@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  operator
+  viewer
+}
+
+enum DeviceType {
+  access_point
+  switch
+  gateway
+}
+
+enum DeviceStatus {
+  online
+  offline
+  warning
+  maintenance
+}
+
+enum AutomationType {
+  configuration_backup
+  firmware_update
+  compliance_check
+  custom_script
+  monitoring_alert
+}
+
+enum ExecutionStatus {
+  pending
+  running
+  success
+  failed
+  cancelled
+}
+
+model User {
+  id            String       @id @default(uuid())
+  email         String       @unique
+  password      String
+  name          String
+  role          UserRole     @default(viewer)
+  refreshToken  String?
+  lastLogin     DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  
+  automations   Automation[]
+  executions    Execution[]
+}
+
+model Device {
+  id            String         @id @default(uuid())
+  serial        String         @unique
+  name          String
+  type          DeviceType
+  model         String
+  ipAddress     String?
+  macAddress    String?
+  location      String?
+  status        DeviceStatus   @default(offline)
+  firmwareVersion String?
+  lastSeen      DateTime?
+  metadata      Json?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  executions    Execution[]
+  deviceGroups  DeviceGroup[]
+}
+
+model DeviceGroup {
+  id          String      @id @default(uuid())
+  name        String      @unique
+  description String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  devices     Device[]
+  automations Automation[]
+}
+
+model Automation {
+  id          String         @id @default(uuid())
+  name        String
+  description String?
+  type        AutomationType
+  workflow    Json           // Stores the automation workflow definition
+  active      Boolean        @default(true)
+  createdBy   User           @relation(fields: [userId], references: [id])
+  userId      String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  
+  schedules   Schedule[]
+  executions  Execution[]
+  deviceGroups DeviceGroup[]
+}
+
+model Schedule {
+  id           String      @id @default(uuid())
+  automation   Automation  @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  automationId String
+  cronExpression String
+  timezone     String      @default("UTC")
+  active       Boolean     @default(true)
+  nextRun      DateTime?
+  lastRun      DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  
+  @@index([automationId])
+  @@index([nextRun])
+}
+
+model Execution {
+  id           String          @id @default(uuid())
+  automation   Automation      @relation(fields: [automationId], references: [id])
+  automationId String
+  device       Device?         @relation(fields: [deviceId], references: [id])
+  deviceId     String?
+  status       ExecutionStatus @default(pending)
+  startedAt    DateTime?
+  completedAt  DateTime?
+  duration     Int?            // Duration in milliseconds
+  output       Json?
+  error        String?
+  triggeredBy  User?           @relation(fields: [userId], references: [id])
+  userId       String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  
+  @@index([automationId])
+  @@index([deviceId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  action    String
+  entity    String
+  entityId  String
+  userId    String
+  changes   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
