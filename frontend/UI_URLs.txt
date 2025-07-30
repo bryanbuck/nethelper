@@ -1,0 +1,732 @@
+● Aruba Central Automation Platform - UI URLs Documentation
+
+  Complete URL Documentation & Test Cases
+
+  Authentication Routes (No Auth Required)
+
+  1. /login - User Login Page
+
+  Purpose: User authentication interface for accessing the platform
+  Component: LoginView.vue (/src/views/auth/LoginView.vue)
+  API Endpoints:
+  - POST /auth/login - User authentication
+  - POST /auth/refresh - Token refresh
+
+  Test Cases:
+  describe('Login Page (/login)', () => {
+    it('should display login form with email and password fields', () => {
+      cy.visit('/login')
+      cy.get('[data-cy=email-input]').should('be.visible')
+      cy.get('[data-cy=password-input]').should('be.visible')
+      cy.get('[data-cy=login-button]').should('be.visible')
+    })
+
+    it('should validate required fields', () => {
+      cy.visit('/login')
+      cy.get('[data-cy=login-button]').click()
+      cy.get('.error-message').should('contain', 'Email is required')
+      cy.get('.error-message').should('contain', 'Password is required')
+    })
+
+    it('should authenticate with valid credentials', () => {
+      cy.visit('/login')
+      cy.get('[data-cy=email-input]').type('admin@company.com')
+      cy.get('[data-cy=password-input]').type('password123')
+      cy.get('[data-cy=login-button]').click()
+      cy.url().should('eq', '/dashboard')
+    })
+
+    it('should display error for invalid credentials', () => {
+      cy.visit('/login')
+      cy.get('[data-cy=email-input]').type('invalid@email.com')
+      cy.get('[data-cy=password-input]').type('wrongpassword')
+      cy.get('[data-cy=login-button]').click()
+      cy.get('.error-alert').should('contain', 'Invalid credentials')
+    })
+
+    it('should redirect authenticated users to dashboard', () => {
+      cy.login() // Custom command to set auth token
+      cy.visit('/login')
+      cy.url().should('eq', '/dashboard')
+    })
+  })
+
+  2. /forgot-password - Password Reset Page
+
+  Purpose: Interface for users to reset forgotten passwords
+  Component: ForgotPasswordView.vue (/src/views/auth/ForgotPasswordView.vue)
+  API Endpoints:
+  - POST /auth/forgot-password - Password reset request
+
+  Test Cases:
+  describe('Forgot Password Page (/forgot-password)', () => {
+    it('should display email input for password reset', () => {
+      cy.visit('/forgot-password')
+      cy.get('[data-cy=email-input]').should('be.visible')
+      cy.get('[data-cy=reset-button]').should('be.visible')
+      cy.get('[data-cy=back-to-login]').should('be.visible')
+    })
+
+    it('should validate email format', () => {
+      cy.visit('/forgot-password')
+      cy.get('[data-cy=email-input]').type('invalid-email')
+      cy.get('[data-cy=reset-button]').click()
+      cy.get('.error-message').should('contain', 'Valid email is required')
+    })
+
+    it('should send password reset email', () => {
+      cy.visit('/forgot-password')
+      cy.get('[data-cy=email-input]').type('user@company.com')
+      cy.get('[data-cy=reset-button]').click()
+      cy.get('.success-message').should('contain', 'Password reset email sent')
+    })
+
+    it('should navigate back to login', () => {
+      cy.visit('/forgot-password')
+      cy.get('[data-cy=back-to-login]').click()
+      cy.url().should('eq', '/login')
+    })
+  })
+
+  ---
+  Protected Routes (Authentication Required)
+
+  3. / (Root) - Default Redirect
+
+  Purpose: Redirects to dashboard for authenticated users
+  Behavior: Automatic redirect to /dashboard
+
+  Test Cases:
+  describe('Root Path (/)', () => {
+    it('should redirect to dashboard when authenticated', () => {
+      cy.login()
+      cy.visit('/')
+      cy.url().should('eq', '/dashboard')
+    })
+
+    it('should redirect to login when not authenticated', () => {
+      cy.visit('/')
+      cy.url().should('eq', '/login')
+    })
+  })
+
+  4. /dashboard - Main Dashboard
+
+  Purpose: Real-time network monitoring and device statistics overview
+  Component: DashboardView.vue (/src/views/dashboard/DashboardView.vue)
+  API Endpoints:
+  - GET /devices - Device list for stats
+  - GET /executions/stats/summary - Execution statistics
+  - WebSocket connection for real-time updates
+
+  Test Cases:
+  describe('Dashboard Page (/dashboard)', () => {
+    beforeEach(() => {
+      cy.login()
+    })
+
+    it('should display key metrics cards', () => {
+      cy.visit('/dashboard')
+      cy.get('[data-cy=total-devices-card]').should('be.visible')
+      cy.get('[data-cy=online-devices-card]').should('be.visible')
+      cy.get('[data-cy=active-automations-card]').should('be.visible')
+      cy.get('[data-cy=recent-executions-card]').should('be.visible')
+    })
+
+    it('should display network health chart', () => {
+      cy.visit('/dashboard')
+      cy.get('[data-cy=network-health-chart]').should('be.visible')
+      cy.get('.chart-container canvas').should('be.visible')
+    })
+
+    it('should show recent devices list', () => {
+      cy.visit('/dashboard')
+      cy.get('[data-cy=recent-devices-list]').should('be.visible')
+      cy.get('[data-cy=device-item]').should('have.length.greaterThan', 0)
+    })
+
+    it('should update metrics in real-time via WebSocket', () => {
+      cy.visit('/dashboard')
+      cy.mockWebSocketMessage('device:update', { deviceId: '123', status: 'online' })
+      cy.get('[data-cy=online-devices-count]').should('be.updated')
+    })
+
+    it('should navigate to devices page from view all link', () => {
+      cy.visit('/dashboard')
+      cy.get('[data-cy=view-all-devices]').click()
+      cy.url().should('eq', '/devices')
+    })
+  })
+
+  5. /devices - Device Management
+
+  Purpose: Comprehensive device listing, filtering, and management interface
+  Component: DevicesView.vue (/src/views/devices/DevicesView.vue)
+  API Endpoints:
+  - GET /devices - Device list with pagination
+  - POST /devices/sync - Sync devices from Aruba Central
+  - DELETE /devices/{id} - Device deletion
+
+  Test Cases:
+  describe('Devices Page (/devices)', () => {
+    beforeEach(() => {
+      cy.login()
+      cy.intercept('GET', '/api/v1/devices*', { fixture: 'devices.json' }).as('getDevices')
+    })
+
+    it('should display devices data table', () => {
+      cy.visit('/devices')
+      cy.wait('@getDevices')
+      cy.get('[data-cy=devices-table]').should('be.visible')
+      cy.get('[data-cy=device-row]').should('have.length.greaterThan', 0)
+    })
+
+    it('should support device filtering', () => {
+      cy.visit('/devices')
+      cy.get('[data-cy=device-filter-button]').click()
+      cy.get('[data-cy=filter-access-points]').click()
+      cy.get('[data-cy=apply-filters]').click()
+      cy.get('[data-cy=device-row]').each($el => {
+        cy.wrap($el).should('contain', 'IAP-')
+      })
+    })
+
+    it('should support search functionality', () => {
+      cy.visit('/devices')
+      cy.get('[data-cy=search-input]').type('AP-Office-01')
+      cy.get('[data-cy=device-row]').should('have.length', 1)
+      cy.get('[data-cy=device-row]').should('contain', 'AP-Office-01')
+    })
+
+    it('should sync devices from Aruba Central', () => {
+      cy.visit('/devices')
+      cy.intercept('POST', '/api/v1/devices/sync', { success: true }).as('syncDevices')
+      cy.get('[data-cy=sync-devices-button]').click()
+      cy.wait('@syncDevices')
+      cy.get('.success-notification').should('contain', 'Devices synced successfully')
+    })
+
+    it('should navigate to device detail page', () => {
+      cy.visit('/devices')
+      cy.get('[data-cy=device-row]').first().click()
+      cy.url().should('match', /\/devices\/[a-f0-9-]+/)
+    })
+
+    it('should support bulk device operations', () => {
+      cy.visit('/devices')
+      cy.get('[data-cy=device-checkbox]').first().click()
+      cy.get('[data-cy=device-checkbox]').eq(1).click()
+      cy.get('[data-cy=bulk-actions-menu]').should('be.visible')
+      cy.get('[data-cy=bulk-delete]').click()
+      cy.get('[data-cy=confirm-dialog]').should('be.visible')
+    })
+  })
+
+  6. /devices/:id - Device Detail View
+
+  Purpose: Detailed view of individual network device with configuration and stats
+  Component: DeviceDetailView.vue (/src/views/devices/DeviceDetailView.vue)
+  API Endpoints:
+  - GET /devices/{id} - Device details
+  - GET /devices/{id}/stats - Device statistics
+  - PUT /devices/{id}/configuration - Update device config
+
+  Test Cases:
+  describe('Device Detail Page (/devices/:id)', () => {
+    beforeEach(() => {
+      cy.login()
+      cy.intercept('GET', '/api/v1/devices/123', { fixture: 'device-detail.json' }).as('getDevice')
+      cy.intercept('GET', '/api/v1/devices/123/stats', { fixture: 'device-stats.json' }).as('getDeviceStats')
+    })
+
+    it('should display device information', () => {
+      cy.visit('/devices/123')
+      cy.wait('@getDevice')
+      cy.get('[data-cy=device-name]').should('be.visible')
+      cy.get('[data-cy=device-type]').should('be.visible')
+      cy.get('[data-cy=device-ip]').should('be.visible')
+      cy.get('[data-cy=device-status]').should('be.visible')
+    })
+
+    it('should show device statistics charts', () => {
+      cy.visit('/devices/123')
+      cy.wait('@getDeviceStats')
+      cy.get('[data-cy=cpu-usage-chart]').should('be.visible')
+      cy.get('[data-cy=memory-usage-chart]').should('be.visible')
+      cy.get('[data-cy=throughput-chart]').should('be.visible')
+    })
+
+    it('should allow configuration updates', () => {
+      cy.visit('/devices/123')
+      cy.get('[data-cy=edit-configuration]').click()
+      cy.get('[data-cy=config-editor]').should('be.visible')
+      cy.get('[data-cy=save-configuration]').click()
+      cy.get('.success-notification').should('contain', 'Configuration updated')
+    })
+
+    it('should display device command execution interface', () => {
+      cy.visit('/devices/123')
+      cy.get('[data-cy=command-interface-tab]').click()
+      cy.get('[data-cy=command-input]').should('be.visible')
+      cy.get('[data-cy=execute-command]').should('be.visible')
+    })
+
+    it('should handle non-existent device', () => {
+      cy.intercept('GET', '/api/v1/devices/999', { statusCode: 404 }).as('getDeviceNotFound')
+      cy.visit('/devices/999')
+      cy.wait('@getDeviceNotFound')
+      cy.get('[data-cy=not-found-message]').should('contain', 'Device not found')
+    })
+  })
+
+  7. /automations - Automation Management
+
+  Purpose: List and manage network automation workflows
+  Component: AutomationsView.vue (/src/views/automations/AutomationsView.vue)
+  API Endpoints:
+  - GET /automations - List automations
+  - DELETE /automations/{id} - Delete automation
+  - POST /automations/{id}/execute - Manual execution
+
+  Test Cases:
+  describe('Automations Page (/automations)', () => {
+    beforeEach(() => {
+      cy.login()
+      cy.intercept('GET', '/api/v1/automations', { fixture: 'automations.json' }).as('getAutomations')
+    })
+
+    it('should display automations list', () => {
+      cy.visit('/automations')
+      cy.wait('@getAutomations')
+      cy.get('[data-cy=automations-grid]').should('be.visible')
+      cy.get('[data-cy=automation-card]').should('have.length.greaterThan', 0)
+    })
+
+    it('should navigate to automation builder', () => {
+      cy.visit('/automations')
+      cy.get('[data-cy=create-automation]').click()
+      cy.url().should('eq', '/automations/builder')
+    })
+
+    it('should execute automation manually', () => {
+      cy.visit('/automations')
+      cy.intercept('POST', '/api/v1/automations/*/execute', { executionId: '456' }).as('executeAutomation')
+      cy.get('[data-cy=automation-card]').first().within(() => {
+        cy.get('[data-cy=execute-button]').click()
+      })
+      cy.wait('@executeAutomation')
+      cy.get('.success-notification').should('contain', 'Automation started')
+    })
+
+    it('should filter automations by status', () => {
+      cy.visit('/automations')
+      cy.get('[data-cy=status-filter]').select('active')
+      cy.get('[data-cy=automation-card]').each($card => {
+        cy.wrap($card).should('contain', 'Active')
+      })
+    })
+
+    it('should delete automation with confirmation', () => {
+      cy.visit('/automations')
+      cy.get('[data-cy=automation-card]').first().within(() => {
+        cy.get('[data-cy=delete-button]').click()
+      })
+      cy.get('[data-cy=confirm-dialog]').should('be.visible')
+      cy.get('[data-cy=confirm-delete]').click()
+      cy.get('.success-notification').should('contain', 'Automation deleted')
+    })
+  })
+
+  8. /automations/builder - Automation Builder
+
+  Purpose: Visual workflow designer for creating network automations
+  Component: AutomationBuilderView.vue (/src/views/automations/AutomationBuilderView.vue)
+  API Endpoints:
+  - POST /automations - Create new automation
+  - PUT /automations/{id} - Update automation
+
+  Test Cases:
+  describe('Automation Builder Page (/automations/builder)', () => {
+    beforeEach(() => {
+      cy.login()
+    })
+
+    it('should display workflow canvas', () => {
+      cy.visit('/automations/builder')
+      cy.get('[data-cy=workflow-canvas]').should('be.visible')
+      cy.get('[data-cy=node-palette]').should('be.visible')
+      cy.get('[data-cy=workflow-toolbar]').should('be.visible')
+    })
+
+    it('should allow adding nodes to canvas', () => {
+      cy.visit('/automations/builder')
+      cy.get('[data-cy=trigger-node]').drag('[data-cy=workflow-canvas]')
+      cy.get('[data-cy=canvas-node]').should('have.length', 1)
+    })
+
+    it('should connect nodes with edges', () => {
+      cy.visit('/automations/builder')
+      // Add two nodes
+      cy.get('[data-cy=trigger-node]').drag('[data-cy=workflow-canvas]')
+      cy.get('[data-cy=action-node]').drag('[data-cy=workflow-canvas]')
+      // Connect them
+      cy.get('[data-cy=node-output]').first().drag('[data-cy=node-input]').last()
+      cy.get('[data-cy=canvas-edge]').should('have.length', 1)
+    })
+
+    it('should configure node properties', () => {
+      cy.visit('/automations/builder')
+      cy.get('[data-cy=trigger-node]').drag('[data-cy=workflow-canvas]')
+      cy.get('[data-cy=canvas-node]').dblclick()
+      cy.get('[data-cy=node-config-dialog]').should('be.visible')
+      cy.get('[data-cy=node-name-input]').type('Device Status Check')
+      cy.get('[data-cy=save-node-config]').click()
+    })
+
+    it('should save automation workflow', () => {
+      cy.visit('/automations/builder')
+      cy.buildBasicWorkflow() // Custom command
+      cy.get('[data-cy=save-automation]').click()
+      cy.get('[data-cy=automation-name-input]').type('Test Automation')
+      cy.get('[data-cy=save-confirm]').click()
+      cy.get('.success-notification').should('contain', 'Automation saved')
+    })
+
+    it('should validate workflow before saving', () => {
+      cy.visit('/automations/builder')
+      cy.get('[data-cy=save-automation]').click()
+      cy.get('.error-notification').should('contain', 'Workflow must have at least one trigger')
+    })
+  })
+
+  9. /automations/:id - Automation Detail View
+
+  Purpose: Detailed view of specific automation with execution history
+  Component: AutomationDetailView.vue (/src/views/automations/AutomationDetailView.vue)
+  API Endpoints:
+  - GET /automations/{id} - Automation details
+  - GET /executions/automation/{id} - Execution history
+  - POST /automations/{id}/execute - Execute automation
+
+  Test Cases:
+  describe('Automation Detail Page (/automations/:id)', () => {
+    beforeEach(() => {
+      cy.login()
+      cy.intercept('GET', '/api/v1/automations/123', { fixture: 'automation-detail.json' }).as('getAutomation')
+      cy.intercept('GET', '/api/v1/executions/automation/123', { fixture: 'executions.json' }).as('getExecutions')
+    })
+
+    it('should display automation details', () => {
+      cy.visit('/automations/123')
+      cy.wait('@getAutomation')
+      cy.get('[data-cy=automation-name]').should('be.visible')
+      cy.get('[data-cy=automation-description]').should('be.visible')
+      cy.get('[data-cy=automation-status]').should('be.visible')
+      cy.get('[data-cy=workflow-diagram]').should('be.visible')
+    })
+
+    it('should show execution history', () => {
+      cy.visit('/automations/123')
+      cy.wait('@getExecutions')
+      cy.get('[data-cy=execution-history]').should('be.visible')
+      cy.get('[data-cy=execution-item]').should('have.length.greaterThan', 0)
+    })
+
+    it('should execute automation', () => {
+      cy.visit('/automations/123')
+      cy.intercept('POST', '/api/v1/automations/123/execute', { executionId: '789' }).as('executeAutomation')
+      cy.get('[data-cy=execute-automation]').click()
+      cy.wait('@executeAutomation')
+      cy.get('.success-notification').should('contain', 'Automation started successfully')
+    })
+
+    it('should edit automation', () => {
+      cy.visit('/automations/123')
+      cy.get('[data-cy=edit-automation]').click()
+      cy.url().should('eq', '/automations/builder?id=123')
+    })
+  })
+
+  10. /schedule - Automation Scheduling
+
+  Purpose: Calendar-based interface for scheduling automation executions
+  Component: ScheduleView.vue (/src/views/schedule/ScheduleView.vue)
+  API Endpoints:
+  - GET /schedules - List all schedules
+  - POST /schedules - Create new schedule
+  - PUT /schedules/{id} - Update schedule
+  - DELETE /schedules/{id} - Delete schedule
+
+  Test Cases:
+  describe('Schedule Page (/schedule)', () => {
+    beforeEach(() => {
+      cy.login()
+      cy.intercept('GET', '/api/v1/schedules', { fixture: 'schedules.json' }).as('getSchedules')
+    })
+
+    it('should display calendar interface', () => {
+      cy.visit('/schedule')
+      cy.wait('@getSchedules')
+      cy.get('[data-cy=schedule-calendar]').should('be.visible')
+      cy.get('[data-cy=calendar-month-view]').should('be.visible')
+    })
+
+    it('should show scheduled events on calendar', () => {
+      cy.visit('/schedule')
+      cy.wait('@getSchedules')
+      cy.get('[data-cy=calendar-event]').should('have.length.greaterThan', 0)
+    })
+
+    it('should create new schedule', () => {
+      cy.visit('/schedule')
+      cy.get('[data-cy=add-schedule]').click()
+      cy.get('[data-cy=schedule-form]').should('be.visible')
+      cy.get('[data-cy=automation-select]').select('Device Health Check')
+      cy.get('[data-cy=schedule-datetime]').type('2024-12-01T10:00')
+      cy.get('[data-cy=recurring-checkbox]').check()
+      cy.get('[data-cy=save-schedule]').click()
+      cy.get('.success-notification').should('contain', 'Schedule created')
+    })
+
+    it('should support cron expression builder', () => {
+      cy.visit('/schedule')
+      cy.get('[data-cy=add-schedule]').click()
+      cy.get('[data-cy=advanced-scheduling]').click()
+      cy.get('[data-cy=cron-builder]').should('be.visible')
+      cy.get('[data-cy=cron-minute]').select('0')
+      cy.get('[data-cy=cron-hour]').select('9')
+      cy.get('[data-cy=cron-preview]').should('contain', 'Every day at 9:00 AM')
+    })
+
+    it('should edit existing schedule', () => {
+      cy.visit('/schedule')
+      cy.get('[data-cy=calendar-event]').first().click()
+      cy.get('[data-cy=edit-schedule]').click()
+      cy.get('[data-cy=schedule-form]').should('be.visible')
+      cy.get('[data-cy=schedule-name]').should('have.value')
+    })
+
+    it('should switch calendar views', () => {
+      cy.visit('/schedule')
+      cy.get('[data-cy=week-view-button]').click()
+      cy.get('[data-cy=calendar-week-view]').should('be.visible')
+      cy.get('[data-cy=day-view-button]').click()
+      cy.get('[data-cy=calendar-day-view]').should('be.visible')
+    })
+  })
+
+  11. /executions - Execution History
+
+  Purpose: Monitor and analyze automation execution history and logs
+  Component: ExecutionsView.vue (/src/views/executions/ExecutionsView.vue)
+  API Endpoints:
+  - GET /executions - List executions with filters
+  - GET /executions/stats/summary - Execution statistics
+
+  Test Cases:
+  describe('Executions Page (/executions)', () => {
+    beforeEach(() => {
+      cy.login()
+      cy.intercept('GET', '/api/v1/executions*', { fixture: 'executions.json' }).as('getExecutions')
+    })
+
+    it('should display execution list', () => {
+      cy.visit('/executions')
+      cy.wait('@getExecutions')
+      cy.get('[data-cy=executions-table]').should('be.visible')
+      cy.get('[data-cy=execution-row]').should('have.length.greaterThan', 0)
+    })
+
+    it('should filter executions by status', () => {
+      cy.visit('/executions')
+      cy.get('[data-cy=status-filter]').select('failed')
+      cy.get('[data-cy=execution-row]').each($row => {
+        cy.wrap($row).find('[data-cy=status-badge]').should('contain', 'Failed')
+      })
+    })
+
+    it('should filter executions by date range', () => {
+      cy.visit('/executions')
+      cy.get('[data-cy=date-range-picker]').click()
+      cy.get('[data-cy=start-date]').type('2024-01-01')
+      cy.get('[data-cy=end-date]').type('2024-01-31')
+      cy.get('[data-cy=apply-date-filter]').click()
+      cy.get('[data-cy=execution-row]').should('be.visible')
+    })
+
+    it('should display execution statistics', () => {
+      cy.visit('/executions')
+      cy.get('[data-cy=success-rate-card]').should('be.visible')
+      cy.get('[data-cy=total-executions-card]').should('be.visible')
+      cy.get('[data-cy=average-duration-card]').should('be.visible')
+    })
+
+    it('should navigate to execution detail', () => {
+      cy.visit('/executions')
+      cy.get('[data-cy=execution-row]').first().click()
+      cy.url().should('match', /\/executions\/[a-f0-9-]+/)
+    })
+
+    it('should export execution data', () => {
+      cy.visit('/executions')
+      cy.get('[data-cy=export-button]').click()
+      cy.get('[data-cy=export-csv]').click()
+      cy.get('.success-notification').should('contain', 'Export started')
+    })
+  })
+
+  12. /executions/:id - Execution Detail View
+
+  Purpose: Detailed view of specific execution with logs and metrics
+  Component: ExecutionDetailView.vue (/src/views/executions/ExecutionDetailView.vue)
+  API Endpoints:
+  - GET /executions/{id} - Execution details and logs
+
+  Test Cases:
+  describe('Execution Detail Page (/executions/:id)', () => {
+    beforeEach(() => {
+      cy.login()
+      cy.intercept('GET', '/api/v1/executions/123', { fixture: 'execution-detail.json' }).as('getExecution')
+    })
+
+    it('should display execution information', () => {
+      cy.visit('/executions/123')
+      cy.wait('@getExecution')
+      cy.get('[data-cy=execution-status]').should('be.visible')
+      cy.get('[data-cy=execution-duration]').should('be.visible')
+      cy.get('[data-cy=execution-timestamp]').should('be.visible')
+      cy.get('[data-cy=automation-name]').should('be.visible')
+    })
+
+    it('should show execution timeline', () => {
+      cy.visit('/executions/123')
+      cy.get('[data-cy=execution-timeline]').should('be.visible')
+      cy.get('[data-cy=timeline-step]').should('have.length.greaterThan', 0)
+    })
+
+    it('should display execution logs', () => {
+      cy.visit('/executions/123')
+      cy.get('[data-cy=logs-tab]').click()
+      cy.get('[data-cy=log-viewer]').should('be.visible')
+      cy.get('[data-cy=log-entry]').should('have.length.greaterThan', 0)
+    })
+
+    it('should support log filtering', () => {
+      cy.visit('/executions/123')
+      cy.get('[data-cy=logs-tab]').click()
+      cy.get('[data-cy=log-level-filter]').select('error')
+      cy.get('[data-cy=log-entry]').each($entry => {
+        cy.wrap($entry).should('contain', 'ERROR')
+      })
+    })
+
+    it('should allow re-running failed executions', () => {
+      cy.visit('/executions/123')
+      cy.intercept('POST', '/api/v1/automations/*/execute', { executionId: '456' }).as('rerunExecution')
+      cy.get('[data-cy=rerun-execution]').click()
+      cy.get('[data-cy=confirm-rerun]').click()
+      cy.wait('@rerunExecution')
+      cy.get('.success-notification').should('contain', 'Execution restarted')
+    })
+  })
+
+  ---
+  Error Routes
+
+  13. /:pathMatch(.*) - 404 Not Found
+
+  Purpose: Handle invalid URLs and display user-friendly error page
+  Component: NotFound.vue (/src/views/NotFound.vue)
+
+  Test Cases:
+  describe('404 Not Found Page', () => {
+    it('should display 404 page for invalid routes', () => {
+      cy.login()
+      cy.visit('/invalid-route', { failOnStatusCode: false })
+      cy.get('[data-cy=not-found-message]').should('contain', '404')
+      cy.get('[data-cy=back-to-dashboard]').should('be.visible')
+    })
+
+    it('should navigate back to dashboard', () => {
+      cy.login()
+      cy.visit('/invalid-route', { failOnStatusCode: false })
+      cy.get('[data-cy=back-to-dashboard]').click()
+      cy.url().should('eq', '/dashboard')
+    })
+  })
+
+  ---
+  Navigation Guards Test Cases
+
+  describe('Route Navigation Guards', () => {
+    it('should redirect unauthenticated users to login', () => {
+      cy.visit('/dashboard')
+      cy.url().should('eq', '/login')
+      cy.get('[data-cy=redirect-param]').should('contain', 'dashboard')
+    })
+
+    it('should refresh token when approaching expiry', () => {
+      cy.loginWithExpiringToken()
+      cy.intercept('POST', '/api/v1/auth/refresh', { token: 'new-token' }).as('refreshToken')
+      cy.visit('/dashboard')
+      cy.wait('@refreshToken')
+      cy.url().should('eq', '/dashboard')
+    })
+
+    it('should logout user when token refresh fails', () => {
+      cy.loginWithExpiringToken()
+      cy.intercept('POST', '/api/v1/auth/refresh', { statusCode: 401 }).as('refreshTokenFail')
+      cy.visit('/dashboard')
+      cy.wait('@refreshTokenFail')
+      cy.url().should('eq', '/login')
+    })
+
+    it('should set page title correctly', () => {
+      cy.login()
+      cy.visit('/devices')
+      cy.title().should('eq', 'Devices - Aruba Central Automation')
+    })
+  })
+
+  ---
+  WebSocket Integration Test Cases
+
+  describe('Real-time Updates via WebSocket', () => {
+    beforeEach(() => {
+      cy.login()
+      cy.mockWebSocket()
+    })
+
+    it('should update device status in real-time', () => {
+      cy.visit('/devices')
+      cy.mockWebSocketMessage('device:update', {
+        deviceId: '123',
+        status: 'offline'
+      })
+      cy.get('[data-cy=device-123]').should('contain', 'Offline')
+    })
+
+    it('should show automation progress updates', () => {
+      cy.visit('/executions/123')
+      cy.mockWebSocketMessage('automation:progress', {
+        executionId: '123',
+        step: 'Processing devices',
+        progress: 50
+      })
+      cy.get('[data-cy=progress-bar]').should('have.attr', 'value', '50')
+    })
+
+    it('should display new alerts', () => {
+      cy.visit('/dashboard')
+      cy.mockWebSocketMessage('alert:new', {
+        type: 'error',
+        message: 'Device AP-Office-01 is offline'
+      })
+      cy.get('[data-cy=alert-notification]').should('contain', 'Device AP-Office-01 is offline')
+    })
+  })
+
+  This comprehensive documentation covers all UI URLs in the Aruba Central Automation Platform frontend, their purposes, associated API endpoints,
+  and detailed test cases to validate functionality. Each route is thoroughly tested for both positive and negative scenarios, ensuring robust
+  application behavior.
+

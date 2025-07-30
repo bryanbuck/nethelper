@@ -26,11 +26,16 @@ class ArubaCentralService {
         return cachedToken;
       }
 
-      // Get new token
-      const response = await axios.post(`${this.baseURL}/oauth2/token`, {
-        grant_type: 'client_credentials',
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
+      // Get new token using form data format
+      const params = new URLSearchParams();
+      params.append('grant_type', 'client_credentials');
+      params.append('client_id', this.clientId);
+      params.append('client_secret', this.clientSecret);
+
+      const response = await axios.post(`${this.baseURL}/oauth2/token`, params, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
       });
 
       const { access_token, expires_in } = response.data;

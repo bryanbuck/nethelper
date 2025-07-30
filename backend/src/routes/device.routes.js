@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const deviceController = require('../controllers/device.controller');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
-const { validateDevice } = require('../middleware/validation.middleware');
+const { validateDevice, validateDeviceGroup } = require('../middleware/validation.middleware');
 
 // All routes require authentication
 router.use(authenticate);
@@ -10,11 +10,20 @@ router.use(authenticate);
 // Get all devices
 router.get('/', deviceController.getDevices);
 
+// Create new device
+router.post('/', authorize('admin', 'operator'), validateDevice.create, deviceController.createDevice);
+
 // Sync devices from Aruba Central
 router.post('/sync', authorize('admin', 'operator'), deviceController.syncDevices);
 
 // Get specific device
 router.get('/:deviceId', deviceController.getDevice);
+
+// Update device
+router.put('/:deviceId', authorize('admin', 'operator'), validateDevice.update, deviceController.updateDevice);
+
+// Delete device
+router.delete('/:deviceId', authorize('admin'), deviceController.deleteDevice);
 
 // Get device statistics
 router.get('/:deviceId/stats', deviceController.getDeviceStats);
@@ -40,6 +49,29 @@ router.post(
   authorize('admin'),
   validateDevice.executeCommand,
   deviceController.executeCommand
+);
+
+// Device group routes
+router.get('/groups', deviceController.getDeviceGroups);
+
+router.post(
+  '/groups',
+  authorize('admin', 'operator'),
+  validateDeviceGroup.create,
+  deviceController.createDeviceGroup
+);
+
+router.put(
+  '/groups/:groupId',
+  authorize('admin', 'operator'),
+  validateDeviceGroup.update,
+  deviceController.updateDeviceGroup
+);
+
+router.delete(
+  '/groups/:groupId',
+  authorize('admin'),
+  deviceController.deleteDeviceGroup
 );
 
 module.exports = router;
