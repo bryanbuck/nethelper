@@ -80,22 +80,22 @@ api.interceptors.response.use(
           refresh_token: refreshToken
         })
 
-        const { access_token, refresh_token: newRefreshToken } = response.data
+        const { accessToken, refreshToken: newRefreshToken } = response.data
 
         // Update stored tokens
-        localStorage.setItem('access_token', access_token)
+        localStorage.setItem('access_token', accessToken)
         if (newRefreshToken) {
           localStorage.setItem('refresh_token', newRefreshToken)
         }
 
         // Update default authorization header
-        api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`
+        api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
         
         // Process queued requests
-        processQueue(null, access_token)
+        processQueue(null, accessToken)
         
         // Retry original request
-        originalRequest.headers.Authorization = `Bearer ${access_token}`
+        originalRequest.headers.Authorization = `Bearer ${accessToken}`
         return api(originalRequest)
         
       } catch (refreshError) {

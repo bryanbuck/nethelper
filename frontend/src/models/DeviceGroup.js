@@ -1,6 +1,6 @@
 /**
  * DeviceGroup Model
- * Represents a group of devices in the Aruba Central Automation Platform
+ * Represents a group of devices in the NetHelper Automation Platform
  */
 
 export class DeviceGroup {

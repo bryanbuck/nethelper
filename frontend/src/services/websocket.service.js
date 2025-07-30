@@ -1,6 +1,6 @@
 /**
  * WebSocket Service
- * Centralized WebSocket event handling for the Aruba Central Automation Platform
+ * Centralized WebSocket event handling for the NetHelper Automation Platform
  */
 
 import { io } from 'socket.io-client'

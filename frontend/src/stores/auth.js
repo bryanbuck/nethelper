@@ -24,9 +24,9 @@ export const useAuthStore = defineStore('auth', () => {
 
       const response = await authService.login(credentials)
       
-      // Store tokens
-      token.value = response.data.access_token
-      refreshToken.value = response.data.refresh_token
+      // Store tokens (backend uses camelCase, not snake_case)
+      token.value = response.data.accessToken
+      refreshToken.value = response.data.refreshToken
       user.value = response.data.user
 
       // Persist to localStorage
@@ -34,8 +34,8 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.setItem('refresh_token', refreshToken.value)
       localStorage.setItem('user', JSON.stringify(user.value))
 
-      // Redirect to dashboard
-      router.push('/dashboard')
+      // Don't navigate here - let the component handle navigation
+      // This prevents double navigation conflicts
       
       return response.data
     } catch (err) {
@@ -69,10 +69,10 @@ export const useAuthStore = defineStore('auth', () => {
 
       const response = await authService.refresh(refreshToken.value)
       
-      // Update tokens
-      token.value = response.data.access_token
-      if (response.data.refresh_token) {
-        refreshToken.value = response.data.refresh_token
+      // Update tokens (backend uses camelCase, not snake_case)
+      token.value = response.data.accessToken
+      if (response.data.refreshToken) {
+        refreshToken.value = response.data.refreshToken
         localStorage.setItem('refresh_token', refreshToken.value)
       }
       

@@ -1,6 +1,6 @@
 /**
  * Models Index
- * Central export point for all data models in the Aruba Central Automation Platform
+ * Central export point for all data models in the NetHelper Automation Platform
  */
 
 // Import all models

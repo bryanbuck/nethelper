@@ -1,6 +1,6 @@
 /**
  * Automation Model
- * Represents an automation workflow in the Aruba Central Automation Platform
+ * Represents an automation workflow in the NetHelper Automation Platform
  */
 
 // Automation type enumeration

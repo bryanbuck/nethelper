@@ -1,6 +1,6 @@
 /**
  * User Model
- * Represents a user in the Aruba Central Automation Platform
+ * Represents a user in the NetHelper Automation Platform
  */
 
 // User role enumeration

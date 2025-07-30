@@ -78,7 +78,7 @@ onMounted(() => {
         
         <v-toolbar-title>
           <v-icon class="mr-2">mdi-network</v-icon>
-          Aruba Central
+          NetHelper
         </v-toolbar-title>
 
         <v-spacer />
@@ -181,7 +181,7 @@ onMounted(() => {
       app
     >
       <v-spacer />
-      <div>&copy; {{ new Date().getFullYear() }} — Aruba Central Automation Platform</div>
+      <div>&copy; {{ new Date().getFullYear() }} — NetHelper Automation Platform</div>
       <v-spacer />
     </v-footer>
   </v-app>

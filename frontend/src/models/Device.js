@@ -1,6 +1,6 @@
 /**
  * Device Model
- * Represents a network device in the Aruba Central Automation Platform
+ * Represents a network device in the NetHelper Automation Platform
  */
 
 // Device type enumeration

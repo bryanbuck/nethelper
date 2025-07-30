@@ -1,6 +1,6 @@
 /**
  * Execution Model
- * Represents an automation execution in the Aruba Central Automation Platform
+ * Represents an automation execution in the NetHelper Automation Platform
  */
 
 // Execution status enumeration

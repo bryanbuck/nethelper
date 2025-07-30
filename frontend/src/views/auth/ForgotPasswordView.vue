@@ -134,7 +134,7 @@
             size="small"
             class="text-medium-emphasis"
           >
-            © 2024 Aruba Central Automation Platform
+            ï¿½ 2024 NetHelper Automation Platform
           </v-chip>
         </div>
       </v-col>

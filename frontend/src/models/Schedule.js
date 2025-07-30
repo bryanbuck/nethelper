@@ -1,6 +1,6 @@
 /**
  * Schedule Model
- * Represents a schedule for automation execution in the Aruba Central Automation Platform
+ * Represents a schedule for automation execution in the NetHelper Automation Platform
  */
 
 import { parse } from 'cron-parser'

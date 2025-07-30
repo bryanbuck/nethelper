@@ -1,6 +1,6 @@
 /**
  * API Endpoints Configuration
- * Centralizes all backend API endpoints for the Aruba Central Automation Platform
+ * Centralizes all backend API endpoints for the NetHelper Automation Platform
  */
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1'

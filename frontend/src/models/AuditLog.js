@@ -1,6 +1,6 @@
 /**
  * AuditLog Model
- * Represents an audit log entry in the Aruba Central Automation Platform
+ * Represents an audit log entry in the NetHelper Automation Platform
  */
 
 // Common audit actions

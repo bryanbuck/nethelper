@@ -5,7 +5,7 @@
         <v-card class="elevation-8 rounded-lg">
           <v-card-title class="text-center py-8">
             <div class="text-h4 font-weight-bold primary--text">
-              Aruba Central
+              NetHelper
             </div>
             <div class="text-subtitle-1 text-medium-emphasis mt-2">
               Network Automation Platform
@@ -105,7 +105,7 @@
             size="small"
             class="text-medium-emphasis"
           >
-            © 2024 Aruba Central Automation Platform
+            ï¿½ 2024 NetHelper Automation Platform
           </v-chip>
         </div>
       </v-col>
