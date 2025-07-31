@@ -1,6 +1,9 @@
 const { getPrisma } = require('../config/database');
 const arubaCentralService = require('./aruba-central.service');
-const logger = require('../utils/logger');
+const { debugLog, Services } = require('../utils/debug-logger');
+
+// Create service-specific logger
+const logger = debugLog.createLogger(Services.DEVICE);
 
 class DeviceService {
   async getDevices(filters = {}) {
@@ -45,7 +48,7 @@ class DeviceService {
 
       return devices;
     } catch (error) {
-      logger.error('Get devices error:', error);
+      logger.error('Get devices error', { error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -82,7 +85,7 @@ class DeviceService {
 
       return device;
     } catch (error) {
-      logger.error('Get device error:', error);
+      logger.error('Get device error', { error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -106,10 +109,10 @@ class DeviceService {
         },
       });
 
-      logger.info('Device created', { deviceId: device.id, serial: device.serial });
+      logger.success('Device created', { deviceId: device.id, serial: device.serial });
       return device;
     } catch (error) {
-      logger.error('Create device error:', error);
+      logger.error('Create device error', { error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -126,10 +129,10 @@ class DeviceService {
         },
       });
 
-      logger.info('Device updated', { deviceId, changes: Object.keys(updateData) });
+      logger.success('Device updated', { deviceId, changes: Object.keys(updateData) });
       return device;
     } catch (error) {
-      logger.error('Update device error:', error);
+      logger.error('Update device error', { error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -142,16 +145,16 @@ class DeviceService {
         where: { id: deviceId },
       });
 
-      logger.info('Device deleted', { deviceId });
+      logger.success('Device deleted', { deviceId });
     } catch (error) {
-      logger.error('Delete device error:', error);
+      logger.error('Delete device error', { error: error.message, stack: error.stack });
       throw error;
     }
   }
 
   async syncDevicesFromAruba() {
     try {
-      logger.info('Starting device sync from Aruba Central');
+      logger.progress('Starting device sync from Aruba Central');
 
       // Get devices from Aruba Central
       const arubaDevices = await arubaCentralService.getDevices();
@@ -197,14 +200,14 @@ class DeviceService {
             created++;
           }
         } catch (deviceError) {
-          logger.error('Error processing device:', deviceError, { serial: arubaDevice.serial });
+          logger.error('Error processing device', { error: deviceError.message, serial: arubaDevice.serial });
         }
       }
 
-      logger.info('Device sync completed', { created, updated, total: arubaDevices.length });
+      logger.success('Device sync completed', { created, updated, total: arubaDevices.length });
       return { created, updated, total: arubaDevices.length };
     } catch (error) {
-      logger.error('Device sync error:', error);
+      logger.error('Device sync error', { error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -222,10 +225,10 @@ class DeviceService {
         },
       });
 
-      logger.info('Device sync job queued', { jobId: job.id });
+      logger.success('Device sync job queued', { jobId: job.id });
       return job;
     } catch (error) {
-      logger.error('Queue device sync error:', error);
+      logger.error('Queue device sync error', { error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -282,7 +285,7 @@ class DeviceService {
 
       return groups;
     } catch (error) {
-      logger.error('Get device groups error:', error);
+      logger.error('Get device groups error', { error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -311,10 +314,10 @@ class DeviceService {
         },
       });
 
-      logger.info('Device group created', { groupId: group.id, name: group.name });
+      logger.success('Device group created', { groupId: group.id, name: group.name });
       return group;
     } catch (error) {
-      logger.error('Create device group error:', error);
+      logger.error('Create device group error', { error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -349,10 +352,10 @@ class DeviceService {
         },
       });
 
-      logger.info('Device group updated', { groupId, changes: Object.keys(updateData) });
+      logger.success('Device group updated', { groupId, changes: Object.keys(updateData) });
       return group;
     } catch (error) {
-      logger.error('Update device group error:', error);
+      logger.error('Update device group error', { error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -365,9 +368,9 @@ class DeviceService {
         where: { id: groupId },
       });
 
-      logger.info('Device group deleted', { groupId });
+      logger.success('Device group deleted', { groupId });
     } catch (error) {
-      logger.error('Delete device group error:', error);
+      logger.error('Delete device group error', { error: error.message, stack: error.stack });
       throw error;
     }
   }

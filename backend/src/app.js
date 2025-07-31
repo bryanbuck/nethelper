@@ -24,9 +24,16 @@ app.use(helmet());
 app.use(cors({
   origin: [
     process.env.FRONTEND_URL,
-    'http://localhost:5173'
+    'http://localhost:5173',
+    'http://192.168.0.169:5173',
+    /^http:\/\/192\.168\.0\.\d+:5173$/,
+    /^https:\/\/192\.168\.0\.\d+:5173$/,
+    /^http:\/\/192\.168\.2\d\.\d+:5173$/,
+    /^https:\/\/192\.168\.2\d\.\d+:5173$/
   ].filter(Boolean),
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }));
 
 // Compression middleware
@@ -44,8 +51,28 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Request logging
+// Request logging with enhanced auth debugging
 app.use((req, res, next) => {
+  const isAuthRoute = req.path.startsWith('/api/v1/auth');
+  
+  if (isAuthRoute) {
+    logger.debug('Auth route request details', {
+      method: req.method,
+      path: req.path,
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+      origin: req.get('origin'),
+      referer: req.get('referer'),
+      contentType: req.get('content-type'),
+      authorization: req.get('authorization') ? 'Bearer [TOKEN]' : 'None',
+      cookies: Object.keys(req.cookies || {}),
+      body: req.method === 'POST' ? {
+        ...req.body,
+        password: req.body?.password ? '[REDACTED]' : undefined
+      } : undefined
+    });
+  }
+  
   logger.info(`${req.method} ${req.path}`, {
     ip: req.ip,
     userAgent: req.get('user-agent'),

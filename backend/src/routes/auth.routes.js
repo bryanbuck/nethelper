@@ -24,19 +24,34 @@ const loginValidation = [
 
 // Generate JWT tokens
 function generateTokens(userId) {
-  const accessToken = jwt.sign(
-    { userId },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN }
-  );
+  logger.debug('Generating tokens', { userId });
+  
+  try {
+    const accessToken = jwt.sign(
+      { userId },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN }
+    );
 
-  const refreshToken = jwt.sign(
-    { userId },
-    process.env.JWT_REFRESH_SECRET,
-    { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN }
-  );
+    const refreshToken = jwt.sign(
+      { userId },
+      process.env.JWT_REFRESH_SECRET,
+      { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN }
+    );
 
-  return { accessToken, refreshToken };
+    logger.debug('Tokens generated successfully', { 
+      userId,
+      accessTokenLength: accessToken?.length,
+      refreshTokenLength: refreshToken?.length,
+      jwtSecret: process.env.JWT_SECRET ? '[SET]' : '[MISSING]',
+      jwtRefreshSecret: process.env.JWT_REFRESH_SECRET ? '[SET]' : '[MISSING]'
+    });
+
+    return { accessToken, refreshToken };
+  } catch (error) {
+    logger.error('Token generation failed', { userId, error: error.message });
+    throw error;
+  }
 }
 
 // Register endpoint
@@ -115,9 +130,22 @@ router.post('/register', registerValidation, async (req, res) => {
 
 // Login endpoint
 router.post('/login', loginValidation, async (req, res) => {
+  const requestId = Math.random().toString(36).substring(7);
+  logger.debug(`[${requestId}] Login attempt started`, {
+    email: req.body?.email,
+    hasPassword: !!req.body?.password,
+    userAgent: req.get('User-Agent'),
+    ip: req.ip,
+    origin: req.get('Origin'),
+    referer: req.get('Referer'),
+    contentType: req.get('Content-Type'),
+    bodySize: JSON.stringify(req.body || {}).length
+  });
+
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      logger.debug(`[${requestId}] Validation failed`, { errors: errors.array() });
       return res.status(400).json({
         success: false,
         errors: errors.array(),
@@ -125,6 +153,8 @@ router.post('/login', loginValidation, async (req, res) => {
     }
 
     const { email, password } = req.body;
+    logger.debug(`[${requestId}] Validation passed, searching for user`, { email });
+    
     const prisma = getPrisma();
 
     // Find user
@@ -133,23 +163,41 @@ router.post('/login', loginValidation, async (req, res) => {
     });
 
     if (!user) {
+      logger.debug(`[${requestId}] User not found`, { email });
       return res.status(401).json({
         success: false,
         error: 'Invalid credentials',
       });
     }
+
+    logger.debug(`[${requestId}] User found, verifying password`, { 
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      hasStoredPassword: !!user.password,
+      lastLogin: user.lastLogin
+    });
 
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
+      logger.debug(`[${requestId}] Password verification failed`, { userId: user.id, email });
       return res.status(401).json({
         success: false,
         error: 'Invalid credentials',
       });
     }
 
+    logger.debug(`[${requestId}] Password verified, generating tokens`, { userId: user.id });
+
     // Generate tokens
     const { accessToken, refreshToken } = generateTokens(user.id);
+    
+    logger.debug(`[${requestId}] Tokens generated, updating database`, { 
+      userId: user.id,
+      accessTokenLength: accessToken?.length,
+      refreshTokenLength: refreshToken?.length
+    });
 
     // Store refresh token
     await prisma.user.update({
@@ -163,9 +211,9 @@ router.post('/login', loginValidation, async (req, res) => {
       data: { lastLogin: new Date() },
     });
 
-    logger.info('User logged in successfully', { userId: user.id, email: user.email });
+    logger.debug(`[${requestId}] Database updated, preparing response`, { userId: user.id });
 
-    res.json({
+    const responseData = {
       success: true,
       data: {
         user: {
@@ -177,9 +225,27 @@ router.post('/login', loginValidation, async (req, res) => {
         accessToken,
         refreshToken,
       },
+    };
+
+    logger.info('User logged in successfully', { userId: user.id, email: user.email, requestId });
+    logger.debug(`[${requestId}] Sending successful response`, {
+      userId: user.id,
+      responseSize: JSON.stringify(responseData).length,
+      headers: {
+        'content-type': 'application/json',
+        'access-control-allow-origin': res.get('Access-Control-Allow-Origin'),
+        'access-control-allow-credentials': res.get('Access-Control-Allow-Credentials')
+      }
     });
+
+    res.json(responseData);
   } catch (error) {
-    logger.error('Login error:', error);
+    logger.error(`[${requestId}] Login error:`, error);
+    logger.debug(`[${requestId}] Error details`, {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
     res.status(500).json({
       success: false,
       error: 'Login failed',

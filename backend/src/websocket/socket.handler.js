@@ -7,8 +7,17 @@ let io;
 function initializeSocket(server) {
   io = new Server(server, {
     cors: {
-      origin: process.env.FRONTEND_URL,
+      origin: [
+        process.env.FRONTEND_URL,
+        'http://localhost:5173',
+        'http://192.168.0.169:5173',
+        /^http:\/\/192\.168\.0\.\d+:5173$/,
+        /^https:\/\/192\.168\.0\.\d+:5173$/,
+        /^http:\/\/192\.168\.2\d\.\d+:5173$/,
+        /^https:\/\/192\.168\.2\d\.\d+:5173$/
+      ].filter(Boolean),
       credentials: true,
+      methods: ['GET', 'POST'],
     },
   });
 
