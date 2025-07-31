@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import debugLog, { DebugCategory } from '@/utils/debug'
 
 // Lazy load components for better performance
 const LoginView = () => import('@/views/auth/LoginView.vue')
@@ -173,17 +174,27 @@ const router = createRouter({
 
 // Navigation guards
 router.beforeEach(async (to, from, next) => {
+  debugLog.progress(DebugCategory.ROUTER, `Navigating from ${from.path} to ${to.path}`)
+  
   const authStore = useAuthStore()
+  debugLog.progress(DebugCategory.ROUTER, 'Auth state check', {
+    isAuthenticated: authStore.isAuthenticated,
+    hasUser: !!authStore.user,
+    hasToken: !!authStore.token
+  })
   
   // Initialize auth state if not already done
   if (!authStore.user && authStore.token) {
+    debugLog.progress(DebugCategory.ROUTER, 'Initializing auth state')
     authStore.initializeAuth()
   }
 
   // Check if route requires authentication
   if (to.meta.requiresAuth) {
+    debugLog.progress(DebugCategory.ROUTER, 'Route requires auth')
     if (!authStore.isAuthenticated) {
       // Not authenticated, redirect to login
+      debugLog.warn(DebugCategory.ROUTER, 'Not authenticated, redirecting to login')
       next({
         name: 'Login',
         query: { redirect: to.fullPath } // Save intended destination
@@ -194,9 +205,10 @@ router.beforeEach(async (to, from, next) => {
     // Check if token is about to expire and refresh if needed
     if (authStore.checkTokenExpiry()) {
       try {
+        debugLog.progress(DebugCategory.ROUTER, 'Refreshing token')
         await authStore.refreshAccessToken()
       } catch (error) {
-        console.error('Token refresh failed:', error)
+        debugLog.error(DebugCategory.ROUTER, 'Token refresh failed:', error)
         next({ name: 'Login' })
         return
       }
@@ -205,6 +217,7 @@ router.beforeEach(async (to, from, next) => {
 
   // Redirect authenticated users away from auth pages
   if (to.meta.hideForAuth && authStore.isAuthenticated) {
+    debugLog.progress(DebugCategory.ROUTER, 'Authenticated user accessing auth page, redirecting to dashboard')
     next({ name: 'Dashboard' })
     return
   }
@@ -214,6 +227,7 @@ router.beforeEach(async (to, from, next) => {
     document.title = `${to.meta.title} - Aruba Central Automation`
   }
 
+  debugLog.success(DebugCategory.ROUTER, 'Navigation allowed')
   next()
 })
 

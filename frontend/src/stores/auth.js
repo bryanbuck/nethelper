@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import router from '@/router'
 import { authService } from '@/services/auth.service'
+import debugLog, { DebugCategory } from '@/utils/debug'
 
 export const useAuthStore = defineStore('auth', () => {
   // State
@@ -18,31 +19,56 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Actions
   const login = async (credentials) => {
+    debugLog.progress(DebugCategory.AUTH, 'Auth store login called', { email: credentials.email, password: '***' })
+    
     try {
       isLoading.value = true
       error.value = null
+      debugLog.progress(DebugCategory.AUTH, 'Setting loading state to true, cleared errors')
 
+      debugLog.progress(DebugCategory.AUTH, 'Calling authService.login...')
       const response = await authService.login(credentials)
+      debugLog.success(DebugCategory.AUTH, 'Auth service response received', {
+        status: response.status,
+        data: response.data ? {
+          success: response.data.success ? 'present' : 'missing',
+          user: response.data.data?.user ? 'present' : 'missing',
+          accessToken: response.data.data?.accessToken ? 'present' : 'missing',
+          refreshToken: response.data.data?.refreshToken ? 'present' : 'missing'
+        } : 'no data'
+      })
       
-      // Store tokens (backend uses camelCase, not snake_case)
-      token.value = response.data.accessToken
-      refreshToken.value = response.data.refreshToken
-      user.value = response.data.user
+      // Backend wraps response in { success: true, data: { user, accessToken, refreshToken } }
+      const responseData = response.data.data
+      token.value = responseData.accessToken
+      refreshToken.value = responseData.refreshToken
+      user.value = responseData.user
+
+      debugLog.progress(DebugCategory.AUTH, 'Storing tokens and user data in state')
+      debugLog.progress(DebugCategory.AUTH, 'Token stored:', token.value ? 'yes' : 'no')
+      debugLog.progress(DebugCategory.AUTH, 'User stored:', user.value ? 'yes' : 'no')
 
       // Persist to localStorage
       localStorage.setItem('access_token', token.value)
       localStorage.setItem('refresh_token', refreshToken.value)
       localStorage.setItem('user', JSON.stringify(user.value))
+      debugLog.progress(DebugCategory.AUTH, 'Data persisted to localStorage')
+
+      debugLog.success(DebugCategory.AUTH, 'isAuthenticated computed:', isAuthenticated.value)
 
       // Don't navigate here - let the component handle navigation
       // This prevents double navigation conflicts
       
       return response.data
     } catch (err) {
+      debugLog.error(DebugCategory.AUTH, 'Auth store login error:', err)
+      debugLog.error(DebugCategory.AUTH, 'Error response data:', err.response?.data)
+      debugLog.error(DebugCategory.AUTH, 'Error status:', err.response?.status)
       error.value = err.response?.data?.message || 'Login failed'
       throw err
     } finally {
       isLoading.value = false
+      debugLog.progress(DebugCategory.AUTH, 'Loading state set to false')
     }
   }
 
@@ -69,10 +95,11 @@ export const useAuthStore = defineStore('auth', () => {
 
       const response = await authService.refresh(refreshToken.value)
       
-      // Update tokens (backend uses camelCase, not snake_case)
-      token.value = response.data.accessToken
-      if (response.data.refreshToken) {
-        refreshToken.value = response.data.refreshToken
+      // Backend wraps response in { success: true, data: { accessToken, refreshToken } }
+      const responseData = response.data.data
+      token.value = responseData.accessToken
+      if (responseData.refreshToken) {
+        refreshToken.value = responseData.refreshToken
         localStorage.setItem('refresh_token', refreshToken.value)
       }
       

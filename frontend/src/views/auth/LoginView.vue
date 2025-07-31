@@ -14,7 +14,7 @@
 
           <v-card-text class="px-8 pb-8">
             <Form v-slot="{ handleSubmit, isSubmitting }" :validation-schema="validationSchema">
-              <form @submit="handleSubmit(onSubmit)">
+              <form @submit.prevent="handleSubmit(onSubmit)">
                 <!-- Email Field -->
                 <Field name="email" v-slot="{ field, errors }">
                   <v-text-field
@@ -84,6 +84,7 @@
                   Sign In
                 </v-btn>
 
+
                 <!-- Forgot Password Link -->
                 <div class="text-center">
                   <router-link
@@ -97,6 +98,7 @@
             </Form>
           </v-card-text>
         </v-card>
+
 
         <!-- Footer -->
         <div class="text-center mt-6">
@@ -119,6 +121,7 @@ import { Form, Field } from 'vee-validate'
 import * as yup from 'yup'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter, useRoute } from 'vue-router'
+import debugLog, { DebugCategory } from '@/utils/debug'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -151,18 +154,33 @@ const focusPassword = async () => {
 
 // Form submission handler
 const onSubmit = async (values) => {
+  debugLog.progress(DebugCategory.AUTH, 'Login form submitted', { email: values.email, password: '***' })
+  debugLog.progress(DebugCategory.AUTH, 'Remember me:', rememberMe.value)
+  
   try {
-    await authStore.login({
+    debugLog.progress(DebugCategory.AUTH, 'Calling authStore.login...')
+    const result = await authStore.login({
       email: values.email,
       password: values.password,
       remember: rememberMe.value
     })
+    
+    debugLog.success(DebugCategory.AUTH, 'Login successful, result:', result)
+    debugLog.success(DebugCategory.AUTH, 'Auth store state after login', {
+      isAuthenticated: authStore.isAuthenticated,
+      user: authStore.user,
+      token: authStore.token ? 'present' : 'missing'
+    })
 
     // Redirect to intended page or dashboard
     const redirectTo = route.query.redirect || '/dashboard'
-    router.push(redirectTo)
+    debugLog.progress(DebugCategory.AUTH, 'Redirecting to:', redirectTo)
+    await router.push(redirectTo)
+    debugLog.success(DebugCategory.AUTH, 'Redirect completed')
   } catch (error) {
-    console.error('Login error:', error)
+    debugLog.error(DebugCategory.AUTH, 'Login error:', error)
+    debugLog.error(DebugCategory.AUTH, 'Error response:', error.response?.data)
+    debugLog.error(DebugCategory.AUTH, 'Error status:', error.response?.status)
     // Error is handled by the auth store
   }
 }

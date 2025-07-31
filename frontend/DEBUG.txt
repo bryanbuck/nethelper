@@ -1,0 +1,47 @@
+  🔧 Debug Logging System Features:
+
+  Environment Configuration (.env)
+
+  # Debug Logging Configuration
+  VITE_DEBUG_LOGGING=true                    # Enable/disable all debug logging
+  VITE_DEBUG_CATEGORIES=AUTH,API,ROUTER      # Only log these categories
+
+  Usage Examples:
+
+  In Browser Console:
+  // Check debug status
+  debugLog.status()
+
+  // Toggle debug on/off
+  debugLog.toggle()
+
+  // Enable/disable specific categories
+  debugLog.toggleCategory('AUTH')      // Toggle AUTH category
+  debugLog.toggleCategory('API')       // Toggle API category
+
+  Control Options:
+
+  1. Complete Control via .env:
+    - Set VITE_DEBUG_LOGGING=false to disable all debug logging
+    - Set VITE_DEBUG_LOGGING=true to enable debug logging
+    - Use VITE_DEBUG_CATEGORIES=AUTH,API to only show specific categories
+  2. Runtime Control:
+    - debugLog.toggle() - Turn debug on/off during development
+    - debugLog.toggleCategory('AUTH') - Enable/disable specific categories
+    - debugLog.status() - See current configuration
+  3. Categories Available:
+    - AUTH - Authentication & login flow
+    - API - HTTP requests & responses
+    - ROUTER - Navigation & route changes
+    - WEBSOCKET - WebSocket connections
+    - STORE - State management
+    - COMPONENT - Vue component lifecycle
+
+  Production Ready:
+
+  - Debug logging automatically disabled in production builds
+  - No performance impact when disabled
+  - Clean, timestamped output with emoji indicators (🔄 ✅ ❌ ⚠️ ℹ️)
+
+  To turn off debug logging: Set VITE_DEBUG_LOGGING=false in your .env file, or use debugLog.toggle() in the browser console.
+
