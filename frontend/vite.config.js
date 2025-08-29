@@ -5,6 +5,13 @@ import { fileURLToPath, URL } from 'node:url'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue()],
+  server: {
+    allowedHosts: [
+      'dev-nethelper.buck.local',
+      'buck.local',
+      'localhost'
+    ]
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))

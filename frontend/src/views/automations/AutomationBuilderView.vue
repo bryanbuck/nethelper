@@ -458,12 +458,14 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { validateWorkflow, exportWorkflowToJSON, importWorkflowFromJSON } from '@/utils/layoutUtils'
+import { useAutomationsStore } from '@/stores/automations'
 import WorkflowCanvas from '@/components/automations/WorkflowCanvas.vue'
 import NodeToolbar from '@/components/automations/NodeToolbar.vue'
 import NodeConfigDialog from '@/components/automations/NodeConfigDialog.vue'
 
 const router = useRouter()
 const route = useRoute()
+const automationsStore = useAutomationsStore()
 
 // Component state
 const canvas = ref(null)
@@ -482,12 +484,14 @@ const importFile = ref(null)
 const importJson = ref('')
 
 // Workflow metadata
+const workflowId = ref(route.params.id || null)
 const workflowMetadata = ref({
   name: 'Untitled Workflow',
   description: '',
   category: 'network',
   priority: 'medium',
   enabled: true,
+  active: false,
   created: new Date().toISOString(),
   modified: new Date().toISOString()
 })
@@ -668,14 +672,51 @@ const saveWorkflow = async () => {
   saving.value = true
   
   try {
+    const nodes = workflowElements.value.filter(el => el.type)
+    const edges = workflowElements.value.filter(el => !el.type)
+    
     const workflowData = {
-      ...workflowMetadata.value,
+      name: workflowMetadata.value.name,
+      description: workflowMetadata.value.description,
+      category: workflowMetadata.value.category,
+      priority: workflowMetadata.value.priority,
+      active: workflowMetadata.value.active,
+      enabled: workflowMetadata.value.enabled,
       elements: workflowElements.value,
-      modified: new Date().toISOString()
+      metadata: {
+        nodeCount: nodes.length,
+        edgeCount: edges.length,
+        lastModified: new Date().toISOString()
+      }
     }
     
-    // Save to backend (mock for now)
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    if (workflowId.value) {
+      // Update existing automation
+      const updatedAutomation = await automationsStore.updateAutomation(workflowId.value, workflowData)
+      workflowMetadata.value = {
+        ...workflowMetadata.value,
+        ...updatedAutomation,
+        modified: new Date().toISOString()
+      }
+    } else {
+      // Create new automation
+      const newAutomation = await automationsStore.createAutomation({
+        ...workflowData,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      })
+      
+      workflowId.value = newAutomation.id
+      workflowMetadata.value = {
+        ...workflowMetadata.value,
+        ...newAutomation,
+        created: newAutomation.createdAt,
+        modified: newAutomation.updatedAt
+      }
+      
+      // Update URL to reflect the new automation ID
+      router.replace(`/automations/builder/${newAutomation.id}`)
+    }
     
     showSnackbar('Workflow saved successfully', 'success')
     
@@ -693,10 +734,25 @@ const deployWorkflow = async () => {
   deploying.value = true
   
   try {
-    // Deploy to backend (mock for now)
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    // First save the workflow if there are unsaved changes
+    if (workflowId.value) {
+      await saveWorkflow()
+    } else {
+      // Must save first before deploying
+      await saveWorkflow()
+    }
     
-    workflowMetadata.value.enabled = true
+    // Deploy (activate) the automation
+    if (workflowId.value) {
+      await automationsStore.updateAutomation(workflowId.value, {
+        active: true,
+        enabled: true
+      })
+      
+      workflowMetadata.value.active = true
+      workflowMetadata.value.enabled = true
+    }
+    
     showSnackbar('Workflow deployed successfully', 'success')
     
   } catch (error) {
@@ -815,12 +871,56 @@ const handleKeyboard = (event) => {
   }
 }
 
+const loadExistingAutomation = async () => {
+  if (!workflowId.value) return
+  
+  try {
+    const automation = automationsStore.getAutomationById(workflowId.value)
+    
+    if (automation) {
+      workflowMetadata.value = {
+        name: automation.name,
+        description: automation.description || '',
+        category: automation.category || 'network',
+        priority: automation.priority || 'medium',
+        enabled: automation.enabled || false,
+        active: automation.active || false,
+        created: automation.createdAt,
+        modified: automation.updatedAt
+      }
+      
+      if (automation.elements && automation.elements.length > 0) {
+        workflowElements.value = automation.elements
+        
+        if (canvas.value) {
+          const nodes = automation.elements.filter(el => el.type)
+          const edges = automation.elements.filter(el => !el.type)
+          
+          canvas.value.importWorkflow({ nodes, edges })
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load automation:', error)
+    showSnackbar('Failed to load automation', 'error')
+  }
+}
+
 // Lifecycle
-onMounted(() => {
+onMounted(async () => {
   document.addEventListener('keydown', handleKeyboard)
   
+  // Load existing automation if editing
+  if (workflowId.value) {
+    // Ensure automations are loaded first
+    if (automationsStore.automations.length === 0) {
+      await automationsStore.fetchAutomations()
+    }
+    await loadExistingAutomation()
+  }
+  
   // Initialize with sample workflow if needed
-  if (route.query.sample) {
+  if (route.query.sample && !workflowId.value) {
     // Add sample nodes for demonstration
     setTimeout(() => {
       if (canvas.value) {
