@@ -139,6 +139,36 @@ const validateQuery = {
   ],
 };
 
+// API Credential validation rules
+const validateApiCredential = {
+  create: [
+    body('name').trim().isLength({ min: 1, max: 255 }).withMessage('Credential name is required (max 255 characters)'),
+    body('type').isIn(['switch', 'ap', 'gateway', 'controller', 'other']).withMessage('Invalid credential type'),
+    body('deviceId').optional().isUUID().withMessage('Invalid device ID'),
+    body('username').optional().trim(),
+    body('password').optional().trim(),
+    body('apiKey').optional().trim(),
+    body('apiSecret').optional().trim(),
+    body('notes').optional().trim(),
+    body('metadata').optional().isObject().withMessage('Metadata must be an object'),
+    handleValidationErrors,
+  ],
+
+  update: [
+    param('id').isUUID().withMessage('Invalid credential ID'),
+    body('name').optional().trim().isLength({ min: 1, max: 255 }),
+    body('type').optional().isIn(['switch', 'ap', 'gateway', 'controller', 'other']),
+    body('deviceId').optional().isUUID(),
+    body('username').optional().trim(),
+    body('password').optional().trim(),
+    body('apiKey').optional().trim(),
+    body('apiSecret').optional().trim(),
+    body('notes').optional().trim(),
+    body('metadata').optional().isObject(),
+    handleValidationErrors,
+  ],
+};
+
 // General validation helpers
 const validateUUID = (paramName) => [
   param(paramName).isUUID().withMessage(`Invalid ${paramName}`),
@@ -156,6 +186,7 @@ module.exports = {
   validateAutomation,
   validateSchedule,
   validateDeviceGroup,
+  validateApiCredential,
   validateQuery,
   validateUUID,
   validateOptionalUUID,
