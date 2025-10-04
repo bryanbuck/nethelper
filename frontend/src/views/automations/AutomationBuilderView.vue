@@ -591,20 +591,58 @@ const addToHistory = (elements) => {
 const undo = () => {
   if (canUndo.value) {
     historyIndex.value--
-    workflowElements.value = JSON.parse(JSON.stringify(history.value[historyIndex.value]))
+    const restoredElements = JSON.parse(JSON.stringify(history.value[historyIndex.value]))
+    
+    // Prevent this change from being added to history
+    preventHistoryUpdate.value = true
+    workflowElements.value = restoredElements
+    
+    // Update the canvas with restored elements
+    if (canvas.value) {
+      const nodes = restoredElements.filter(el => el.type)
+      const edges = restoredElements.filter(el => !el.type)
+      canvas.value.importWorkflow({ nodes, edges })
+    }
+    
+    // Re-enable history updates after a brief delay
+    setTimeout(() => {
+      preventHistoryUpdate.value = false
+    }, 100)
   }
 }
 
 const redo = () => {
   if (canRedo.value) {
     historyIndex.value++
-    workflowElements.value = JSON.parse(JSON.stringify(history.value[historyIndex.value]))
+    const restoredElements = JSON.parse(JSON.stringify(history.value[historyIndex.value]))
+    
+    // Prevent this change from being added to history
+    preventHistoryUpdate.value = true
+    workflowElements.value = restoredElements
+    
+    // Update the canvas with restored elements
+    if (canvas.value) {
+      const nodes = restoredElements.filter(el => el.type)
+      const edges = restoredElements.filter(el => !el.type)
+      canvas.value.importWorkflow({ nodes, edges })
+    }
+    
+    // Re-enable history updates after a brief delay
+    setTimeout(() => {
+      preventHistoryUpdate.value = false
+    }, 100)
   }
 }
 
+const preventHistoryUpdate = ref(false)
+
 const onElementsChange = (elements) => {
   workflowElements.value = elements
-  addToHistory(elements)
+  
+  // Don't add to history if this change came from undo/redo
+  if (!preventHistoryUpdate.value) {
+    addToHistory(elements)
+  }
 }
 
 const onNodeConfigure = (node) => {
@@ -909,6 +947,9 @@ const loadExistingAutomation = async () => {
 // Lifecycle
 onMounted(async () => {
   document.addEventListener('keydown', handleKeyboard)
+  
+  // Initialize history with empty state
+  addToHistory([])
   
   // Load existing automation if editing
   if (workflowId.value) {

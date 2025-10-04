@@ -13,7 +13,7 @@
     <Handle 
       v-if="!isStartNode" 
       type="target" 
-      position="Position.Left" 
+      :position="Position.Left" 
       :style="{ background: '#555' }"
     />
     
@@ -84,7 +84,7 @@
     <Handle 
       v-if="!isEndNode" 
       type="source" 
-      position="Position.Right" 
+      :position="Position.Right" 
       :style="{ background: '#555' }"
     />
   </div>

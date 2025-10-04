@@ -25,7 +25,8 @@ export const DebugCategory = {
   ROUTER: 'ROUTER',
   WEBSOCKET: 'WEBSOCKET',
   STORE: 'STORE',
-  COMPONENT: 'COMPONENT'
+  COMPONENT: 'COMPONENT',
+  SETTINGS: 'SETTINGS'
 }
 
 /**

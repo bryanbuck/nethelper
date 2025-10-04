@@ -52,6 +52,11 @@ const navigationItems = [
     title: 'Executions',
     icon: 'mdi-history',
     to: '/executions'
+  },
+  {
+    title: 'Settings',
+    icon: 'mdi-cog',
+    to: '/settings'
   }
 ]
 

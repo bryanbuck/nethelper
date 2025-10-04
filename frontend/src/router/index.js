@@ -14,6 +14,7 @@ const AutomationDetailView = () => import('@/views/automations/AutomationDetailV
 const ScheduleView = () => import('@/views/schedule/ScheduleView.vue')
 const ExecutionsView = () => import('@/views/executions/ExecutionsView.vue')
 const ExecutionDetailView = () => import('@/views/executions/ExecutionDetailView.vue')
+const SettingsView = () => import('@/views/settings/SettingsView.vue')
 
 const routes = [
   // Default redirect
@@ -138,13 +139,23 @@ const routes = [
     path: '/executions/:id',
     name: 'ExecutionDetail',
     component: ExecutionDetailView,
-    meta: { 
+    meta: {
       requiresAuth: true,
       title: 'Execution Details',
       breadcrumb: [
         { text: 'Executions', to: '/executions' },
         { text: 'Details', disabled: true }
       ]
+    }
+  },
+  {
+    path: '/settings',
+    name: 'Settings',
+    component: SettingsView,
+    meta: {
+      requiresAuth: true,
+      title: 'Settings',
+      icon: 'mdi-cog'
     }
   },
 
