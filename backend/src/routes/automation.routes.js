@@ -9,11 +9,20 @@ const router = express.Router();
 // All routes require authentication
 router.use(authenticate);
 
-// Get all automations
+// Get all automations with optional filtering
 router.get('/', async (req, res) => {
   try {
+    const { category, active, enabled, priority } = req.query;
     const prisma = getPrisma();
+    
+    const where = {};
+    if (category) where.category = category;
+    if (active !== undefined) where.active = active === 'true';
+    if (enabled !== undefined) where.enabled = enabled === 'true';
+    if (priority) where.priority = priority;
+
     const automations = await prisma.automation.findMany({
+      where,
       include: {
         createdBy: {
           select: { id: true, name: true, email: true },
@@ -26,15 +35,15 @@ router.get('/', async (req, res) => {
       orderBy: { createdAt: 'desc' },
     });
 
+    // Format response to match frontend expectations
     res.json({
-      success: true,
       data: automations,
     });
   } catch (error) {
     logger.error('Get automations error:', error);
     res.status(500).json({
-      success: false,
       error: 'Failed to fetch automations',
+      message: error.message,
     });
   }
 });
@@ -67,20 +76,18 @@ router.get('/:id', async (req, res) => {
 
     if (!automation) {
       return res.status(404).json({
-        success: false,
         error: 'Automation not found',
       });
     }
 
     res.json({
-      success: true,
       data: automation,
     });
   } catch (error) {
     logger.error('Get automation error:', error);
     res.status(500).json({
-      success: false,
       error: 'Failed to fetch automation',
+      message: error.message,
     });
   }
 });
@@ -88,28 +95,46 @@ router.get('/:id', async (req, res) => {
 // Create automation
 router.post('/', authorize('admin', 'operator'), [
   body('name').trim().isLength({ min: 1 }).withMessage('Name is required'),
-  body('type').isIn(['configuration_backup', 'firmware_update', 'compliance_check', 'custom_script', 'monitoring_alert']),
-  body('workflow').isObject().withMessage('Workflow must be an object'),
+  body('category').isIn(['network', 'security', 'monitoring', 'maintenance', 'compliance']).withMessage('Invalid category'),
+  body('priority').isIn(['low', 'medium', 'high', 'critical']).withMessage('Invalid priority'),
+  body('elements').isArray().withMessage('Elements must be an array'),
   body('description').optional().trim(),
+  body('active').optional().isBoolean(),
+  body('enabled').optional().isBoolean(),
+  body('metadata').optional().isObject(),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
-        success: false,
-        errors: errors.array(),
+        error: 'Validation failed',
+        details: errors.array(),
       });
     }
 
-    const { name, description, type, workflow, deviceGroupIds = [] } = req.body;
+    const { 
+      name, 
+      description, 
+      category, 
+      priority, 
+      elements, 
+      active = false, 
+      enabled = true, 
+      metadata,
+      deviceGroupIds = [] 
+    } = req.body;
     const prisma = getPrisma();
 
     const automation = await prisma.automation.create({
       data: {
         name,
         description,
-        type,
-        workflow,
+        category,
+        priority,
+        elements,
+        active,
+        enabled,
+        metadata,
         userId: req.user.id,
         deviceGroups: {
           connect: deviceGroupIds.map(id => ({ id })),
@@ -126,14 +151,13 @@ router.post('/', authorize('admin', 'operator'), [
     logger.info('Automation created', { automationId: automation.id, userId: req.user.id });
 
     res.status(201).json({
-      success: true,
       data: automation,
     });
   } catch (error) {
     logger.error('Create automation error:', error);
     res.status(500).json({
-      success: false,
       error: 'Failed to create automation',
+      message: error.message,
     });
   }
 });
@@ -141,22 +165,35 @@ router.post('/', authorize('admin', 'operator'), [
 // Update automation
 router.put('/:id', authorize('admin', 'operator'), [
   body('name').optional().trim().isLength({ min: 1 }),
-  body('type').optional().isIn(['configuration_backup', 'firmware_update', 'compliance_check', 'custom_script', 'monitoring_alert']),
-  body('workflow').optional().isObject(),
+  body('category').optional().isIn(['network', 'security', 'monitoring', 'maintenance', 'compliance']),
+  body('priority').optional().isIn(['low', 'medium', 'high', 'critical']),
+  body('elements').optional().isArray(),
   body('description').optional().trim(),
   body('active').optional().isBoolean(),
+  body('enabled').optional().isBoolean(),
+  body('metadata').optional().isObject(),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
-        success: false,
-        errors: errors.array(),
+        error: 'Validation failed',
+        details: errors.array(),
       });
     }
 
     const { id } = req.params;
-    const { name, description, type, workflow, active, deviceGroupIds } = req.body;
+    const { 
+      name, 
+      description, 
+      category, 
+      priority, 
+      elements, 
+      active, 
+      enabled, 
+      metadata, 
+      deviceGroupIds 
+    } = req.body;
     const prisma = getPrisma();
 
     // Check if automation exists
@@ -166,7 +203,6 @@ router.put('/:id', authorize('admin', 'operator'), [
 
     if (!existingAutomation) {
       return res.status(404).json({
-        success: false,
         error: 'Automation not found',
       });
     }
@@ -175,9 +211,12 @@ router.put('/:id', authorize('admin', 'operator'), [
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (description !== undefined) updateData.description = description;
-    if (type !== undefined) updateData.type = type;
-    if (workflow !== undefined) updateData.workflow = workflow;
+    if (category !== undefined) updateData.category = category;
+    if (priority !== undefined) updateData.priority = priority;
+    if (elements !== undefined) updateData.elements = elements;
     if (active !== undefined) updateData.active = active;
+    if (enabled !== undefined) updateData.enabled = enabled;
+    if (metadata !== undefined) updateData.metadata = metadata;
 
     if (deviceGroupIds !== undefined) {
       updateData.deviceGroups = {
@@ -199,14 +238,13 @@ router.put('/:id', authorize('admin', 'operator'), [
     logger.info('Automation updated', { automationId: id, userId: req.user.id });
 
     res.json({
-      success: true,
       data: automation,
     });
   } catch (error) {
     logger.error('Update automation error:', error);
     res.status(500).json({
-      success: false,
       error: 'Failed to update automation',
+      message: error.message,
     });
   }
 });
@@ -224,7 +262,6 @@ router.delete('/:id', authorize('admin', 'operator'), async (req, res) => {
 
     if (!automation) {
       return res.status(404).json({
-        success: false,
         error: 'Automation not found',
       });
     }
@@ -237,14 +274,15 @@ router.delete('/:id', authorize('admin', 'operator'), async (req, res) => {
     logger.info('Automation deleted', { automationId: id, userId: req.user.id });
 
     res.json({
-      success: true,
-      message: 'Automation deleted successfully',
+      data: {
+        message: 'Automation deleted successfully',
+      },
     });
   } catch (error) {
     logger.error('Delete automation error:', error);
     res.status(500).json({
-      success: false,
       error: 'Failed to delete automation',
+      message: error.message,
     });
   }
 });
@@ -256,7 +294,7 @@ router.post('/:id/execute', authorize('admin', 'operator'), async (req, res) => 
     const { deviceIds = [] } = req.body;
     const prisma = getPrisma();
 
-    // Check if automation exists and is active
+    // Check if automation exists and is enabled
     const automation = await prisma.automation.findUnique({
       where: { id },
       include: {
@@ -270,15 +308,13 @@ router.post('/:id/execute', authorize('admin', 'operator'), async (req, res) => 
 
     if (!automation) {
       return res.status(404).json({
-        success: false,
         error: 'Automation not found',
       });
     }
 
-    if (!automation.active) {
+    if (!automation.enabled) {
       return res.status(400).json({
-        success: false,
-        error: 'Automation is not active',
+        error: 'Automation is not enabled',
       });
     }
 
@@ -297,10 +333,15 @@ router.post('/:id/execute', authorize('admin', 'operator'), async (req, res) => 
 
     if (targetDevices.length === 0) {
       return res.status(400).json({
-        success: false,
         error: 'No target devices specified',
       });
     }
+
+    // Update lastRun timestamp
+    await prisma.automation.update({
+      where: { id },
+      data: { lastRun: new Date() },
+    });
 
     // Create execution records
     const executions = await Promise.all(
@@ -328,7 +369,6 @@ router.post('/:id/execute', authorize('admin', 'operator'), async (req, res) => 
     });
 
     res.json({
-      success: true,
       data: {
         executions,
         message: `Automation queued for ${targetDevices.length} device(s)`,
@@ -339,8 +379,55 @@ router.post('/:id/execute', authorize('admin', 'operator'), async (req, res) => 
   } catch (error) {
     logger.error('Execute automation error:', error);
     res.status(500).json({
-      success: false,
       error: 'Failed to execute automation',
+      message: error.message,
+    });
+  }
+});
+
+// Toggle automation active status
+router.patch('/:id/toggle', authorize('admin', 'operator'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const prisma = getPrisma();
+
+    // Check if automation exists
+    const existingAutomation = await prisma.automation.findUnique({
+      where: { id },
+    });
+
+    if (!existingAutomation) {
+      return res.status(404).json({
+        error: 'Automation not found',
+      });
+    }
+
+    // Toggle active status
+    const automation = await prisma.automation.update({
+      where: { id },
+      data: { active: !existingAutomation.active },
+      include: {
+        createdBy: {
+          select: { id: true, name: true, email: true },
+        },
+        deviceGroups: true,
+      },
+    });
+
+    logger.info('Automation active status toggled', { 
+      automationId: id, 
+      newStatus: automation.active,
+      userId: req.user.id 
+    });
+
+    res.json({
+      data: automation,
+    });
+  } catch (error) {
+    logger.error('Toggle automation error:', error);
+    res.status(500).json({
+      error: 'Failed to toggle automation',
+      message: error.message,
     });
   }
 });

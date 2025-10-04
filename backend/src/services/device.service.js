@@ -156,8 +156,8 @@ class DeviceService {
     try {
       logger.progress('Starting device sync from Aruba Central');
 
-      // Get devices from Aruba Central
-      const arubaDevices = await arubaCentralService.getDevices();
+      // Get devices from Aruba Central using the new getAllDevices method
+      const arubaDevices = await arubaCentralService.getAllDevices();
       const prisma = getPrisma();
 
       let created = 0;
@@ -204,7 +204,14 @@ class DeviceService {
         }
       }
 
-      logger.success('Device sync completed', { created, updated, total: arubaDevices.length });
+      logger.success('Device sync completed', { 
+        created, 
+        updated, 
+        total: arubaDevices.length,
+        accessPoints: arubaDevices.filter(d => this.mapDeviceType(d.device_type) === 'access_point').length,
+        switches: arubaDevices.filter(d => this.mapDeviceType(d.device_type) === 'switch').length,
+        gateways: arubaDevices.filter(d => this.mapDeviceType(d.device_type) === 'gateway').length
+      });
       return { created, updated, total: arubaDevices.length };
     } catch (error) {
       logger.error('Device sync error', { error: error.message, stack: error.stack });
@@ -235,16 +242,33 @@ class DeviceService {
 
   mapDeviceType(arubaType) {
     const typeMap = {
+      // Access Points
       'ap': 'access_point',
       'access_point': 'access_point',
+      'iap': 'access_point',
+      'instant_ap': 'access_point',
+      
+      // Switches
       'switch': 'switch',
-      'gateway': 'gateway',
-      'gw': 'gateway',
       'cx': 'switch',
       'aos_switch': 'switch',
+      'aos-s': 'switch',
+      'aos-cx': 'switch',
+      
+      // Gateways
+      'gateway': 'gateway',
+      'gw': 'gateway',
+      'mobility_controller': 'gateway',
+      'controller': 'gateway',
+      'mc': 'gateway'
     };
 
-    return typeMap[arubaType?.toLowerCase()] || 'access_point';
+    const deviceType = typeMap[arubaType?.toLowerCase()];
+    if (!deviceType) {
+      logger.warn('Unknown device type encountered', { arubaType });
+      return 'access_point'; // Default fallback
+    }
+    return deviceType;
   }
 
   mapDeviceStatus(arubaStatus) {

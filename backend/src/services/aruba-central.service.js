@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { debugLog, Services } = require('../utils/debug-logger');
+const ArubaErrorHandler = require('../utils/aruba-error-handler');
 const { getRedis } = require('../config/redis');
 
 // Create service-specific logger
@@ -72,14 +73,19 @@ class ArubaCentralService {
 
       return access_token;
     } catch (error) {
-      logger.error('Failed to get access token', {
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        responseData: error.response?.data,
-        url: `${this.baseURL}/oauth2/token`
-      });
-      throw error;
+      // Parse and enhance the error
+      const enhancedError = ArubaErrorHandler.parseError(error, 'authentication');
+      ArubaErrorHandler.logError(enhancedError);
+      
+      // Create a more user-friendly error
+      const userError = new Error(enhancedError.userMessage);
+      userError.type = enhancedError.type;
+      userError.category = enhancedError.category;
+      userError.actions = enhancedError.actions;
+      userError.isArubaError = enhancedError.isArubaError;
+      userError.originalError = error;
+      
+      throw userError;
     }
   }
 
@@ -150,35 +156,37 @@ class ArubaCentralService {
 
       return response.data;
     } catch (error) {
-      const errorDetails = {
-        requestId,
-        method,
-        endpoint,
-        url: `${this.baseURL}${endpoint}`,
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        responseData: error.response?.data,
-        isNetworkError: !error.response,
-        isTimeoutError: error.code === 'ECONNABORTED'
-      };
-
-      if (error.response) {
-        logger.error('API HTTP error', errorDetails, requestId);
-      } else if (error.request) {
-        logger.error('API network error - no response received', errorDetails, requestId);
-      } else {
-        logger.error('API request setup error', errorDetails, requestId);
-      }
-
-      throw error;
+      // Parse and enhance the error
+      const enhancedError = ArubaErrorHandler.parseError(error, `api_${endpoint.split('/')[1] || 'call'}`);
+      ArubaErrorHandler.logError(enhancedError, requestId);
+      
+      // Create a more user-friendly error
+      const userError = new Error(enhancedError.userMessage);
+      userError.type = enhancedError.type;
+      userError.category = enhancedError.category;
+      userError.actions = enhancedError.actions;
+      userError.isArubaError = enhancedError.isArubaError;
+      userError.statusCode = enhancedError.details.statusCode;
+      userError.endpoint = endpoint;
+      userError.originalError = error;
+      
+      throw userError;
     }
   }
 
-  // Device Management Methods
+  // Device Management Methods - DEPRECATED: Use getAccessPoints() and getSwitches() separately
   async getDevices(filters = {}) {
-    const endpoint = '/monitoring/v2/devices';
-    return this.makeRequest('GET', endpoint, null, filters);
+    // This method is deprecated - use getAccessPoints() and getSwitches() instead
+    logger.warn('getDevices() is deprecated - use getAccessPoints() and getSwitches() separately');
+    
+    // Get both APs and switches and combine them
+    const [accessPoints, switches] = await Promise.all([
+      this.getAccessPoints(filters),
+      this.getSwitches(filters)
+    ]);
+    
+    // Combine and return both device types
+    return [...(accessPoints || []), ...(switches || [])];
   }
 
   async getDevice(deviceSerial) {
@@ -192,8 +200,76 @@ class ArubaCentralService {
   }
 
   async getSwitches(filters = {}) {
-    const endpoint = '/monitoring/v2/switches';
+    const endpoint = '/monitoring/v1/switches';
     return this.makeRequest('GET', endpoint, null, filters);
+  }
+
+  async getGateways(filters = {}) {
+    const endpoint = '/monitoring/v1/gateways';
+    return this.makeRequest('GET', endpoint, null, filters);
+  }
+
+  // New method that properly fetches all device types using current endpoints
+  async getAllDevices(filters = {}) {
+    logger.info('Fetching all devices using current API endpoints');
+    
+    try {
+      const [accessPointsResult, switchesResult, gatewaysResult] = await Promise.allSettled([
+        this.getAccessPoints(filters),
+        this.getSwitches(filters),
+        this.getGateways(filters)
+      ]);
+
+      const allDevices = [];
+      let errors = [];
+
+      if (accessPointsResult.status === 'fulfilled') {
+        allDevices.push(...(accessPointsResult.value || []));
+        logger.debug('Successfully fetched access points', { count: accessPointsResult.value?.length || 0 });
+      } else {
+        errors.push({ type: 'access_points', error: accessPointsResult.reason });
+        logger.error('Failed to fetch access points', { error: accessPointsResult.reason?.message });
+      }
+
+      if (switchesResult.status === 'fulfilled') {
+        allDevices.push(...(switchesResult.value || []));
+        logger.debug('Successfully fetched switches', { count: switchesResult.value?.length || 0 });
+      } else {
+        errors.push({ type: 'switches', error: switchesResult.reason });
+        logger.error('Failed to fetch switches', { error: switchesResult.reason?.message });
+      }
+
+      if (gatewaysResult.status === 'fulfilled') {
+        allDevices.push(...(gatewaysResult.value || []));
+        logger.debug('Successfully fetched gateways', { count: gatewaysResult.value?.length || 0 });
+      } else {
+        errors.push({ type: 'gateways', error: gatewaysResult.reason });
+        logger.warn('Failed to fetch gateways (may not be supported)', { error: gatewaysResult.reason?.message });
+      }
+
+      logger.success('Device fetch completed', { 
+        totalDevices: allDevices.length,
+        errors: errors.length,
+        successfulEndpoints: 3 - errors.length
+      });
+
+      // If we have at least some devices, return them even if some endpoints failed
+      if (allDevices.length > 0) {
+        return allDevices;
+      }
+
+      // If all endpoints failed, throw an error
+      if (errors.length === 3) {
+        const error = new Error('Failed to fetch devices from all endpoints');
+        error.details = errors;
+        throw error;
+      }
+
+      return allDevices;
+    } catch (error) {
+      logger.error('Unexpected error in getAllDevices', { error: error.message });
+      throw error;
+    }
   }
 
   // Configuration Methods

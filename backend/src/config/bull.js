@@ -3,6 +3,14 @@ const logger = require('../utils/logger');
 
 const queues = {};
 
+/**
+ * Creates a new Bull queue with standardized configuration for job processing.
+ * Sets up Redis connection, default job options including retry logic, cleanup settings,
+ * and error handling. Each queue is configured with exponential backoff for failed jobs.
+ * 
+ * @param {string} name - The name of the queue to create
+ * @returns {Queue} Configured Bull queue instance
+ */
 function createQueue(name) {
   const queue = new Queue(name, {
     redis: {
@@ -32,6 +40,14 @@ function createQueue(name) {
   return queue;
 }
 
+/**
+ * Initializes all application job queues and their processors.
+ * Creates queues for automation execution, device synchronization, notifications,
+ * and cleanup tasks. Also imports and initializes the corresponding job processors
+ * to handle queue processing.
+ * 
+ * @returns {Promise<void>} Promise that resolves when all queues are initialized
+ */
 async function initializeQueues() {
   // Create queues
   queues.automation = createQueue('automation');
@@ -46,6 +62,15 @@ async function initializeQueues() {
   logger.info('All job queues initialized');
 }
 
+/**
+ * Retrieves a previously initialized queue by name.
+ * Provides access to specific queues for adding jobs or monitoring status.
+ * Throws an error if the requested queue hasn't been initialized.
+ * 
+ * @param {string} name - The name of the queue to retrieve
+ * @returns {Queue} The requested Bull queue instance
+ * @throws {Error} If the queue doesn't exist
+ */
 function getQueue(name) {
   if (!queues[name]) {
     throw new Error(`Queue ${name} not found`);

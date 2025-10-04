@@ -12,6 +12,7 @@
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:seed": "node scripts/seed-data.js",
+    "user:manage": "node scripts/user-manager.js",
     "setup": "npm install && npm run db:generate && npm run db:migrate"
   },
   "dependencies": {

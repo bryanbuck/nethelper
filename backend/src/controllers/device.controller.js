@@ -1,5 +1,6 @@
 const deviceService = require('../services/device.service');
 const arubaCentralService = require('../services/aruba-central.service');
+const ArubaErrorHandler = require('../utils/aruba-error-handler');
 const logger = require('../utils/logger');
 
 class DeviceController {
@@ -53,6 +54,20 @@ class DeviceController {
         jobId: job.id,
       });
     } catch (error) {
+      // Handle enhanced Aruba errors
+      if (error.isArubaError && error.actions) {
+        const errorResponse = ArubaErrorHandler.createErrorResponse({
+          type: error.type,
+          userMessage: error.message,
+          explanation: error.explanation,
+          actions: error.actions,
+          documentation: error.documentation,
+          context: 'device_sync',
+          details: { statusCode: error.statusCode },
+          timestamp: new Date().toISOString()
+        });
+        return res.status(error.statusCode || 500).json(errorResponse);
+      }
       next(error);
     }
   }

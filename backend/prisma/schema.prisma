@@ -34,6 +34,21 @@ enum AutomationType {
   monitoring_alert
 }
 
+enum AutomationCategory {
+  network
+  security
+  monitoring
+  maintenance
+  compliance
+}
+
+enum AutomationPriority {
+  low
+  medium
+  high
+  critical
+}
+
 enum ExecutionStatus {
   pending
   running
@@ -89,16 +104,20 @@ model DeviceGroup {
 }
 
 model Automation {
-  id          String         @id @default(uuid())
+  id          String             @id @default(uuid())
   name        String
   description String?
-  type        AutomationType
-  workflow    Json           // Stores the automation workflow definition
-  active      Boolean        @default(true)
-  createdBy   User           @relation(fields: [userId], references: [id])
+  category    AutomationCategory
+  priority    AutomationPriority
+  active      Boolean            @default(false)
+  enabled     Boolean            @default(true)
+  elements    Json               // Stores Vue Flow nodes and edges (renamed from workflow)
+  metadata    Json?              // Stores additional workflow metadata
+  lastRun     DateTime?          // Timestamp of last execution
+  createdBy   User               @relation(fields: [userId], references: [id])
   userId      String
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
   
   schedules   Schedule[]
   executions  Execution[]
