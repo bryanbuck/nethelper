@@ -1,5 +1,6 @@
 const deviceService = require('../services/device.service');
 const arubaCentralService = require('../services/aruba-central.service');
+const devicePollerService = require('../services/device-poller.service');
 const ArubaErrorHandler = require('../utils/aruba-error-handler');
 const logger = require('../utils/logger');
 
@@ -233,12 +234,73 @@ class DeviceController {
   async deleteDeviceGroup(req, res, next) {
     try {
       const { groupId } = req.params;
-      
+
       await deviceService.deleteDeviceGroup(groupId);
-      
+
       res.json({
         success: true,
         message: 'Device group deleted successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Poll devices for specific information
+   * Supports bulk polling of multiple devices
+   */
+  async pollDevices(req, res, next) {
+    try {
+      const { poller, deviceIds } = req.body;
+
+      // Validate input
+      if (!poller) {
+        return res.status(400).json({
+          success: false,
+          error: 'Poller name is required',
+          availablePollers: devicePollerService.getAvailablePollers(),
+        });
+      }
+
+      if (!deviceIds || !Array.isArray(deviceIds) || deviceIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'deviceIds array is required and must contain at least one device ID',
+        });
+      }
+
+      // Poll devices
+      const results = await devicePollerService.pollDevices(poller, deviceIds);
+
+      // Calculate summary statistics
+      const summary = {
+        total: results.length,
+        successful: results.filter(r => r.success).length,
+        failed: results.filter(r => !r.success).length,
+      };
+
+      res.json({
+        success: true,
+        poller,
+        summary,
+        results,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get available device pollers
+   */
+  async getAvailablePollers(req, res, next) {
+    try {
+      const pollers = devicePollerService.getAvailablePollers();
+
+      res.json({
+        success: true,
+        pollers,
       });
     } catch (error) {
       next(error);

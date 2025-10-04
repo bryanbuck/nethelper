@@ -16,6 +16,13 @@ router.post('/', authorize('admin', 'operator'), validateDevice.create, deviceCo
 // Sync devices from Aruba Central
 router.post('/sync', authorize('admin', 'operator'), deviceController.syncDevices);
 
+// Device polling routes
+// Get available pollers
+router.get('/poll/pollers', deviceController.getAvailablePollers);
+
+// Poll devices for specific information (bulk operation)
+router.post('/poll', authorize('admin', 'operator'), deviceController.pollDevices);
+
 // Get specific device
 router.get('/:deviceId', deviceController.getDevice);
 
