@@ -297,6 +297,34 @@ class DeviceService {
     }
     return mac
   }
+
+  // Device Polling API Methods
+  async getAvailablePollers() {
+    try {
+      const response = await api.get('/devices/poll/pollers')
+      return response.data
+    } catch (error) {
+      console.error('Error fetching available pollers:', error)
+      throw error
+    }
+  }
+
+  async pollDevices(poller, deviceIds) {
+    try {
+      const response = await api.post('/devices/poll', {
+        poller,
+        deviceIds
+      })
+      return response.data
+    } catch (error) {
+      console.error('Error polling devices:', error)
+      throw error
+    }
+  }
+
+  async pollDeviceFirmware(deviceIds) {
+    return this.pollDevices('firmware', deviceIds)
+  }
 }
 
 export default new DeviceService()

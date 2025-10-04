@@ -34,7 +34,13 @@ export const useDevicesStore = defineStore('devices', () => {
   
   const tableLoading = ref(false)
 
-  const onlineDevices = computed(() => 
+  // Firmware polling state
+  const firmwareData = ref([])
+  const firmwareLoading = ref(false)
+  const firmwareError = ref(null)
+  const availablePollers = ref([])
+
+  const onlineDevices = computed(() =>
     devices.value.filter(device => device.status === 'online')
   )
 
@@ -211,6 +217,73 @@ export const useDevicesStore = defineStore('devices', () => {
     }
   }
 
+  async function fetchAvailablePollers() {
+    try {
+      const response = await deviceService.getAvailablePollers()
+      availablePollers.value = response.pollers || []
+      return response
+    } catch (error) {
+      console.error('Failed to fetch available pollers:', error)
+      throw error
+    }
+  }
+
+  async function pollDeviceFirmware(deviceIds) {
+    firmwareLoading.value = true
+    firmwareError.value = null
+    try {
+      const response = await deviceService.pollDeviceFirmware(deviceIds)
+
+      // Merge firmware data with device info
+      firmwareData.value = response.results.map(result => {
+        const device = devices.value.find(d => d.id === result.deviceId)
+        return {
+          deviceId: result.deviceId,
+          deviceName: device?.name || result.deviceId,
+          deviceType: device?.type || 'Unknown',
+          deviceIp: device?.ipAddress || 'N/A',
+          deviceLocation: device?.location || 'N/A',
+          success: result.success,
+          error: result.error || null,
+          timestamp: result.timestamp,
+          booted: result.data?.booted_image || null,
+          current: result.data?.current_image || null,
+          default: result.data?.default_image || null,
+          primary: result.data?.primary_version || null,
+          secondary: result.data?.secondary_version || null
+        }
+      })
+
+      return response
+    } catch (error) {
+      firmwareError.value = error.message || 'Failed to poll device firmware'
+      console.error('Failed to poll device firmware:', error)
+      throw error
+    } finally {
+      firmwareLoading.value = false
+    }
+  }
+
+  async function pollAllSwitchesFirmware() {
+    // Get all switch devices
+    const switches = devices.value.filter(d =>
+      d.type && (d.type.toLowerCase().includes('switch') || d.type.toLowerCase() === 'cx')
+    )
+
+    if (switches.length === 0) {
+      firmwareError.value = 'No switches found to poll'
+      return
+    }
+
+    const switchIds = switches.map(s => s.id)
+    return await pollDeviceFirmware(switchIds)
+  }
+
+  function clearFirmwareData() {
+    firmwareData.value = []
+    firmwareError.value = null
+  }
+
   return {
     devices,
     selectedDevices,
@@ -221,6 +294,10 @@ export const useDevicesStore = defineStore('devices', () => {
     pagination,
     tableOptions,
     tableLoading,
+    firmwareData,
+    firmwareLoading,
+    firmwareError,
+    availablePollers,
     onlineDevices,
     offlineDevices,
     warningDevices,
@@ -241,6 +318,10 @@ export const useDevicesStore = defineStore('devices', () => {
     setFilters,
     setSorting,
     setPage,
-    setItemsPerPage
+    setItemsPerPage,
+    fetchAvailablePollers,
+    pollDeviceFirmware,
+    pollAllSwitchesFirmware,
+    clearFirmwareData
   }
 })

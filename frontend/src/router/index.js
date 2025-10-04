@@ -8,6 +8,7 @@ const ForgotPasswordView = () => import('@/views/auth/ForgotPasswordView.vue')
 const DashboardView = () => import('@/views/dashboard/DashboardView.vue')
 const DevicesView = () => import('@/views/devices/DevicesView.vue')
 const DeviceDetailView = () => import('@/views/devices/DeviceDetailView.vue')
+const FirmwareStatusView = () => import('@/views/devices/FirmwareStatusView.vue')
 const AutomationsView = () => import('@/views/automations/AutomationsView.vue')
 const AutomationBuilderView = () => import('@/views/automations/AutomationBuilderView.vue')
 const AutomationDetailView = () => import('@/views/automations/AutomationDetailView.vue')
@@ -67,10 +68,24 @@ const routes = [
     }
   },
   {
+    path: '/devices/firmware',
+    name: 'FirmwareStatus',
+    component: FirmwareStatusView,
+    meta: {
+      requiresAuth: true,
+      title: 'Firmware Status',
+      icon: 'mdi-chip',
+      breadcrumb: [
+        { text: 'Devices', to: '/devices' },
+        { text: 'Firmware Status', disabled: true }
+      ]
+    }
+  },
+  {
     path: '/devices/:id',
     name: 'DeviceDetail',
     component: DeviceDetailView,
-    meta: { 
+    meta: {
       requiresAuth: true,
       title: 'Device Details',
       breadcrumb: [
