@@ -25,6 +25,9 @@ class DevicePollerService {
 
     // Register built-in pollers
     this.registerPoller('firmware', this.firmwarePoller.bind(this));
+    this.registerPoller('system', this.systemPoller.bind(this));
+    this.registerPoller('backup', this.backupPoller.bind(this));
+    this.registerPoller('login-sessions', this.loginSessionsPoller.bind(this));
   }
 
   /**
@@ -235,6 +238,184 @@ class DevicePollerService {
       return result;
     } catch (error) {
       logger.error(`Firmware polling failed for ${device.name}`, { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * System Poller Module
+   * Polls system information from AOS-CX switches
+   * @param {Object} device - Device object from database
+   * @param {Object} credentials - Decrypted credentials
+   * @returns {Promise<Object>} System information
+   */
+  async systemPoller(device, credentials) {
+    try {
+      logger.progress(`Polling system info from ${device.name} (${device.ipAddress})`);
+
+      // Determine base URL based on device type
+      let baseUrl, apiPath;
+
+      switch (device.type) {
+        case 'switch':
+          // AOS-CX switch - use REST API v10.15
+          baseUrl = `https://${device.ipAddress}/rest/v10.15`;
+          apiPath = '/system';
+          break;
+
+        case 'ap':
+        case 'gateway':
+          throw new Error(`System polling not yet implemented for device type: ${device.type}`);
+
+        default:
+          throw new Error(`Unsupported device type: ${device.type}`);
+      }
+
+      // Make API request with depth=1 to get basic system info
+      const systemData = await this.makeDeviceRequest(baseUrl, apiPath, credentials, {
+        headers: { 'Depth': '1' }
+      });
+
+      // Extract relevant fields (common fields returned by /system endpoint)
+      const result = {
+        hostname: systemData.hostname || null,
+        platform_name: systemData.platform_name || null,
+        software_version: systemData.software_version || null,
+        software_info: systemData.software_info || null,
+        mgmt_intf_status: systemData.mgmt_intf_status || null,
+        boot_time: systemData.boot_time || null,
+        usb_status: systemData.usb_status || null,
+        timezone: systemData.timezone || null,
+        contact: systemData.contact || null,
+        location: systemData.location || null,
+        description: systemData.description || null,
+      };
+
+      logger.success(`System info retrieved from ${device.name}`, {
+        hostname: result.hostname,
+        platform: result.platform_name,
+        version: result.software_version,
+      });
+
+      return result;
+    } catch (error) {
+      logger.error(`System polling failed for ${device.name}`, { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Backup Poller Module
+   * Retrieves configuration backup from AOS-CX switches
+   * @param {Object} device - Device object from database
+   * @param {Object} credentials - Decrypted credentials
+   * @returns {Promise<Object>} Configuration data
+   */
+  async backupPoller(device, credentials) {
+    try {
+      logger.progress(`Polling configuration backup from ${device.name} (${device.ipAddress})`);
+
+      // Determine base URL based on device type
+      let baseUrl, runningConfigPath, startupConfigPath;
+
+      switch (device.type) {
+        case 'switch':
+          // AOS-CX switch - use REST API v10.15
+          baseUrl = `https://${device.ipAddress}/rest/v10.15`;
+          runningConfigPath = '/fullconfigs/running-config';
+          startupConfigPath = '/fullconfigs/startup-config';
+          break;
+
+        case 'ap':
+        case 'gateway':
+          throw new Error(`Backup polling not yet implemented for device type: ${device.type}`);
+
+        default:
+          throw new Error(`Unsupported device type: ${device.type}`);
+      }
+
+      // Get both running and startup configurations
+      // Note: These can be large, so we're being careful with parallel requests
+      const [runningConfig, startupConfig] = await Promise.all([
+        this.makeDeviceRequest(baseUrl, runningConfigPath, credentials, { timeout: 30000 }),
+        this.makeDeviceRequest(baseUrl, startupConfigPath, credentials, { timeout: 30000 })
+      ]);
+
+      const result = {
+        running_config: runningConfig,
+        startup_config: startupConfig,
+        backed_up_at: new Date().toISOString(),
+      };
+
+      logger.success(`Configuration backup retrieved from ${device.name}`, {
+        running_config_size: JSON.stringify(runningConfig).length,
+        startup_config_size: JSON.stringify(startupConfig).length,
+      });
+
+      return result;
+    } catch (error) {
+      logger.error(`Backup polling failed for ${device.name}`, { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Login Sessions Poller Module
+   * Polls active login sessions from AOS-CX switches
+   * @param {Object} device - Device object from database
+   * @param {Object} credentials - Decrypted credentials
+   * @returns {Promise<Object>} Active login sessions
+   */
+  async loginSessionsPoller(device, credentials) {
+    try {
+      logger.progress(`Polling login sessions from ${device.name} (${device.ipAddress})`);
+
+      // Determine base URL based on device type
+      let baseUrl, apiPath;
+
+      switch (device.type) {
+        case 'switch':
+          // AOS-CX switch - use REST API v10.15
+          baseUrl = `https://${device.ipAddress}/rest/v10.15`;
+          // Get system resource which contains session information
+          // Note: Direct /login-sessions may not exist, using /system/users or similar
+          apiPath = '/system/users';
+          break;
+
+        case 'ap':
+        case 'gateway':
+          throw new Error(`Login sessions polling not yet implemented for device type: ${device.type}`);
+
+        default:
+          throw new Error(`Unsupported device type: ${device.type}`);
+      }
+
+      try {
+        // Try to get login sessions - the exact endpoint may vary by firmware version
+        const sessionsData = await this.makeDeviceRequest(baseUrl, apiPath, credentials, {
+          headers: { 'Depth': '2' }
+        });
+
+        const result = {
+          users: sessionsData,
+          session_count: Object.keys(sessionsData || {}).length,
+          polled_at: new Date().toISOString(),
+        };
+
+        logger.success(`Login sessions retrieved from ${device.name}`, {
+          session_count: result.session_count,
+        });
+
+        return result;
+      } catch (apiError) {
+        // If the endpoint doesn't exist, provide informative error
+        if (apiError.message.includes('404')) {
+          throw new Error('Login sessions endpoint not available on this device/firmware version. Try using CLI command "show users" instead.');
+        }
+        throw apiError;
+      }
+    } catch (error) {
+      logger.error(`Login sessions polling failed for ${device.name}`, { error: error.message });
       throw error;
     }
   }

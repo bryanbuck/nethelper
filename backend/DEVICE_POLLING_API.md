@@ -2,7 +2,12 @@
 
 ## Overview
 
-The Device Polling API provides the capability to poll information directly from network devices using device-specific APIs, separate from Aruba Central. This is a modular system that currently supports firmware version polling from AOS-CX switches, with the architecture designed to easily add additional data collection capabilities in the future.
+The Device Polling API provides the capability to poll information directly from network devices using device-specific APIs, separate from Aruba Central. This is a modular system that currently supports multiple polling capabilities from AOS-CX switches:
+
+- **Firmware** - Firmware version information
+- **System** - System information (hostname, platform, software version, etc.)
+- **Backup** - Configuration backup (running and startup configs)
+- **Login Sessions** - Active user sessions
 
 ### Key Features
 
@@ -37,7 +42,7 @@ Retrieve a list of all available polling modules.
 ```json
 {
   "success": true,
-  "pollers": ["firmware"]
+  "pollers": ["firmware", "system", "backup", "login-sessions"]
 }
 ```
 
@@ -117,7 +122,7 @@ Poll one or more devices for specific information using a designated poller.
 {
   "success": false,
   "error": "Poller name is required",
-  "availablePollers": ["firmware"]
+  "availablePollers": ["firmware", "system", "backup", "login-sessions"]
 }
 ```
 
@@ -133,11 +138,15 @@ Poll one or more devices for specific information using a designated poller.
 ```json
 {
   "success": false,
-  "error": "Poller 'invalid-poller' not found. Available pollers: firmware"
+  "error": "Poller 'invalid-poller' not found. Available pollers: firmware, system, backup, login-sessions"
 }
 ```
 
-## Firmware Poller
+---
+
+## Available Pollers
+
+### Firmware Poller
 
 The `firmware` poller retrieves firmware version information from network devices.
 
@@ -163,6 +172,135 @@ For the firmware poller to work:
 2. Device must have valid API credentials configured in Settings
 3. Device must be reachable on the network
 4. Credentials must have API access permissions on the device
+
+---
+
+### System Poller
+
+The `system` poller retrieves system information from network devices.
+
+**Poller Name**: `system`
+
+**Supported Devices**:
+- **AOS-CX Switches**: Uses REST API v10.15 endpoint `/rest/v10.15/system`
+
+**Response Fields**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `hostname` | string \| null | Device hostname |
+| `platform_name` | string \| null | Hardware platform name (e.g., "8325-48Y8C") |
+| `software_version` | string \| null | Running software version |
+| `software_info` | object \| null | Detailed software information |
+| `mgmt_intf_status` | object \| null | Management interface status |
+| `boot_time` | number \| null | Boot time (Unix timestamp) |
+| `usb_status` | string \| null | USB port status |
+| `timezone` | string \| null | Configured timezone |
+| `contact` | string \| null | System contact (SNMP) |
+| `location` | string \| null | System location (SNMP) |
+| `description` | string \| null | System description |
+
+**Example Response**:
+```json
+{
+  "deviceId": "uuid-of-device",
+  "success": true,
+  "data": {
+    "hostname": "switch-core-01",
+    "platform_name": "8325-48Y8C",
+    "software_version": "10.13.1010",
+    "boot_time": 1696348800,
+    "timezone": "America/New_York",
+    "contact": "Network Admin",
+    "location": "Data Center 1"
+  },
+  "timestamp": "2025-10-14T14:30:00.000Z"
+}
+```
+
+---
+
+### Backup Poller
+
+The `backup` poller retrieves complete device configurations.
+
+**Poller Name**: `backup`
+
+**Supported Devices**:
+- **AOS-CX Switches**: Uses REST API v10.15 endpoints:
+  - `/rest/v10.15/fullconfigs/running-config`
+  - `/rest/v10.15/fullconfigs/startup-config`
+
+**Response Fields**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `running_config` | object | Complete running configuration (JSON format) |
+| `startup_config` | object | Complete startup configuration (JSON format) |
+| `backed_up_at` | string | ISO timestamp of when backup was created |
+
+**Example Response**:
+```json
+{
+  "deviceId": "uuid-of-device",
+  "success": true,
+  "data": {
+    "running_config": { /* Full device config */ },
+    "startup_config": { /* Full device config */ },
+    "backed_up_at": "2025-10-14T14:30:00.000Z"
+  },
+  "timestamp": "2025-10-14T14:30:00.000Z"
+}
+```
+
+**Important Notes**:
+- Configuration files can be very large (several MB)
+- Backup poller has extended timeout (30 seconds) to accommodate large configs
+- Consider storing backups in a separate database or file storage system
+- Use this poller sparingly to avoid performance impact
+
+---
+
+### Login Sessions Poller
+
+The `login-sessions` poller retrieves information about active user sessions.
+
+**Poller Name**: `login-sessions`
+
+**Supported Devices**:
+- **AOS-CX Switches**: Uses REST API v10.15 endpoint `/rest/v10.15/system/users`
+
+**Response Fields**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `users` | object | User information and session details |
+| `session_count` | number | Number of active user accounts |
+| `polled_at` | string | ISO timestamp of when data was collected |
+
+**Example Response**:
+```json
+{
+  "deviceId": "uuid-of-device",
+  "success": true,
+  "data": {
+    "users": {
+      "admin": { /* user details */ },
+      "operator1": { /* user details */ }
+    },
+    "session_count": 2,
+    "polled_at": "2025-10-14T14:30:00.000Z"
+  },
+  "timestamp": "2025-10-14T14:30:00.000Z"
+}
+```
+
+**Important Notes**:
+- This endpoint returns user account information, not active CLI/SSH sessions
+- The exact response structure may vary by firmware version
+- For detailed session information, consider using CLI commands via automation workflows
+
+---
 
 ## Frontend Implementation Examples
 
@@ -297,17 +435,24 @@ failedDevices.forEach(device => {
 
 ### 3. Timeout Handling
 
-Device polls have a 15-second timeout. If devices are slow to respond, you may see timeout errors. Consider showing a loading indicator for at least 20 seconds.
+Device polls have different timeouts based on the poller:
+- **firmware, system, login-sessions**: 15 seconds
+- **backup**: 30 seconds (due to large config files)
+
+If devices are slow to respond, you may see timeout errors. Consider showing a loading indicator for at least:
+- 20 seconds for standard pollers
+- 40 seconds for backup poller
 
 ## Future Pollers
 
 The modular architecture supports adding new pollers. Future pollers might include:
 
-- **config** - Retrieve device configuration
 - **stats** - Get device statistics (CPU, memory, uptime)
 - **interfaces** - Poll interface status and statistics
 - **neighbors** - Get LLDP/CDP neighbor information
 - **logs** - Retrieve recent device logs
+- **checkpoint** - Create configuration checkpoints
+- **vlans** - VLAN configuration and status
 
 When new pollers are added, they will automatically appear in the `/poll/pollers` endpoint response.
 

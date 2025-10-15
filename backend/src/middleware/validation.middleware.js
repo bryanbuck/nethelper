@@ -27,11 +27,11 @@ const validateDevice = {
   ],
 
   create: [
-    body('serial').trim().isLength({ min: 1 }).withMessage('Serial number is required'),
     body('name').trim().isLength({ min: 1 }).withMessage('Device name is required'),
     body('type').isIn(['access_point', 'switch', 'gateway']).withMessage('Invalid device type'),
+    body('ipAddress').trim().isIP().withMessage('IP address is required and must be valid'),
+    body('serial').optional().trim(),
     body('model').optional().trim(),
-    body('ipAddress').optional().isIP().withMessage('Invalid IP address'),
     body('macAddress').optional().isMACAddress().withMessage('Invalid MAC address'),
     body('location').optional().trim(),
     handleValidationErrors,

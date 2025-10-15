@@ -8,6 +8,7 @@
     "dev": "nodemon server.js",
     "test": "jest",
     "test:watch": "jest --watch",
+    "test:login": "node scripts/test-login.js",
     "lint": "eslint src/",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",

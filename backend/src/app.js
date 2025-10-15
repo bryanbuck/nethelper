@@ -13,6 +13,7 @@ const automationRoutes = require('./routes/automation.routes');
 const scheduleRoutes = require('./routes/schedule.routes');
 const executionRoutes = require('./routes/execution.routes');
 const settingsRoutes = require('./routes/settings.routes');
+const deviceApiTestRoutes = require('./routes/device-api-test.routes');
 
 // Import middleware
 // This section imports custom middleware functions that will be applied to requests.
@@ -122,6 +123,7 @@ app.use(`${apiPrefix}/automations`, automationRoutes);
 app.use(`${apiPrefix}/schedules`, scheduleRoutes);
 app.use(`${apiPrefix}/executions`, executionRoutes);
 app.use(`${apiPrefix}/settings`, settingsRoutes);
+app.use(`${apiPrefix}/device-api`, deviceApiTestRoutes);
 
 // 404 handler
 // Catch-all middleware that handles requests to undefined routes by returning a standardized
