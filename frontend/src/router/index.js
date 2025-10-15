@@ -16,6 +16,7 @@ const ScheduleView = () => import('@/views/schedule/ScheduleView.vue')
 const ExecutionsView = () => import('@/views/executions/ExecutionsView.vue')
 const ExecutionDetailView = () => import('@/views/executions/ExecutionDetailView.vue')
 const SettingsView = () => import('@/views/settings/SettingsView.vue')
+const DeviceApiTestingView = () => import('@/views/settings/DeviceApiTestingView.vue')
 
 const routes = [
   // Default redirect
@@ -171,6 +172,20 @@ const routes = [
       requiresAuth: true,
       title: 'Settings',
       icon: 'mdi-cog'
+    }
+  },
+  {
+    path: '/settings/device-api-testing',
+    name: 'DeviceApiTesting',
+    component: DeviceApiTestingView,
+    meta: {
+      requiresAuth: true,
+      title: 'Device API Testing',
+      icon: 'mdi-test-tube',
+      breadcrumb: [
+        { text: 'Settings', to: '/settings' },
+        { text: 'Device API Testing', disabled: true }
+      ]
     }
   },
 

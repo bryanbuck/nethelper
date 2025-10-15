@@ -10,7 +10,25 @@ export default defineConfig({
       'dev-nethelper.buck.local',
       'buck.local',
       'localhost'
-    ]
+    ],
+    proxy: {
+      '/api': {
+        target: 'http://dev-nethelper.buck.local:3000',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy, options) => {
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            console.log('🔄 Proxying:', req.method, req.url, '→', options.target + req.url)
+          })
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            console.log('✅ Proxy response:', proxyRes.statusCode, req.url)
+          })
+          proxy.on('error', (err, req, res) => {
+            console.error('❌ Proxy error:', err.message, req.url)
+          })
+        }
+      }
+    }
   },
   resolve: {
     alias: {

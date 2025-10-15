@@ -445,7 +445,7 @@ const addNode = (category, nodeData) => {
 }
 
 .node-item:hover {
-  border-color: #1976d2;
+  border-color: #FF8300;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   transform: translateY(-1px);
 }

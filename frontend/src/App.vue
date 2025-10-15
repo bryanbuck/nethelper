@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useTheme } from 'vuetify'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import NotificationDisplay from '@/components/common/NotificationDisplay.vue'
 
 const theme = useTheme()
 const router = useRouter()
@@ -77,9 +78,9 @@ onMounted(() => {
         elevation="2"
       >
         <v-app-bar-nav-icon
-          variant="text"
           @click.stop="drawer = !drawer"
-        />
+          icon="mdi-menu"
+        ></v-app-bar-nav-icon>
         
         <v-toolbar-title>
           <v-icon class="mr-2">mdi-network</v-icon>
@@ -181,7 +182,7 @@ onMounted(() => {
     </v-main>
 
     <!-- Footer only for authenticated pages -->
-    <v-footer 
+    <v-footer
       v-if="!isAuthPage && authStore.isAuthenticated"
       app
     >
@@ -189,6 +190,9 @@ onMounted(() => {
       <div>&copy; {{ new Date().getFullYear() }} — NetHelper Automation Platform</div>
       <v-spacer />
     </v-footer>
+
+    <!-- Global Notification Display -->
+    <NotificationDisplay />
   </v-app>
 </template>
 
@@ -200,5 +204,14 @@ onMounted(() => {
 /* Loading overlay */
 .v-overlay {
   backdrop-filter: blur(2px);
+}
+
+/* Ensure app bar nav icon is visible */
+:deep(.v-app-bar-nav-icon) {
+  color: white !important;
+}
+
+:deep(.v-app-bar-nav-icon .v-icon) {
+  opacity: 1 !important;
 }
 </style>

@@ -223,6 +223,44 @@ export const useNotificationsStore = defineStore('notifications', () => {
     })
   }
 
+  // Convenience methods for common notification patterns
+  function showSuccess(message, title = 'Success') {
+    return addNotification({
+      type: NotificationType.SUCCESS,
+      title,
+      message,
+      timeout: 3000
+    })
+  }
+
+  function showError(message, title = 'Error') {
+    return addNotification({
+      type: NotificationType.ERROR,
+      title,
+      message,
+      persistent: false,
+      timeout: 5000
+    })
+  }
+
+  function showWarning(message, title = 'Warning') {
+    return addNotification({
+      type: NotificationType.WARNING,
+      title,
+      message,
+      timeout: 4000
+    })
+  }
+
+  function showInfo(message, title = 'Info') {
+    return addNotification({
+      type: NotificationType.INFO,
+      title,
+      message,
+      timeout: 3000
+    })
+  }
+
   return {
     notifications,
     alerts,
@@ -241,6 +279,10 @@ export const useNotificationsStore = defineStore('notifications', () => {
     clearReadNotifications,
     addDeviceAlert,
     addAutomationNotification,
+    showSuccess,
+    showError,
+    showWarning,
+    showInfo,
     NotificationType,
     AlertSeverity
   }

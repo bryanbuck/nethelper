@@ -219,14 +219,14 @@ const handleDelete = (event) => {
 }
 
 .base-node:hover {
-  border-color: #1976d2;
+  border-color: #FF8300;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
   transform: translateY(-1px);
 }
 
 .node-selected {
-  border-color: #1976d2;
-  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.2);
+  border-color: #FF8300;
+  box-shadow: 0 0 0 3px rgba(255, 131, 0, 0.2);
 }
 
 .node-error {
@@ -340,11 +340,11 @@ const handleDelete = (event) => {
 }
 
 .node-action {
-  border-color: #2196f3;
+  border-color: #FF8300;
 }
 
 .node-action:hover {
-  border-color: #1976d2;
+  border-color: #cc6900;
 }
 
 .node-notification {

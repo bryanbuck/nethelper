@@ -82,7 +82,7 @@
       </v-row>
       
       <!-- Device Table -->
-      <DeviceTable />
+      <DeviceTable @edit-device="handleEditDevice" />
     </v-container>
     
     <!-- Add Device Dialog -->
@@ -127,9 +127,11 @@
                   variant="outlined"
                   required
                   :rules="[rules.required, rules.ipAddress]"
+                  hint="Required for device API queries"
+                  persistent-hint
                 />
               </v-col>
-              
+
               <v-col cols="12" sm="6">
                 <v-text-field
                   v-model="newDevice.macAddress"
@@ -138,8 +140,8 @@
                   :rules="[rules.macAddress]"
                 />
               </v-col>
-              
-              <v-col cols="12">
+
+              <v-col cols="12" sm="6">
                 <v-text-field
                   v-model="newDevice.location"
                   label="Location"
@@ -148,12 +150,14 @@
                   :rules="[rules.required]"
                 />
               </v-col>
-              
+
               <v-col cols="12" sm="6">
                 <v-text-field
                   v-model="newDevice.serialNumber"
                   label="Serial Number"
                   variant="outlined"
+                  hint="Optional"
+                  persistent-hint
                 />
               </v-col>
               
@@ -187,7 +191,114 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
-    
+
+    <!-- Edit Device Dialog -->
+    <v-dialog
+      v-model="showEditDialog"
+      max-width="600px"
+      persistent
+    >
+      <v-card>
+        <v-card-title class="text-h5">
+          Edit Device
+        </v-card-title>
+
+        <v-card-text>
+          <v-container>
+            <v-row>
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="editingDevice.name"
+                  label="Device Name"
+                  variant="outlined"
+                  required
+                  :rules="[rules.required]"
+                />
+              </v-col>
+
+              <v-col cols="12" sm="6">
+                <v-select
+                  v-model="editingDevice.type"
+                  label="Device Type"
+                  :items="deviceTypes"
+                  variant="outlined"
+                  required
+                  :rules="[rules.required]"
+                />
+              </v-col>
+
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="editingDevice.ipAddress"
+                  label="IP Address"
+                  variant="outlined"
+                  required
+                  :rules="[rules.required, rules.ipAddress]"
+                  hint="Required for device API queries"
+                  persistent-hint
+                />
+              </v-col>
+
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="editingDevice.macAddress"
+                  label="MAC Address"
+                  variant="outlined"
+                  :rules="[rules.macAddress]"
+                />
+              </v-col>
+
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="editingDevice.location"
+                  label="Location"
+                  variant="outlined"
+                  required
+                  :rules="[rules.required]"
+                />
+              </v-col>
+
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="editingDevice.serialNumber"
+                  label="Serial Number"
+                  variant="outlined"
+                  hint="Optional"
+                  persistent-hint
+                />
+              </v-col>
+
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="editingDevice.model"
+                  label="Model"
+                  variant="outlined"
+                />
+              </v-col>
+            </v-row>
+          </v-container>
+        </v-card-text>
+
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn
+            variant="text"
+            @click="closeEditDialog"
+          >
+            Cancel
+          </v-btn>
+          <v-btn
+            color="primary"
+            variant="flat"
+            @click="updateDevice"
+            :loading="saving"
+          >
+            Save Changes
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <!-- Snackbar for notifications -->
     <v-snackbar
       v-model="snackbar.show"
@@ -222,8 +333,19 @@ const { connected, connecting } = useWebSocket()
 
 // Component state
 const showAddDialog = ref(false)
+const showEditDialog = ref(false)
 const saving = ref(false)
 const newDevice = ref({
+  name: '',
+  type: '',
+  ipAddress: '',
+  macAddress: '',
+  location: '',
+  serialNumber: '',
+  model: ''
+})
+const editingDevice = ref({
+  id: '',
   name: '',
   type: '',
   ipAddress: '',
@@ -259,10 +381,7 @@ const rules = {
 const deviceTypes = [
   'Access Point',
   'Switch',
-  'Gateway',
-  'Controller',
-  'Router',
-  'Firewall'
+  'Gateway'
 ]
 
 // Computed properties
@@ -296,50 +415,43 @@ const closeAddDialog = () => {
 
 const saveDevice = async () => {
   // Validate required fields
-  if (!newDevice.value.name || !newDevice.value.type || 
+  if (!newDevice.value.name || !newDevice.value.type ||
       !newDevice.value.ipAddress || !newDevice.value.location) {
     showSnackbar('Please fill in all required fields', 'error')
     return
   }
-  
+
   saving.value = true
-  
+
   try {
-    // Generate mock device data
-    const deviceToAdd = {
-      id: Date.now().toString(),
-      ...newDevice.value,
-      status: 'online',
-      lastSeen: new Date().toISOString(),
-      uptime: '0m',
-      firmware: '10.0.0',
-      macAddress: newDevice.value.macAddress || generateRandomMac()
+    // Map frontend device type to backend format
+    const typeMap = {
+      'Access Point': 'access_point',
+      'Switch': 'switch',
+      'Gateway': 'gateway'
     }
-    
-    // Add type-specific properties
-    if (deviceToAdd.type === 'Access Point') {
-      deviceToAdd.clients = 0
-      deviceToAdd.bandwidth = '0 Mbps'
-      deviceToAdd.channel = 1
-    } else if (deviceToAdd.type === 'Switch') {
-      deviceToAdd.ports = 24
-      deviceToAdd.utilization = '0%'
-      deviceToAdd.vlanCount = 1
-    } else if (deviceToAdd.type === 'Gateway') {
-      deviceToAdd.throughput = '0 Mbps'
-      deviceToAdd.temperature = '65°C'
-      deviceToAdd.wanStatus = 'up'
+
+    // Prepare device data for backend
+    const deviceData = {
+      name: newDevice.value.name,
+      type: typeMap[newDevice.value.type] || 'gateway',
+      ipAddress: newDevice.value.ipAddress, // Required
+      macAddress: newDevice.value.macAddress || generateRandomMac(),
+      location: newDevice.value.location,
+      serial: newDevice.value.serialNumber || '', // Optional - send empty string if not provided
+      model: newDevice.value.model || ''
     }
-    
-    // Add to store
-    devicesStore.addDevice(deviceToAdd)
-    
+
+    // Create device via API
+    await devicesStore.createDevice(deviceData)
+
     showSnackbar('Device added successfully', 'success')
     closeAddDialog()
-    
+
   } catch (error) {
     console.error('Failed to add device:', error)
-    showSnackbar('Failed to add device', 'error')
+    const errorMessage = error.userMessage || error.message || 'Failed to add device'
+    showSnackbar(errorMessage, 'error')
   } finally {
     saving.value = false
   }
@@ -361,6 +473,89 @@ const showSnackbar = (message, color = 'success') => {
     message,
     color,
     timeout: 4000
+  }
+}
+
+// Handle edit device event from DeviceTable
+const handleEditDevice = (device) => {
+  // Map backend device type to frontend format if needed
+  const typeMap = {
+    'access_point': 'Access Point',
+    'switch': 'Switch',
+    'gateway': 'Gateway',
+    'Access Point': 'Access Point',
+    'Switch': 'Switch',
+    'Gateway': 'Gateway'
+  }
+
+  editingDevice.value = {
+    id: device.id,
+    name: device.name || '',
+    type: typeMap[device.type] || device.type || '',
+    ipAddress: device.ipAddress || '',
+    macAddress: device.macAddress || '',
+    location: device.location || '',
+    serialNumber: device.serialNumber || device.serial || '',
+    model: device.model || ''
+  }
+  showEditDialog.value = true
+}
+
+const closeEditDialog = () => {
+  showEditDialog.value = false
+  editingDevice.value = {
+    id: '',
+    name: '',
+    type: '',
+    ipAddress: '',
+    macAddress: '',
+    location: '',
+    serialNumber: '',
+    model: ''
+  }
+}
+
+const updateDevice = async () => {
+  // Validate required fields
+  if (!editingDevice.value.name || !editingDevice.value.type ||
+      !editingDevice.value.ipAddress || !editingDevice.value.location) {
+    showSnackbar('Please fill in all required fields', 'error')
+    return
+  }
+
+  saving.value = true
+
+  try {
+    // Map frontend device type to backend format
+    const typeMap = {
+      'Access Point': 'access_point',
+      'Switch': 'switch',
+      'Gateway': 'gateway'
+    }
+
+    // Prepare device data for backend
+    const deviceData = {
+      name: editingDevice.value.name,
+      type: typeMap[editingDevice.value.type] || 'gateway',
+      ipAddress: editingDevice.value.ipAddress,
+      macAddress: editingDevice.value.macAddress || '',
+      location: editingDevice.value.location,
+      serial: editingDevice.value.serialNumber || '',
+      model: editingDevice.value.model || ''
+    }
+
+    // Update device via API
+    await devicesStore.updateDevice(editingDevice.value.id, deviceData)
+
+    showSnackbar('Device updated successfully', 'success')
+    closeEditDialog()
+
+  } catch (error) {
+    console.error('Failed to update device:', error)
+    const errorMessage = error.userMessage || error.message || 'Failed to update device'
+    showSnackbar(errorMessage, 'error')
+  } finally {
+    saving.value = false
   }
 }
 

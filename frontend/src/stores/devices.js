@@ -7,6 +7,7 @@ export const useDevicesStore = defineStore('devices', () => {
   const selectedDevices = ref([])
   const filters = ref({})
   const loading = ref(false)
+  const error = ref(null)
   const lastSync = ref(null)
   const stats = ref({
     total: 0,
@@ -40,6 +41,11 @@ export const useDevicesStore = defineStore('devices', () => {
   const firmwareError = ref(null)
   const availablePollers = ref([])
 
+  // System polling state
+  const systemData = ref(null)
+  const systemLoading = ref(false)
+  const systemError = ref(null)
+
   const onlineDevices = computed(() =>
     devices.value.filter(device => device.status === 'online')
   )
@@ -72,14 +78,16 @@ export const useDevicesStore = defineStore('devices', () => {
 
   async function fetchDevices() {
     loading.value = true
+    error.value = null
     try {
       const response = await deviceService.getDevices()
       devices.value = response.data
       updateStats()
       lastSync.value = new Date()
-    } catch (error) {
-      console.error('Failed to fetch devices:', error)
-      throw error
+    } catch (err) {
+      console.error('Failed to fetch devices:', err)
+      error.value = err
+      throw err
     } finally {
       loading.value = false
     }
@@ -87,30 +95,47 @@ export const useDevicesStore = defineStore('devices', () => {
 
   async function fetchDevicesWithPagination(options = {}) {
     tableLoading.value = true
+    error.value = null
     try {
       const mergedOptions = {
         ...tableOptions.value,
         ...options
       }
-      
+
       const response = await deviceService.getDevicesWithPagination(mergedOptions)
-      
+
       devices.value = response.data
       pagination.value = response.pagination
-      
+
       // Update table options
       tableOptions.value = {
         ...tableOptions.value,
         ...mergedOptions
       }
-      
+
       updateStats()
       lastSync.value = new Date()
-      
+
       return response
-    } catch (error) {
-      console.error('Failed to fetch devices with pagination:', error)
-      throw error
+    } catch (err) {
+      console.error('Failed to fetch devices with pagination:', err)
+      error.value = err
+
+      // Ensure devices.value is always an array (initialize if undefined)
+      if (!devices.value) {
+        devices.value = []
+      }
+
+      // Don't throw - let the component handle the error gracefully
+      return {
+        data: [],
+        pagination: {
+          page: options.page || 1,
+          itemsPerPage: options.itemsPerPage || 10,
+          total: 0,
+          totalPages: 0
+        }
+      }
     } finally {
       tableLoading.value = false
     }
@@ -148,17 +173,24 @@ export const useDevicesStore = defineStore('devices', () => {
 
   async function syncDevices() {
     loading.value = true
+    error.value = null
     try {
       const response = await deviceService.syncDevices()
       devices.value = response.data
       updateStats()
       lastSync.value = new Date()
-    } catch (error) {
-      console.error('Failed to sync devices:', error)
-      throw error
+      return response
+    } catch (err) {
+      console.error('Failed to sync devices:', err)
+      error.value = err
+      throw err
     } finally {
       loading.value = false
     }
+  }
+
+  function clearError() {
+    error.value = null
   }
 
   function updateDeviceStatus(deviceId, status) {
@@ -179,7 +211,37 @@ export const useDevicesStore = defineStore('devices', () => {
     }
   }
 
+  async function createDevice(deviceData) {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await deviceService.createDevice(deviceData)
+      const newDevice = response.data
+
+      // Ensure devices.value is initialized as an array
+      if (!devices.value) {
+        devices.value = []
+      }
+
+      // Add to local state
+      devices.value.push(newDevice)
+      updateStats()
+
+      return newDevice
+    } catch (err) {
+      console.error('Failed to create device:', err)
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   function addDevice(device) {
+    // Ensure devices.value is initialized as an array
+    if (!devices.value) {
+      devices.value = []
+    }
     devices.value.push(device)
     updateStats()
   }
@@ -192,11 +254,27 @@ export const useDevicesStore = defineStore('devices', () => {
     }
   }
 
-  function updateDevice(deviceId, updates) {
-    const device = devices.value.find(d => d.id === deviceId)
-    if (device) {
-      Object.assign(device, updates)
-      updateStats()
+  async function updateDevice(deviceId, updates) {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await deviceService.updateDevice(deviceId, updates)
+      const updatedDevice = response.data
+
+      // Update local state
+      const device = devices.value.find(d => d.id === deviceId)
+      if (device) {
+        Object.assign(device, updatedDevice)
+        updateStats()
+      }
+
+      return updatedDevice
+    } catch (err) {
+      console.error('Failed to update device:', err)
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
     }
   }
 
@@ -284,11 +362,46 @@ export const useDevicesStore = defineStore('devices', () => {
     firmwareError.value = null
   }
 
+  async function pollDeviceSystem(deviceId) {
+    systemLoading.value = true
+    systemError.value = null
+    try {
+      const response = await deviceService.pollDeviceSystem([deviceId])
+
+      if (response.results && response.results.length > 0) {
+        const result = response.results[0]
+        if (result.success) {
+          systemData.value = {
+            deviceId: result.deviceId,
+            timestamp: result.timestamp,
+            ...result.data
+          }
+        } else {
+          systemError.value = result.error || 'Failed to poll system information'
+        }
+      }
+
+      return response
+    } catch (error) {
+      systemError.value = error.message || 'Failed to poll device system information'
+      console.error('Failed to poll device system:', error)
+      throw error
+    } finally {
+      systemLoading.value = false
+    }
+  }
+
+  function clearSystemData() {
+    systemData.value = null
+    systemError.value = null
+  }
+
   return {
     devices,
     selectedDevices,
     filters,
     loading,
+    error,
     lastSync,
     stats,
     pagination,
@@ -306,6 +419,8 @@ export const useDevicesStore = defineStore('devices', () => {
     fetchDevices,
     fetchDevicesWithPagination,
     syncDevices,
+    clearError,
+    createDevice,
     updateDeviceStatus,
     addDevice,
     removeDevice,
@@ -322,6 +437,11 @@ export const useDevicesStore = defineStore('devices', () => {
     fetchAvailablePollers,
     pollDeviceFirmware,
     pollAllSwitchesFirmware,
-    clearFirmwareData
+    clearFirmwareData,
+    systemData,
+    systemLoading,
+    systemError,
+    pollDeviceSystem,
+    clearSystemData
   }
 })

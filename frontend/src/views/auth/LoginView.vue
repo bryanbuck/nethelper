@@ -192,7 +192,7 @@ authStore.clearError()
 <style scoped>
 .fill-height {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #FF8300 0%, #cc6900 100%);
 }
 
 .v-card {
@@ -200,14 +200,14 @@ authStore.clearError()
 }
 
 .v-card-title {
-  background: linear-gradient(45deg, #1976D2, #1565C0);
+  background: linear-gradient(45deg, #FF8300, #cc6900);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .primary--text {
-  color: #1976D2 !important;
+  color: #FF8300 !important;
 }
 
 /* Custom input styling */

@@ -237,6 +237,55 @@
               prepend-inner-icon="mdi-note-text"
               rows="3"
             ></v-textarea>
+
+            <!-- Test Connection Button -->
+            <div class="d-flex justify-end mt-2">
+              <v-btn
+                color="info"
+                variant="outlined"
+                prepend-icon="mdi-connection"
+                :disabled="!canTestInDialog"
+                :loading="testingInDialog"
+                @click="testConnectionInDialog"
+              >
+                Test Connection
+              </v-btn>
+            </div>
+
+            <!-- Test Results -->
+            <v-alert
+              v-if="dialogTestResult"
+              :type="dialogTestResult.success ? 'success' : 'error'"
+              :icon="dialogTestResult.success ? 'mdi-check-circle' : 'mdi-alert-circle'"
+              class="mt-4"
+              closable
+              @click:close="clearDialogTestResults"
+            >
+              <div class="text-subtitle-2 mb-2">
+                {{ dialogTestResult.success ? 'Connection Successful' : 'Connection Failed' }}
+              </div>
+
+              <div v-if="dialogTestResult.success">
+                <div v-if="dialogTestResult.responseTime" class="mb-1">
+                  <strong>Response Time:</strong> {{ dialogTestResult.responseTime }}ms
+                </div>
+
+                <div v-if="dialogTestResult.deviceInfo">
+                  <strong>Device:</strong> {{ dialogTestResult.deviceInfo.hostname || 'Unknown' }}
+                  <span v-if="dialogTestResult.deviceInfo.model">
+                    ({{ dialogTestResult.deviceInfo.model }})
+                  </span>
+                </div>
+
+                <div v-if="dialogTestResult.deviceInfo?.version">
+                  <strong>Version:</strong> {{ dialogTestResult.deviceInfo.version }}
+                </div>
+              </div>
+
+              <div v-else>
+                <div class="mb-2">{{ dialogTestResult.message }}</div>
+              </div>
+            </v-alert>
           </v-form>
         </v-card-text>
 
@@ -290,13 +339,14 @@
 import { ref, computed, onMounted } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useDevicesStore } from '@/stores/devices'
-import { useNotificationStore } from '@/stores/notifications'
+import { useNotificationsStore } from '@/stores/notifications'
 import { format } from 'date-fns'
 import debugLog, { DebugCategory } from '@/utils/debug'
+import deviceApiService from '@/services/deviceApi.service'
 
 const settingsStore = useSettingsStore()
 const devicesStore = useDevicesStore()
-const notificationStore = useNotificationStore()
+const notificationStore = useNotificationsStore()
 
 // Table headers
 const headers = [
@@ -342,6 +392,10 @@ const formData = ref({
 const itemToDelete = ref(null)
 const editingItem = ref(null)
 
+// Test in dialog state
+const testingInDialog = ref(false)
+const dialogTestResult = ref(null)
+
 // Validation rules
 const rules = {
   required: (value) => !!value || 'This field is required',
@@ -349,6 +403,26 @@ const rules = {
 
 // Computed
 const devicesList = computed(() => devicesStore.devices || [])
+
+const canTestInDialog = computed(() => {
+  // Need at least device info and credentials for manual test
+  if (!formData.value.deviceId) return false
+  if (!formData.value.username) return false
+  if (!formData.value.password && dialogMode.value === 'create') return false
+  return true
+})
+
+// Map credential type to device type
+const getDeviceType = (credType) => {
+  const typeMap = {
+    'switch': 'cx_switch',
+    'ap': 'instant_ap',
+    'gateway': 'aruba_controller',
+    'controller': 'aruba_controller',
+    'other': 'cx_switch'
+  }
+  return typeMap[credType] || 'cx_switch'
+}
 
 // Methods
 const getTypeColor = (type) => {
@@ -432,6 +506,52 @@ const closeDialog = () => {
   editingItem.value = null
   showPassword.value = false
   showSecret.value = false
+  clearDialogTestResults()
+}
+
+const testConnectionInDialog = async () => {
+  if (!canTestInDialog.value) return
+
+  testingInDialog.value = true
+  dialogTestResult.value = null
+
+  try {
+    // Get device IP from selected device
+    const device = devicesStore.devices.find(d => d.id === formData.value.deviceId)
+    if (!device || !device.ipAddress) {
+      throw new Error('Device IP address not found')
+    }
+
+    // Test manual connection
+    const result = await deviceApiService.testManualConnection({
+      deviceIp: device.ipAddress,
+      username: formData.value.username,
+      password: formData.value.password,
+      deviceType: getDeviceType(formData.value.type)
+    })
+
+    dialogTestResult.value = result
+
+    if (result.success) {
+      notificationStore.showSuccess('Connection test successful')
+    } else {
+      notificationStore.showWarning('Connection test failed')
+    }
+  } catch (error) {
+    debugLog.error(DebugCategory.SETTINGS, 'Failed to test connection in dialog:', error)
+    dialogTestResult.value = {
+      success: false,
+      message: error.userMessage || error.message || 'Connection test failed',
+      testedAt: new Date().toISOString()
+    }
+    notificationStore.showError(error.userMessage || 'Failed to test connection')
+  } finally {
+    testingInDialog.value = false
+  }
+}
+
+const clearDialogTestResults = () => {
+  dialogTestResult.value = null
 }
 
 const saveCredential = async () => {
@@ -516,12 +636,23 @@ const testCredential = async (item) => {
 onMounted(async () => {
   debugLog.progress(DebugCategory.SETTINGS, 'Loading API credentials')
 
-  // Load credentials
-  await settingsStore.fetchApiCredentials()
+  try {
+    // Load credentials
+    await settingsStore.fetchApiCredentials()
 
-  // Load devices if not already loaded
-  if (devicesStore.devices.length === 0) {
-    await devicesStore.fetchDevices()
+    // Load devices if not already loaded
+    if (devicesStore.devices.length === 0) {
+      await devicesStore.fetchDevices()
+    }
+  } catch (error) {
+    debugLog.error(DebugCategory.SETTINGS, 'Failed to load settings data:', error)
+
+    // User-friendly error message
+    const errorMessage = error.response?.status === 404
+      ? 'Settings endpoint not found. Please ensure the backend is configured correctly.'
+      : 'Failed to load settings. Please try refreshing the page.'
+
+    notificationStore.showError(errorMessage)
   }
 })
 </script>

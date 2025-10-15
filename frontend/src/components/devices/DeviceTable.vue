@@ -23,7 +23,7 @@
             hide-details
             placeholder="Search devices..."
             prepend-inner-icon="mdi-magnify"
-            style="max-width: 300px;"
+            style="width: 250px; min-width: 250px;"
             clearable
             @input="onSearchInput"
           />
@@ -79,7 +79,36 @@
       </v-card-title>
       
       <v-divider></v-divider>
-      
+
+      <!-- Error Alert -->
+      <v-alert
+        v-if="devicesStore.error"
+        type="error"
+        variant="tonal"
+        closable
+        class="ma-4"
+        @click:close="devicesStore.clearError()"
+      >
+        <v-alert-title class="d-flex align-center">
+          <v-icon class="mr-2">mdi-alert-circle</v-icon>
+          {{ getErrorTitle(devicesStore.error) }}
+        </v-alert-title>
+        <div class="mt-2">
+          {{ devicesStore.error.userMessage || devicesStore.error.message }}
+        </div>
+        <div v-if="devicesStore.error.type === 'NETWORK' || devicesStore.error.type === 'CONNECTION'" class="mt-3">
+          <v-btn
+            color="white"
+            variant="outlined"
+            size="small"
+            prepend-icon="mdi-refresh"
+            @click="retryLoad"
+          >
+            Retry Connection
+          </v-btn>
+        </div>
+      </v-alert>
+
       <!-- Filters Section -->
       <v-expand-transition>
         <div v-show="showFilters">
@@ -199,16 +228,25 @@
         
         <template v-slot:item.type="{ item }">
           <div class="d-flex align-center">
-            <v-icon 
-              :color="getDeviceTypeColor(item.type)" 
-              :icon="getDeviceIcon(item.type)" 
-              size="small" 
+            <v-icon
+              :color="getDeviceTypeColor(item.type)"
+              :icon="getDeviceIcon(item.type)"
+              size="small"
               class="mr-2"
             ></v-icon>
             {{ item.type }}
           </div>
         </template>
-        
+
+        <template v-slot:item.apiStatus="{ item }">
+          <ConnectionStatusBadge
+            :status="getApiConnectionStatus(item)"
+            :last-tested="item.apiLastTested"
+            :response-time="item.apiResponseTime"
+            :error-message="item.apiError"
+          />
+        </template>
+
         <template v-slot:item.lastSeen="{ item }">
           <div>
             <div class="text-body-2">{{ formatLastSeen(item.lastSeen) }}</div>
@@ -346,9 +384,13 @@ import { useRouter } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
 import { formatDistanceToNow } from 'date-fns'
 import { debounce } from 'lodash-es'
+import ConnectionStatusBadge from './ConnectionStatusBadge.vue'
 
 const router = useRouter()
 const devicesStore = useDevicesStore()
+
+// Define emits
+const emit = defineEmits(['edit-device'])
 
 // Component state
 const selectedItems = ref([])
@@ -402,6 +444,12 @@ const headers = [
     width: '180px'
   },
   {
+    title: 'API Status',
+    key: 'apiStatus',
+    sortable: true,
+    width: '160px'
+  },
+  {
     title: 'Last Seen',
     key: 'lastSeen',
     sortable: true,
@@ -432,8 +480,7 @@ const statusOptions = [
 const typeOptions = [
   { title: 'Access Point', value: 'Access Point' },
   { title: 'Switch', value: 'Switch' },
-  { title: 'Gateway', value: 'Gateway' },
-  { title: 'Controller', value: 'Controller' }
+  { title: 'Gateway', value: 'Gateway' }
 ]
 
 const locationOptions = [
@@ -496,8 +543,13 @@ const refreshTable = () => {
 }
 
 const syncDevices = async () => {
-  await devicesStore.syncDevices()
-  await refreshTable()
+  try {
+    await devicesStore.syncDevices()
+    await refreshTable()
+  } catch (error) {
+    // Error is already stored in devicesStore.error and will be displayed
+    console.error('Sync failed:', error)
+  }
 }
 
 // Device actions
@@ -512,7 +564,7 @@ const viewDevice = (device) => {
 }
 
 const editDevice = (device) => {
-  router.push(`/devices/${device.id}/edit`)
+  emit('edit-device', device)
 }
 
 const rebootDevice = (device) => {
@@ -593,6 +645,51 @@ const formatLastSeen = (lastSeen) => {
 
 const formatUptime = (uptime) => {
   return uptime || 'Unknown'
+}
+
+const getApiConnectionStatus = (device) => {
+  // If device has credentials configured
+  if (device.hasApiCredentials) {
+    // If test was performed
+    if (device.apiLastTested) {
+      // Check test result
+      if (device.apiTestStatus === 'success') {
+        return 'connected'
+      } else {
+        return 'failed'
+      }
+    } else {
+      // Has credentials but never tested
+      return 'untested'
+    }
+  } else {
+    // No credentials configured
+    return 'no-credentials'
+  }
+}
+
+const getErrorTitle = (error) => {
+  if (!error) return 'Error'
+
+  const titles = {
+    NETWORK: 'Network Connection Error',
+    CONNECTION: 'Connection Failed',
+    TIMEOUT: 'Request Timeout',
+    UNAUTHORIZED: 'Authentication Required',
+    FORBIDDEN: 'Access Denied',
+    NOT_FOUND: 'Not Found',
+    SERVER_ERROR: 'Server Error',
+    BAD_REQUEST: 'Invalid Request',
+    VALIDATION_ERROR: 'Validation Error',
+    RATE_LIMIT: 'Rate Limit Exceeded'
+  }
+
+  return titles[error.type] || 'Error Loading Devices'
+}
+
+const retryLoad = () => {
+  devicesStore.clearError()
+  refreshTable()
 }
 
 // Initialize table

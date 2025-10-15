@@ -216,7 +216,7 @@ const edgeTypes = {}
 // Style configurations
 const connectionLineStyle = {
   strokeWidth: 2,
-  stroke: '#1976d2'
+  stroke: '#FF8300'
 }
 
 const defaultEdgeOptions = {
@@ -238,15 +238,15 @@ const selectionBoxStyle = computed(() => {
   const top = Math.min(startY, endY)
   const width = Math.abs(endX - startX)
   const height = Math.abs(endY - startY)
-  
+
   return {
     position: 'absolute',
     left: `${left}px`,
     top: `${top}px`,
     width: `${width}px`,
     height: `${height}px`,
-    border: '2px dashed #1976d2',
-    backgroundColor: 'rgba(25, 118, 210, 0.1)',
+    border: '2px dashed #FF8300',
+    backgroundColor: 'rgba(255, 131, 0, 0.1)',
     pointerEvents: 'none',
     zIndex: 1000
   }
@@ -511,7 +511,7 @@ const getNodeColor = (node) => {
   const colors = {
     trigger: '#4caf50',
     condition: '#ff9800',
-    action: '#2196f3',
+    action: '#FF8300',
     notification: '#9c27b0'
   }
   return colors[node.type] || '#64748b'
@@ -579,8 +579,8 @@ onMounted(() => {
 
 .selection-box {
   position: absolute;
-  border: 2px dashed #1976d2;
-  background-color: rgba(25, 118, 210, 0.1);
+  border: 2px dashed #FF8300;
+  background-color: rgba(255, 131, 0, 0.1);
   pointer-events: none;
   z-index: 1000;
 }
@@ -595,11 +595,11 @@ onMounted(() => {
 }
 
 :deep(.vue-flow__edge:hover) {
-  stroke: #1976d2;
+  stroke: #FF8300;
 }
 
 :deep(.vue-flow__edge.selected) {
-  stroke: #1976d2;
+  stroke: #FF8300;
 }
 
 :deep(.vue-flow__controls) {
