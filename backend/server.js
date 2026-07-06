@@ -6,6 +6,7 @@ const logger = require('./src/utils/logger');
 const { connectDatabase, disconnectDatabase } = require('./src/config/database');
 const { connectRedis, disconnectRedis } = require('./src/config/redis');
 const { initializeQueues } = require('./src/config/bull');
+const pingMonitorService = require('./src/services/ping-monitor.service');
 
 const PORT = process.env.PORT || 3000;
 
@@ -30,6 +31,10 @@ async function startServer() {
     initializeSocket(server);
     logger.info('WebSocket server initialized');
 
+    // Start ping monitoring
+    pingMonitorService.startMonitoring();
+    logger.info('Ping monitoring service started');
+
     // Start server
     server.listen(PORT, '0.0.0.0', () => {
       logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
@@ -38,6 +43,11 @@ async function startServer() {
     // Graceful shutdown
     process.on('SIGTERM', async () => {
       logger.info('SIGTERM signal received: closing HTTP server');
+
+      // Stop ping monitoring
+      pingMonitorService.stopMonitoring();
+      logger.info('Ping monitoring stopped');
+
       server.close(async () => {
         logger.info('HTTP server closed');
         await disconnectDatabase();

@@ -81,9 +81,10 @@ model User {
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
-  automations     Automation[]
-  executions      Execution[]
-  apiCredentials  ApiCredential[]
+  automations           Automation[]
+  executions            Execution[]
+  apiCredentials        ApiCredential[]
+  arubaCentralConfigs   ArubaCentralConfig[]
 }
 
 model Device {
@@ -95,16 +96,31 @@ model Device {
   ipAddress     String?
   macAddress    String?
   location      String?
-  status        DeviceStatus   @default(offline)
+
+  // ICMP Ping Monitoring Fields
+  pingStatus        DeviceStatus?  // Real-time ping-based status (primary status)
+  pingLastChecked   DateTime?      // Last time ping check was performed
+  pingResponseTime  Int?           // Last successful ping response time in ms
+  pingSuccessRate   Float?         // Success rate percentage (0-100)
+  consecutiveFailures Int @default(0) // Count of consecutive ping failures
+
+  // Aruba Central Status
+  centralStatus     DeviceStatus   @default(offline) // Status from Aruba Central sync
+
   firmwareVersion String?
-  lastSeen      DateTime?
+  lastSeen      DateTime?      // Last seen timestamp (updated by both ping monitoring and Aruba Central sync)
   metadata      Json?
+  apiCredentialId String?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
+  apiCredential   ApiCredential? @relation("DeviceCredential", fields: [apiCredentialId], references: [id], onDelete: SetNull)
   executions      Execution[]
   deviceGroups    DeviceGroup[]
-  apiCredentials  ApiCredential[]
+
+  @@index([apiCredentialId])
+  @@index([pingStatus])
+  @@index([pingLastChecked])
 }
 
 model DeviceGroup {
@@ -198,8 +214,6 @@ model ApiCredential {
   id              String              @id @default(uuid())
   name            String
   type            ApiCredentialType
-  device          Device?             @relation(fields: [deviceId], references: [id], onDelete: SetNull)
-  deviceId        String?
   username        String?
   password        String?             // Encrypted
   apiKey          String?             // Encrypted
@@ -213,7 +227,27 @@ model ApiCredential {
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
-  @@index([deviceId])
+  devices         Device[]            @relation("DeviceCredential")
+
   @@index([type])
   @@index([userId])
+}
+
+model ArubaCentralConfig {
+  id              String    @id @default(uuid())
+  baseUrl         String    // Aruba Central API base URL
+  clientId        String    // OAuth2 Client ID
+  clientSecret    String    // Encrypted OAuth2 Client Secret
+  customerId      String    // Aruba Central Customer ID
+  isActive        Boolean   @default(true)  // Allow multiple configs, but only one active
+  lastTested      DateTime?
+  lastTestStatus  TestStatus?
+  notes           String?
+  createdBy       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([isActive])
 }
