@@ -443,11 +443,11 @@
     >
       {{ snackbar.message }}
       <template v-slot:actions>
-        <v-btn 
-          variant="text" 
+        <v-btn
+          icon="mdi-close"
+          variant="text"
           @click="snackbar.show = false"
         >
-          Close
         </v-btn>
       </template>
     </v-snackbar>
@@ -1113,5 +1113,11 @@ onUnmounted(() => {
 
 .help-content li {
   margin-bottom: 8px;
+}
+
+/* Style the snackbar action button to be bold and match notification text color */
+.snackbar-action-btn {
+  font-weight: bold !important;
+  opacity: 1 !important;
 }
 </style>

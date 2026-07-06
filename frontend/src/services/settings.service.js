@@ -1,4 +1,5 @@
 import api from './api'
+import { handleApiError } from '@/utils/apiError'
 
 /**
  * Settings Service
@@ -15,8 +16,12 @@ const settingsService = {
    * @returns {Promise} API credentials list
    */
   async getApiCredentials() {
-    const response = await api.get('/settings/api-credentials')
-    return response.data
+    try {
+      const response = await api.get('/settings/api-credentials')
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'fetching API credentials')
+    }
   },
 
   /**
@@ -25,8 +30,12 @@ const settingsService = {
    * @returns {Promise} API credential details
    */
   async getApiCredential(id) {
-    const response = await api.get(`/settings/api-credentials/${id}`)
-    return response.data
+    try {
+      const response = await api.get(`/settings/api-credentials/${id}`)
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'fetching API credential')
+    }
   },
 
   /**
@@ -43,8 +52,12 @@ const settingsService = {
    * @returns {Promise} Created credential
    */
   async createApiCredential(credentialData) {
-    const response = await api.post('/settings/api-credentials', credentialData)
-    return response.data
+    try {
+      const response = await api.post('/settings/api-credentials', credentialData)
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'creating API credential')
+    }
   },
 
   /**
@@ -54,8 +67,12 @@ const settingsService = {
    * @returns {Promise} Updated credential
    */
   async updateApiCredential(id, updates) {
-    const response = await api.put(`/settings/api-credentials/${id}`, updates)
-    return response.data
+    try {
+      const response = await api.put(`/settings/api-credentials/${id}`, updates)
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'updating API credential')
+    }
   },
 
   /**
@@ -64,8 +81,12 @@ const settingsService = {
    * @returns {Promise} Deletion result
    */
   async deleteApiCredential(id) {
-    const response = await api.delete(`/settings/api-credentials/${id}`)
-    return response.data
+    try {
+      const response = await api.delete(`/settings/api-credentials/${id}`)
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'deleting API credential')
+    }
   },
 
   /**
@@ -74,8 +95,12 @@ const settingsService = {
    * @returns {Promise} Test result
    */
   async testApiCredential(id) {
-    const response = await api.post(`/settings/api-credentials/${id}/test`)
-    return response.data
+    try {
+      const response = await api.post(`/settings/api-credentials/${id}/test`)
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'testing API credential')
+    }
   },
 
   /**
@@ -84,8 +109,77 @@ const settingsService = {
    * @returns {Promise} Credentials for the device
    */
   async getCredentialsByDevice(deviceId) {
-    const response = await api.get(`/settings/api-credentials/device/${deviceId}`)
-    return response.data
+    try {
+      const response = await api.get(`/settings/api-credentials/device/${deviceId}`)
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'fetching credentials for device')
+    }
+  },
+
+  // ============================================
+  // Aruba Central API Configuration
+  // ============================================
+
+  /**
+   * Get current Aruba Central API configuration
+   * @returns {Promise} Aruba Central configuration
+   */
+  async getArubaCentralConfig() {
+    try {
+      const response = await api.get('/settings/aruba-central')
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'fetching Aruba Central configuration')
+    }
+  },
+
+  /**
+   * Save Aruba Central API configuration
+   * @param {Object} configData - Configuration data
+   * @param {string} configData.baseUrl - API base URL
+   * @param {string} configData.clientId - Client ID
+   * @param {string} configData.clientSecret - Client secret
+   * @param {string} configData.customerId - Customer ID
+   * @param {string} configData.notes - Optional notes
+   * @returns {Promise} Saved configuration
+   */
+  async saveArubaCentralConfig(configData) {
+    try {
+      const response = await api.post('/settings/aruba-central', configData)
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'saving Aruba Central configuration')
+    }
+  },
+
+  /**
+   * Test Aruba Central API connection
+   * @param {string} configId - Optional config ID (uses active config if not provided)
+   * @returns {Promise} Test result
+   */
+  async testArubaCentralConnection(configId = null) {
+    try {
+      const payload = configId ? { configId } : {}
+      const response = await api.post('/settings/aruba-central/test', payload)
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'testing Aruba Central connection')
+    }
+  },
+
+  /**
+   * Delete Aruba Central API configuration
+   * @param {string} id - Configuration ID
+   * @returns {Promise} Deletion result
+   */
+  async deleteArubaCentralConfig(id) {
+    try {
+      const response = await api.delete(`/settings/aruba-central/${id}`)
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'deleting Aruba Central configuration')
+    }
   },
 
   // ============================================
@@ -97,8 +191,12 @@ const settingsService = {
    * @returns {Promise} Application settings
    */
   async getSettings() {
-    const response = await api.get('/settings')
-    return response.data
+    try {
+      const response = await api.get('/settings')
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'fetching settings')
+    }
   },
 
   /**
@@ -107,8 +205,12 @@ const settingsService = {
    * @returns {Promise} Updated settings
    */
   async updateSettings(settings) {
-    const response = await api.put('/settings', settings)
-    return response.data
+    try {
+      const response = await api.put('/settings', settings)
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'updating settings')
+    }
   },
 
   /**
@@ -117,8 +219,12 @@ const settingsService = {
    * @returns {Promise} Setting value
    */
   async getSetting(key) {
-    const response = await api.get(`/settings/${key}`)
-    return response.data
+    try {
+      const response = await api.get(`/settings/${key}`)
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'fetching setting')
+    }
   },
 
   /**
@@ -128,8 +234,12 @@ const settingsService = {
    * @returns {Promise} Updated setting
    */
   async updateSetting(key, value) {
-    const response = await api.put(`/settings/${key}`, { value })
-    return response.data
+    try {
+      const response = await api.put(`/settings/${key}`, { value })
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'updating setting')
+    }
   },
 }
 

@@ -133,19 +133,21 @@ class WebSocketService {
   setupEventHandlers() {
     // Device update events
     this.socket.on('device:update', (data) => this.handleDeviceUpdate(data))
-    
+    this.socket.on('device:status:update', (data) => this.handleDeviceStatusUpdate(data))
+    this.socket.on('device:api:status', (data) => this.handleDeviceApiStatus(data))
+
     // Automation lifecycle events
     this.socket.on('automation:started', (data) => this.handleAutomationStarted(data))
     this.socket.on('automation:progress', (data) => this.handleAutomationProgress(data))
     this.socket.on('automation:completed', (data) => this.handleAutomationCompleted(data))
-    
+
     // Alert events
     this.socket.on('alert:new', (data) => this.handleNewAlert(data))
-    
+
     // Additional system events
     this.socket.on('metrics:update', (data) => this.handleMetricsUpdate(data))
     this.socket.on('system:maintenance', (data) => this.handleSystemMaintenance(data))
-    
+
     console.log('WebSocket event handlers registered')
   }
 
@@ -155,15 +157,15 @@ class WebSocketService {
    */
   handleDeviceUpdate(data) {
     console.log('Device update received:', data)
-    
+
     try {
       const { deviceId, device, changes } = data
-      
+
       if (device) {
         // Full device update
         const deviceInstance = Device.fromApiResponse(device)
         this.stores.devices.updateDevice(deviceId, deviceInstance.toJSON())
-        
+
         // Add notification for significant status changes
         if (changes?.status) {
           this.stores.notifications.addDeviceAlert({
@@ -178,15 +180,76 @@ class WebSocketService {
       } else if (changes) {
         // Partial update
         this.stores.devices.updateDevice(deviceId, changes)
-        
+
         // Handle status changes
         if (changes.status) {
           this.stores.devices.updateDeviceStatus(deviceId, changes.status)
         }
       }
-      
+
     } catch (error) {
       console.error('Error handling device update:', error)
+    }
+  }
+
+  /**
+   * Handle device ping status update events
+   * @param {Object} data - Ping status data
+   */
+  handleDeviceStatusUpdate(data) {
+    console.log('Device ping status update:', data)
+
+    try {
+      const { deviceId, status, pingStatus, pingResponseTime, pingLastChecked } = data
+
+      // Use local update (no API call) to avoid unnecessary requests
+      this.stores.devices.updateDeviceLocally(deviceId, {
+        status: pingStatus || status,
+        pingStatus,
+        pingResponseTime,
+        pingLastChecked
+      })
+
+      // Optionally show notification for offline status
+      if (status === 'offline' || pingStatus === 'offline') {
+        // Could add a notification here if desired
+      }
+
+    } catch (error) {
+      console.error('Error handling device status update:', error)
+    }
+  }
+
+  /**
+   * Handle device API status update events
+   * @param {Object} data - API status data
+   */
+  handleDeviceApiStatus(data) {
+    console.log('Device API status update:', data)
+
+    try {
+      const {
+        deviceId,
+        status,
+        lastCommunication,
+        responseTime,
+        successRate,
+        consecutiveFailures,
+        error
+      } = data
+
+      // Use local update (no API call) to avoid unnecessary requests
+      this.stores.devices.updateDeviceLocally(deviceId, {
+        apiStatus: status,
+        apiLastCommunication: lastCommunication,
+        apiResponseTime: responseTime,
+        apiSuccessRate: successRate,
+        apiConsecutiveFailures: consecutiveFailures,
+        apiError: error
+      })
+
+    } catch (error) {
+      console.error('Error handling device API status:', error)
     }
   }
 

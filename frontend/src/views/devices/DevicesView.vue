@@ -275,6 +275,80 @@
                   variant="outlined"
                 />
               </v-col>
+
+              <v-col cols="12">
+                <v-divider class="my-2"></v-divider>
+                <h3 class="text-subtitle-1 mb-3">API Configuration</h3>
+              </v-col>
+
+              <v-col cols="12">
+                <v-select
+                  v-model="editingDevice.apiCredentialId"
+                  :items="availableCredentials"
+                  item-title="name"
+                  item-value="id"
+                  label="API Credential"
+                  variant="outlined"
+                  prepend-inner-icon="mdi-key-variant"
+                  clearable
+                  :loading="loadingCredentials"
+                  hint="Select the API credentials to use for this device"
+                  persistent-hint
+                >
+                  <template v-slot:item="{ props, item }">
+                    <v-list-item
+                      v-bind="props"
+                      :subtitle="`${item.raw.type} - ${item.raw.username || 'No username'}`"
+                    >
+                      <template v-slot:append v-if="item.raw.lastTestStatus">
+                        <v-chip
+                          :color="item.raw.lastTestStatus === 'success' ? 'success' : 'error'"
+                          size="x-small"
+                          variant="flat"
+                        >
+                          {{ item.raw.lastTestStatus }}
+                        </v-chip>
+                      </template>
+                    </v-list-item>
+                  </template>
+
+                  <template v-slot:selection="{ item }">
+                    <div class="d-flex align-center">
+                      <span>{{ item.title }}</span>
+                      <v-chip
+                        v-if="item.raw.lastTestStatus === 'success'"
+                        color="success"
+                        size="x-small"
+                        variant="flat"
+                        class="ml-2"
+                      >
+                        Tested
+                      </v-chip>
+                    </div>
+                  </template>
+
+                  <template v-slot:prepend-item>
+                    <v-list-item
+                      title="Manage Credentials"
+                      prepend-icon="mdi-cog"
+                      :to="{ path: '/settings', query: { tab: 'credentials' } }"
+                      target="_blank"
+                    >
+                    </v-list-item>
+                    <v-divider class="mb-2"></v-divider>
+                  </template>
+                </v-select>
+
+                <v-alert
+                  v-if="!editingDevice.apiCredentialId"
+                  type="info"
+                  variant="tonal"
+                  density="compact"
+                  class="mt-2"
+                >
+                  No credential assigned. Direct device polling will not be available.
+                </v-alert>
+              </v-col>
             </v-row>
           </v-container>
         </v-card-text>
@@ -308,11 +382,11 @@
     >
       {{ snackbar.message }}
       <template v-slot:actions>
-        <v-btn 
-          variant="text" 
+        <v-btn
+          icon="mdi-close"
+          variant="text"
           @click="snackbar.show = false"
         >
-          Close
         </v-btn>
       </template>
     </v-snackbar>
@@ -323,13 +397,19 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
+import { useSettingsStore } from '@/stores/settings'
 import { useWebSocket } from '@/composables/useWebSocket'
 import DeviceTable from '@/components/devices/DeviceTable.vue'
 
 const router = useRouter()
 const route = useRoute()
 const devicesStore = useDevicesStore()
+const settingsStore = useSettingsStore()
 const { connected, connecting } = useWebSocket()
+
+// Credentials state
+const loadingCredentials = ref(false)
+const availableCredentials = computed(() => settingsStore.apiCredentials || [])
 
 // Component state
 const showAddDialog = ref(false)
@@ -352,7 +432,8 @@ const editingDevice = ref({
   macAddress: '',
   location: '',
   serialNumber: '',
-  model: ''
+  model: '',
+  apiCredentialId: null
 })
 
 const snackbar = ref({
@@ -477,7 +558,7 @@ const showSnackbar = (message, color = 'success') => {
 }
 
 // Handle edit device event from DeviceTable
-const handleEditDevice = (device) => {
+const handleEditDevice = async (device) => {
   // Map backend device type to frontend format if needed
   const typeMap = {
     'access_point': 'Access Point',
@@ -496,8 +577,22 @@ const handleEditDevice = (device) => {
     macAddress: device.macAddress || '',
     location: device.location || '',
     serialNumber: device.serialNumber || device.serial || '',
-    model: device.model || ''
+    model: device.model || '',
+    apiCredentialId: device.apiCredentialId || null
   }
+
+  // Load API credentials if not already loaded
+  if (settingsStore.apiCredentials.length === 0) {
+    loadingCredentials.value = true
+    try {
+      await settingsStore.fetchApiCredentials()
+    } catch (error) {
+      console.error('Failed to load API credentials:', error)
+    } finally {
+      loadingCredentials.value = false
+    }
+  }
+
   showEditDialog.value = true
 }
 
@@ -511,7 +606,8 @@ const closeEditDialog = () => {
     macAddress: '',
     location: '',
     serialNumber: '',
-    model: ''
+    model: '',
+    apiCredentialId: null
   }
 }
 
@@ -541,7 +637,8 @@ const updateDevice = async () => {
       macAddress: editingDevice.value.macAddress || '',
       location: editingDevice.value.location,
       serial: editingDevice.value.serialNumber || '',
-      model: editingDevice.value.model || ''
+      model: editingDevice.value.model || '',
+      apiCredentialId: editingDevice.value.apiCredentialId || null
     }
 
     // Update device via API
@@ -585,5 +682,11 @@ onMounted(() => {
 
 .stats-card:hover {
   transform: translateY(-1px);
+}
+
+/* Style the snackbar action button to be bold and match notification text color */
+.snackbar-action-btn {
+  font-weight: bold !important;
+  opacity: 1 !important;
 }
 </style>

@@ -1,5 +1,23 @@
 <template>
   <div class="device-table">
+    <!-- WebSocket Disconnection Warning -->
+    <v-alert
+      v-if="!wsConnected && !wsConnecting"
+      type="warning"
+      variant="tonal"
+      density="compact"
+      class="mb-4"
+      closable
+    >
+      <div class="d-flex align-center">
+        <v-icon start>mdi-wifi-off</v-icon>
+        <div>
+          <strong>Real-time updates paused</strong>
+          <span class="text-caption ml-2">- Attempting to reconnect...</span>
+        </div>
+      </div>
+    </v-alert>
+
     <v-card elevation="2">
       <v-card-title class="d-flex align-center justify-space-between">
         <div class="d-flex align-center">
@@ -212,18 +230,35 @@
         </template>
         
         <template v-slot:item.status="{ item }">
-          <v-chip 
-            :color="getStatusColor(item.status)" 
-            size="small" 
-            variant="flat"
-          >
-            <v-icon 
-              start 
-              :icon="getStatusIcon(item.status)" 
-              size="small"
-            ></v-icon>
-            {{ item.status }}
-          </v-chip>
+          <v-tooltip location="bottom">
+            <template v-slot:activator="{ props }">
+              <v-chip
+                v-bind="props"
+                :color="getStatusColor(item.status)"
+                size="small"
+                variant="flat"
+              >
+                <v-icon
+                  start
+                  :icon="getStatusIcon(item.status)"
+                  size="small"
+                ></v-icon>
+                {{ item.status }}
+              </v-chip>
+            </template>
+            <div class="text-caption">
+              <div v-if="item.pingLastChecked">
+                <strong>Ping Status:</strong> {{ item.status }}<br>
+                <strong>Last Checked:</strong> {{ formatLastSeen(item.pingLastChecked) }}<br>
+                <span v-if="item.pingResponseTime">
+                  <strong>Response Time:</strong> {{ item.pingResponseTime }}ms
+                </span>
+              </div>
+              <div v-else>
+                Status based on network reachability
+              </div>
+            </div>
+          </v-tooltip>
         </template>
         
         <template v-slot:item.type="{ item }">
@@ -238,10 +273,45 @@
           </div>
         </template>
 
+        <template v-slot:item.centralStatus="{ item }">
+          <v-tooltip location="bottom">
+            <template v-slot:activator="{ props }">
+              <v-chip
+                v-if="item.centralStatus"
+                v-bind="props"
+                :color="getStatusColor(item.centralStatus)"
+                size="small"
+                variant="tonal"
+              >
+                <v-icon
+                  start
+                  :icon="getStatusIcon(item.centralStatus)"
+                  size="x-small"
+                ></v-icon>
+                {{ item.centralStatus }}
+              </v-chip>
+              <span v-else class="text-caption text-medium-emphasis">
+                N/A
+              </span>
+            </template>
+            <div class="text-caption">
+              <div v-if="item.centralStatus">
+                <strong>Aruba Central Status:</strong> {{ item.centralStatus }}<br>
+                <span v-if="item.lastSeen">
+                  <strong>Last Updated:</strong> {{ formatLastSeen(item.lastSeen) }}
+                </span>
+              </div>
+              <div v-else>
+                Not synced from Aruba Central yet
+              </div>
+            </div>
+          </v-tooltip>
+        </template>
+
         <template v-slot:item.apiStatus="{ item }">
           <ConnectionStatusBadge
             :status="getApiConnectionStatus(item)"
-            :last-tested="item.apiLastTested"
+            :last-tested="item.apiCredential?.lastTested || item.apiLastTested"
             :response-time="item.apiResponseTime"
             :error-message="item.apiError"
           />
@@ -382,12 +452,14 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
+import { useWebSocket } from '@/composables/useWebSocket'
 import { formatDistanceToNow } from 'date-fns'
 import { debounce } from 'lodash-es'
 import ConnectionStatusBadge from './ConnectionStatusBadge.vue'
 
 const router = useRouter()
 const devicesStore = useDevicesStore()
+const { connected: wsConnected, connecting: wsConnecting } = useWebSocket()
 
 // Define emits
 const emit = defineEmits(['edit-device'])
@@ -429,7 +501,8 @@ const headers = [
     title: 'Status',
     key: 'status',
     sortable: true,
-    width: '120px'
+    width: '120px',
+    tooltip: 'Network reachability status (ICMP ping)'
   },
   {
     title: 'IP Address',
@@ -444,10 +517,18 @@ const headers = [
     width: '180px'
   },
   {
+    title: 'Central Status',
+    key: 'centralStatus',
+    sortable: true,
+    width: '140px',
+    tooltip: 'Status from Aruba Central'
+  },
+  {
     title: 'API Status',
     key: 'apiStatus',
     sortable: true,
-    width: '160px'
+    width: '160px',
+    tooltip: 'Device API communication status'
   },
   {
     title: 'Last Seen',
@@ -649,11 +730,15 @@ const formatUptime = (uptime) => {
 
 const getApiConnectionStatus = (device) => {
   // If device has credentials configured
-  if (device.hasApiCredentials) {
+  if (device.apiCredentialId) {
+    // Check if we have the credential object with test status
+    const lastTested = device.apiCredential?.lastTested || device.apiLastTested
+    const testStatus = device.apiCredential?.lastTestStatus || device.apiTestStatus
+
     // If test was performed
-    if (device.apiLastTested) {
+    if (lastTested) {
       // Check test result
-      if (device.apiTestStatus === 'success') {
+      if (testStatus === 'success') {
         return 'connected'
       } else {
         return 'failed'

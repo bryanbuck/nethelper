@@ -75,17 +75,6 @@
           </v-chip>
         </template>
 
-        <!-- Device Column -->
-        <template v-slot:item.deviceId="{ item }">
-          <span v-if="item.deviceId">
-            {{ getDeviceName(item.deviceId) }}
-          </span>
-          <span v-else class="text-medium-emphasis">
-            <v-icon size="small">mdi-minus</v-icon>
-            Not assigned
-          </span>
-        </template>
-
         <!-- Username Column -->
         <template v-slot:item.username="{ item }">
           <span>{{ item.username || '-' }}</span>
@@ -180,18 +169,6 @@
               class="mb-2"
             ></v-select>
 
-            <v-autocomplete
-              v-model="formData.deviceId"
-              :items="devicesList"
-              item-title="name"
-              item-value="id"
-              label="Associated Device (Optional)"
-              variant="outlined"
-              prepend-inner-icon="mdi-router-wireless"
-              clearable
-              class="mb-2"
-            ></v-autocomplete>
-
             <v-text-field
               v-model="formData.username"
               label="Username"
@@ -237,55 +214,6 @@
               prepend-inner-icon="mdi-note-text"
               rows="3"
             ></v-textarea>
-
-            <!-- Test Connection Button -->
-            <div class="d-flex justify-end mt-2">
-              <v-btn
-                color="info"
-                variant="outlined"
-                prepend-icon="mdi-connection"
-                :disabled="!canTestInDialog"
-                :loading="testingInDialog"
-                @click="testConnectionInDialog"
-              >
-                Test Connection
-              </v-btn>
-            </div>
-
-            <!-- Test Results -->
-            <v-alert
-              v-if="dialogTestResult"
-              :type="dialogTestResult.success ? 'success' : 'error'"
-              :icon="dialogTestResult.success ? 'mdi-check-circle' : 'mdi-alert-circle'"
-              class="mt-4"
-              closable
-              @click:close="clearDialogTestResults"
-            >
-              <div class="text-subtitle-2 mb-2">
-                {{ dialogTestResult.success ? 'Connection Successful' : 'Connection Failed' }}
-              </div>
-
-              <div v-if="dialogTestResult.success">
-                <div v-if="dialogTestResult.responseTime" class="mb-1">
-                  <strong>Response Time:</strong> {{ dialogTestResult.responseTime }}ms
-                </div>
-
-                <div v-if="dialogTestResult.deviceInfo">
-                  <strong>Device:</strong> {{ dialogTestResult.deviceInfo.hostname || 'Unknown' }}
-                  <span v-if="dialogTestResult.deviceInfo.model">
-                    ({{ dialogTestResult.deviceInfo.model }})
-                  </span>
-                </div>
-
-                <div v-if="dialogTestResult.deviceInfo?.version">
-                  <strong>Version:</strong> {{ dialogTestResult.deviceInfo.version }}
-                </div>
-              </div>
-
-              <div v-else>
-                <div class="mb-2">{{ dialogTestResult.message }}</div>
-              </div>
-            </v-alert>
           </v-form>
         </v-card-text>
 
@@ -332,6 +260,107 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- Test Credential Dialog -->
+    <v-dialog v-model="showTestDialog" max-width="600px">
+      <v-card>
+        <v-card-title>
+          <v-icon class="mr-2">mdi-test-tube</v-icon>
+          Test API Credential - {{ itemToTest?.name }}
+        </v-card-title>
+
+        <v-card-text>
+          <div class="mb-4">
+            <p class="text-body-2 text-medium-emphasis">
+              Select a device to test this credential with:
+            </p>
+          </div>
+
+          <v-autocomplete
+            v-model="selectedTestDevice"
+            :items="devicesUsingCredential"
+            item-title="name"
+            item-value="id"
+            label="Select Device"
+            variant="outlined"
+            prepend-inner-icon="mdi-router-wireless"
+            :loading="loadingDevicesForTest"
+            :disabled="loadingDevicesForTest"
+            class="mb-4"
+          >
+            <template v-slot:item="{ props, item }">
+              <v-list-item
+                v-bind="props"
+                :subtitle="`${item.raw.type} - ${item.raw.ipAddress}`"
+              >
+              </v-list-item>
+            </template>
+
+            <template v-slot:no-data>
+              <v-list-item>
+                <v-list-item-title>No devices using this credential</v-list-item-title>
+                <v-list-item-subtitle>Assign this credential to a device first</v-list-item-subtitle>
+              </v-list-item>
+            </template>
+          </v-autocomplete>
+
+          <div class="d-flex justify-end mb-4">
+            <v-btn
+              color="primary"
+              variant="flat"
+              prepend-icon="mdi-connection"
+              :disabled="!selectedTestDevice"
+              :loading="testingCredential"
+              @click="executeCredentialTest"
+            >
+              Test Connection
+            </v-btn>
+          </div>
+
+          <!-- Test Results -->
+          <v-alert
+            v-if="testResult"
+            :type="testResult.success ? 'success' : 'error'"
+            :icon="testResult.success ? 'mdi-check-circle' : 'mdi-alert-circle'"
+            variant="tonal"
+            closable
+            @click:close="clearTestResult"
+          >
+            <div class="text-subtitle-2 mb-2">
+              {{ testResult.success ? 'Connection Successful' : 'Connection Failed' }}
+            </div>
+
+            <div v-if="testResult.success">
+              <div v-if="testResult.responseTime" class="mb-1">
+                <strong>Response Time:</strong> {{ testResult.responseTime }}ms
+              </div>
+
+              <div v-if="testResult.deviceInfo">
+                <strong>Device:</strong> {{ testResult.deviceInfo.hostname || 'Unknown' }}
+                <span v-if="testResult.deviceInfo.model">
+                  ({{ testResult.deviceInfo.model }})
+                </span>
+              </div>
+
+              <div v-if="testResult.deviceInfo?.version">
+                <strong>Version:</strong> {{ testResult.deviceInfo.version }}
+              </div>
+            </div>
+
+            <div v-else>
+              <div class="mb-2">{{ testResult.message }}</div>
+            </div>
+          </v-alert>
+        </v-card-text>
+
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn color="grey" variant="text" @click="closeTestDialog">
+            Close
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -352,7 +381,6 @@ const notificationStore = useNotificationsStore()
 const headers = [
   { title: 'Name', key: 'name', sortable: true },
   { title: 'Type', key: 'type', sortable: true },
-  { title: 'Device', key: 'deviceId', sortable: false },
   { title: 'Username', key: 'username', sortable: false },
   { title: 'Last Tested', key: 'lastTested', sortable: true },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' },
@@ -370,18 +398,17 @@ const credentialTypes = [
 // Dialog state
 const showDialog = ref(false)
 const showDeleteDialog = ref(false)
+const showTestDialog = ref(false)
 const dialogMode = ref('create') // 'create' or 'edit'
 const formRef = ref(null)
 const formValid = ref(false)
 const showPassword = ref(false)
 const showSecret = ref(false)
-const testingId = ref(null)
 
 // Form data
 const formData = ref({
   name: '',
   type: '',
-  deviceId: null,
   username: '',
   password: '',
   apiKey: '',
@@ -390,11 +417,15 @@ const formData = ref({
 })
 
 const itemToDelete = ref(null)
+const itemToTest = ref(null)
 const editingItem = ref(null)
 
-// Test in dialog state
-const testingInDialog = ref(false)
-const dialogTestResult = ref(null)
+// Test dialog state
+const selectedTestDevice = ref(null)
+const testingCredential = ref(false)
+const loadingDevicesForTest = ref(false)
+const testResult = ref(null)
+const devicesUsingCredential = ref([])
 
 // Validation rules
 const rules = {
@@ -403,14 +434,6 @@ const rules = {
 
 // Computed
 const devicesList = computed(() => devicesStore.devices || [])
-
-const canTestInDialog = computed(() => {
-  // Need at least device info and credentials for manual test
-  if (!formData.value.deviceId) return false
-  if (!formData.value.username) return false
-  if (!formData.value.password && dialogMode.value === 'create') return false
-  return true
-})
 
 // Map credential type to device type
 const getDeviceType = (credType) => {
@@ -465,7 +488,6 @@ const openCreateDialog = () => {
   formData.value = {
     name: '',
     type: '',
-    deviceId: null,
     username: '',
     password: '',
     apiKey: '',
@@ -481,7 +503,6 @@ const openEditDialog = (item) => {
   formData.value = {
     name: item.name,
     type: item.type,
-    deviceId: item.deviceId,
     username: item.username || '',
     password: '', // Don't populate password for security
     apiKey: item.apiKey || '',
@@ -496,7 +517,6 @@ const closeDialog = () => {
   formData.value = {
     name: '',
     type: '',
-    deviceId: null,
     username: '',
     password: '',
     apiKey: '',
@@ -506,53 +526,8 @@ const closeDialog = () => {
   editingItem.value = null
   showPassword.value = false
   showSecret.value = false
-  clearDialogTestResults()
 }
 
-const testConnectionInDialog = async () => {
-  if (!canTestInDialog.value) return
-
-  testingInDialog.value = true
-  dialogTestResult.value = null
-
-  try {
-    // Get device IP from selected device
-    const device = devicesStore.devices.find(d => d.id === formData.value.deviceId)
-    if (!device || !device.ipAddress) {
-      throw new Error('Device IP address not found')
-    }
-
-    // Test manual connection
-    const result = await deviceApiService.testManualConnection({
-      deviceIp: device.ipAddress,
-      username: formData.value.username,
-      password: formData.value.password,
-      deviceType: getDeviceType(formData.value.type)
-    })
-
-    dialogTestResult.value = result
-
-    if (result.success) {
-      notificationStore.showSuccess('Connection test successful')
-    } else {
-      notificationStore.showWarning('Connection test failed')
-    }
-  } catch (error) {
-    debugLog.error(DebugCategory.SETTINGS, 'Failed to test connection in dialog:', error)
-    dialogTestResult.value = {
-      success: false,
-      message: error.userMessage || error.message || 'Connection test failed',
-      testedAt: new Date().toISOString()
-    }
-    notificationStore.showError(error.userMessage || 'Failed to test connection')
-  } finally {
-    testingInDialog.value = false
-  }
-}
-
-const clearDialogTestResults = () => {
-  dialogTestResult.value = null
-}
 
 const saveCredential = async () => {
   if (!formValid.value) return
@@ -562,7 +537,6 @@ const saveCredential = async () => {
     const data = {
       name: formData.value.name,
       type: formData.value.type,
-      deviceId: formData.value.deviceId,
       username: formData.value.username,
       apiKey: formData.value.apiKey,
       notes: formData.value.notes,
@@ -615,22 +589,65 @@ const confirmDelete = async () => {
 }
 
 const testCredential = async (item) => {
-  testingId.value = item.id
+  itemToTest.value = item
+  loadingDevicesForTest.value = true
+  showTestDialog.value = true
+
   try {
-    const result = await settingsStore.testApiCredential(item.id)
+    // Load devices that are using this credential
+    const allDevices = devicesStore.devices
+    devicesUsingCredential.value = allDevices.filter(d => d.apiCredentialId === item.id)
+  } catch (error) {
+    debugLog.error(DebugCategory.SETTINGS, 'Failed to load devices for test:', error)
+    notificationStore.showError('Failed to load devices')
+  } finally {
+    loadingDevicesForTest.value = false
+  }
+}
+
+const closeTestDialog = () => {
+  showTestDialog.value = false
+  itemToTest.value = null
+  selectedTestDevice.value = null
+  testResult.value = null
+  devicesUsingCredential.value = []
+}
+
+const executeCredentialTest = async () => {
+  if (!selectedTestDevice.value || !itemToTest.value) return
+
+  testingCredential.value = true
+  testResult.value = null
+
+  try {
+    // Use the device API test endpoint which will fetch the stored credentials
+    // and test against the selected device
+    const result = await deviceApiService.testDeviceConnection(selectedTestDevice.value)
+
+    testResult.value = result
+
     if (result.success) {
-      notificationStore.showSuccess(`Credential test successful for "${item.name}"`)
+      notificationStore.showSuccess('Connection test successful')
+      // Update the credential's last tested status
+      await settingsStore.fetchApiCredentials()
     } else {
-      notificationStore.showWarning(`Credential test failed: ${result.message}`)
+      notificationStore.showWarning('Connection test failed')
     }
-    // Refresh credentials to get updated test status
-    await settingsStore.fetchApiCredentials()
   } catch (error) {
     debugLog.error(DebugCategory.SETTINGS, 'Failed to test credential:', error)
-    notificationStore.showError(error.response?.data?.message || 'Failed to test credential')
+    testResult.value = {
+      success: false,
+      message: error.userMessage || error.message || 'Connection test failed',
+      testedAt: new Date().toISOString()
+    }
+    notificationStore.showError(error.userMessage || 'Failed to test connection')
   } finally {
-    testingId.value = null
+    testingCredential.value = false
   }
+}
+
+const clearTestResult = () => {
+  testResult.value = null
 }
 
 onMounted(async () => {

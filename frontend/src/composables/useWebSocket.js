@@ -164,20 +164,24 @@ export function useWebSocket() {
 
   onMounted(async () => {
     await nextTick()
-    
-    if (import.meta.env.DEV) {
+
+    // Check if we should use real WebSocket even in dev mode
+    const useRealWebSocket = import.meta.env.VITE_USE_REAL_WEBSOCKET === 'true'
+
+    if (import.meta.env.DEV && !useRealWebSocket) {
       console.log('Development mode: simulating WebSocket events')
       simulateRealTimeUpdates()
-      
+
       // Set connected to true for development simulation
       connected.value = true
     } else {
+      // Use real WebSocket connection (production or dev with override)
       connect()
     }
-    
+
     // Poll connection status
     const statusInterval = setInterval(updateConnectionStatus, 1000)
-    
+
     onUnmounted(() => {
       clearInterval(statusInterval)
     })

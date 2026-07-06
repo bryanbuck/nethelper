@@ -250,14 +250,16 @@ const testConnection = async () => {
   emit('test-start')
 
   try {
-    let result
+    let response
 
     if (props.mode === 'manual') {
-      result = await deviceApiService.testManualConnection(formData.value)
+      response = await deviceApiService.testManualConnection(formData.value)
     } else {
-      result = await deviceApiService.testDeviceConnection(props.deviceId)
+      response = await deviceApiService.testDeviceConnection(props.deviceId)
     }
 
+    // Extract result from response (handle both { success, data } and direct result)
+    const result = response.data || response
     testResult.value = result
 
     if (result.success) {
@@ -290,10 +292,12 @@ const loadDeviceInfo = async () => {
   loadingInfo.value = true
 
   try {
-    deviceInfo.value = await deviceApiService.getDeviceInfo(props.deviceId)
+    const deviceInfoResponse = await deviceApiService.getDeviceInfo(props.deviceId)
+    deviceInfo.value = deviceInfoResponse.data || deviceInfoResponse
 
     if (props.showFirmwareInfo) {
-      firmwareInfo.value = await deviceApiService.getFirmwareInfo(props.deviceId)
+      const firmwareInfoResponse = await deviceApiService.getFirmwareInfo(props.deviceId)
+      firmwareInfo.value = firmwareInfoResponse.data || firmwareInfoResponse
     }
   } catch (error) {
     console.error('Error loading device info:', error)

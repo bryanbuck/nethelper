@@ -25,11 +25,11 @@
 
     <template v-slot:actions>
       <v-btn
-        variant="text"
+        icon="mdi-close"
         size="small"
+        variant="text"
         @click="handleClose(notification.id)"
       >
-        Close
       </v-btn>
     </template>
   </v-snackbar>
@@ -109,5 +109,11 @@ watch(() => notificationsStore.notifications.length, () => {
 <style scoped>
 .notification-snackbar {
   margin-bottom: 8px;
+}
+
+/* Style the action button to be bold and match notification text color */
+:deep(.notification-action-btn) {
+  font-weight: bold !important;
+  opacity: 1 !important;
 }
 </style>

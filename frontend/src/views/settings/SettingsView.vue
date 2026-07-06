@@ -43,6 +43,15 @@
             <!-- API Credentials Tab -->
             <v-window-item value="credentials">
               <v-card-text>
+                <!-- Aruba Central API Credentials Section -->
+                <ErrorBoundary :show-details="isDevelopment">
+                  <ArubaCentralCredentials />
+                </ErrorBoundary>
+
+                <!-- Divider between sections -->
+                <v-divider class="my-8"></v-divider>
+
+                <!-- Device API Credentials Section -->
                 <ErrorBoundary :show-details="isDevelopment">
                   <ApiCredentials />
                 </ErrorBoundary>
@@ -89,6 +98,7 @@
 import { ref, watch, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
+import ArubaCentralCredentials from '@/components/settings/ArubaCentralCredentials.vue'
 import ApiCredentials from '@/components/settings/ApiCredentials.vue'
 import debugLog, { DebugCategory } from '@/utils/debug'
 

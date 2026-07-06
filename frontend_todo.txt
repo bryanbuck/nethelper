@@ -1,0 +1,344 @@
+================================================================================
+FRONTEND TODO - Unused, Work-in-Progress, and Incomplete Elements
+================================================================================
+Generated from analysis of frontend/src/ vs backend API availability.
+Date: 2026-03-24
+
+================================================================================
+SECTION 1: STUB VIEWS - DECLARED IN ROUTER, CONTENT NOT IMPLEMENTED
+================================================================================
+
+1.1 ExecutionsView (frontend/src/views/executions/ExecutionsView.vue)
+    STATUS: STUB - Only contains "This component will be implemented."
+    ROUTE: /executions
+    BACKEND: Full executions API exists (GET/filter, cancel, stats/summary)
+    ACTION: Implement execution list table with status filtering, pagination,
+            and link to execution details. Use executions store + backend routes.
+
+1.2 ExecutionDetailView (frontend/src/views/executions/ExecutionDetailView.vue)
+    STATUS: STUB - Only contains "This component will be implemented."
+    ROUTE: /executions/:id
+    BACKEND: GET /api/v1/executions/:id returns full execution with device,
+             automation, and user details.
+    ACTION: Build execution detail page showing log output, status timeline,
+            device info, and cancel button (PATCH /executions/:id/cancel).
+
+1.3 ScheduleView (frontend/src/views/schedule/ScheduleView.vue)
+    STATUS: STUB - Only contains "This component will be implemented."
+    ROUTE: /schedule
+    BACKEND: Full schedules API exists (CRUD + automation sub-routes).
+    ACTION: Implement schedule management with cron builder. Leverage the
+            existing CronBuilder.vue and ScheduleCalendar.vue components.
+
+1.4 AutomationDetailView (frontend/src/views/automations/AutomationDetailView.vue)
+    STATUS: STUB - Only contains "This component will be implemented."
+    ROUTE: /automations/:id
+    BACKEND: GET /api/v1/automations/:id with full detail including executions.
+    ACTION: Build automation detail page showing workflow config, execution
+            history, and controls (execute, toggle, delete).
+
+================================================================================
+SECTION 2: COMPONENTS BUILT BUT NEVER IMPORTED/USED
+================================================================================
+
+2.1 DeviceStatusBadge (frontend/src/components/devices/DeviceStatusBadge.vue)
+    STATUS: Built, never imported in any view or parent component
+    ACTION: Use in DeviceTable.vue or DeviceDetailView.vue to display status.
+
+2.2 DeviceCard (frontend/src/components/devices/DeviceCard.vue)
+    STATUS: Built, never imported in any view or parent component
+    ACTION: Use in a card-grid layout for DevicesView or dashboard.
+
+2.3 DeviceFilters (frontend/src/components/devices/DeviceFilters.vue)
+    STATUS: Built, never imported in any view or parent component
+    ACTION: Import into DevicesView.vue to enable sidebar/dialog filtering.
+
+2.4 WorkflowNode (frontend/src/components/automations/WorkflowNode.vue)
+    STATUS: Built, never imported in any view or parent component
+    ACTION: Import into WorkflowCanvas.vue for node rendering.
+
+2.5 NodeConnector (frontend/src/components/automations/NodeConnector.vue)
+    STATUS: Built, never imported in any view or parent component
+    ACTION: Import into WorkflowCanvas.vue for connection rendering.
+
+2.6 HelloWorld (frontend/src/components/HelloWorld.vue)
+    STATUS: Default Vue scaffolding component, no purpose in this project
+    ACTION: DELETE - leftover scaffolding file.
+
+2.7 ScheduleCalendar (frontend/src/components/schedule/ScheduleCalendar.vue)
+    STATUS: Built, never imported (ScheduleView is a stub)
+    ACTION: Import into ScheduleView.vue once implemented.
+
+2.8 ScheduleForm (frontend/src/components/schedule/ScheduleForm.vue)
+    STATUS: Built, never imported
+    ACTION: Import into ScheduleView.vue for creating/editing schedules.
+
+2.9 CronBuilder (frontend/src/components/schedule/CronBuilder.vue)
+    STATUS: Built, never imported
+    ACTION: Import into ScheduleForm.vue for visual cron editing.
+
+2.10 ExecutionList (frontend/src/components/executions/ExecutionList.vue)
+    STATUS: Built, never imported (ExecutionsView is a stub)
+    ACTION: Import into ExecutionsView.vue once implemented.
+
+2.11 ExecutionTimeline (frontend/src/components/executions/ExecutionTimeline.vue)
+    STATUS: Built, never imported
+    ACTION: Import into ExecutionDetailView.vue once implemented.
+
+2.12 ExecutionLogViewer (frontend/src/components/executions/ExecutionLogViewer.vue)
+    STATUS: Built, never imported
+    ACTION: Import into ExecutionDetailView.vue once implemented.
+
+2.13 NetworkHealthChart (frontend/src/components/dashboard/NetworkHealthChart.vue)
+    STATUS: Dashboard component, import status needs verification
+    ACTION: Verify it is actually used in DashboardView; if not, connect it.
+
+================================================================================
+SECTION 3: STORES WITH EMPTY/STUB IMPLEMENTATIONS
+================================================================================
+
+3.1 schedule store (frontend/src/stores/schedule.js)
+    STATUS: FILE IS EMPTY (1 line)
+    ACTION: Implement schedule store with CRUD actions matching schedule.service.js
+            and the backend schedule API.
+
+3.2 websocket store (frontend/src/stores/websocket.js)
+    STATUS: FILE IS EMPTY (1 line)
+    ACTION: Decide if this is needed alongside the existing websocket.service.js
+            singleton, or remove it. Currently websocket.service.js manages state.
+
+3.3 executions store - fetchExecutions() missing
+    STATUS: useExecutionsStore exists with addExecution/updateExecutionStatus etc.
+            for WebSocket updates, but has NO action to fetch executions from
+            the REST API (GET /api/v1/executions).
+    ACTION: Add fetchExecutions(), fetchExecutionById(), cancelExecution(),
+            and fetchExecutionStats() actions calling the backend.
+
+================================================================================
+SECTION 4: SERVICE METHODS CALLING NON-EXISTENT BACKEND ENDPOINTS
+================================================================================
+
+4.1 automation.service.js - testAutomation(automationId)
+    CALLS: POST /api/v1/automations/:id/test
+    BACKEND: No such route exists. Only /execute exists.
+    ACTION: Either add a /test endpoint to the backend, or remove this method.
+
+4.2 automation.service.js - getAutomationHistory(automationId)
+    CALLS: GET /api/v1/automations/:id/history
+    BACKEND: No such route exists. Use /api/v1/executions?automationId=:id instead.
+    ACTION: Update method to call /executions?automationId=:id or add backend route.
+
+4.3 automation.service.js - cloneAutomation(automationId)
+    CALLS: POST /api/v1/automations/:id/clone
+    BACKEND: No such route exists.
+    ACTION: Implement backend clone route or remove this method if not planned.
+
+4.4 automation.service.js - getAutomationTemplates()
+    CALLS: GET /api/v1/automations/templates
+    BACKEND: No such route exists.
+    ACTION: Implement templates system in backend or remove this method.
+
+4.5 automation.service.js - createFromTemplate(templateId)
+    CALLS: POST /api/v1/automations/from-template
+    BACKEND: No such route exists.
+    ACTION: Depends on 4.4 - implement together or remove.
+
+4.6 automation.service.js - validateAutomation(automationData)
+    CALLS: POST /api/v1/automations/validate
+    BACKEND: No such route exists.
+    ACTION: Add validation endpoint to backend or remove this method.
+
+4.7 automation.service.js - getAutomationStats()
+    CALLS: GET /api/v1/automations/stats
+    BACKEND: No such route exists. Execution stats live at
+             GET /api/v1/executions/stats/summary.
+    ACTION: Either add automation stats endpoint or update to use execution stats.
+
+4.8 automation.service.js - exportAutomations() / importAutomations()
+    CALLS: GET /api/v1/automations/export, POST /api/v1/automations/import
+    BACKEND: No such routes exist.
+    ACTION: Long-term feature - implement or clearly mark as future work.
+
+4.9 settings.service.js - getSettings() / updateSettings() / getSetting() / updateSetting()
+    CALLS: GET/PUT /api/v1/settings, GET/PUT /api/v1/settings/:key
+    BACKEND: No such general settings routes exist in settings.routes.js.
+    ACTION: Either implement these backend routes or remove these 4 methods.
+
+4.10 device.service.js (frontend) - deleteDevice()
+    CALLS: DELETE /api/v1/devices/:id
+    BACKEND: Route exists, but the frontend store has no deleteDevice() action
+             and no view calls this service method.
+    ACTION: Add deleteDevice() action to devices store and add delete button
+            to device management UI.
+
+================================================================================
+SECTION 5: SERVICES DEFINED BUT NOT CALLED FROM VIEWS/STORES
+================================================================================
+
+5.1 device.service.js - getMockDevices()
+    STATUS: Hardcoded mock data method - should only exist during development
+    ACTION: Remove once real API is reliably available and tested.
+
+5.2 device.service.js - getMockDevicesWithPagination()
+    STATUS: Hardcoded mock data method with 50 generated fake devices
+    ACTION: Remove - no longer needed once backend is working.
+
+5.3 device.service.js - generateMockDevices() / generateRandomUptime() / generateRandomMac()
+    STATUS: Mock data generators, development only
+    ACTION: Remove all three methods.
+
+5.4 device.service.js - pollDeviceBackup(deviceIds) / pollDeviceLoginSessions(deviceIds)
+    STATUS: Service methods exist, backend routes support them, but NO store
+            action or view calls them.
+    BACKEND: POST /api/v1/devices/poll with poller='backup' or 'login-sessions'
+    ACTION: Either add store actions and views, or document as "future pollers."
+
+5.5 device.service.js - pollDeviceSystem(deviceIds)
+    STATUS: Store action pollDeviceSystem() calls this service method, but
+            only DeviceDetailView.vue references it - verify it is actually
+            wired to a UI trigger.
+    ACTION: Confirm system polling is visible and functional in device detail.
+
+5.6 automation.service.js - ALL methods in 4.1-4.8 above
+    These service methods have no callers either in the stores or in views.
+
+5.7 schedule.service.js (frontend/src/services/schedule.service.js)
+    STATUS: Service file exists, ScheduleView is a stub, schedule store is empty.
+            Nothing in the app calls any schedule service methods.
+    ACTION: Implement ScheduleView to consume this service.
+
+================================================================================
+SECTION 6: COMPOSABLES NOT INTEGRATED
+================================================================================
+
+6.1 useDeviceFilters (frontend/src/composables/useDeviceFilters.js)
+    STATUS: Built but never imported in any component
+    ACTION: Import into DevicesView.vue alongside DeviceFilters.vue component.
+
+6.2 useNotifications (frontend/src/composables/useNotifications.js)
+    STATUS: Built but only referenced internally - verify active usage
+    ACTION: Check if NotificationDisplay.vue uses it; if not, wire it in.
+
+================================================================================
+SECTION 7: MODELS WITH PARTIAL/MISSING WIRING
+================================================================================
+
+7.1 Execution model (frontend/src/models/Execution.js)
+    STATUS: Model is used only by WebSocket handlers in websocket.service.js.
+            No REST API fetching has been wired to the executions store.
+    ACTION: Connect executions store fetchExecutions() to use this model.
+
+7.2 Schedule model (frontend/src/models/Schedule.js)
+    STATUS: Model built, schedule store is empty, no consumers.
+    ACTION: Build out schedule store to use this model.
+
+7.3 User model (frontend/src/models/User.js) / AuditLog model
+    STATUS: Models built but nothing in the frontend consumes them.
+    ACTION: Use in a future user profile page and audit log view (neither
+            implemented yet).
+
+7.4 DeviceGroup model (frontend/src/models/DeviceGroup.js)
+    STATUS: Built, no device group management UI exists in frontend.
+    ACTION: Build device group management UI or document as future work.
+
+================================================================================
+SECTION 8: VIEWS WITH INCOMPLETE/BROKEN FUNCTIONALITY
+================================================================================
+
+8.1 ForgotPasswordView (frontend/src/views/auth/ForgotPasswordView.vue)
+    STATUS: UI built, but there is NO backend password-reset endpoint.
+            The form cannot actually reset passwords.
+    ACTION: Implement backend /auth/forgot-password and /auth/reset-password
+            routes, or remove/disable this view.
+
+8.2 AutomationBuilderView - Save/Test/Deploy disconnect
+    STATUS: Builder has Save, Test, and Deploy buttons. Test calls
+            automationService.testAutomation() which hits a non-existent
+            backend endpoint. Deploy button behavior is unclear.
+    ACTION: Fix Test to use a valid endpoint, clarify Deploy vs. Save+Enable.
+
+8.3 Execution cancel in frontend
+    STATUS: Backend PATCH /executions/:id/cancel exists but no frontend
+            component calls it.
+    ACTION: Add cancel button to ExecutionDetailView (once implemented).
+
+================================================================================
+SECTION 9: DEBUG/DEVELOPMENT ARTIFACTS TO CLEAN UP
+================================================================================
+
+9.1 frontend/src/utils/debug.js
+    STATUS: Debug logging utility - may contain verbose logging not appropriate
+            for production builds.
+    ACTION: Ensure debug logs are gated behind DEV environment checks.
+
+9.2 frontend/src/utils/test-backend-connection.js
+    STATUS: Development utility for testing backend connectivity
+    ACTION: Remove from production build or gate behind environment check.
+
+9.3 frontend/src/components/debug/ApiTest.vue
+    STATUS: Debug component for API testing
+    ACTION: Remove from production build or restrict to admin/dev mode only.
+
+9.4 useWebSocket.js - simulateRealTimeUpdates()
+    STATUS: Development simulation for WebSocket events. Currently runs in
+            DEV mode automatically.
+    ACTION: Confirm this is properly gated by `import.meta.env.DEV` so it
+            doesn't run in production.
+
+9.5 console.log() calls throughout router/websocket service
+    STATUS: Multiple console.log statements exist in router/index.js and
+            websocket.service.js (afterEach hook, all event handlers).
+    ACTION: Replace with the project's debugLog utility or remove for production.
+
+================================================================================
+SECTION 10: FRONTEND CALLS TO BACKEND ENDPOINTS NOT YET WIRED
+================================================================================
+
+These backend endpoints are fully implemented and functional, but no frontend
+service, store, or view currently calls them:
+
+10.1 GET /api/v1/devices/ping/stats           → No frontend call
+10.2 POST /api/v1/devices/ping/all            → No frontend call
+10.3 POST /api/v1/devices/:id/ping            → No frontend call
+10.4 GET /api/v1/devices/:id/stats            → getDeviceStats() in device.service.js
+                                                 exists but is never called
+10.5 POST /api/v1/devices/:id/backup          → No frontend service method
+10.6 PUT /api/v1/devices/:id/configuration    → No frontend service method
+10.7 POST /api/v1/devices/:id/command         → No frontend service method
+10.8 GET /api/v1/devices/groups               → No frontend service method
+10.9 POST /api/v1/devices/groups              → No frontend service method
+10.10 PUT /api/v1/devices/groups/:id          → No frontend service method
+10.11 DELETE /api/v1/devices/groups/:id       → No frontend service method
+10.12 GET /api/v1/executions/stats/summary    → No frontend service method
+10.13 PATCH /api/v1/executions/:id/cancel     → No frontend call
+10.14 GET /api/v1/executions/automation/:id   → No frontend call
+10.15 GET /api/v1/executions/device/:id       → No frontend call
+10.16 GET /api/v1/schedules/automation/:id    → No frontend call
+10.17 PUT /api/v1/auth/me (update profile)    → No frontend profile edit UI
+
+================================================================================
+SUMMARY OF PRIORITY ACTIONS
+================================================================================
+CRITICAL (broken features that are navigable):
+  - ExecutionsView/ScheduleView/AutomationDetailView/ExecutionDetailView are
+    all stub pages reachable via navigation but show no content.
+  - ForgotPasswordView UI exists with no working backend.
+  - AutomationBuilder Test button calls non-existent endpoint.
+
+HIGH:
+  - Connect schedule store + service (empty store, full service, stub view).
+  - Add fetchExecutions() to executions store.
+  - Import and use DeviceFilters/DeviceCard/DeviceStatusBadge components.
+  - Import and wire up schedule-related components to ScheduleView.
+
+MEDIUM:
+  - Remove/clean up mock data methods from device.service.js.
+  - Remove HelloWorld.vue scaffolding artifact.
+  - Add device group management UI.
+  - Wire ping/backup/command device operations to UI.
+
+LOW:
+  - Remove debug artifacts (ApiTest.vue, test-backend-connection.js).
+  - Implement User/AuditLog/DeviceGroup model consumers.
+  - Clean up console.log statements in production code paths.
+================================================================================

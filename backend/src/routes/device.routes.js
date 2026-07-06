@@ -16,6 +16,13 @@ router.post('/', authorize('admin', 'operator'), validateDevice.create, deviceCo
 // Sync devices from Aruba Central
 router.post('/sync', authorize('admin', 'operator'), deviceController.syncDevices);
 
+// Ping monitoring routes
+// Get ping monitoring statistics
+router.get('/ping/stats', deviceController.getPingStats);
+
+// Trigger ping check for all devices
+router.post('/ping/all', authorize('admin', 'operator'), deviceController.pingAllDevices);
+
 // Device polling routes
 // Get available pollers
 router.get('/poll/pollers', deviceController.getAvailablePollers);
@@ -56,6 +63,13 @@ router.post(
   authorize('admin'),
   validateDevice.executeCommand,
   deviceController.executeCommand
+);
+
+// Manually trigger ping check for specific device
+router.post(
+  '/:deviceId/ping',
+  authorize('admin', 'operator'),
+  deviceController.pingDevice
 );
 
 // Device group routes

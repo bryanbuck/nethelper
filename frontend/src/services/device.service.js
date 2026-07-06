@@ -1,4 +1,5 @@
 import api from './api'
+import { handleApiError } from '@/utils/apiError'
 
 class DeviceService {
   async getDevices(params = {}) {
@@ -7,7 +8,7 @@ class DeviceService {
       return response.data
     } catch (error) {
       console.error('Error fetching devices:', error)
-      throw this.handleApiError(error, 'fetching devices')
+      throw handleApiError(error, 'fetching devices')
     }
   }
 
@@ -50,7 +51,7 @@ class DeviceService {
       }
     } catch (error) {
       console.error('Error fetching devices with pagination:', error)
-      throw this.handleApiError(error, 'fetching devices')
+      throw handleApiError(error, 'fetching devices')
     }
   }
 
@@ -60,7 +61,7 @@ class DeviceService {
       return response.data
     } catch (error) {
       console.error('Error fetching device:', error)
-      throw this.handleApiError(error, 'fetching device details')
+      throw handleApiError(error, 'fetching device details')
     }
   }
 
@@ -70,7 +71,7 @@ class DeviceService {
       return response.data
     } catch (error) {
       console.error('Error creating device:', error)
-      throw this.handleApiError(error, 'creating device')
+      throw handleApiError(error, 'creating device')
     }
   }
 
@@ -80,7 +81,7 @@ class DeviceService {
       return response.data
     } catch (error) {
       console.error('Error updating device:', error)
-      throw this.handleApiError(error, 'updating device')
+      throw handleApiError(error, 'updating device')
     }
   }
 
@@ -90,7 +91,7 @@ class DeviceService {
       return response.data
     } catch (error) {
       console.error('Error syncing devices:', error)
-      throw this.handleApiError(error, 'syncing devices')
+      throw handleApiError(error, 'syncing devices')
     }
   }
 
@@ -100,7 +101,7 @@ class DeviceService {
       return response.data
     } catch (error) {
       console.error('Error fetching device stats:', error)
-      throw this.handleApiError(error, 'fetching device statistics')
+      throw handleApiError(error, 'fetching device statistics')
     }
   }
 
@@ -371,116 +372,6 @@ class DeviceService {
     return this.pollDevices('login-sessions', deviceIds)
   }
 
-  /**
-   * Handle API errors with user-friendly messages
-   * @param {Error} error - The error object from axios
-   * @param {string} action - Description of what was being attempted
-   * @returns {Error} Enhanced error with user-friendly message
-   */
-  handleApiError(error, action = 'completing the request') {
-    const enhancedError = new Error()
-
-    // Check if it's a network error (no response from server)
-    if (!error.response) {
-      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-        enhancedError.message = `Request timeout while ${action}. The server took too long to respond.`
-        enhancedError.userMessage = 'The request timed out. Please try again.'
-        enhancedError.type = 'TIMEOUT'
-      } else if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
-        enhancedError.message = `Network error while ${action}. Unable to connect to the server.`
-        enhancedError.userMessage = 'Unable to connect to the server. Please check your internet connection and ensure the backend server is running.'
-        enhancedError.type = 'NETWORK'
-      } else {
-        enhancedError.message = `Connection failed while ${action}. ${error.message}`
-        enhancedError.userMessage = 'Connection failed. Please verify the backend server is running and accessible.'
-        enhancedError.type = 'CONNECTION'
-      }
-      enhancedError.statusCode = 0
-      enhancedError.isRecoverable = true
-      return enhancedError
-    }
-
-    // Handle HTTP error responses
-    const status = error.response.status
-    const responseData = error.response.data
-
-    enhancedError.statusCode = status
-    enhancedError.response = error.response
-
-    switch (status) {
-      case 400:
-        enhancedError.message = `Bad request while ${action}: ${responseData.error || responseData.message || 'Invalid data provided'}`
-        enhancedError.userMessage = responseData.error || 'The request contains invalid data. Please check your input.'
-        enhancedError.type = 'BAD_REQUEST'
-        enhancedError.isRecoverable = true
-        break
-
-      case 401:
-        enhancedError.message = `Unauthorized while ${action}. Please log in again.`
-        enhancedError.userMessage = 'Your session has expired. Please log in again.'
-        enhancedError.type = 'UNAUTHORIZED'
-        enhancedError.isRecoverable = false
-        break
-
-      case 403:
-        enhancedError.message = `Access forbidden while ${action}. Insufficient permissions.`
-        enhancedError.userMessage = 'You do not have permission to perform this action.'
-        enhancedError.type = 'FORBIDDEN'
-        enhancedError.isRecoverable = false
-        break
-
-      case 404:
-        enhancedError.message = `Resource not found while ${action}.`
-        enhancedError.userMessage = 'The requested resource was not found.'
-        enhancedError.type = 'NOT_FOUND'
-        enhancedError.isRecoverable = true
-        break
-
-      case 409:
-        enhancedError.message = `Conflict while ${action}: ${responseData.error || 'Resource already exists'}`
-        enhancedError.userMessage = responseData.error || 'A conflict occurred. This resource may already exist.'
-        enhancedError.type = 'CONFLICT'
-        enhancedError.isRecoverable = true
-        break
-
-      case 422:
-        enhancedError.message = `Validation error while ${action}: ${responseData.error || 'Invalid data'}`
-        enhancedError.userMessage = responseData.error || 'The data provided failed validation.'
-        enhancedError.type = 'VALIDATION_ERROR'
-        enhancedError.isRecoverable = true
-        enhancedError.validationErrors = responseData.errors
-        break
-
-      case 429:
-        enhancedError.message = `Rate limit exceeded while ${action}.`
-        enhancedError.userMessage = 'Too many requests. Please wait a moment and try again.'
-        enhancedError.type = 'RATE_LIMIT'
-        enhancedError.isRecoverable = true
-        break
-
-      case 500:
-      case 502:
-      case 503:
-      case 504:
-        enhancedError.message = `Server error while ${action}: ${responseData.error || 'Internal server error'}`
-        enhancedError.userMessage = 'A server error occurred. Please try again later or contact support if the issue persists.'
-        enhancedError.type = 'SERVER_ERROR'
-        enhancedError.isRecoverable = true
-        break
-
-      default:
-        enhancedError.message = `Error while ${action}: ${responseData.error || responseData.message || 'Unknown error'}`
-        enhancedError.userMessage = responseData.error || responseData.message || 'An unexpected error occurred.'
-        enhancedError.type = 'UNKNOWN'
-        enhancedError.isRecoverable = true
-    }
-
-    // Preserve original error details
-    enhancedError.originalError = error
-    enhancedError.action = action
-
-    return enhancedError
-  }
 }
 
 export default new DeviceService()

@@ -1,4 +1,5 @@
 import api from './api'
+import { handleApiError } from '@/utils/apiError'
 
 /**
  * Device API Testing Service
@@ -25,7 +26,7 @@ class DeviceApiService {
       return response.data
     } catch (error) {
       console.error('Error testing manual connection:', error)
-      throw this.handleApiError(error, 'testing device connection')
+      throw handleApiError(error, 'testing device connection')
     }
   }
 
@@ -40,7 +41,7 @@ class DeviceApiService {
       return response.data
     } catch (error) {
       console.error('Error testing device connection:', error)
-      throw this.handleApiError(error, 'testing device connection')
+      throw handleApiError(error, 'testing device connection')
     }
   }
 
@@ -55,7 +56,7 @@ class DeviceApiService {
       return response.data
     } catch (error) {
       console.error('Error getting device info:', error)
-      throw this.handleApiError(error, 'retrieving device information')
+      throw handleApiError(error, 'retrieving device information')
     }
   }
 
@@ -70,7 +71,7 @@ class DeviceApiService {
       return response.data
     } catch (error) {
       console.error('Error getting firmware info:', error)
-      throw this.handleApiError(error, 'retrieving firmware information')
+      throw handleApiError(error, 'retrieving firmware information')
     }
   }
 
@@ -84,7 +85,7 @@ class DeviceApiService {
       return response.data
     } catch (error) {
       console.error('Error getting supported types:', error)
-      throw this.handleApiError(error, 'retrieving supported device types')
+      throw handleApiError(error, 'retrieving supported device types')
     }
   }
 
@@ -99,7 +100,7 @@ class DeviceApiService {
       return response.data
     } catch (error) {
       console.error('Error testing credential:', error)
-      throw this.handleApiError(error, 'testing credential')
+      throw handleApiError(error, 'testing credential')
     }
   }
 
@@ -188,94 +189,6 @@ class DeviceApiService {
     }
   }
 
-  /**
-   * Handle API errors with user-friendly messages
-   * @param {Error} error - The error object from axios
-   * @param {string} action - Description of what was being attempted
-   * @returns {Error} Enhanced error with user-friendly message
-   */
-  handleApiError(error, action = 'completing the request') {
-    const enhancedError = new Error()
-
-    // Check if it's a network error (no response from server)
-    if (!error.response) {
-      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-        enhancedError.message = `Request timeout while ${action}. The server took too long to respond.`
-        enhancedError.userMessage = 'The request timed out. Please try again.'
-        enhancedError.type = 'TIMEOUT'
-      } else if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
-        enhancedError.message = `Network error while ${action}. Unable to connect to the server.`
-        enhancedError.userMessage = 'Unable to connect to the server. Please check your internet connection and ensure the backend server is running.'
-        enhancedError.type = 'NETWORK'
-      } else {
-        enhancedError.message = `Connection failed while ${action}. ${error.message}`
-        enhancedError.userMessage = 'Connection failed. Please verify the backend server is running and accessible.'
-        enhancedError.type = 'CONNECTION'
-      }
-      enhancedError.statusCode = 0
-      enhancedError.isRecoverable = true
-      return enhancedError
-    }
-
-    // Handle HTTP error responses
-    const status = error.response.status
-    const responseData = error.response.data
-
-    enhancedError.statusCode = status
-    enhancedError.response = error.response
-
-    switch (status) {
-      case 400:
-        enhancedError.message = `Bad request while ${action}: ${responseData.error || responseData.message || 'Invalid data provided'}`
-        enhancedError.userMessage = responseData.error || 'The request contains invalid data. Please check your input.'
-        enhancedError.type = 'BAD_REQUEST'
-        enhancedError.isRecoverable = true
-        break
-
-      case 401:
-        enhancedError.message = `Unauthorized while ${action}. Please log in again.`
-        enhancedError.userMessage = 'Your session has expired. Please log in again.'
-        enhancedError.type = 'UNAUTHORIZED'
-        enhancedError.isRecoverable = false
-        break
-
-      case 403:
-        enhancedError.message = `Access forbidden while ${action}. Insufficient permissions.`
-        enhancedError.userMessage = 'You do not have permission to perform this action.'
-        enhancedError.type = 'FORBIDDEN'
-        enhancedError.isRecoverable = false
-        break
-
-      case 404:
-        enhancedError.message = `Resource not found while ${action}.`
-        enhancedError.userMessage = responseData.error || 'The requested resource was not found.'
-        enhancedError.type = 'NOT_FOUND'
-        enhancedError.isRecoverable = true
-        break
-
-      case 500:
-      case 502:
-      case 503:
-      case 504:
-        enhancedError.message = `Server error while ${action}: ${responseData.error || 'Internal server error'}`
-        enhancedError.userMessage = responseData.error || 'A server error occurred. Please try again later or contact support if the issue persists.'
-        enhancedError.type = 'SERVER_ERROR'
-        enhancedError.isRecoverable = true
-        break
-
-      default:
-        enhancedError.message = `Error while ${action}: ${responseData.error || responseData.message || 'Unknown error'}`
-        enhancedError.userMessage = responseData.error || responseData.message || 'An unexpected error occurred.'
-        enhancedError.type = 'UNKNOWN'
-        enhancedError.isRecoverable = true
-    }
-
-    // Preserve original error details
-    enhancedError.originalError = error
-    enhancedError.action = action
-
-    return enhancedError
-  }
 }
 
 export default new DeviceApiService()

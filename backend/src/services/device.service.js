@@ -12,22 +12,48 @@ class DeviceService {
       const { type, status, location, search } = filters;
 
       const where = {};
-      
+
       if (type) where.type = type;
-      if (status) where.status = status;
-      if (location) where.location = { contains: location, mode: 'insensitive' };
-      
-      if (search) {
+      // Filter by pingStatus as primary status, fallback to centralStatus
+      if (status) {
         where.OR = [
+          { pingStatus: status },
+          { AND: [{ pingStatus: null }, { centralStatus: status }] }
+        ];
+      }
+      if (location) where.location = { contains: location, mode: 'insensitive' };
+
+      if (search) {
+        const searchConditions = [
           { name: { contains: search, mode: 'insensitive' } },
           { serial: { contains: search, mode: 'insensitive' } },
           { ipAddress: { contains: search, mode: 'insensitive' } },
         ];
+
+        if (where.OR) {
+          // If we already have OR conditions from status filter, combine with AND
+          where.AND = [
+            { OR: where.OR },
+            { OR: searchConditions }
+          ];
+          delete where.OR;
+        } else {
+          where.OR = searchConditions;
+        }
       }
 
       const devices = await prisma.device.findMany({
         where,
         include: {
+          apiCredential: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              lastTested: true,
+              lastTestStatus: true,
+            },
+          },
           deviceGroups: {
             select: {
               id: true,
@@ -41,12 +67,20 @@ class DeviceService {
           },
         },
         orderBy: [
-          { status: 'asc' },
+          { pingStatus: 'asc' },
           { name: 'asc' },
         ],
       });
 
-      return devices;
+      // Map pingStatus to status field for frontend compatibility
+      return devices.map(device => ({
+        ...device,
+        // Use pingStatus as primary, fallback to centralStatus
+        status: device.pingStatus || device.centralStatus || 'offline',
+        // Include both statuses for frontend display
+        pingStatus: device.pingStatus,
+        centralStatus: device.centralStatus,
+      }));
     } catch (error) {
       logger.error('Get devices error', { error: error.message, stack: error.stack });
       throw error;
@@ -60,6 +94,15 @@ class DeviceService {
       const device = await prisma.device.findUnique({
         where: { id: deviceId },
         include: {
+          apiCredential: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              lastTested: true,
+              lastTestStatus: true,
+            },
+          },
           deviceGroups: {
             select: {
               id: true,
@@ -103,8 +146,9 @@ class DeviceService {
           ipAddress: deviceData.ipAddress,
           macAddress: deviceData.macAddress,
           location: deviceData.location,
-          status: deviceData.status || 'offline',
+          centralStatus: deviceData.centralStatus || deviceData.status || 'offline',
           firmwareVersion: deviceData.firmwareVersion,
+          apiCredentialId: deviceData.apiCredentialId || null,
           metadata: deviceData.metadata || {},
         },
       });
@@ -156,9 +200,16 @@ class DeviceService {
     try {
       logger.progress('Starting device sync from Aruba Central');
 
-      // Get devices from Aruba Central using the new getAllDevices method
-      const arubaDevices = await arubaCentralService.getAllDevices();
+      // Get devices from Aruba Central using the unified endpoint
+      // Note: The new API returns {items: [], count, total, next}
+      const response = await arubaCentralService.getAllDevices({ limit: 100 });
+      const arubaDevices = response.items || [];
       const prisma = getPrisma();
+
+      logger.info('Received devices from Aruba Central', {
+        count: arubaDevices.length,
+        total: response.total
+      });
 
       let created = 0;
       let updated = 0;
@@ -171,19 +222,27 @@ class DeviceService {
           });
 
           const deviceData = {
-            name: arubaDevice.name || arubaDevice.serial,
-            type: this.mapDeviceType(arubaDevice.device_type),
+            name: arubaDevice.deviceName || arubaDevice.serial,
+            type: this.mapDeviceType(arubaDevice.deviceType),
             model: arubaDevice.model,
-            ipAddress: arubaDevice.ip_address,
-            macAddress: arubaDevice.mac_address,
-            location: arubaDevice.site,
-            status: this.mapDeviceStatus(arubaDevice.status),
-            firmwareVersion: arubaDevice.firmware_version,
-            lastSeen: arubaDevice.last_modified ? new Date(arubaDevice.last_modified * 1000) : null,
+            ipAddress: arubaDevice.ipv4 || arubaDevice.ipv6,
+            macAddress: arubaDevice.macAddress,
+            location: arubaDevice.location,
+            centralStatus: this.mapDeviceStatus(arubaDevice.status),
+            firmwareVersion: arubaDevice.firmwareVersion,
+            lastSeen: arubaDevice.lastSeen ? new Date(arubaDevice.lastSeen * 1000) : null,
             metadata: {
-              group_id: arubaDevice.group_id,
-              labels: arubaDevice.labels || [],
-              uptime: arubaDevice.uptime,
+              siteId: arubaDevice.siteId,
+              deployment: arubaDevice.deployment,
+              health: arubaDevice.health,
+              uptime: arubaDevice.upTime,
+              // Switch-specific fields
+              stackId: arubaDevice.stackId,
+              switchRole: arubaDevice.switchRole,
+              // Firmware details
+              firmwareBackupVersion: arubaDevice.firmwareBackupVersion,
+              firmwareStatus: arubaDevice.firmwareStatus,
+              firmwareRecommendedVersion: arubaDevice.firmwareRecommendedVersion,
             },
           };
 
@@ -204,13 +263,13 @@ class DeviceService {
         }
       }
 
-      logger.success('Device sync completed', { 
-        created, 
-        updated, 
+      logger.success('Device sync completed', {
+        created,
+        updated,
         total: arubaDevices.length,
-        accessPoints: arubaDevices.filter(d => this.mapDeviceType(d.device_type) === 'access_point').length,
-        switches: arubaDevices.filter(d => this.mapDeviceType(d.device_type) === 'switch').length,
-        gateways: arubaDevices.filter(d => this.mapDeviceType(d.device_type) === 'gateway').length
+        accessPoints: arubaDevices.filter(d => d.deviceType === 'ACCESS_POINT').length,
+        switches: arubaDevices.filter(d => d.deviceType === 'SWITCH').length,
+        gateways: arubaDevices.filter(d => d.deviceType === 'GATEWAY').length
       });
       return { created, updated, total: arubaDevices.length };
     } catch (error) {
@@ -242,20 +301,23 @@ class DeviceService {
 
   mapDeviceType(arubaType) {
     const typeMap = {
-      // Access Points
+      // New API format (v1alpha1)
+      'ACCESS_POINT': 'access_point',
+      'SWITCH': 'switch',
+      'GATEWAY': 'gateway',
+
+      // Legacy API formats (kept for compatibility)
       'ap': 'access_point',
       'access_point': 'access_point',
       'iap': 'access_point',
       'instant_ap': 'access_point',
-      
-      // Switches
+
       'switch': 'switch',
       'cx': 'switch',
       'aos_switch': 'switch',
       'aos-s': 'switch',
       'aos-cx': 'switch',
-      
-      // Gateways
+
       'gateway': 'gateway',
       'gw': 'gateway',
       'mobility_controller': 'gateway',
@@ -263,7 +325,8 @@ class DeviceService {
       'mc': 'gateway'
     };
 
-    const deviceType = typeMap[arubaType?.toLowerCase()];
+    // Handle both uppercase (new API) and lowercase (legacy)
+    const deviceType = typeMap[arubaType] || typeMap[arubaType?.toLowerCase()];
     if (!deviceType) {
       logger.warn('Unknown device type encountered', { arubaType });
       return 'access_point'; // Default fallback
@@ -294,7 +357,8 @@ class DeviceService {
               name: true,
               serial: true,
               type: true,
-              status: true,
+              pingStatus: true,
+              centralStatus: true,
             },
           },
           _count: {
@@ -307,7 +371,14 @@ class DeviceService {
         orderBy: { name: 'asc' },
       });
 
-      return groups;
+      // Map pingStatus to status for each device in the groups
+      return groups.map(group => ({
+        ...group,
+        devices: group.devices.map(device => ({
+          ...device,
+          status: device.pingStatus || device.centralStatus || 'offline',
+        })),
+      }));
     } catch (error) {
       logger.error('Get device groups error', { error: error.message, stack: error.stack });
       throw error;

@@ -51,22 +51,22 @@ class SettingsController {
   }
 
   /**
-   * Get API credentials by device ID
+   * Get API credential associated with a specific device
    * GET /api/v1/settings/api-credentials/device/:deviceId
    */
-  async getApiCredentialsByDevice(req, res, next) {
+  async getApiCredentialByDevice(req, res, next) {
     try {
       const { deviceId } = req.params;
       const userId = req.user.id;
 
-      const credentials = await settingsService.getApiCredentialsByDevice(deviceId, userId);
+      const credential = await settingsService.getApiCredentialByDevice(deviceId, userId);
 
       res.json({
         success: true,
-        data: credentials,
+        data: credential,
       });
     } catch (error) {
-      logger.error('Get API credentials by device error:', error);
+      logger.error('Get API credential by device error:', error);
       next(error);
     }
   }
@@ -170,13 +170,15 @@ class SettingsController {
   /**
    * Test an API credential
    * POST /api/v1/settings/api-credentials/:id/test
+   * Optional body: { deviceId: "device-uuid" }
    */
   async testApiCredential(req, res, next) {
     try {
       const { id } = req.params;
       const userId = req.user.id;
+      const { deviceId } = req.body || {};
 
-      const testResult = await settingsService.testApiCredential(id, userId);
+      const testResult = await settingsService.testApiCredential(id, userId, deviceId);
 
       res.json({
         success: true,
@@ -185,7 +187,99 @@ class SettingsController {
     } catch (error) {
       logger.error('Test API credential error:', error);
 
-      if (error.message === 'API credential not found') {
+      if (error.message === 'API credential not found' || error.message === 'Device not found') {
+        return res.status(404).json({
+          success: false,
+          error: error.message,
+        });
+      }
+
+      next(error);
+    }
+  }
+
+  /**
+   * Get Aruba Central configuration
+   * GET /api/v1/settings/aruba-central
+   */
+  async getArubaCentralConfig(req, res, next) {
+    try {
+      const userId = req.user.id;
+
+      const config = await settingsService.getArubaCentralConfig(userId);
+
+      res.json({
+        success: true,
+        data: config,
+      });
+    } catch (error) {
+      logger.error('Get Aruba Central config error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Create or update Aruba Central configuration
+   * POST /api/v1/settings/aruba-central
+   */
+  async saveArubaCentralConfig(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const configData = req.body;
+
+      const config = await settingsService.saveArubaCentralConfig(userId, configData);
+
+      res.status(config.isNew ? 201 : 200).json({
+        success: true,
+        data: config.data,
+        message: config.isNew ? 'Aruba Central configuration created successfully' : 'Aruba Central configuration updated successfully',
+      });
+    } catch (error) {
+      logger.error('Save Aruba Central config error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Test Aruba Central configuration
+   * POST /api/v1/settings/aruba-central/test
+   */
+  async testArubaCentralConfig(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { configId } = req.body;
+
+      const testResult = await settingsService.testArubaCentralConfig(userId, configId);
+
+      res.json({
+        success: true,
+        data: testResult,
+      });
+    } catch (error) {
+      logger.error('Test Aruba Central config error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Delete Aruba Central configuration
+   * DELETE /api/v1/settings/aruba-central/:id
+   */
+  async deleteArubaCentralConfig(req, res, next) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+
+      await settingsService.deleteArubaCentralConfig(id, userId);
+
+      res.json({
+        success: true,
+        message: 'Aruba Central configuration deleted successfully',
+      });
+    } catch (error) {
+      logger.error('Delete Aruba Central config error:', error);
+
+      if (error.message === 'Aruba Central configuration not found') {
         return res.status(404).json({
           success: false,
           error: error.message,

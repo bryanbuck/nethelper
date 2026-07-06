@@ -55,6 +55,25 @@ class DeviceAPITestController {
       // Test connection
       const result = await deviceAPI.testConnection();
 
+      // Update credential test status
+      if (device.apiCredentialId) {
+        try {
+          await prisma.apiCredential.update({
+            where: { id: device.apiCredentialId },
+            data: {
+              lastTested: new Date(),
+              lastTestStatus: result.success ? 'success' : 'failed',
+            },
+          });
+        } catch (updateError) {
+          logger.warn('Failed to update credential test status', {
+            error: updateError.message,
+            credentialId: device.apiCredentialId,
+          });
+          // Don't fail the request if we can't update the credential
+        }
+      }
+
       res.json({
         success: true,
         data: result,
@@ -64,6 +83,30 @@ class DeviceAPITestController {
         error: error.message,
         stack: error.stack,
       });
+
+      // Try to update credential status even on failure
+      if (req.params.deviceId) {
+        try {
+          const prisma = getPrisma();
+          const device = await prisma.device.findUnique({
+            where: { id: req.params.deviceId },
+          });
+
+          if (device?.apiCredentialId) {
+            await prisma.apiCredential.update({
+              where: { id: device.apiCredentialId },
+              data: {
+                lastTested: new Date(),
+                lastTestStatus: 'failed',
+              },
+            });
+          }
+        } catch (updateError) {
+          logger.warn('Failed to update credential test status on error', {
+            error: updateError.message,
+          });
+        }
+      }
 
       if (error.message.includes('Unsupported device API type')) {
         return res.status(400).json({

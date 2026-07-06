@@ -202,6 +202,20 @@ export const useDevicesStore = defineStore('devices', () => {
     }
   }
 
+  /**
+   * Update device locally without making API call
+   * Used for WebSocket real-time updates
+   * @param {string} deviceId - Device ID
+   * @param {Object} updates - Fields to update
+   */
+  function updateDeviceLocally(deviceId, updates) {
+    const device = devices.value.find(d => d.id === deviceId)
+    if (device) {
+      Object.assign(device, updates)
+      updateStats()
+    }
+  }
+
   function updateStats() {
     stats.value = {
       total: devices.value.length,
@@ -422,6 +436,7 @@ export const useDevicesStore = defineStore('devices', () => {
     clearError,
     createDevice,
     updateDeviceStatus,
+    updateDeviceLocally,
     addDevice,
     removeDevice,
     updateDevice,

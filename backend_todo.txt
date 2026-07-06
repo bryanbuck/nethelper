@@ -1,0 +1,230 @@
+================================================================================
+BACKEND TODO - Unused, Work-in-Progress, and Incomplete Elements
+================================================================================
+Generated from analysis of backend/src/ vs frontend usage patterns.
+Date: 2026-03-24
+
+================================================================================
+SECTION 1: SERVICES NOT CALLED BY ANY ROUTE/CONTROLLER
+================================================================================
+
+1.1 automation.service.js (backend/src/services/automation.service.js)
+    STATUS: ORPHANED - Fully implemented service with no callers
+    ISSUE: This AutomationService class (createAutomation, getAutomations,
+           executeAutomation, etc.) is never imported or called from any
+           route or controller. The automation.routes.js bypasses it entirely,
+           implementing all logic inline using getPrisma() directly.
+    IMPACT: Dead code. All automation DB operations are duplicated inline in
+            the route file.
+    ACTION: Either wire up the routes to use this service, or delete it.
+
+1.2 notification.service.js (backend/src/services/notification.service.js)
+    STATUS: ORPHANED - Complete service, zero callers in codebase
+    ISSUE: None of the following methods are called from any route,
+           controller, or job:
+           - notifyAutomationComplete()
+           - notifyAutomationFailed()
+           - notifyDeviceOffline()
+           - notifyScheduledAutomationFailed()     [has internal TODO comment]
+           - sendSystemAlert()                     [has internal TODO comment]
+           - sendWebhook()
+           - sendSlackNotification()
+           - testEmailConnection()
+    IMPACT: Email notifications, Slack alerts, and webhooks are completely
+            non-functional despite being implemented.
+    ACTION: Wire service into automation.job.js and ping-monitor.service.js.
+            Implement the TODO stubs in notifyScheduledAutomationFailed() and
+            sendSystemAlert().
+
+================================================================================
+SECTION 2: CONTROLLER METHODS NOT USED BY FRONTEND
+================================================================================
+
+2.1 backupDeviceConfiguration (device.controller.js -> aruba-central.service.js)
+    ROUTE: POST /api/v1/devices/:deviceId/backup
+    STATUS: Backend fully implemented, frontend has no corresponding call
+    ACTION: Add backup functionality to device detail view in frontend.
+
+2.2 updateDeviceConfiguration (device.controller.js -> aruba-central.service.js)
+    ROUTE: PUT /api/v1/devices/:deviceId/configuration
+    STATUS: Backend fully implemented, frontend has no corresponding call
+    ACTION: Implement configuration editor in device detail view.
+
+2.3 executeCommand (device.controller.js -> aruba-central.service.js)
+    ROUTE: POST /api/v1/devices/:deviceId/command
+    STATUS: Backend implemented, no frontend consumer
+    ACTION: Decide if this is in scope; add CLI/command interface to device
+            detail view or remove until needed.
+
+2.4 getDeviceStats (device.controller.js -> aruba-central.service.js)
+    ROUTE: GET /api/v1/devices/:deviceId/stats
+    STATUS: Backend implemented, frontend has getDeviceStats() in
+            device.service.js (frontend) but it is never called from any
+            component or store.
+    ACTION: Connect to a stats/metrics panel in device detail view.
+
+2.5 pingAllDevices (device.controller.js)
+    ROUTE: POST /api/v1/devices/ping/all
+    STATUS: Backend implemented, no frontend consumer
+    ACTION: Add a "Ping All" button to DevicesView or DashboardView.
+
+2.6 pingDevice (device.controller.js)
+    ROUTE: POST /api/v1/devices/:deviceId/ping
+    STATUS: Backend implemented, no frontend consumer
+    ACTION: Add manual ping button to device detail view.
+
+2.7 getPingStats (device.controller.js)
+    ROUTE: GET /api/v1/devices/ping/stats
+    STATUS: Backend implemented, no frontend consumer
+    ACTION: Surface ping statistics on dashboard or monitoring panel.
+
+2.8 Device Group CRUD (device.controller.js)
+    ROUTES: GET/POST /devices/groups, PUT/DELETE /devices/groups/:groupId
+    STATUS: Backend fully implemented, frontend has api.endpoints.js entry
+            but NO service methods, store actions, or views consume these.
+    ACTION: Implement device group management UI and wire up frontend service.
+
+================================================================================
+SECTION 3: ARUBA CENTRAL SERVICE - METHODS WITH NO CALLERS
+================================================================================
+
+3.1 getSwitchDetails(serial)
+    STATUS: Implemented, never called from any controller or job
+    ACTION: Could be used by a "switch detail" panel or by device poller.
+
+3.2 getAccessPointDetails(serial)
+    STATUS: Implemented, never called from any controller or job
+    ACTION: Could be used by "AP detail" panel or device poller.
+
+3.3 getNetworkHealth()
+    STATUS: Implemented, never called
+    ACTION: Wire into dashboard stats or add a network health endpoint.
+
+3.4 getFirmwareVersions(deviceType)
+    STATUS: Implemented, never called
+    ACTION: Needed for the Firmware Status view to show available upgrades.
+
+3.5 upgradeFirmware(deviceSerial, version)
+    STATUS: Implemented, never called
+    ACTION: Blocked by getFirmwareVersions(); both needed before this is usable.
+
+3.6 makeRequest() - legacy baseURL/customerId references
+    STATUS: The method references `this.baseURL` and `this.customerId` which
+            are never set as instance properties (config is loaded dynamically
+            via getConfig()). This will cause undefined reference issues if
+            makeRequest() is called for the configuration/monitoring/firmware
+            endpoints (sections 3.1-3.5 above).
+    ACTION: Fix makeRequest() to call getConfig() before building the URL,
+            matching the pattern used in getAllDevices().
+
+================================================================================
+SECTION 4: JOBS AND BACKGROUND WORKERS - INCOMPLETE/DISCONNECTED
+================================================================================
+
+4.1 automation.job.js (backend/src/jobs/automation.job.js)
+    STATUS: Exists but its relationship to automation.service.js vs the
+            inline route logic is unclear. The execute route has a
+            TODO comment: "// TODO: Add to job queue for background processing"
+            meaning executions are NOT actually queued - they run synchronously
+            and execution records are created with status 'pending' but never
+            progressed.
+    ACTION: Complete job integration: have execute route enqueue a job,
+            have the job update execution status, emit WebSocket events,
+            and call notification.service.js on completion/failure.
+
+4.2 device-sync.job.js (backend/src/jobs/device-sync.job.js)
+    STATUS: Appears to exist but relationship to aruba-central.service.js
+            getAllDevices() is unclear - verify it properly calls
+            deviceService.syncDevicesFromAruba().
+    ACTION: Audit and confirm job properly invokes syncDevicesFromAruba().
+
+4.3 Execution status never transitions beyond 'pending'
+    STATUS: WIP - executions are created as 'pending' but no job processor
+            advances them to 'running', 'success', or 'failed'.
+    ACTION: Implement job processor in automation.job.js.
+
+================================================================================
+SECTION 5: ROUTES WITH NO FRONTEND CONSUMER
+================================================================================
+
+5.1 /api/v1/schedules/automation/:automationId
+    No frontend service method calls this sub-route.
+
+5.2 /api/v1/executions/automation/:automationId
+    No frontend service calls this.
+
+5.3 /api/v1/executions/device/:deviceId
+    No frontend service calls this.
+
+5.4 /api/v1/executions/stats/summary
+    No frontend service calls this (but would be useful for dashboard).
+
+5.5 /api/v1/auth/register
+    No frontend registration form or service method calls this.
+    (ForgotPassword view exists in frontend but no corresponding backend
+    password-reset route exists either.)
+
+5.6 /api/v1/auth/me PUT (update profile)
+    Backend route exists, no frontend profile editing UI or service call.
+
+================================================================================
+SECTION 6: INCOMPLETE / TODO-STUB CODE
+================================================================================
+
+6.1 notification.service.js - notifyScheduledAutomationFailed()
+    Contains explicit "TODO: Implement admin notification logic" comment.
+
+6.2 notification.service.js - sendSystemAlert()
+    Contains explicit "TODO: Implement system alert notifications" comment.
+
+6.3 automation.routes.js - execute endpoint
+    Contains "// TODO: Add to job queue for background processing" comment.
+
+6.4 automation.controller.js (backend/src/controllers/automation.controller.js)
+    STATUS: File exists but appears to be mostly empty or minimal - the route
+            logic is all implemented inline in automation.routes.js instead.
+    ACTION: Either consolidate into controller pattern or document intentional
+            inline approach.
+
+================================================================================
+SECTION 7: SETTINGS / GENERAL API ROUTES NOT IMPLEMENTED
+================================================================================
+
+7.1 /api/v1/settings (general settings GET/PUT/GET-by-key/PUT-by-key)
+    Frontend settings.service.js has getSettings(), updateSettings(),
+    getSetting(), updateSetting() methods - but NO corresponding routes
+    exist in the backend settings.routes.js.
+    ACTION: Either implement these general settings endpoints or remove the
+            dead methods from the frontend service.
+
+================================================================================
+SECTION 8: ARUBA CENTRAL CONFIG - PASSWORD RESET NOT IMPLEMENTED
+================================================================================
+
+8.1 Forgot Password flow
+    Frontend has ForgotPasswordView.vue with a working form UI.
+    Backend auth.routes.js has NO password reset route (no /auth/forgot-password,
+    /auth/reset-password, etc.).
+    ACTION: Implement password reset flow in backend or mark ForgotPasswordView
+            as out of scope and remove it.
+
+================================================================================
+SUMMARY OF PRIORITY ACTIONS
+================================================================================
+HIGH:
+  - Wire automation.job.js to actually process execution status transitions
+  - Connect notification.service.js to automation lifecycle events
+  - Fix makeRequest() baseURL/customerId undefined reference bug
+
+MEDIUM:
+  - Implement general /settings endpoints (or remove frontend dead methods)
+  - Wire device group routes to frontend
+  - Add password reset backend route
+  - Connect getDeviceStats to device detail view
+
+LOW:
+  - Remove/consolidate orphaned automation.service.js
+  - Surface getSwitchDetails/getAccessPointDetails via new endpoints
+  - Connect ping routes to frontend UI
+  - Implement backupDeviceConfiguration UI
+================================================================================

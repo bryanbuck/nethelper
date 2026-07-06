@@ -161,11 +161,11 @@
     >
       {{ snackbar.message }}
       <template v-slot:actions>
-        <v-btn 
-          variant="text" 
+        <v-btn
+          icon="mdi-close"
+          variant="text"
           @click="snackbar.show = false"
         >
-          Close
         </v-btn>
       </template>
     </v-snackbar>
@@ -370,5 +370,11 @@ onUnmounted(() => {
 .quick-action-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Style the snackbar action button to be bold and match notification text color */
+.snackbar-action-btn {
+  font-weight: bold !important;
+  opacity: 1 !important;
 }
 </style>

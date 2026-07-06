@@ -7,7 +7,7 @@ class SettingsService {
   /**
    * Get all API credentials for a user
    * @param {string} userId - User ID
-   * @returns {Promise<Array>} Array of API credentials (with masked sensitive fields)
+   * @returns {Promise<Array>} Array of API credentials (with masked sensitive fields and device count)
    */
   async getApiCredentials(userId) {
     try {
@@ -16,7 +16,7 @@ class SettingsService {
       const credentials = await prisma.apiCredential.findMany({
         where: { userId },
         include: {
-          device: {
+          devices: {
             select: {
               id: true,
               name: true,
@@ -28,8 +28,12 @@ class SettingsService {
         orderBy: { createdAt: 'desc' },
       });
 
-      // Mask sensitive fields for response
-      return credentials.map(cred => this.maskCredential(cred));
+      // Mask sensitive fields for response and include device info
+      return credentials.map(cred => ({
+        ...this.maskCredential(cred),
+        devices: cred.devices,
+        deviceCount: cred.devices.length,
+      }));
     } catch (error) {
       logger.error('Get API credentials error:', error);
       throw error;
@@ -52,7 +56,7 @@ class SettingsService {
           userId
         },
         include: {
-          device: {
+          devices: {
             select: {
               id: true,
               name: true,
@@ -67,8 +71,12 @@ class SettingsService {
         return null;
       }
 
-      // Mask sensitive fields for response
-      return this.maskCredential(credential);
+      // Mask sensitive fields for response and include device info
+      return {
+        ...this.maskCredential(credential),
+        devices: credential.devices,
+        deviceCount: credential.devices.length,
+      };
     } catch (error) {
       logger.error('Get API credential error:', error);
       throw error;
@@ -76,29 +84,34 @@ class SettingsService {
   }
 
   /**
-   * Get API credentials by device ID
+   * Get API credential associated with a specific device
    * @param {string} deviceId - Device ID
    * @param {string} userId - User ID (for authorization)
-   * @returns {Promise<Array>} Array of API credentials
+   * @returns {Promise<Object|null>} API credential or null
    */
-  async getApiCredentialsByDevice(deviceId, userId) {
+  async getApiCredentialByDevice(deviceId, userId) {
     try {
       const prisma = getPrisma();
 
-      const credentials = await prisma.apiCredential.findMany({
-        where: {
-          deviceId,
-          userId
+      const device = await prisma.device.findUnique({
+        where: { id: deviceId },
+        include: {
+          apiCredential: true,
         },
-        orderBy: [
-          { lastTestStatus: 'desc' }, // Success first
-          { lastTested: 'desc' },
-        ],
       });
 
-      return credentials.map(cred => this.maskCredential(cred));
+      if (!device || !device.apiCredential) {
+        return null;
+      }
+
+      // Verify the credential belongs to the user
+      if (device.apiCredential.userId !== userId) {
+        return null;
+      }
+
+      return this.maskCredential(device.apiCredential);
     } catch (error) {
-      logger.error('Get API credentials by device error:', error);
+      logger.error('Get API credential by device error:', error);
       throw error;
     }
   }
@@ -118,22 +131,10 @@ class SettingsService {
         throw new Error('At least one authentication method (username/password or apiKey/apiSecret) must be provided');
       }
 
-      // If deviceId is provided, verify it exists
-      if (credentialData.deviceId) {
-        const device = await prisma.device.findUnique({
-          where: { id: credentialData.deviceId },
-        });
-
-        if (!device) {
-          throw new Error('Device not found');
-        }
-      }
-
       // Encrypt sensitive fields
       const encryptedData = {
         name: credentialData.name,
         type: credentialData.type,
-        deviceId: credentialData.deviceId || null,
         username: credentialData.username || null,
         password: credentialData.password ? encryption.encrypt(credentialData.password) : null,
         apiKey: credentialData.apiKey ? encryption.encrypt(credentialData.apiKey) : null,
@@ -145,16 +146,6 @@ class SettingsService {
 
       const credential = await prisma.apiCredential.create({
         data: encryptedData,
-        include: {
-          device: {
-            select: {
-              id: true,
-              name: true,
-              serial: true,
-              type: true,
-            },
-          },
-        },
       });
 
       return this.maskCredential(credential);
@@ -184,22 +175,10 @@ class SettingsService {
         throw new Error('API credential not found');
       }
 
-      // If deviceId is being updated, verify it exists
-      if (updateData.deviceId !== undefined && updateData.deviceId !== null) {
-        const device = await prisma.device.findUnique({
-          where: { id: updateData.deviceId },
-        });
-
-        if (!device) {
-          throw new Error('Device not found');
-        }
-      }
-
       // Prepare update data
       const encryptedUpdateData = {
         ...(updateData.name && { name: updateData.name }),
         ...(updateData.type && { type: updateData.type }),
-        ...(updateData.deviceId !== undefined && { deviceId: updateData.deviceId }),
         ...(updateData.username !== undefined && { username: updateData.username }),
         ...(updateData.notes !== undefined && { notes: updateData.notes }),
         ...(updateData.metadata !== undefined && { metadata: updateData.metadata }),
@@ -219,16 +198,6 @@ class SettingsService {
       const credential = await prisma.apiCredential.update({
         where: { id: credentialId },
         data: encryptedUpdateData,
-        include: {
-          device: {
-            select: {
-              id: true,
-              name: true,
-              serial: true,
-              type: true,
-            },
-          },
-        },
       });
 
       return this.maskCredential(credential);
@@ -269,12 +238,13 @@ class SettingsService {
   }
 
   /**
-   * Test an API credential by attempting to connect to the device
+   * Test an API credential by attempting to connect to a device
    * @param {string} credentialId - Credential ID
    * @param {string} userId - User ID (for authorization)
+   * @param {string} deviceId - Optional device ID to test against
    * @returns {Promise<Object>} Test result
    */
-  async testApiCredential(credentialId, userId) {
+  async testApiCredential(credentialId, userId, deviceId = null) {
     try {
       const prisma = getPrisma();
 
@@ -282,12 +252,25 @@ class SettingsService {
       const credential = await prisma.apiCredential.findFirst({
         where: { id: credentialId, userId },
         include: {
-          device: true,
+          devices: true,
         },
       });
 
       if (!credential) {
         throw new Error('API credential not found');
+      }
+
+      // If deviceId is provided, use that device; otherwise use the first device associated with this credential
+      let device = null;
+      if (deviceId) {
+        device = await prisma.device.findUnique({
+          where: { id: deviceId },
+        });
+        if (!device) {
+          throw new Error('Device not found');
+        }
+      } else if (credential.devices && credential.devices.length > 0) {
+        device = credential.devices[0];
       }
 
       const startTime = Date.now();
@@ -296,7 +279,7 @@ class SettingsService {
       try {
         // Decrypt credentials
         const decryptedCreds = {
-          username: credential.username ? encryption.decrypt(credential.username) : null,
+          username: credential.username ? credential.username : null,
           password: credential.password ? encryption.decrypt(credential.password) : null,
           apiKey: credential.apiKey ? encryption.decrypt(credential.apiKey) : null,
           apiSecret: credential.apiSecret ? encryption.decrypt(credential.apiSecret) : null,
@@ -305,7 +288,7 @@ class SettingsService {
         // Attempt connection based on device type
         testResult = await this.testDeviceConnection(
           credential.type,
-          credential.device,
+          device,
           decryptedCreds
         );
 
@@ -478,8 +461,6 @@ class SettingsService {
       id: credential.id,
       name: credential.name,
       type: credential.type,
-      deviceId: credential.deviceId,
-      device: credential.device,
       username: credential.username,
       password: credential.password ? '***' : null,
       apiKey: credential.apiKey ? '***' : null,
@@ -503,30 +484,19 @@ class SettingsService {
     try {
       const prisma = getPrisma();
 
-      // Get the most recently successful credential for the device
-      const credential = await prisma.apiCredential.findFirst({
-        where: {
-          deviceId,
-          lastTestStatus: 'success',
+      // Get the device with its associated credential
+      const device = await prisma.device.findUnique({
+        where: { id: deviceId },
+        include: {
+          apiCredential: true,
         },
-        orderBy: { lastTested: 'desc' },
       });
 
-      if (!credential) {
-        // Fallback to any credential for the device
-        const fallback = await prisma.apiCredential.findFirst({
-          where: { deviceId },
-          orderBy: { createdAt: 'desc' },
-        });
-
-        if (!fallback) {
-          return null;
-        }
-
-        return this.decryptCredential(fallback);
+      if (!device || !device.apiCredential) {
+        return null;
       }
 
-      return this.decryptCredential(credential);
+      return this.decryptCredential(device.apiCredential);
     } catch (error) {
       logger.error('Get device credentials for use error:', error);
       throw error;
@@ -546,6 +516,216 @@ class SettingsService {
       apiKey: credential.apiKey ? encryption.decrypt(credential.apiKey) : null,
       apiSecret: credential.apiSecret ? encryption.decrypt(credential.apiSecret) : null,
     };
+  }
+
+  /**
+   * Get Aruba Central configuration for a user
+   * @param {string} userId - User ID
+   * @returns {Promise<Object|null>} Aruba Central configuration (without client secret)
+   */
+  async getArubaCentralConfig(userId) {
+    const prisma = getPrisma();
+
+    const config = await prisma.arubaCentralConfig.findFirst({
+      where: { userId, isActive: true },
+      select: {
+        id: true,
+        baseUrl: true,
+        clientId: true,
+        customerId: true,
+        isActive: true,
+        lastTested: true,
+        lastTestStatus: true,
+        notes: true,
+        createdAt: true,
+        updatedAt: true,
+        // DO NOT include clientSecret in response
+      },
+    });
+
+    return config;
+  }
+
+  /**
+   * Save (create or update) Aruba Central configuration
+   * @param {string} userId - User ID
+   * @param {Object} configData - Configuration data
+   * @returns {Promise<Object>} Saved configuration
+   */
+  async saveArubaCentralConfig(userId, configData) {
+    const prisma = getPrisma();
+    const arubaCentralService = require('./aruba-central.service');
+
+    // Validate required fields
+    if (!configData.baseUrl || !configData.clientId || !configData.clientSecret || !configData.customerId) {
+      throw new Error('Missing required fields: baseUrl, clientId, clientSecret, and customerId are required');
+    }
+
+    // Encrypt client secret
+    const encryptedSecret = encryption.encrypt(configData.clientSecret);
+
+    // Check if user already has an active config
+    const existingConfig = await prisma.arubaCentralConfig.findFirst({
+      where: { userId, isActive: true },
+    });
+
+    let savedConfig;
+    let isNew = false;
+
+    if (existingConfig) {
+      // Update existing config
+      savedConfig = await prisma.arubaCentralConfig.update({
+        where: { id: existingConfig.id },
+        data: {
+          baseUrl: configData.baseUrl,
+          clientId: configData.clientId,
+          clientSecret: encryptedSecret,
+          customerId: configData.customerId,
+          notes: configData.notes,
+          updatedAt: new Date(),
+        },
+        select: {
+          id: true,
+          baseUrl: true,
+          clientId: true,
+          customerId: true,
+          isActive: true,
+          notes: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+    } else {
+      // Create new config
+      savedConfig = await prisma.arubaCentralConfig.create({
+        data: {
+          baseUrl: configData.baseUrl,
+          clientId: configData.clientId,
+          clientSecret: encryptedSecret,
+          customerId: configData.customerId,
+          isActive: true,
+          notes: configData.notes,
+          userId,
+        },
+        select: {
+          id: true,
+          baseUrl: true,
+          clientId: true,
+          customerId: true,
+          isActive: true,
+          notes: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+      isNew = true;
+    }
+
+    // Clear the config cache in aruba-central.service
+    arubaCentralService.clearConfigCache();
+
+    // Clear the access token cache to force re-authentication with new credentials
+    const redis = arubaCentralService.getRedis();
+    await redis.del('aruba:access_token');
+
+    return { data: savedConfig, isNew };
+  }
+
+  /**
+   * Test Aruba Central configuration
+   * @param {string} userId - User ID
+   * @param {string} configId - Config ID (optional, uses active if not provided)
+   * @returns {Promise<Object>} Test result
+   */
+  async testArubaCentralConfig(userId, configId) {
+    const prisma = getPrisma();
+    const arubaCentralService = require('./aruba-central.service');
+
+    let config;
+    if (configId) {
+      config = await prisma.arubaCentralConfig.findFirst({
+        where: { id: configId, userId },
+      });
+    } else {
+      config = await prisma.arubaCentralConfig.findFirst({
+        where: { userId, isActive: true },
+      });
+    }
+
+    if (!config) {
+      throw new Error('Aruba Central configuration not found');
+    }
+
+    try {
+      // Clear caches to force using this config
+      arubaCentralService.clearConfigCache();
+      const redis = arubaCentralService.getRedis();
+      await redis.del('aruba:access_token');
+
+      // Try to get access token (this will test OAuth credentials)
+      const startTime = Date.now();
+      await arubaCentralService.getAccessToken();
+      const responseTime = Date.now() - startTime;
+
+      // Update test status
+      await prisma.arubaCentralConfig.update({
+        where: { id: config.id },
+        data: {
+          lastTested: new Date(),
+          lastTestStatus: 'success',
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Successfully authenticated with Aruba Central',
+        responseTime: `${responseTime}ms`,
+        testedAt: new Date(),
+      };
+    } catch (error) {
+      // Update test status
+      await prisma.arubaCentralConfig.update({
+        where: { id: config.id },
+        data: {
+          lastTested: new Date(),
+          lastTestStatus: 'failed',
+        },
+      });
+
+      return {
+        success: false,
+        message: error.message || 'Failed to authenticate with Aruba Central',
+        error: error.message,
+        testedAt: new Date(),
+      };
+    }
+  }
+
+  /**
+   * Delete Aruba Central configuration
+   * @param {string} configId - Config ID
+   * @param {string} userId - User ID
+   */
+  async deleteArubaCentralConfig(configId, userId) {
+    const prisma = getPrisma();
+    const arubaCentralService = require('./aruba-central.service');
+
+    const config = await prisma.arubaCentralConfig.findFirst({
+      where: { id: configId, userId },
+    });
+
+    if (!config) {
+      throw new Error('Aruba Central configuration not found');
+    }
+
+    await prisma.arubaCentralConfig.delete({
+      where: { id: configId },
+    });
+
+    // Clear caches
+    arubaCentralService.clearConfigCache();
+    const redis = arubaCentralService.getRedis();
+    await redis.del('aruba:access_token');
   }
 }
 

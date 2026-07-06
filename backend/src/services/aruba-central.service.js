@@ -2,17 +2,17 @@ const axios = require('axios');
 const { debugLog, Services } = require('../utils/debug-logger');
 const ArubaErrorHandler = require('../utils/aruba-error-handler');
 const { getRedis } = require('../config/redis');
+const { getPrisma } = require('../config/database');
+const { decrypt } = require('../utils/encryption');
 
 // Create service-specific logger
 const logger = debugLog.createLogger(Services.ARUBA_CENTRAL);
 
 class ArubaCentralService {
   constructor() {
-    this.baseURL = process.env.ARUBA_CENTRAL_BASE_URL;
-    this.clientId = process.env.ARUBA_CENTRAL_CLIENT_ID;
-    this.clientSecret = process.env.ARUBA_CENTRAL_CLIENT_SECRET;
-    this.customerId = process.env.ARUBA_CENTRAL_CUSTOMER_ID;
     this.redis = null;
+    this.configCache = null;
+    this.configCacheExpiry = null;
   }
 
   getRedis() {
@@ -20,6 +20,80 @@ class ArubaCentralService {
       this.redis = getRedis();
     }
     return this.redis;
+  }
+
+  /**
+   * Get active Aruba Central configuration from database
+   * Uses in-memory cache with 5-minute expiry
+   */
+  async getConfig() {
+    try {
+      // Check cache first (5 minute TTL)
+      const now = Date.now();
+      if (this.configCache && this.configCacheExpiry && now < this.configCacheExpiry) {
+        logger.debug('Using cached Aruba Central config');
+        return this.configCache;
+      }
+
+      const prisma = getPrisma();
+
+      // Try to get active config from database
+      const dbConfig = await prisma.arubaCentralConfig.findFirst({
+        where: { isActive: true },
+        orderBy: { updatedAt: 'desc' },
+      });
+
+      let config;
+
+      if (dbConfig) {
+        logger.debug('Loaded Aruba Central config from database');
+
+        // Decrypt client secret
+        const decryptedSecret = decrypt(dbConfig.clientSecret);
+
+        config = {
+          baseURL: dbConfig.baseUrl,
+          clientId: dbConfig.clientId,
+          clientSecret: decryptedSecret,
+          customerId: dbConfig.customerId,
+          source: 'database',
+          configId: dbConfig.id,
+        };
+      } else {
+        // Fallback to environment variables if no DB config
+        logger.warn('No active Aruba Central config in database, falling back to environment variables');
+
+        if (!process.env.ARUBA_CENTRAL_BASE_URL || !process.env.ARUBA_CENTRAL_CLIENT_ID) {
+          throw new Error('Aruba Central configuration not found. Please configure in Settings or environment variables.');
+        }
+
+        config = {
+          baseURL: process.env.ARUBA_CENTRAL_BASE_URL,
+          clientId: process.env.ARUBA_CENTRAL_CLIENT_ID,
+          clientSecret: process.env.ARUBA_CENTRAL_CLIENT_SECRET,
+          customerId: process.env.ARUBA_CENTRAL_CUSTOMER_ID,
+          source: 'environment',
+        };
+      }
+
+      // Cache for 5 minutes
+      this.configCache = config;
+      this.configCacheExpiry = now + (5 * 60 * 1000);
+
+      return config;
+    } catch (error) {
+      logger.error('Error loading Aruba Central config', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Clear the configuration cache (call when config is updated)
+   */
+  clearConfigCache() {
+    this.configCache = null;
+    this.configCacheExpiry = null;
+    logger.debug('Aruba Central config cache cleared');
   }
 
   async getAccessToken() {
@@ -32,23 +106,27 @@ class ArubaCentralService {
         return cachedToken;
       }
 
+      // Get configuration from database or environment
+      const config = await this.getConfig();
+
       logger.info('No cached token found, requesting new access token');
-      logger.debug('OAuth URL', { url: `${this.baseURL}/oauth2/token` });
-      
+      logger.debug('OAuth URL', { url: `${config.baseURL}/oauth2/token`, source: config.source });
+
       // Get new token using form data format
       const params = new URLSearchParams();
       params.append('grant_type', 'client_credentials');
-      params.append('client_id', this.clientId);
-      params.append('client_secret', this.clientSecret);
+      params.append('client_id', config.clientId);
+      params.append('client_secret', config.clientSecret);
 
       logger.progress('Attempting OAuth2 connection', {
-        url: `${this.baseURL}/oauth2/token`,
-        clientId: this.clientId,
-        grantType: 'client_credentials'
+        url: `${config.baseURL}/oauth2/token`,
+        clientId: config.clientId,
+        grantType: 'client_credentials',
+        configSource: config.source
       });
 
       const startTime = Date.now();
-      const response = await axios.post(`${this.baseURL}/oauth2/token`, params, {
+      const response = await axios.post(`${config.baseURL}/oauth2/token`, params, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
@@ -76,7 +154,7 @@ class ArubaCentralService {
       // Parse and enhance the error
       const enhancedError = ArubaErrorHandler.parseError(error, 'authentication');
       ArubaErrorHandler.logError(enhancedError);
-      
+
       // Create a more user-friendly error
       const userError = new Error(enhancedError.userMessage);
       userError.type = enhancedError.type;
@@ -84,7 +162,7 @@ class ArubaCentralService {
       userError.actions = enhancedError.actions;
       userError.isArubaError = enhancedError.isArubaError;
       userError.originalError = error;
-      
+
       throw userError;
     }
   }
@@ -174,101 +252,198 @@ class ArubaCentralService {
     }
   }
 
-  // Device Management Methods - DEPRECATED: Use getAccessPoints() and getSwitches() separately
-  async getDevices(filters = {}) {
-    // This method is deprecated - use getAccessPoints() and getSwitches() instead
-    logger.warn('getDevices() is deprecated - use getAccessPoints() and getSwitches() separately');
-    
-    // Get both APs and switches and combine them
-    const [accessPoints, switches] = await Promise.all([
-      this.getAccessPoints(filters),
-      this.getSwitches(filters)
-    ]);
-    
-    // Combine and return both device types
-    return [...(accessPoints || []), ...(switches || [])];
-  }
+  /**
+   * Get all devices using unified Aruba Central API
+   * @param {Object} options - Query options
+   * @param {string} options.filter - OData filter string (e.g., "deviceType eq 'SWITCH'")
+   * @param {string} options.sort - Sort expression (e.g., "deviceName asc")
+   * @param {number} options.limit - Maximum number of devices to return (max 100)
+   * @param {number} options.offset - Pagination offset
+   * @returns {Promise<Object>} Response with items, count, total, and next cursor
+   */
+  async getAllDevices(options = {}) {
+    logger.info('Fetching all devices from unified endpoint', options);
 
-  async getDevice(deviceSerial) {
-    const endpoint = `/monitoring/v2/devices/${deviceSerial}`;
-    return this.makeRequest('GET', endpoint);
-  }
-
-  async getAccessPoints(filters = {}) {
-    const endpoint = '/monitoring/v2/aps';
-    return this.makeRequest('GET', endpoint, null, filters);
-  }
-
-  async getSwitches(filters = {}) {
-    const endpoint = '/monitoring/v1/switches';
-    return this.makeRequest('GET', endpoint, null, filters);
-  }
-
-  async getGateways(filters = {}) {
-    const endpoint = '/monitoring/v1/gateways';
-    return this.makeRequest('GET', endpoint, null, filters);
-  }
-
-  // New method that properly fetches all device types using current endpoints
-  async getAllDevices(filters = {}) {
-    logger.info('Fetching all devices using current API endpoints');
-    
     try {
-      const [accessPointsResult, switchesResult, gatewaysResult] = await Promise.allSettled([
-        this.getAccessPoints(filters),
-        this.getSwitches(filters),
-        this.getGateways(filters)
-      ]);
+      const endpoint = '/network-monitoring/v1alpha1/devices';
+      const centralConfig = await this.getConfig();
 
-      const allDevices = [];
-      let errors = [];
+      // Build query parameters
+      const params = {
+        customer_id: centralConfig.customerId,
+      };
 
-      if (accessPointsResult.status === 'fulfilled') {
-        allDevices.push(...(accessPointsResult.value || []));
-        logger.debug('Successfully fetched access points', { count: accessPointsResult.value?.length || 0 });
-      } else {
-        errors.push({ type: 'access_points', error: accessPointsResult.reason });
-        logger.error('Failed to fetch access points', { error: accessPointsResult.reason?.message });
+      // Add OData filter if provided
+      if (options.filter) {
+        params.filter = options.filter;
       }
 
-      if (switchesResult.status === 'fulfilled') {
-        allDevices.push(...(switchesResult.value || []));
-        logger.debug('Successfully fetched switches', { count: switchesResult.value?.length || 0 });
-      } else {
-        errors.push({ type: 'switches', error: switchesResult.reason });
-        logger.error('Failed to fetch switches', { error: switchesResult.reason?.message });
+      // Add sort if provided
+      if (options.sort) {
+        params.sort = options.sort;
       }
 
-      if (gatewaysResult.status === 'fulfilled') {
-        allDevices.push(...(gatewaysResult.value || []));
-        logger.debug('Successfully fetched gateways', { count: gatewaysResult.value?.length || 0 });
-      } else {
-        errors.push({ type: 'gateways', error: gatewaysResult.reason });
-        logger.warn('Failed to fetch gateways (may not be supported)', { error: gatewaysResult.reason?.message });
+      // Add limit (default 100, max 100)
+      if (options.limit) {
+        params.limit = Math.min(options.limit, 100);
       }
 
-      logger.success('Device fetch completed', { 
-        totalDevices: allDevices.length,
-        errors: errors.length,
-        successfulEndpoints: 3 - errors.length
+      // Add pagination cursor if provided
+      if (options.next) {
+        params.next = options.next;
+      }
+
+      const accessToken = await this.getAccessToken();
+
+      const config = {
+        method: 'GET',
+        url: `${centralConfig.baseURL}${endpoint}`,
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        params,
+      };
+
+      logger.debug('Making unified device list request', {
+        url: config.url,
+        params: { ...params, customer_id: '[REDACTED]' }
       });
 
-      // If we have at least some devices, return them even if some endpoints failed
-      if (allDevices.length > 0) {
-        return allDevices;
-      }
+      const startTime = Date.now();
+      const response = await axios(config);
+      const responseTime = Date.now() - startTime;
 
-      // If all endpoints failed, throw an error
-      if (errors.length === 3) {
-        const error = new Error('Failed to fetch devices from all endpoints');
-        error.details = errors;
-        throw error;
-      }
+      const data = response.data;
+      const deviceCount = data.items?.length || 0;
 
-      return allDevices;
+      logger.success('Unified device list fetched successfully', {
+        count: deviceCount,
+        total: data.total,
+        hasMore: !!data.next,
+        responseTime: `${responseTime}ms`
+      });
+
+      return data;
     } catch (error) {
-      logger.error('Unexpected error in getAllDevices', { error: error.message });
-      throw error;
+      const enhancedError = ArubaErrorHandler.parseError(error, 'device_list');
+      ArubaErrorHandler.logError(enhancedError);
+
+      const userError = new Error(enhancedError.userMessage);
+      userError.type = enhancedError.type;
+      userError.category = enhancedError.category;
+      userError.actions = enhancedError.actions;
+      userError.isArubaError = enhancedError.isArubaError;
+      userError.statusCode = enhancedError.details.statusCode;
+      userError.originalError = error;
+
+      throw userError;
+    }
+  }
+
+  /**
+   * Get detailed information for a specific switch
+   * @param {string} serial - Switch serial number
+   * @returns {Promise<Object>} Switch details
+   */
+  async getSwitchDetails(serial) {
+    logger.info('Fetching switch details', { serial });
+
+    try {
+      const endpoint = `/network-monitoring/v1alpha1/switch/${serial}`;
+      const centralConfig = await this.getConfig();
+      const accessToken = await this.getAccessToken();
+
+      const config = {
+        method: 'GET',
+        url: `${centralConfig.baseURL}${endpoint}`,
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        params: {
+          customer_id: centralConfig.customerId,
+        },
+      };
+
+      const startTime = Date.now();
+      const response = await axios(config);
+      const responseTime = Date.now() - startTime;
+
+      logger.success('Switch details fetched successfully', {
+        serial,
+        model: response.data.model,
+        status: response.data.status,
+        responseTime: `${responseTime}ms`
+      });
+
+      return response.data;
+    } catch (error) {
+      const enhancedError = ArubaErrorHandler.parseError(error, 'switch_details');
+      ArubaErrorHandler.logError(enhancedError);
+
+      const userError = new Error(enhancedError.userMessage);
+      userError.type = enhancedError.type;
+      userError.category = enhancedError.category;
+      userError.actions = enhancedError.actions;
+      userError.isArubaError = enhancedError.isArubaError;
+      userError.statusCode = enhancedError.details.statusCode;
+      userError.originalError = error;
+
+      throw userError;
+    }
+  }
+
+  /**
+   * Get detailed information for a specific access point
+   * @param {string} serial - Access point serial number
+   * @returns {Promise<Object>} Access point details
+   */
+  async getAccessPointDetails(serial) {
+    logger.info('Fetching access point details', { serial });
+
+    try {
+      const endpoint = `/network-monitoring/v1alpha1/aps/${serial}`;
+      const centralConfig = await this.getConfig();
+      const accessToken = await this.getAccessToken();
+
+      const config = {
+        method: 'GET',
+        url: `${centralConfig.baseURL}${endpoint}`,
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        params: {
+          customer_id: centralConfig.customerId,
+        },
+      };
+
+      const startTime = Date.now();
+      const response = await axios(config);
+      const responseTime = Date.now() - startTime;
+
+      logger.success('Access point details fetched successfully', {
+        serial,
+        model: response.data.model,
+        status: response.data.status,
+        responseTime: `${responseTime}ms`
+      });
+
+      return response.data;
+    } catch (error) {
+      const enhancedError = ArubaErrorHandler.parseError(error, 'ap_details');
+      ArubaErrorHandler.logError(enhancedError);
+
+      const userError = new Error(enhancedError.userMessage);
+      userError.type = enhancedError.type;
+      userError.category = enhancedError.category;
+      userError.actions = enhancedError.actions;
+      userError.isArubaError = enhancedError.isArubaError;
+      userError.statusCode = enhancedError.details.statusCode;
+      userError.originalError = error;
+
+      throw userError;
     }
   }
 

@@ -12,8 +12,8 @@ router.use(authenticate);
 // Get all API credentials for authenticated user
 router.get('/api-credentials', settingsController.getApiCredentials);
 
-// Get API credentials by device ID
-router.get('/api-credentials/device/:deviceId', validateUUID('deviceId'), settingsController.getApiCredentialsByDevice);
+// Get API credential by device ID
+router.get('/api-credentials/device/:deviceId', validateUUID('deviceId'), settingsController.getApiCredentialByDevice);
 
 // Get specific API credential
 router.get('/api-credentials/:id', validateUUID('id'), settingsController.getApiCredential);
@@ -48,6 +48,33 @@ router.post(
   authorize('admin', 'operator'),
   validateUUID('id'),
   settingsController.testApiCredential
+);
+
+// Aruba Central Configuration routes
+
+// Get Aruba Central configuration
+router.get('/aruba-central', settingsController.getArubaCentralConfig);
+
+// Save Aruba Central configuration
+router.post(
+  '/aruba-central',
+  authorize('admin'),  // Only admins can configure Aruba Central
+  settingsController.saveArubaCentralConfig
+);
+
+// Test Aruba Central configuration
+router.post(
+  '/aruba-central/test',
+  authorize('admin'),
+  settingsController.testArubaCentralConfig
+);
+
+// Delete Aruba Central configuration
+router.delete(
+  '/aruba-central/:id',
+  authorize('admin'),
+  validateUUID('id'),
+  settingsController.deleteArubaCentralConfig
 );
 
 module.exports = router;

@@ -306,6 +306,97 @@ class DeviceController {
       next(error);
     }
   }
+
+  /**
+   * Manually trigger ping check for specific device
+   */
+  async pingDevice(req, res, next) {
+    try {
+      const { deviceId } = req.params;
+      const pingMonitorService = require('../services/ping-monitor.service');
+
+      const device = await deviceService.getDevice(deviceId);
+      if (!device) {
+        return res.status(404).json({
+          success: false,
+          error: 'Device not found',
+        });
+      }
+
+      if (!device.ipAddress) {
+        return res.status(400).json({
+          success: false,
+          error: 'Device does not have an IP address configured',
+        });
+      }
+
+      const result = await pingMonitorService.pingDevice(device.ipAddress);
+      await pingMonitorService.updateDeviceStatus(
+        deviceId,
+        device.name,
+        result.alive,
+        result.time,
+        device.consecutiveFailures || 0,
+        device.pingStatus
+      );
+
+      res.json({
+        success: true,
+        data: {
+          deviceId,
+          deviceName: device.name,
+          ipAddress: device.ipAddress,
+          alive: result.alive,
+          responseTime: result.time,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Trigger ping check for all devices
+   */
+  async pingAllDevices(req, res, next) {
+    try {
+      const pingMonitorService = require('../services/ping-monitor.service');
+
+      // Queue the job instead of running synchronously
+      const { getQueue } = require('../config/bull');
+      const pingMonitorQueue = getQueue('pingMonitor');
+
+      const job = await pingMonitorQueue.add('checkDevices', {
+        triggeredBy: req.user.id,
+        manual: true,
+      });
+
+      res.json({
+        success: true,
+        message: 'Ping check for all devices has been queued',
+        jobId: job.id,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get ping monitoring statistics
+   */
+  async getPingStats(req, res, next) {
+    try {
+      const pingMonitorService = require('../services/ping-monitor.service');
+      const stats = pingMonitorService.getStats();
+
+      res.json({
+        success: true,
+        data: stats,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = new DeviceController();
