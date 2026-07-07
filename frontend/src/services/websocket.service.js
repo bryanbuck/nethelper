@@ -8,6 +8,8 @@ import { useDevicesStore } from '@/stores/devices'
 import { useExecutionsStore } from '@/stores/executions'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAutomationsStore } from '@/stores/automations'
+import { useDiscoveryStore } from '@/stores/discovery'
+import { useBackupsStore } from '@/stores/backups'
 import { Device, Execution, ExecutionStatus } from '@/models'
 
 class WebSocketService {
@@ -31,7 +33,9 @@ class WebSocketService {
         devices: useDevicesStore(),
         executions: useExecutionsStore(),
         notifications: useNotificationsStore(),
-        automations: useAutomationsStore()
+        automations: useAutomationsStore(),
+        discovery: useDiscoveryStore(),
+        backups: useBackupsStore()
       }
     }
   }
@@ -140,6 +144,16 @@ class WebSocketService {
     this.socket.on('automation:started', (data) => this.handleAutomationStarted(data))
     this.socket.on('automation:progress', (data) => this.handleAutomationProgress(data))
     this.socket.on('automation:completed', (data) => this.handleAutomationCompleted(data))
+
+    // Discovery scan events
+    this.socket.on('discovery:progress', (data) => this.handleDiscoveryProgress(data))
+    this.socket.on('discovery:completed', (data) => this.handleDiscoveryCompleted(data))
+    this.socket.on('discovery:failed', (data) => this.handleDiscoveryFailed(data))
+
+    // Config backup events
+    this.socket.on('backup:completed', (data) => this.handleBackupCompleted(data))
+    this.socket.on('backup:failed', (data) => this.handleBackupFailed(data))
+    this.socket.on('backup:run:completed', (data) => this.handleBackupRunCompleted(data))
 
     // Alert events
     this.socket.on('alert:new', (data) => this.handleNewAlert(data))
@@ -250,6 +264,130 @@ class WebSocketService {
 
     } catch (error) {
       console.error('Error handling device API status:', error)
+    }
+  }
+
+  /**
+   * Handle discovery scan progress events
+   * @param {Object} data - { scanId, progress, phase, message }
+   */
+  handleDiscoveryProgress(data) {
+    console.log('Discovery progress:', data)
+
+    try {
+      this.stores.discovery.updateScanProgress(data)
+    } catch (error) {
+      console.error('Error handling discovery progress:', error)
+    }
+  }
+
+  /**
+   * Handle discovery scan completed events
+   * @param {Object} data - { scanId, totalHosts, arubaHosts }
+   */
+  handleDiscoveryCompleted(data) {
+    console.log('Discovery completed:', data)
+
+    try {
+      const { totalHosts, arubaHosts } = data
+
+      this.stores.discovery.handleScanCompleted(data)
+
+      this.stores.notifications.showSuccess(
+        `Found ${totalHosts} host(s), ${arubaHosts} Aruba device(s)`,
+        'Discovery Scan Complete'
+      )
+    } catch (error) {
+      console.error('Error handling discovery completed:', error)
+    }
+  }
+
+  /**
+   * Handle discovery scan failed events
+   * @param {Object} data - { scanId, error }
+   */
+  handleDiscoveryFailed(data) {
+    console.log('Discovery failed:', data)
+
+    try {
+      this.stores.discovery.handleScanFailed(data)
+
+      this.stores.notifications.showError(
+        data.error || 'The discovery scan failed',
+        'Discovery Scan Failed'
+      )
+    } catch (error) {
+      console.error('Error handling discovery failed:', error)
+    }
+  }
+
+  /**
+   * Handle config backup completed events (per device)
+   * @param {Object} data - { backupId, deviceId, deviceName, hasChanges }
+   */
+  handleBackupCompleted(data) {
+    console.log('Backup completed:', data)
+
+    try {
+      const { deviceName, hasChanges } = data
+
+      this.stores.backups.applyBackupEvent(data)
+
+      this.stores.notifications.showSuccess(
+        `Configuration backup for "${deviceName}" completed${hasChanges ? ' (configuration changed)' : ''}`,
+        'Backup Complete'
+      )
+    } catch (error) {
+      console.error('Error handling backup completed:', error)
+    }
+  }
+
+  /**
+   * Handle config backup failed events (per device)
+   * @param {Object} data - { backupId, deviceId, deviceName, error }
+   */
+  handleBackupFailed(data) {
+    console.log('Backup failed:', data)
+
+    try {
+      const { deviceName, error: errorMessage } = data
+
+      this.stores.backups.applyBackupEvent(data)
+
+      this.stores.notifications.showError(
+        `Configuration backup for "${deviceName}" failed: ${errorMessage || 'Unknown error'}`,
+        'Backup Failed'
+      )
+    } catch (error) {
+      console.error('Error handling backup failed:', error)
+    }
+  }
+
+  /**
+   * Handle config backup run completed events (whole batch)
+   * @param {Object} data - { scheduleId, total, succeeded, failed }
+   */
+  handleBackupRunCompleted(data) {
+    console.log('Backup run completed:', data)
+
+    try {
+      const { total, succeeded, failed } = data
+
+      this.stores.backups.handleRunCompleted(data)
+
+      if (failed > 0) {
+        this.stores.notifications.showWarning(
+          `Backup run finished: ${succeeded}/${total} succeeded, ${failed} failed`,
+          'Backup Run Complete'
+        )
+      } else {
+        this.stores.notifications.showSuccess(
+          `Backup run finished: ${succeeded}/${total} device(s) backed up`,
+          'Backup Run Complete'
+        )
+      }
+    } catch (error) {
+      console.error('Error handling backup run completed:', error)
     }
   }
 

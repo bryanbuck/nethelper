@@ -40,6 +40,16 @@ const navigationItems = [
     to: '/devices'
   },
   {
+    title: 'Discovery',
+    icon: 'mdi-radar',
+    to: '/devices/discovery'
+  },
+  {
+    title: 'Config Backups',
+    icon: 'mdi-backup-restore',
+    to: '/devices/backups'
+  },
+  {
     title: 'Automations',
     icon: 'mdi-cogs',
     to: '/automations'

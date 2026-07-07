@@ -168,10 +168,36 @@
                   variant="outlined"
                 />
               </v-col>
+
+              <v-col cols="12" sm="6">
+                <v-select
+                  v-model="newDevice.managementMode"
+                  :items="managementModeOptions"
+                  label="Management Mode"
+                  variant="outlined"
+                  hint="How NetHelper reaches this device"
+                  persistent-hint
+                />
+              </v-col>
+
+              <v-col cols="12" sm="6">
+                <v-select
+                  v-model="newDevice.apiCredentialId"
+                  :items="availableCredentials"
+                  item-title="name"
+                  item-value="id"
+                  label="Device Credential"
+                  variant="outlined"
+                  clearable
+                  hint="Required for direct (REST/SSH) access"
+                  persistent-hint
+                  :disabled="newDevice.managementMode === 'central'"
+                />
+              </v-col>
             </v-row>
           </v-container>
         </v-card-text>
-        
+
         <v-card-actions>
           <v-spacer></v-spacer>
           <v-btn
@@ -281,7 +307,19 @@
                 <h3 class="text-subtitle-1 mb-3">API Configuration</h3>
               </v-col>
 
-              <v-col cols="12">
+              <v-col cols="12" sm="6">
+                <v-select
+                  v-model="editingDevice.managementMode"
+                  :items="managementModeOptions"
+                  label="Management Mode"
+                  variant="outlined"
+                  prepend-inner-icon="mdi-server-network"
+                  hint="Central pulls config from Aruba Central; Direct uses REST/SSH"
+                  persistent-hint
+                />
+              </v-col>
+
+              <v-col cols="12" sm="6">
                 <v-select
                   v-model="editingDevice.apiCredentialId"
                   :items="availableCredentials"
@@ -415,6 +453,10 @@ const availableCredentials = computed(() => settingsStore.apiCredentials || [])
 const showAddDialog = ref(false)
 const showEditDialog = ref(false)
 const saving = ref(false)
+const managementModeOptions = [
+  { title: 'Direct (REST/SSH)', value: 'direct' },
+  { title: 'Aruba Central', value: 'central' }
+]
 const newDevice = ref({
   name: '',
   type: '',
@@ -422,7 +464,9 @@ const newDevice = ref({
   macAddress: '',
   location: '',
   serialNumber: '',
-  model: ''
+  model: '',
+  managementMode: 'direct',
+  apiCredentialId: null
 })
 const editingDevice = ref({
   id: '',
@@ -433,6 +477,7 @@ const editingDevice = ref({
   location: '',
   serialNumber: '',
   model: '',
+  managementMode: 'direct',
   apiCredentialId: null
 })
 
@@ -477,7 +522,17 @@ const connectionStatus = computed(() => {
 })
 
 // Methods
-const addDevice = () => {
+const addDevice = async () => {
+  if (settingsStore.apiCredentials.length === 0) {
+    loadingCredentials.value = true
+    try {
+      await settingsStore.fetchApiCredentials()
+    } catch (error) {
+      console.error('Failed to load API credentials:', error)
+    } finally {
+      loadingCredentials.value = false
+    }
+  }
   showAddDialog.value = true
 }
 
@@ -490,7 +545,9 @@ const closeAddDialog = () => {
     macAddress: '',
     location: '',
     serialNumber: '',
-    model: ''
+    model: '',
+    managementMode: 'direct',
+    apiCredentialId: null
   }
 }
 
@@ -520,7 +577,11 @@ const saveDevice = async () => {
       macAddress: newDevice.value.macAddress || generateRandomMac(),
       location: newDevice.value.location,
       serial: newDevice.value.serialNumber || '', // Optional - send empty string if not provided
-      model: newDevice.value.model || ''
+      model: newDevice.value.model || '',
+      managementMode: newDevice.value.managementMode || 'direct',
+      apiCredentialId: newDevice.value.managementMode === 'central'
+        ? null
+        : (newDevice.value.apiCredentialId || null)
     }
 
     // Create device via API
@@ -578,6 +639,7 @@ const handleEditDevice = async (device) => {
     location: device.location || '',
     serialNumber: device.serialNumber || device.serial || '',
     model: device.model || '',
+    managementMode: device.managementMode || 'direct',
     apiCredentialId: device.apiCredentialId || null
   }
 
@@ -607,6 +669,7 @@ const closeEditDialog = () => {
     location: '',
     serialNumber: '',
     model: '',
+    managementMode: 'direct',
     apiCredentialId: null
   }
 }
@@ -638,6 +701,7 @@ const updateDevice = async () => {
       location: editingDevice.value.location,
       serial: editingDevice.value.serialNumber || '',
       model: editingDevice.value.model || '',
+      managementMode: editingDevice.value.managementMode || 'direct',
       apiCredentialId: editingDevice.value.apiCredentialId || null
     }
 

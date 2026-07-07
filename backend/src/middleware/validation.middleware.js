@@ -34,6 +34,8 @@ const validateDevice = {
     body('model').optional().trim(),
     body('macAddress').optional().isMACAddress().withMessage('Invalid MAC address'),
     body('location').optional().trim(),
+    body('managementMode').optional().isIn(['central', 'direct']).withMessage('Invalid management mode'),
+    body('apiCredentialId').optional({ nullable: true }).isUUID().withMessage('Invalid credential ID'),
     handleValidationErrors,
   ],
 
@@ -46,6 +48,8 @@ const validateDevice = {
     body('macAddress').optional().isMACAddress(),
     body('location').optional().trim(),
     body('status').optional().isIn(['online', 'offline', 'warning', 'maintenance']),
+    body('managementMode').optional().isIn(['central', 'direct']).withMessage('Invalid management mode'),
+    body('apiCredentialId').optional({ nullable: true }).isUUID().withMessage('Invalid credential ID'),
     handleValidationErrors,
   ],
 };
@@ -169,6 +173,96 @@ const validateApiCredential = {
   ],
 };
 
+// Discovery validation rules
+const validateDiscovery = {
+  scan: [
+    body('subnets').optional().isArray().withMessage('Subnets must be an array'),
+    body('subnets.*').optional().trim().matches(/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/).withMessage('Subnets must be CIDR strings'),
+    handleValidationErrors,
+  ],
+
+  scanId: [
+    param('scanId').isUUID().withMessage('Invalid scan ID'),
+    handleValidationErrors,
+  ],
+
+  discoveredId: [
+    param('discoveredId').isUUID().withMessage('Invalid discovered device ID'),
+    handleValidationErrors,
+  ],
+
+  importDevice: [
+    param('discoveredId').isUUID().withMessage('Invalid discovered device ID'),
+    body('name').optional().trim().isLength({ min: 1 }),
+    body('type').optional().isIn(['access_point', 'switch', 'gateway']),
+    body('serial').optional().trim().isLength({ min: 1 }),
+    body('model').optional().trim(),
+    body('location').optional().trim(),
+    body('apiCredentialId').optional({ nullable: true }).isUUID().withMessage('Invalid credential ID'),
+    body('updateExisting').optional().isBoolean(),
+    handleValidationErrors,
+  ],
+};
+
+// Config backup validation rules
+const validateBackup = {
+  list: [
+    query('deviceId').optional().isUUID(),
+    query('scheduleId').optional().isUUID(),
+    query('status').optional().isIn(['pending', 'running', 'success', 'failed']),
+    query('limit').optional().isInt({ min: 1, max: 200 }).toInt(),
+    query('offset').optional().isInt({ min: 0 }).toInt(),
+    handleValidationErrors,
+  ],
+
+  run: [
+    body('deviceIds').isArray({ min: 1 }).withMessage('At least one device ID is required'),
+    body('deviceIds.*').isUUID().withMessage('Device IDs must be UUIDs'),
+    handleValidationErrors,
+  ],
+
+  backupId: [
+    param('backupId').isUUID().withMessage('Invalid backup ID'),
+    handleValidationErrors,
+  ],
+
+  diff: [
+    param('backupId').isUUID().withMessage('Invalid backup ID'),
+    param('otherId').isUUID().withMessage('Invalid backup ID'),
+    handleValidationErrors,
+  ],
+
+  scheduleId: [
+    param('scheduleId').isUUID().withMessage('Invalid schedule ID'),
+    handleValidationErrors,
+  ],
+
+  scheduleCreate: [
+    body('name').trim().isLength({ min: 1 }).withMessage('Schedule name is required'),
+    body('cronExpression').trim().isLength({ min: 1 }).withMessage('Cron expression is required'),
+    body('timezone').optional().trim().isLength({ min: 1 }),
+    body('active').optional().isBoolean(),
+    body('deviceSelection').optional().isObject().withMessage('Device selection must be an object'),
+    body('deviceSelection.mode').optional().isIn(['all', 'types', 'devices']),
+    body('retentionDays').optional().isInt({ min: 0, max: 3650 }).toInt(),
+    body('retentionMaxCount').optional().isInt({ min: 0, max: 1000 }).toInt(),
+    handleValidationErrors,
+  ],
+
+  scheduleUpdate: [
+    param('scheduleId').isUUID().withMessage('Invalid schedule ID'),
+    body('name').optional().trim().isLength({ min: 1 }),
+    body('cronExpression').optional().trim().isLength({ min: 1 }),
+    body('timezone').optional().trim().isLength({ min: 1 }),
+    body('active').optional().isBoolean(),
+    body('deviceSelection').optional().isObject(),
+    body('deviceSelection.mode').optional().isIn(['all', 'types', 'devices']),
+    body('retentionDays').optional().isInt({ min: 0, max: 3650 }).toInt(),
+    body('retentionMaxCount').optional().isInt({ min: 0, max: 1000 }).toInt(),
+    handleValidationErrors,
+  ],
+};
+
 // General validation helpers
 const validateUUID = (paramName) => [
   param(paramName).isUUID().withMessage(`Invalid ${paramName}`),
@@ -187,6 +281,8 @@ module.exports = {
   validateSchedule,
   validateDeviceGroup,
   validateApiCredential,
+  validateDiscovery,
+  validateBackup,
   validateQuery,
   validateUUID,
   validateOptionalUUID,

@@ -273,6 +273,21 @@
           </div>
         </template>
 
+        <template v-slot:item.managementMode="{ item }">
+          <v-chip
+            :color="item.managementMode === 'central' ? 'primary' : 'secondary'"
+            size="small"
+            variant="tonal"
+          >
+            <v-icon
+              start
+              :icon="item.managementMode === 'central' ? 'mdi-cloud' : 'mdi-lan-connect'"
+              size="x-small"
+            ></v-icon>
+            {{ item.managementMode === 'central' ? 'Central' : 'Direct' }}
+          </v-chip>
+        </template>
+
         <template v-slot:item.centralStatus="{ item }">
           <v-tooltip location="bottom">
             <template v-slot:activator="{ props }">
@@ -496,6 +511,13 @@ const headers = [
     key: 'type',
     sortable: true,
     width: '150px'
+  },
+  {
+    title: 'Managed',
+    key: 'managementMode',
+    sortable: true,
+    width: '120px',
+    tooltip: 'How NetHelper reaches this device (Aruba Central or direct via REST/SSH)'
   },
   {
     title: 'Status',

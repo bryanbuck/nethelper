@@ -147,6 +147,7 @@ class DeviceService {
           macAddress: deviceData.macAddress,
           location: deviceData.location,
           centralStatus: deviceData.centralStatus || deviceData.status || 'offline',
+          managementMode: deviceData.managementMode || 'direct',
           firmwareVersion: deviceData.firmwareVersion,
           apiCredentialId: deviceData.apiCredentialId || null,
           metadata: deviceData.metadata || {},
@@ -229,6 +230,7 @@ class DeviceService {
             macAddress: arubaDevice.macAddress,
             location: arubaDevice.location,
             centralStatus: this.mapDeviceStatus(arubaDevice.status),
+            managementMode: 'central',
             firmwareVersion: arubaDevice.firmwareVersion,
             lastSeen: arubaDevice.lastSeen ? new Date(arubaDevice.lastSeen * 1000) : null,
             metadata: {

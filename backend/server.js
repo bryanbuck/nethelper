@@ -24,6 +24,10 @@ async function startServer() {
     await initializeQueues();
     logger.info('Job queues initialized successfully');
 
+    // Register active config backup schedules as repeatable jobs
+    const configBackupService = require('./src/services/config-backup.service');
+    await configBackupService.syncSchedules();
+
     // Create HTTP server
     const server = http.createServer(app);
 

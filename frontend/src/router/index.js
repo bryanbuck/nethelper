@@ -9,6 +9,8 @@ const DashboardView = () => import('@/views/dashboard/DashboardView.vue')
 const DevicesView = () => import('@/views/devices/DevicesView.vue')
 const DeviceDetailView = () => import('@/views/devices/DeviceDetailView.vue')
 const FirmwareStatusView = () => import('@/views/devices/FirmwareStatusView.vue')
+const DeviceDiscoveryView = () => import('@/views/devices/DeviceDiscoveryView.vue')
+const ConfigBackupsView = () => import('@/views/devices/ConfigBackupsView.vue')
 const AutomationsView = () => import('@/views/automations/AutomationsView.vue')
 const AutomationBuilderView = () => import('@/views/automations/AutomationBuilderView.vue')
 const AutomationDetailView = () => import('@/views/automations/AutomationDetailView.vue')
@@ -79,6 +81,34 @@ const routes = [
       breadcrumb: [
         { text: 'Devices', to: '/devices' },
         { text: 'Firmware Status', disabled: true }
+      ]
+    }
+  },
+  {
+    path: '/devices/discovery',
+    name: 'DeviceDiscovery',
+    component: DeviceDiscoveryView,
+    meta: {
+      requiresAuth: true,
+      title: 'Device Discovery',
+      icon: 'mdi-radar',
+      breadcrumb: [
+        { text: 'Devices', to: '/devices' },
+        { text: 'Device Discovery', disabled: true }
+      ]
+    }
+  },
+  {
+    path: '/devices/backups',
+    name: 'ConfigBackups',
+    component: ConfigBackupsView,
+    meta: {
+      requiresAuth: true,
+      title: 'Config Backups',
+      icon: 'mdi-backup-restore',
+      breadcrumb: [
+        { text: 'Devices', to: '/devices' },
+        { text: 'Config Backups', disabled: true }
       ]
     }
   },

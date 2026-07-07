@@ -30,9 +30,29 @@
               >
                 {{ device.status }}
               </v-chip>
+              <v-chip
+                v-if="device"
+                :color="device.managementMode === 'central' ? 'primary' : 'secondary'"
+                size="small"
+                variant="tonal"
+                class="ml-2"
+              >
+                <v-icon start :icon="device.managementMode === 'central' ? 'mdi-cloud' : 'mdi-lan-connect'" size="x-small"></v-icon>
+                {{ device.managementMode === 'central' ? 'Central-managed' : 'Directly-managed' }}
+              </v-chip>
             </h1>
           </div>
           <div class="d-flex gap-2">
+            <v-btn
+              v-if="device && device.managementMode === 'direct'"
+              color="info"
+              variant="outlined"
+              :loading="testingConnection"
+              @click="testDirectConnection"
+            >
+              <v-icon left>mdi-connection</v-icon>
+              Test Direct Connection
+            </v-btn>
             <v-btn
               color="primary"
               variant="outlined"
@@ -584,6 +604,7 @@ import { useDevicesStore } from '@/stores/devices'
 import { useNotificationsStore } from '@/stores/notifications'
 import { formatDistanceToNow, format, fromUnixTime } from 'date-fns'
 import DeviceConnectionTest from '@/components/devices/DeviceConnectionTest.vue'
+import deviceApiService from '@/services/deviceApi.service'
 
 const route = useRoute()
 const router = useRouter()
@@ -593,6 +614,7 @@ const notificationStore = useNotificationsStore()
 const device = ref(null)
 const loading = ref(false)
 const error = ref(null)
+const testingConnection = ref(false)
 
 // Connection test dialog state
 const showConnectionTestDialog = ref(false)
@@ -740,6 +762,27 @@ const closeConnectionTestDialog = () => {
 const handleConnectionTestComplete = (result) => {
   if (result.success) {
     notificationStore.showSuccess('API connection test successful')
+  }
+}
+
+// Test the direct (REST/SSH) path for a directly-managed device. The backend
+// routes AOS-CX to REST and other devices to SSH automatically.
+const testDirectConnection = async () => {
+  if (!device.value) return
+  testingConnection.value = true
+  try {
+    const response = await deviceApiService.testDeviceConnection(device.value.id)
+    const result = response?.data || response
+    if (result?.success) {
+      const via = result.transport ? ` (via ${result.transport.toUpperCase()})` : ''
+      notificationStore.showSuccess(`Direct connection successful${via}`, 'Connection Test')
+    } else {
+      notificationStore.showError(result?.message || 'Direct connection failed', 'Connection Test')
+    }
+  } catch (err) {
+    notificationStore.showError(err.userMessage || err.message || 'Direct connection failed', 'Connection Test')
+  } finally {
+    testingConnection.value = false
   }
 }
 

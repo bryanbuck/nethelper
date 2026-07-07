@@ -55,11 +55,15 @@ async function initializeQueues() {
   queues.notification = createQueue('notification');
   queues.cleanup = createQueue('cleanup');
   queues.pingMonitor = createQueue('ping-monitor');
+  queues.discovery = createQueue('discovery');
+  queues.configBackup = createQueue('config-backup');
 
   // Import and initialize job processors
   require('../jobs/automation.job')(queues.automation);
   require('../jobs/device-sync.job')(queues.deviceSync);
   require('../jobs/ping-monitor.job')(queues.pingMonitor);
+  require('../jobs/discovery.job')(queues.discovery);
+  require('../jobs/config-backup.job')(queues.configBackup);
 
   logger.info('All job queues initialized');
 }

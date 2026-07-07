@@ -26,6 +26,11 @@ enum DeviceStatus {
   maintenance
 }
 
+enum ManagementMode {
+  central  // Managed via Aruba Central (config pulled from Central API)
+  direct   // Managed directly on the local network (REST or SSH to the device)
+}
+
 enum AutomationType {
   configuration_backup
   firmware_update
@@ -70,6 +75,32 @@ enum TestStatus {
   failed
 }
 
+enum ScanStatus {
+  pending
+  running
+  completed
+  failed
+  cancelled
+}
+
+enum DiscoveredDeviceStatus {
+  new
+  imported
+  ignored
+}
+
+enum BackupStatus {
+  pending
+  running
+  success
+  failed
+}
+
+enum BackupTrigger {
+  manual
+  scheduled
+}
+
 model User {
   id            String       @id @default(uuid())
   email         String       @unique
@@ -106,6 +137,11 @@ model Device {
 
   // Aruba Central Status
   centralStatus     DeviceStatus   @default(offline) // Status from Aruba Central sync
+
+  // How the platform reaches this device for config/polling. Devices synced from
+  // Aruba Central are 'central'; manually-added and discovery-imported devices
+  // default to 'direct' (reached over REST or SSH using linked credentials).
+  managementMode    ManagementMode @default(direct)
 
   firmwareVersion String?
   lastSeen      DateTime?      // Last seen timestamp (updated by both ping monitoring and Aruba Central sync)
@@ -231,6 +267,95 @@ model ApiCredential {
 
   @@index([type])
   @@index([userId])
+}
+
+model DiscoveryScan {
+  id            String      @id @default(uuid())
+  status        ScanStatus  @default(pending)
+  subnets       Json        // Array of CIDR strings scanned
+  totalHosts    Int         @default(0)  // Hosts that responded to the sweep
+  arubaHosts    Int         @default(0)  // Hosts matching Aruba/HPE OUIs or fingerprint
+  progress      Int         @default(0)  // 0-100
+  error         String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  triggeredBy   String?     // User id
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  discoveredDevices DiscoveredDevice[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model DiscoveredDevice {
+  id              String                 @id @default(uuid())
+  scan            DiscoveryScan          @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  scanId          String
+  ipAddress       String
+  macAddress      String?
+  vendor          String?                // OUI vendor name
+  hostname        String?
+  isArubaVendor   Boolean                @default(false)
+  openPorts       Json?                  // Array of open ports found during fingerprinting
+  suggestedType   DeviceType?            // Best-effort type detection
+  suggestedName   String?
+  centralSerial   String?                // Serial if matched in Aruba Central inventory
+  centralMatch    Json?                  // Matched Central device summary (name, model, status)
+  existingDeviceId String?               // Local Device.id if IP/MAC conflicts with inventory
+  conflictType    String?                // ip_conflict | mac_conflict | central_managed | null
+  status          DiscoveredDeviceStatus @default(new)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@index([scanId])
+  @@index([status])
+  @@index([macAddress])
+}
+
+model BackupSchedule {
+  id              String    @id @default(uuid())
+  name            String
+  cronExpression  String
+  timezone        String    @default("UTC")
+  active          Boolean   @default(true)
+  deviceSelection Json      // { mode: 'all' | 'types' | 'devices', types?: [], deviceIds?: [] }
+  retentionDays   Int       @default(90)   // Prune backups older than this (0 = keep forever)
+  retentionMaxCount Int     @default(30)   // Max backups kept per device (0 = unlimited)
+  lastRun         DateTime?
+  nextRun         DateTime?
+  createdBy       String?   // User id
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  backups         ConfigBackup[]
+
+  @@index([active])
+}
+
+model ConfigBackup {
+  id            String        @id @default(uuid())
+  deviceId      String
+  deviceSerial  String
+  deviceName    String        // Denormalized so history survives device deletion
+  status        BackupStatus  @default(pending)
+  trigger       BackupTrigger @default(manual)
+  schedule      BackupSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  scheduleId    String?
+  filePath      String?       // Path on local backup storage
+  checksum      String?       // SHA-256 of config content
+  sizeBytes     Int?
+  hasChanges    Boolean?      // Differs from previous successful backup of this device
+  error         String?
+  triggeredBy   String?       // User id (manual runs)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([deviceId, createdAt])
+  @@index([deviceSerial])
+  @@index([status])
+  @@index([scheduleId])
 }
 
 model ArubaCentralConfig {

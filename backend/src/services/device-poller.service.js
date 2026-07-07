@@ -1,6 +1,8 @@
 const axios = require('axios');
 const https = require('https');
 const settingsService = require('./settings.service');
+const sshDeviceService = require('./ssh-device.service');
+const { isCxRestCapable } = require('../utils/device-platform');
 const { getPrisma } = require('../config/database');
 const { debugLog, Services } = require('../utils/debug-logger');
 
@@ -189,7 +191,8 @@ class DevicePollerService {
 
   /**
    * Firmware Poller Module
-   * Polls firmware information from AOS-CX switches
+   * Polls firmware information from AOS-CX switches (REST) or other direct
+   * devices via SSH `show version`.
    * @param {Object} device - Device object from database
    * @param {Object} credentials - Decrypted credentials
    * @returns {Promise<Object>} Firmware information
@@ -198,24 +201,19 @@ class DevicePollerService {
     try {
       logger.progress(`Polling firmware info from ${device.name} (${device.ipAddress})`);
 
-      // Determine base URL based on device type
-      let baseUrl, apiPath;
-
-      switch (device.type) {
-        case 'switch':
-          // AOS-CX switch - use REST API v10.15
-          baseUrl = `https://${device.ipAddress}/rest/v10.15`;
-          apiPath = '/firmware';
-          break;
-
-        // Additional device types can be added here
-        case 'ap':
-        case 'gateway':
-          throw new Error(`Firmware polling not yet implemented for device type: ${device.type}`);
-
-        default:
-          throw new Error(`Unsupported device type: ${device.type}`);
+      if (!isCxRestCapable(device)) {
+        // SSH fallback: return the raw `show version` text for CLI-only devices.
+        const versionText = await sshDeviceService.getVersion(device, credentials);
+        return {
+          transport: 'ssh',
+          raw_version: versionText,
+          primary_version: this.parseVersionFromText(versionText),
+        };
       }
+
+      // AOS-CX switch - use REST API v10.15
+      const baseUrl = `https://${device.ipAddress}/rest/v10.15`;
+      const apiPath = '/firmware';
 
       // Make API request
       const firmwareData = await this.makeDeviceRequest(baseUrl, apiPath, credentials);
@@ -253,23 +251,20 @@ class DevicePollerService {
     try {
       logger.progress(`Polling system info from ${device.name} (${device.ipAddress})`);
 
-      // Determine base URL based on device type
-      let baseUrl, apiPath;
-
-      switch (device.type) {
-        case 'switch':
-          // AOS-CX switch - use REST API v10.15
-          baseUrl = `https://${device.ipAddress}/rest/v10.15`;
-          apiPath = '/system';
-          break;
-
-        case 'ap':
-        case 'gateway':
-          throw new Error(`System polling not yet implemented for device type: ${device.type}`);
-
-        default:
-          throw new Error(`Unsupported device type: ${device.type}`);
+      if (!isCxRestCapable(device)) {
+        // SSH fallback for CLI-only devices: return raw `show version` text.
+        const versionText = await sshDeviceService.getVersion(device, credentials);
+        return {
+          transport: 'ssh',
+          hostname: null,
+          software_version: this.parseVersionFromText(versionText),
+          raw_version: versionText,
+        };
       }
+
+      // AOS-CX switch - use REST API v10.15
+      const baseUrl = `https://${device.ipAddress}/rest/v10.15`;
+      const apiPath = '/system';
 
       // Make API request with depth=1 to get basic system info
       const systemData = await this.makeDeviceRequest(baseUrl, apiPath, credentials, {
@@ -418,6 +413,24 @@ class DevicePollerService {
       logger.error(`Login sessions polling failed for ${device.name}`, { error: error.message });
       throw error;
     }
+  }
+
+  /**
+   * Best-effort extraction of a version string from `show version` output
+   * across AOS-S / AOS-CX / IOS-like formats.
+   */
+  parseVersionFromText(text) {
+    if (!text) return null;
+    const patterns = [
+      /Version[:\s]+([A-Za-z0-9._-]+)/i,      // AOS-S: "Software revision : WC.16.11.x"
+      /revision\s*:\s*([A-Za-z0-9._-]+)/i,
+      /\b(\d+\.\d+\.\d+[A-Za-z0-9._-]*)\b/,   // generic semver-ish
+    ];
+    for (const re of patterns) {
+      const match = re.exec(text);
+      if (match) return match[1];
+    }
+    return null;
   }
 
   /**

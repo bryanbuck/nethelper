@@ -112,26 +112,67 @@ Enhanced visualization for device performance metrics:
 
 ### 4. Automated Device Discovery
 **Priority**: Medium
-**Status**: Not Started
+**Status**: ✅ Completed (2026-07-06)
 
 Automatically discover devices on the local network:
-- Network scanning for Aruba devices
-- Auto-detection of device types
-- Suggestion to add discovered devices
-- Conflict resolution with existing devices
+- ✅ Network scanning for Aruba devices (nmap ping/ARP sweep of configured or auto-detected subnets)
+- ✅ Auto-detection of device types (Aruba/HPE MAC OUI match + TCP port fingerprint; Central inventory match is authoritative)
+- ✅ Suggestion to add discovered devices (import into inventory with pre-filled name/type/serial)
+- ✅ Conflict resolution with existing devices (IP/MAC/serial conflict detection; "merge into existing" option)
+- ✅ Cross-check against Aruba Central inventory by MAC (gracefully degrades when Central is unreachable)
+
+**Implementation:**
+- Backend: `src/services/discovery.service.js`, `src/jobs/discovery.job.js`, `src/controllers/discovery.controller.js`, `src/routes/discovery.routes.js` (`/api/v1/discovery/*`), Bull `discovery` queue, models `DiscoveryScan` + `DiscoveredDevice`
+- Frontend: `src/views/devices/DeviceDiscoveryView.vue` (route `/devices/discovery`), `src/stores/discovery.js`, `src/services/discovery.service.js`
+- Real-time: WebSocket events `discovery:progress` / `discovery:completed` / `discovery:failed`
+- Requires `nmap` on the backend host (installed). Env: `DISCOVERY_SCAN_TIMEOUT`
 
 ---
 
 ### 5. Configuration Backup Scheduling
 **Priority**: Medium
-**Status**: Not Started
+**Status**: ✅ Completed (2026-07-06)
 
 Scheduled configuration backups with:
-- Automated backup on cron schedule
-- Configuration diff detection
-- Rollback capability
-- Backup retention policies
-- Export to external storage (S3, NFS, etc.)
+- ✅ Automated backup on cron schedule (Bull repeatable jobs per schedule, timezone-aware; device selection by all/type/specific)
+- ✅ Configuration diff detection (SHA-256 change detection per device; unified-diff comparison between any two versions)
+- ✅ Rollback capability — first iteration is **view / diff / download** (browse versions, compare, download to apply manually). Automated push-to-device restore is intentionally deferred (see note below).
+- ✅ Backup retention policies (per-schedule retentionDays + retentionMaxCount, 0 = unlimited; pruned after each run)
+- ⏳ Export to external storage — local disk storage implemented with versioning; S3/NFS export deferred (config pulled via Aruba Central API)
+
+**Implementation:**
+- Backend: `src/services/config-backup.service.js`, `src/jobs/config-backup.job.js`, `src/controllers/backup.controller.js`, `src/routes/backup.routes.js` (`/api/v1/backups/*`), Bull `config-backup` queue, models `BackupSchedule` + `ConfigBackup`, schedule sync on server startup
+- Frontend: `src/views/devices/ConfigBackupsView.vue` (route `/devices/backups`), `src/stores/backups.js`, `src/services/backup.service.js`, `src/components/backups/ConfigDiffViewer.vue` (hand-rolled colored unified-diff viewer)
+- Config source: routed per device by management mode (see "Direct-managed device support" below) — Central API, AOS-CX REST, or SSH; stored to local disk under `BACKUP_STORAGE_PATH`
+- Real-time: WebSocket events `backup:completed` / `backup:failed` / `backup:run:completed`
+
+**Deferred follow-ups (next iteration):**
+- Automated restore/rollback (push a selected version back via Central API or SSH — riskier, needs per-platform apply logic)
+- S3-compatible and NFS export targets
+- ✅ ~~SSH-based config pull for non-cloud-managed devices~~ — completed (2026-07-06), see below
+
+---
+
+### 5a. Direct-managed (non-Central) device support
+**Priority**: Medium
+**Status**: ✅ Completed (2026-07-06)
+
+Support devices managed directly on the local network rather than through Aruba Central, and pull their configs over the right transport.
+
+- ✅ `Device.managementMode` enum (`central` | `direct`). Central-synced devices are `central`; manually-added and discovery-imported devices default to `direct`.
+- ✅ Config-backup transport routing: `central` → Aruba Central API; `direct` + AOS-CX → device REST API (reuses the existing `backupPoller`); `direct` + other (AOS-S, CLI-only) → **SSH `show running-config`**.
+- ✅ New `ssh-device.service.js` (ssh2): interactive shell, disables paging, handles legacy KEX/cipher algorithms common on network gear, per-platform command profiles (AOS-S / AOS-CX / generic).
+- ✅ Direct polling parity: firmware/system pollers fall back to SSH `show version` for non-CX direct devices.
+- ✅ Connection test routes to SSH for direct non-CX devices (existing `POST /api/v1/device-api/test/:deviceId`).
+- ✅ Frontend: Central/Direct chip on device list + detail; "Test Direct Connection" action on directly-managed devices; management-mode + credential selectors in the add/edit device dialogs.
+
+**Implementation:**
+- Backend: `src/services/ssh-device.service.js`; routing in `config-backup.service.js` (`pullConfig`/`isCxSwitch`), `device-poller.service.js` (`isCxRestCapable` + SSH fallbacks), `device-api-test.controller.js` (`useSshTransport`); `managementMode` on Device schema + validation + discovery import
+- Frontend: `DeviceTable.vue` (Managed column), `DeviceDetailView.vue` (chip + test action), `DevicesView.vue` (add/edit selectors)
+- Dependency: `ssh2`. Env: `SSH_PORT`, `SSH_CONNECT_TIMEOUT`, `SSH_COMMAND_TIMEOUT`
+- Note: AOS-CX config pull returns the device's JSON running-config (REST); AOS-S/CLI devices return raw CLI text. Both are checksummed and diffed the same way.
+
+**Deferred:** SSH enable/privileged-mode escalation prompts, SSH key auth (currently password auth), and richer `show version` parsing into structured fields.
 
 ---
 
@@ -232,5 +273,5 @@ _(Items will be moved here once completed)_
 
 ---
 
-**Last Updated**: 2025-10-15
+**Last Updated**: 2026-07-06
 **Maintained By**: Development Team

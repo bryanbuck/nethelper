@@ -1,5 +1,7 @@
 const DeviceAPIFactory = require('../services/device-api/device-api-factory');
 const settingsService = require('../services/settings.service');
+const sshDeviceService = require('../services/ssh-device.service');
+const { useSshTransport } = require('../utils/device-platform');
 const { getPrisma } = require('../config/database');
 const logger = require('../utils/logger');
 
@@ -49,11 +51,16 @@ class DeviceAPITestController {
         });
       }
 
-      // Create device API instance
-      const deviceAPI = DeviceAPIFactory.createDeviceAPI(device, credentials);
-
-      // Test connection
-      const result = await deviceAPI.testConnection();
+      // Route the test by how the device is reachable. AOS-CX switches have a
+      // REST API (via the factory); other direct-managed devices are tested
+      // over SSH. Central-managed and CX devices continue to use REST.
+      let result;
+      if (useSshTransport(device)) {
+        result = await sshDeviceService.testConnection(device, credentials);
+      } else {
+        const deviceAPI = DeviceAPIFactory.createDeviceAPI(device, credentials);
+        result = await deviceAPI.testConnection();
+      }
 
       // Update credential test status
       if (device.apiCredentialId) {
