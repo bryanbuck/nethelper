@@ -38,7 +38,7 @@ const VENDORS = {
 const PLATFORMS = {
   'aos-cx': { id: 'aos-cx', vendor: 'aruba', label: 'AOS-CX', deviceApiType: 'cx_switch', sshProfile: 'aos-cx' },
   'aos-s': { id: 'aos-s', vendor: 'aruba', label: 'AOS-S (AOS-Switch)', deviceApiType: null, sshProfile: 'aos-s' },
-  junos: { id: 'junos', vendor: 'juniper', label: 'Junos', deviceApiType: null, sshProfile: 'junos' },
+  junos: { id: 'junos', vendor: 'juniper', label: 'Junos', deviceApiType: 'junos', sshProfile: 'junos' },
   'ios-xe': { id: 'ios-xe', vendor: 'cisco', label: 'IOS / IOS-XE', deviceApiType: null, sshProfile: 'cisco-ios' },
   meraki: { id: 'meraki', vendor: 'cisco', label: 'Meraki (cloud-managed)', deviceApiType: null, sshProfile: null },
 };
@@ -117,9 +117,13 @@ const CLOUD_PROVIDERS = {
 const TRANSPORT_MATRIX = {
   'aruba/aos-cx': { config: ['device-rest'], test: ['device-rest'], poll: ['device-rest'] },
   'aruba/aos-s': { config: ['ssh'], test: ['ssh'], poll: ['ssh'] },
-  // Future vendors (rows activated by their roadmap phases; harmless now
-  // because no device rows carry these platforms until the phase lands):
-  'juniper/junos': { config: ['ssh'], test: ['ssh'], poll: ['ssh'] },
+  // Junos: NETCONF (the 'device-rest' slot, served by JunosAPI) is preferred —
+  // framed, structured, no CLI screen-scraping. It is NOT enabled by default on
+  // Junos, so SSH follows as a fallback: a device without
+  // `set system services netconf ssh` authenticates and then refuses the
+  // subsystem, and the router retries over the CLI rather than failing.
+  'juniper/junos': { config: ['device-rest', 'ssh'], test: ['device-rest', 'ssh'], poll: ['device-rest', 'ssh'] },
+  // Cisco Catalyst — Phase 4 (harmless now: no device rows carry this platform).
   'cisco/ios-xe': { config: ['ssh'], test: ['ssh'], poll: ['ssh'] },
 };
 

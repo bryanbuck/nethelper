@@ -2,7 +2,9 @@ const DeviceAPIFactory = require('../services/device-api/device-api-factory');
 const settingsService = require('../services/settings.service');
 const sshDeviceService = require('../services/ssh-device.service');
 const devicePollerService = require('../services/device-poller.service');
-const { useSshTransport } = require('../utils/device-platform');
+const NetconfClient = require('../services/device-api/netconf-client');
+const { isCxRestCapable } = require('../utils/device-platform');
+const { resolveTransport } = require('../utils/transport-router');
 const { getPrisma } = require('../config/database');
 const logger = require('../utils/logger');
 
@@ -52,28 +54,62 @@ class DeviceAPITestController {
         });
       }
 
-      // Route the test by how the device is reachable. AOS-CX switches have a
-      // REST API (via the factory); other direct-managed devices are tested
-      // over SSH. Central-managed and CX devices continue to use REST.
+      // Route the test the same way a real operation would: through the
+      // transport matrix. AOS-CX has a REST API and Junos has NETCONF (both the
+      // 'device-rest' slot, dispatched by the factory); everything else is
+      // tested over the SSH CLI. Junos additionally falls back to SSH when the
+      // device has not enabled the NETCONF subsystem.
       let result;
-      if (useSshTransport(device)) {
-        result = await sshDeviceService.testConnection(device, credentials);
-      } else {
-        const deviceAPI = DeviceAPIFactory.createDeviceAPI(device, credentials);
-        result = await deviceAPI.testConnection();
+      const transports = resolveTransport(device, 'test');
 
-        // While we have working REST access to a CX switch, refresh its
-        // switch-reported Central state (best-effort, never fails the test).
-        if (result.success) {
-          const centralStatus = await devicePollerService.refreshCentralStatus(device, credentials);
-          if (centralStatus) {
-            result.centralStatus = {
-              centralManaged: centralStatus.centralManaged,
-              connectionStatus: centralStatus.connectionStatus,
-              mode: centralStatus.mode,
-            };
+      for (const transport of transports) {
+        if (transport === 'device-rest') {
+          let deviceAPI;
+          try {
+            deviceAPI = DeviceAPIFactory.createDeviceAPI(device, credentials);
+          } catch (error) {
+            // No device API client for this platform — try the next transport.
+            logger.debug(`No device API for ${device.name}: ${error.message}`);
+            continue;
           }
+
+          result = await deviceAPI.testConnection();
+
+          // NETCONF is off on this Junos device: not a failure, just means the
+          // CLI is the way in. Try the next transport instead of reporting it.
+          if (!result.success && result.code === NetconfClient.NETCONF_UNAVAILABLE) {
+            logger.info(`NETCONF unavailable on ${device.name}; testing over the SSH CLI instead`);
+            result = null;
+            continue;
+          }
+
+          // While we have working REST access to a CX switch, refresh its
+          // switch-reported Central state (best-effort, never fails the test).
+          if (result.success && isCxRestCapable(device)) {
+            const centralStatus = await devicePollerService.refreshCentralStatus(device, credentials);
+            if (centralStatus) {
+              result.centralStatus = {
+                centralManaged: centralStatus.centralManaged,
+                connectionStatus: centralStatus.connectionStatus,
+                mode: centralStatus.mode,
+              };
+            }
+          }
+          break;
         }
+
+        if (transport === 'ssh') {
+          result = await sshDeviceService.testConnection(device, credentials);
+          break;
+        }
+      }
+
+      if (!result) {
+        result = {
+          success: false,
+          message: `No usable transport for "${device.name}" (tried: ${transports.join(', ') || 'none'})`,
+          testedAt: new Date().toISOString(),
+        };
       }
 
       // Update credential test status

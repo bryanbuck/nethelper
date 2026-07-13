@@ -1,4 +1,5 @@
 const CXSwitchAPI = require('./cx-switch-api');
+const JunosAPI = require('./junos-api');
 const logger = require('../../utils/logger');
 const { PLATFORMS, VENDORS } = require('../../constants/vendors');
 const { detectPlatform } = require('../../utils/device-platform');
@@ -45,8 +46,10 @@ class DeviceAPIFactory {
       case 'cx_switch':
         return new CXSwitchAPI(device, credentials);
 
+      case 'junos':
+        return new JunosAPI(device, credentials);
+
       // Future clients slot in here as their phases land:
-      // case 'junos':             return new JunosAPI(device, credentials);
       // case 'catalyst_restconf': return new CatalystAPI(device, credentials);
 
       default:
@@ -95,7 +98,7 @@ class DeviceAPIFactory {
    * @returns {Array<Object>} Array of supported device types with metadata
    */
   static getSupportedDeviceTypes() {
-    const IMPLEMENTED = new Set(['cx_switch']);
+    const IMPLEMENTED = new Set(['cx_switch', 'junos']);
 
     return Object.values(PLATFORMS)
       .filter((platform) => platform.deviceApiType)

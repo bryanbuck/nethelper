@@ -8,7 +8,9 @@ const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory')
 const settingsService = require('./settings.service');
 const devicePollerService = require('./device-poller.service');
 const sshDeviceService = require('./ssh-device.service');
-const { isCxRestCapable } = require('../utils/device-platform');
+const JunosAPI = require('./device-api/junos-api');
+const NetconfClient = require('./device-api/netconf-client');
+const { isCxRestCapable, detectPlatform } = require('../utils/device-platform');
 const { resolveTransport } = require('../utils/transport-router');
 const { getQueue } = require('../config/bull');
 const { getIO } = require('../websocket/socket.handler');
@@ -202,12 +204,17 @@ class ConfigBackupService {
   /**
    * Pull a device's configuration over the transports the router deems
    * appropriate for it, in order (see utils/transport-router.js):
-   *   - device-rest: AOS-CX REST, preferred even when cloud-managed. Local
-   *     REST *reads* keep working when a switch is Central-managed and return
-   *     the complete running config; the probe piggybacked here also
-   *     refreshes the switch-reported cloudManaged state.
+   *   - device-rest: the device's own API, by platform —
+   *       AOS-CX: REST, preferred even when cloud-managed (local REST *reads*
+   *         keep working under Central management and return the complete
+   *         running config; the probe piggybacked here also refreshes the
+   *         switch-reported cloudManaged state).
+   *       Junos:  NETCONF (set-format config). Not enabled by default on Junos,
+   *         so a device that refuses the subsystem falls through to SSH below
+   *         rather than failing.
    *   - cloud:       the device's cloud integration (per its capabilities)
-   *   - ssh:         `show running-config` over the platform's SSH profile
+   *   - ssh:         the platform's SSH profile (`show running-config`, or
+   *                  `show configuration | display set` on Junos)
    * See docs/CENTRAL_MANAGEMENT_MODE_PLAN.md section 3.3 and
    * docs/MULTI_VENDOR_ROADMAP.md section 5.
    *
@@ -225,17 +232,39 @@ class ConfigBackupService {
 
     for (const transport of transports) {
       if (transport === 'device-rest') {
-        if (!(isCxRestCapable(device) && device.ipAddress && credentials)) {
-          skipped.push('device-rest (needs IP address and linked credentials)');
+        if (!device.ipAddress || !credentials) {
+          skipped.push('device API (needs IP address and linked credentials)');
           continue;
         }
-        // Refresh the switch-reported cloud-management state first
-        // (best-effort; never blocks the backup).
-        await devicePollerService.refreshCentralStatus(device, credentials);
-        const result = await devicePollerService.backupPoller(device, credentials);
-        const running = result.running_config;
-        const text = typeof running === 'string' ? running : JSON.stringify(running, null, 2);
-        return { text, source: 'AOS-CX REST' };
+
+        // AOS-CX keeps its bespoke path: the backup poller also piggybacks the
+        // switch-reported cloud-management probe onto this REST session.
+        if (isCxRestCapable(device)) {
+          await devicePollerService.refreshCentralStatus(device, credentials);
+          const result = await devicePollerService.backupPoller(device, credentials);
+          const running = result.running_config;
+          const text = typeof running === 'string' ? running : JSON.stringify(running, null, 2);
+          return { text, source: 'AOS-CX REST' };
+        }
+
+        if (detectPlatform(device) === 'junos') {
+          const api = new JunosAPI(device, credentials);
+          try {
+            const text = await api.getConfiguration();
+            return { text, source: 'Junos NETCONF' };
+          } catch (error) {
+            // NETCONF is not enabled by default on Junos. If the device refused
+            // the subsystem, that is not a failure — fall through to the SSH CLI
+            // transport the matrix lists next. Any other error is real.
+            if (error.code !== NetconfClient.NETCONF_UNAVAILABLE) throw error;
+            logger.info(`NETCONF unavailable on ${device.name}; falling back to the SSH CLI`);
+            skipped.push('NETCONF (not enabled on the device)');
+            continue;
+          }
+        }
+
+        skipped.push(`device API (no client for platform "${detectPlatform(device)}")`);
+        continue;
       }
 
       if (transport === 'cloud') {

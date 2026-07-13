@@ -223,7 +223,9 @@ const TRANSPORT_MATRIX = {
 
 ### Junos/Catalyst direct — pragmatic MVP call
 
-**SSH is the MVP transport for both.** `show configuration | display set` and `show running-config` over the existing ssh2-based service meet the config-backup + connection-test bar with ~40 lines of profile config. Defer NETCONF (stale npm library landscape; hand-rolling over ssh2 `subsystem('netconf')` is real work) and RESTCONF (YANG parsing, often disabled in the field) to post-MVP. `junos-api.js` is optional in Phase 2 — build it only if structured `getDeviceInfo`/`getStatus` beyond SSH `show version` parsing is wanted.
+~~**SSH is the MVP transport for both.**~~ **Superseded by what Phase 2 actually built.** The original call was: SSH-only, defer NETCONF because the npm libraries are stale. That was reconsidered and reversed — see Phase 2 below. In short: we don't need a library (NETCONF is an XML RPC over an ssh2 subsystem, and ssh2 is already a dependency), and CLI screen-scraping is fragile in a way NETCONF's explicit message framing simply isn't. **Junos now uses NETCONF as its primary transport, with the SSH CLI as an automatic fallback** for devices that haven't enabled it.
+
+Cisco Catalyst (Phase 4) is still planned as SSH-first: RESTCONF needs YANG handling and is commonly disabled in the field, and unlike NETCONF-on-Junos there is no equally clean structured alternative. Revisit if Catalyst devices in practice have it enabled.
 
 ## 6. SSH profiles
 
@@ -284,10 +286,20 @@ Also fixed a latent Phase 0 bug this exercised: `pullConfig()`'s cloud branch wa
 
 **Verified** end-to-end against a local mock of the Mist API built from the spec's response shapes: integration created with the token encrypted at rest and masked over the API; `testConnection` authenticated and validated org scope; sync produced `vendor=juniper` devices with correct type mapping (`ap`/`switch`/`gateway`), `platform=junos` on the switch and gateway but not the AP, and live IP/firmware from stats; config backup of a Mist-managed EX4400 stored and checksummed, and after mutating a port description in Mist the second backup's diff showed exactly that one line; an AP backup recorded an honest "not supported" reason instead of failing opaquely; a Mist org and a Central account were active simultaneously in `activeProviders()`.
 
-### Phase 2 — Junos direct (SSH)
+### Phase 2 — Junos direct ✅ **COMPLETE** (2026-07-12) — NETCONF, not SSH
 
-- `junos` SSH profile; `juniper/junos` matrix row; manual-add flow with vendor=juniper using existing `ApiCredential` username/password; connection test via `ssh-device.service`. Optional stretch: `junos-api.js`.
-- **Verify**: manually add a real Junos device → connection test, config backup (`display set` output stored/checksummed/diffed), change detection fires after a config edit.
+**This phase deliberately departs from the original plan.** The roadmap said "SSH is the MVP transport, defer NETCONF" on the grounds that the npm NETCONF libraries are stale. That reasoning was half right — the `netconf` package's last release was 2022 — but it led to the wrong conclusion, because we don't need a library: NETCONF is an XML RPC over an SSH subsystem, and `ssh2` (already a dependency) exposes `subsys()` directly. Hand-rolling it added **zero dependencies**.
+
+The deciding argument was correctness, not elegance. Screen-scraping an interactive CLI means prompt-matching, echo-stripping, and pager-disabling — machinery that is fragile by construction. NETCONF messages are explicitly framed, so the transport itself tells you where a response ends. There is nothing to guess.
+
+- **`netconf-client.js`** — RFC 6241/6242 over `ssh2.subsys('netconf')`, port 830. Handles both framings and the trap that sits between them: the `<hello>` exchange is *always* `]]>]]>`-terminated, because neither peer yet knows the other's capabilities; only afterwards do messages switch to chunked framing, and only if both advertised `base:1.1`. (I got this wrong on the first pass — the buffer check used `trimStart()`, which strips the very `\n` that begins a chunk header, so chunked reads never fired and every RPC hung. The mock caught it immediately.)
+- **`junos-api.js`** — `BaseDeviceAPI` implementation: `<get-software-information>` for hostname/model/version, `<get-configuration format="set" database="committed"/>` for config. Two details that matter: `database="committed"` (the default is `candidate`, which on a device someone is mid-edit on would back up uncommitted changes that aren't running), and a fallback to `format="text"` because `format="set"` requires Junos 15.1+.
+- **SSH CLI is kept as an automatic fallback**, which is the crux of the design. NETCONF is *not* enabled by default on Junos: a device without `set system services netconf ssh` authenticates and then refuses the subsystem. That surfaces as a typed `NETCONF_UNAVAILABLE`, distinct from "unreachable", and the transport matrix (`juniper/junos: [device-rest, ssh]`) retries over the CLI rather than failing. Both the config-backup path and the connection-test controller honor this.
+- Generalized `pullConfig()`'s `device-rest` branch, which was hardcoded to Aruba CX, to dispatch by platform — and fixed the connection-test controller, which routed on `useSshTransport()` and so would have sent Junos straight to SSH, never trying NETCONF.
+
+**Verified** (no hardware — a mock Junos device: a real `ssh2` SSH server serving both a NETCONF subsystem and a PTY-echoing Junos CLI shell, driven over actual SSH connections). 15 checks, all passing: transport routing and factory dispatch; NETCONF over chunked framing *and* legacy end-of-message framing; device info/firmware parsing; a pre-15.1 device rejecting `format="set"` and falling back to text; config backup storing set-format output, with change detection and a diff isolating exactly the one line changed; **the fallback path — NETCONF refused → detected → SSH CLI → identical config**; the CLI pager being disabled correctly; and Aruba routing unchanged.
+
+**Caveat worth stating**: a mock is faithful to the RFC and to Junos's documented RPCs, but it is still a mock. The first run against real hardware is where response-shape surprises would appear.
 
 ### Phase 3 — Cisco Meraki (cloud)
 
@@ -312,7 +324,8 @@ Per-vendor pollers (generalize `device-poller.service.js`), automation actions f
 4. **Central's broken endpoints** — if Phase 0 cleanup shows classic-Central config retrieval never worked, scope Aruba cloud backup down rather than letting the abstraction inherit fictional capabilities. (Related: item 5b in `LONG_TERM_TODOS.md`, OAuth 401 blocker.)
 5. **DeviceType classification** — Meraki MX → gateway; cameras/sensors → `other`, excluded from backup.
 6. **Credential model split** — direct creds in `ApiCredential`, cloud creds in `CloudIntegration.credentials` JSON; accept the mild inconsistency for MVP.
-7. **NETCONF dependency** — deferred; if needed, prefer hand-rolled ssh2 `subsystem('netconf')` over unmaintained npm libs (re-check the library landscape then).
+7. ~~**NETCONF dependency** — deferred~~ — **Resolved in Phase 2.** Hand-rolled over `ssh2.subsys('netconf')` exactly as this note anticipated; no npm dependency added. The npm `netconf` package was confirmed stale (last release 2022).
+8. **NETCONF is off by default on Junos** — `set system services netconf ssh` is required. Handled by falling back to the SSH CLI, but it means a fleet that has never enabled NETCONF gets the CLI path silently. The connection-test result reports which transport was used, so this is visible rather than hidden.
 
 ## 10. Critical files
 

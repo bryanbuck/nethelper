@@ -199,9 +199,10 @@ path via `getDeviceConfiguration` is likely broken on a New Central tenant).
 
 ### 5c. Multi-Vendor Support (Juniper + Cisco)
 **Priority**: High
-**Status**: 🔨 Phases 0–1 complete (2026-07-12) — vendor abstraction + multi-cloud
-groundwork shipped (Aruba behavior unchanged), and Juniper Mist is live as the second
-cloud platform. Phases 2–4 (Junos direct, Meraki, Catalyst direct) not started.
+**Status**: 🔨 Phases 0–2 complete (2026-07-12) — vendor abstraction + multi-cloud
+groundwork shipped (Aruba behavior unchanged), Juniper Mist live as the second cloud
+platform, and Junos devices reachable directly over NETCONF. Phases 3–4 (Meraki,
+Catalyst direct) not started.
 
 Extend device support beyond Aruba to Juniper (Mist cloud + Junos direct SSH) and Cisco
 (Meraki Dashboard API + Catalyst direct SSH). MVP bar per vendor: inventory sync + status,
@@ -221,8 +222,15 @@ inventory, live stats enrichment, and config backup of Mist-managed EX/SRX devic
 canonical-JSON snapshots of their Mist config object (Mist is intent-based; it has no
 running-config — that comes over SSH in Phase 2). Regional-cloud picker in the UI.
 
+**Phase 2 (done):** Junos direct over **NETCONF** (not SSH — the roadmap's original call was
+reversed; see the doc). Hand-rolled RFC 6241/6242 client over the ssh2 `netconf` subsystem,
+zero new dependencies, because CLI screen-scraping is fragile in a way framed NETCONF
+messages are not. Config is pulled as committed set-format. **NETCONF is not enabled by
+default on Junos**, so a device that refuses the subsystem is detected and falls back to the
+SSH CLI automatically.
+
 **Implementation:**
-- Backend: `src/constants/vendors.js`, `src/utils/transport-router.js`, `src/services/cloud-providers/` (base + factory + aruba-central + mist providers), migration `20260712000000_multi_vendor_phase0`
+- Backend: `src/constants/vendors.js`, `src/utils/transport-router.js`, `src/services/cloud-providers/` (base + factory + aruba-central + mist providers), `src/services/device-api/netconf-client.js` + `junos-api.js`, migration `20260712000000_multi_vendor_phase0`
 - Frontend: `src/models/vendors.js`, `src/components/settings/CloudIntegrations.vue`, vendor/platform/integration selectors in `DevicesView.vue`
 
 **Full design & phased roadmap:** `docs/MULTI_VENDOR_ROADMAP.md`
