@@ -30,6 +30,7 @@ class DevicePollerService {
     this.registerPoller('system', this.systemPoller.bind(this));
     this.registerPoller('backup', this.backupPoller.bind(this));
     this.registerPoller('login-sessions', this.loginSessionsPoller.bind(this));
+    this.registerPoller('central-status', this.centralStatusPoller.bind(this));
   }
 
   /**
@@ -412,6 +413,157 @@ class DevicePollerService {
     } catch (error) {
       logger.error(`Login sessions polling failed for ${device.name}`, { error: error.message });
       throw error;
+    }
+  }
+
+  /**
+   * Central Status Poller Module
+   * Reads the switch's own view of its Aruba Central relationship from the
+   * AOS-CX `system/aruba_central` REST resource (the data behind
+   * `show aruba-central`). AOS-CX 10.15+ also exposes an equivalent
+   * `hpe_anw_central` resource, which we fall back to.
+   * @param {Object} device - Device object from database
+   * @param {Object} credentials - Decrypted credentials
+   * @returns {Promise<Object>} Normalized Central state (see normalizeCentralStatus)
+   */
+  async centralStatusPoller(device, credentials) {
+    if (!this.canProbeCentralStatus(device)) {
+      throw new Error('Central status is only readable from AOS-CX switches via REST');
+    }
+
+    logger.progress(`Polling Aruba Central status from ${device.name} (${device.ipAddress})`);
+    const baseUrl = `https://${device.ipAddress}/rest/v10.15`;
+
+    let raw;
+    try {
+      try {
+        raw = await this.makeDeviceRequest(baseUrl, '/system/aruba_central', credentials);
+      } catch (error) {
+        if (!error.message.includes('404')) throw error;
+        // Legacy resource missing: try the 10.15+ naming before giving up.
+        raw = await this.makeDeviceRequest(baseUrl, '/system/hpe_anw_central', credentials);
+      }
+    } catch (error) {
+      // Some firmware only accepts session (cookie) auth for REST, not basic
+      // auth - fall back to the cookie-login CX API client.
+      if (!error.message.includes('401')) throw error;
+      const CXSwitchAPI = require('./device-api/cx-switch-api');
+      const api = new CXSwitchAPI(device, credentials);
+      try {
+        raw = await api.getCentralStatus();
+      } finally {
+        await api.logout().catch(() => {});
+      }
+    }
+
+    const result = this.normalizeCentralStatus(raw);
+    logger.success(`Central status retrieved from ${device.name}`, {
+      enabled: result.enabled,
+      connectionStatus: result.connectionStatus,
+      centralManaged: result.centralManaged,
+    });
+    return result;
+  }
+
+  /**
+   * Can we read Central status from this device over CX REST? True for
+   * classified AOS-CX switches and for unclassified switches (which this
+   * codebase keeps on REST transport by default); false for AOS-S and
+   * non-switch devices.
+   */
+  canProbeCentralStatus(device) {
+    const { detectPlatform } = require('../utils/device-platform');
+    if (device?.type !== 'switch') return false;
+    return detectPlatform(device) !== 'aos-s';
+  }
+
+  /**
+   * Normalize the aruba_central / hpe_anw_central resource into the fields we
+   * persist. Attribute names vary across firmware - a real 10.10-era payload
+   * uses an inverted `disable` flag and nests connection state:
+   *   { disable: false, central_source: 'activate', location: 'device-...',
+   *     status: { central_connection: 'connected', ... } }
+   * Newer firmware may expose enable/connection_status/mode directly.
+   *
+   * centralManaged semantics (config-write ownership):
+   *   false - Central disabled on the switch, or connected in monitor mode
+   *   true  - Central enabled and connected (conservative: treat as managed
+   *           unless the switch explicitly reports monitor mode)
+   *   null  - Central enabled but not currently connected, or undeterminable
+   */
+  normalizeCentralStatus(raw = {}) {
+    const status = (raw.status && typeof raw.status === 'object') ? raw.status : {};
+    const pick = (...keys) => {
+      for (const key of keys) {
+        if (raw[key] !== undefined && raw[key] !== null) return raw[key];
+        if (status[key] !== undefined && status[key] !== null) return status[key];
+      }
+      return null;
+    };
+
+    let enableValue = pick('enable', 'enabled', 'admin_state');
+    if (enableValue === null && typeof raw.disable === 'boolean') {
+      enableValue = !raw.disable; // 10.10-era inverted flag
+    }
+    const enableKnown = enableValue !== null;
+    const enabled = enableValue === true || enableValue === 'enabled' || enableValue === 'true';
+    const connectionStatus = pick('central_connection', 'connection_status', 'central_connection_status') ||
+      (enableKnown && !enabled ? 'disabled' : 'unknown');
+    const connected = String(connectionStatus).toLowerCase() === 'connected';
+    const mode = pick('mode', 'management_mode', 'config_mode');
+    const monitorOnly = mode !== null && String(mode).toLowerCase().includes('monitor');
+
+    let centralManaged;
+    if (monitorOnly || (enableKnown && !enabled)) {
+      centralManaged = false;
+    } else if (connected) {
+      centralManaged = true;
+    } else {
+      // Enabled but not connected, or the resource had no recognizable
+      // enable attribute (firmware variation) - can't tell.
+      centralManaged = null;
+    }
+
+    return {
+      enabled,
+      connectionStatus,
+      mode,
+      centralManaged,
+      location: pick('central_location', 'location'),
+      source: pick('source', 'central_source'),
+      raw,
+    };
+  }
+
+  /**
+   * Probe a CX switch's Central status and persist it onto the Device row.
+   * Best-effort by design: callers piggyback this on other operations
+   * (connection tests, config backups), so failures are logged, not thrown.
+   * @param {Object} device - Device row (needs id, name, ipAddress, type, model, metadata)
+   * @param {Object} credentials - Decrypted credentials
+   * @returns {Promise<Object|null>} Normalized status, or null if the probe failed
+   */
+  async refreshCentralStatus(device, credentials) {
+    if (!this.canProbeCentralStatus(device) || !device.ipAddress || !credentials) return null;
+
+    try {
+      const status = await this.centralStatusPoller(device, credentials);
+      const prisma = getPrisma();
+      const data = {
+        cloudConnectionStatus: status.connectionStatus,
+        cloudManagedSource: 'switch-rest',
+        cloudManagedCheckedAt: new Date(),
+      };
+      // An inconclusive probe (enabled but not connected right now) shouldn't
+      // erase a previously determined ownership state - keep the old value.
+      if (status.centralManaged !== null) {
+        data.cloudManaged = status.centralManaged;
+      }
+      await prisma.device.update({ where: { id: device.id }, data });
+      return status;
+    } catch (error) {
+      logger.warn(`Central status probe failed for ${device.name}`, { error: error.message });
+      return null;
     }
   }
 

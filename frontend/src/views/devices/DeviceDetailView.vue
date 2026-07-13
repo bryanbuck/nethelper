@@ -32,42 +32,65 @@
               </v-chip>
               <v-chip
                 v-if="device"
-                :color="device.managementMode === 'central' ? 'primary' : 'secondary'"
+                :color="managementChip.color"
                 size="small"
-                variant="tonal"
+                :variant="managementChip.variant"
                 class="ml-2"
               >
-                <v-icon start :icon="device.managementMode === 'central' ? 'mdi-cloud' : 'mdi-lan-connect'" size="x-small"></v-icon>
-                {{ device.managementMode === 'central' ? 'Central-managed' : 'Directly-managed' }}
+                <v-icon start :icon="managementChip.icon" size="x-small"></v-icon>
+                {{ managementChip.label }}
               </v-chip>
             </h1>
+            <div v-if="device" class="text-caption text-grey mt-1">
+              <span v-if="device.cloudManagedCheckedAt">
+                Verified {{ formatRelativeTime(device.cloudManagedCheckedAt) }}
+              </span>
+              <span v-if="device.cloudConnectionStatus && device.cloudConnectionStatus !== 'connected'">
+                <span v-if="device.cloudManagedCheckedAt"> &middot; </span>
+                {{ cloudPlaneName }} connection: {{ device.cloudConnectionStatus }}
+              </span>
+            </div>
           </div>
-          <div class="d-flex gap-2">
-            <v-btn
-              v-if="device && device.managementMode === 'direct'"
-              color="info"
-              variant="outlined"
-              :loading="testingConnection"
-              @click="testDirectConnection"
-            >
-              <v-icon left>mdi-connection</v-icon>
-              Test Direct Connection
-            </v-btn>
-            <v-btn
-              color="primary"
-              variant="outlined"
-              :loading="systemLoading"
-              @click="refreshSystemInfo"
-            >
-              <v-icon left>mdi-refresh</v-icon>
-              Refresh System Info
-            </v-btn>
-            <v-btn color="primary" variant="tonal">
-              <v-icon left>mdi-cog</v-icon>
-              Configure
-            </v-btn>
+          <div class="d-flex flex-column align-end gap-2">
+            <div class="d-flex gap-2">
+              <v-btn
+                v-if="device && device.managementMode === 'direct'"
+                color="info"
+                variant="outlined"
+                :loading="testingConnection"
+                @click="testDirectConnection"
+              >
+                <v-icon left>mdi-connection</v-icon>
+                Test Direct Connection
+              </v-btn>
+              <v-btn
+                color="primary"
+                variant="outlined"
+                :loading="systemLoading"
+                @click="refreshSystemInfo"
+              >
+                <v-icon left>mdi-refresh</v-icon>
+                Refresh System Info
+              </v-btn>
+              <v-btn color="primary" variant="tonal">
+                <v-icon left>mdi-cog</v-icon>
+                Configure
+              </v-btn>
+            </div>
+            <div v-if="lastTestCentralStatus" class="text-caption text-grey">
+              Switch reports: {{ lastTestCentralStatus }}
+            </div>
           </div>
         </div>
+      </v-col>
+    </v-row>
+
+    <!-- Central/Direct Management Mismatch Warning -->
+    <v-row v-if="device && managementMismatch">
+      <v-col cols="12">
+        <v-alert type="warning" variant="tonal" icon="mdi-alert">
+          {{ managementMismatch }}
+        </v-alert>
       </v-col>
     </v-row>
 
@@ -605,6 +628,7 @@ import { useNotificationsStore } from '@/stores/notifications'
 import { formatDistanceToNow, format, fromUnixTime } from 'date-fns'
 import DeviceConnectionTest from '@/components/devices/DeviceConnectionTest.vue'
 import deviceApiService from '@/services/deviceApi.service'
+import { cloudProviderLabel } from '@/models/vendors'
 
 const route = useRoute()
 const router = useRouter()
@@ -615,6 +639,7 @@ const device = ref(null)
 const loading = ref(false)
 const error = ref(null)
 const testingConnection = ref(false)
+const lastTestCentralStatus = ref(null)
 
 // Connection test dialog state
 const showConnectionTestDialog = ref(false)
@@ -638,6 +663,46 @@ const getStatusColor = (status) => {
   }
   return colors[status] || 'grey'
 }
+
+// Name of the cloud plane managing this device ("Central", "Mist", ...).
+const cloudPlaneName = computed(() =>
+  cloudProviderLabel(device.value?.cloudIntegration?.provider)
+)
+
+// Three-state management chip: prefers the device-reported cloudManaged
+// truth over the record-keeping managementMode field, falling back to the
+// latter (marked "unverified") when the device has never been probed.
+const managementChip = computed(() => {
+  if (!device.value) {
+    return { label: '', color: 'grey', variant: 'tonal', icon: 'mdi-help-circle' }
+  }
+  const plane = cloudPlaneName.value
+  if (device.value.cloudManaged === true) {
+    return { label: `${plane}-managed`, color: 'info', variant: 'tonal', icon: 'mdi-cloud' }
+  }
+  if (device.value.cloudManaged === false) {
+    return { label: 'Locally managed', color: 'success', variant: 'tonal', icon: 'mdi-lan-connect' }
+  }
+  if (device.value.managementMode === 'cloud') {
+    return { label: `${plane} (unverified)`, color: 'grey', variant: 'outlined', icon: 'mdi-cloud-outline' }
+  }
+  return { label: 'Direct (unverified)', color: 'grey', variant: 'outlined', icon: 'mdi-lan-connect' }
+})
+
+// Warns when the device's own view of cloud ownership disagrees with how
+// the device record was added to inventory.
+const managementMismatch = computed(() => {
+  if (!device.value) return null
+  const { cloudManaged, managementMode } = device.value
+  const plane = cloudPlaneName.value
+  if (cloudManaged === true && managementMode === 'direct') {
+    return `Device reports it is ${plane}-managed but was added as directly managed — direct config changes will be rejected by the device.`
+  }
+  if (cloudManaged === false && managementMode === 'cloud') {
+    return `Device reports it is locally managed but was added as ${plane}-managed — configuration may not be pushed via ${plane} as expected.`
+  }
+  return null
+})
 
 const getDeviceIcon = (type) => {
   if (!type) return 'mdi-devices'
@@ -770,9 +835,15 @@ const handleConnectionTestComplete = (result) => {
 const testDirectConnection = async () => {
   if (!device.value) return
   testingConnection.value = true
+  lastTestCentralStatus.value = null
   try {
     const response = await deviceApiService.testDeviceConnection(device.value.id)
     const result = response?.data || response
+    if (result?.centralStatus) {
+      const { centralManaged, connectionStatus } = result.centralStatus
+      const label = centralManaged === true ? 'Central-managed' : centralManaged === false ? 'Locally managed' : 'Unknown'
+      lastTestCentralStatus.value = connectionStatus ? `${label} (${connectionStatus})` : label
+    }
     if (result?.success) {
       const via = result.transport ? ` (via ${result.transport.toUpperCase()})` : ''
       notificationStore.showSuccess(`Direct connection successful${via}`, 'Connection Test')

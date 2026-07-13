@@ -85,9 +85,13 @@ class DeviceService {
     }
   }
 
-  async syncDevices() {
+  /**
+   * Sync device inventory from the cloud.
+   * @param {string|null} integrationId - sync one integration, or all active ones when null
+   */
+  async syncDevices(integrationId = null) {
     try {
-      const response = await api.post('/devices/sync')
+      const response = await api.post('/devices/sync', integrationId ? { integrationId } : {})
       return response.data
     } catch (error) {
       console.error('Error syncing devices:', error)

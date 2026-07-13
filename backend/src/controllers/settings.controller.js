@@ -1,4 +1,5 @@
 const settingsService = require('../services/settings.service');
+const { CLOUD_PROVIDERS } = require('../constants/vendors');
 const logger = require('../utils/logger');
 
 class SettingsController {
@@ -286,6 +287,117 @@ class SettingsController {
         });
       }
 
+      next(error);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Cloud integrations (multi-provider, multi-tenant)
+  // ---------------------------------------------------------------------
+
+  /**
+   * List the user's cloud integrations, plus the catalog of supported
+   * providers (so the UI can render the right credential form per provider).
+   * GET /api/v1/settings/cloud-integrations
+   */
+  async getCloudIntegrations(req, res, next) {
+    try {
+      const integrations = await settingsService.getCloudIntegrations(req.user.id);
+
+      res.json({
+        success: true,
+        data: {
+          integrations,
+          providers: Object.values(CLOUD_PROVIDERS).map((provider) => ({
+            id: provider.id,
+            label: provider.label,
+            vendor: provider.vendor,
+            defaultBaseUrl: provider.defaultBaseUrl,
+            credentialFields: provider.credentialFields,
+            implemented: provider.implemented,
+          })),
+        },
+      });
+    } catch (error) {
+      logger.error('Get cloud integrations error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Create a cloud integration.
+   * POST /api/v1/settings/cloud-integrations
+   */
+  async createCloudIntegration(req, res, next) {
+    try {
+      const integration = await settingsService.createCloudIntegration(req.user.id, req.body);
+
+      res.status(201).json({
+        success: true,
+        data: integration,
+        message: 'Cloud integration created successfully',
+      });
+    } catch (error) {
+      logger.error('Create cloud integration error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Update a cloud integration.
+   * PUT /api/v1/settings/cloud-integrations/:id
+   */
+  async updateCloudIntegration(req, res, next) {
+    try {
+      const integration = await settingsService.updateCloudIntegration(
+        req.params.id,
+        req.user.id,
+        req.body
+      );
+
+      res.json({
+        success: true,
+        data: integration,
+        message: 'Cloud integration updated successfully',
+      });
+    } catch (error) {
+      logger.error('Update cloud integration error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Test a cloud integration's credentials against its provider.
+   * POST /api/v1/settings/cloud-integrations/:id/test
+   */
+  async testCloudIntegration(req, res, next) {
+    try {
+      const result = await settingsService.testCloudIntegration(req.params.id, req.user.id);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      logger.error('Test cloud integration error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Delete a cloud integration.
+   * DELETE /api/v1/settings/cloud-integrations/:id
+   */
+  async deleteCloudIntegration(req, res, next) {
+    try {
+      await settingsService.deleteCloudIntegration(req.params.id, req.user.id);
+
+      res.json({
+        success: true,
+        message: 'Cloud integration deleted successfully',
+      });
+    } catch (error) {
+      logger.error('Delete cloud integration error:', error);
       next(error);
     }
   }

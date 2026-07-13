@@ -17,6 +17,27 @@ enum DeviceType {
   access_point
   switch
   gateway
+  controller
+  other
+}
+
+// Device manufacturer. Coarse and stable on purpose — OS/platform families
+// (aos-cx, junos, ios-xe, ...) live in Device.platform as a validated string
+// because they churn faster than vendors do.
+enum Vendor {
+  aruba
+  juniper
+  cisco
+  other
+}
+
+// Cloud management planes we can integrate with. Each CloudIntegration row is
+// one tenant/org of one of these; multiple rows per provider are allowed
+// (e.g. two Central accounts and a Mist org side by side).
+enum CloudProviderType {
+  aruba_central
+  juniper_mist
+  cisco_meraki
 }
 
 enum DeviceStatus {
@@ -27,8 +48,8 @@ enum DeviceStatus {
 }
 
 enum ManagementMode {
-  central  // Managed via Aruba Central (config pulled from Central API)
-  direct   // Managed directly on the local network (REST or SSH to the device)
+  cloud   // Managed via a cloud platform (see Device.cloudIntegration for which one)
+  direct  // Managed directly on the local network (REST or SSH to the device)
 }
 
 enum AutomationType {
@@ -116,6 +137,7 @@ model User {
   executions            Execution[]
   apiCredentials        ApiCredential[]
   arubaCentralConfigs   ArubaCentralConfig[]
+  cloudIntegrations     CloudIntegration[]
 }
 
 model Device {
@@ -123,6 +145,11 @@ model Device {
   serial        String         @unique
   name          String
   type          DeviceType
+  vendor        Vendor         @default(aruba)
+  // OS/platform family: 'aos-cx' | 'aos-s' | 'junos' | 'ios-xe' | 'meraki'.
+  // null = unknown/never classified (legacy rows keep pre-vendor default behavior).
+  // Valid values per vendor are defined in src/constants/vendors.js.
+  platform      String?
   model         String
   ipAddress     String?
   macAddress    String?
@@ -135,13 +162,28 @@ model Device {
   pingSuccessRate   Float?         // Success rate percentage (0-100)
   consecutiveFailures Int @default(0) // Count of consecutive ping failures
 
-  // Aruba Central Status
-  centralStatus     DeviceStatus   @default(offline) // Status from Aruba Central sync
+  // Status as reported by the device's cloud management plane (Central/Mist/...)
+  cloudStatus       DeviceStatus   @default(offline)
 
   // How the platform reaches this device for config/polling. Devices synced from
-  // Aruba Central are 'central'; manually-added and discovery-imported devices
+  // a cloud integration are 'cloud'; manually-added and discovery-imported devices
   // default to 'direct' (reached over REST or SSH using linked credentials).
   managementMode    ManagementMode @default(direct)
+
+  // Which cloud plane manages/inventoried this device. Required in practice for
+  // cloud-managed devices (multiple integrations may be active simultaneously,
+  // including several tenants of the same provider); null for direct devices.
+  cloudIntegration   CloudIntegration? @relation(fields: [cloudIntegrationId], references: [id], onDelete: SetNull)
+  cloudIntegrationId String?
+
+  // The device's OWN report of whether its cloud plane owns its configuration
+  // (e.g. probed from the AOS-CX `system/aruba_central` REST resource). Independent
+  // of managementMode, which only records how the record entered our inventory.
+  // null = never probed / not determinable. See docs/CENTRAL_MANAGEMENT_MODE_PLAN.md.
+  cloudManaged          Boolean?
+  cloudConnectionStatus String?   // connected | not_reachable | connection_failure | disabled | unknown
+  cloudManagedSource    String?   // switch-rest | central-group | manual (probe source, vocabulary unchanged from 5b)
+  cloudManagedCheckedAt DateTime?
 
   firmwareVersion String?
   lastSeen      DateTime?      // Last seen timestamp (updated by both ping monitoring and Aruba Central sync)
@@ -155,6 +197,7 @@ model Device {
   deviceGroups    DeviceGroup[]
 
   @@index([apiCredentialId])
+  @@index([cloudIntegrationId])
   @@index([pingStatus])
   @@index([pingLastChecked])
 }
@@ -358,6 +401,39 @@ model ConfigBackup {
   @@index([scheduleId])
 }
 
+// One configured cloud tenant/org (a Central account, a Mist org, a Meraki org).
+// Multiple rows may be active at once, including several of the same provider;
+// devices point at their owning row via Device.cloudIntegrationId.
+model CloudIntegration {
+  id             String            @id @default(uuid())
+  provider       CloudProviderType
+  name           String            // User label, e.g. "Prod Central" / "EU Mist Org"
+  baseUrl        String            // API base URL (provider- and region-specific)
+  // Provider-specific credential blob; secret values are field-encrypted before
+  // persist (see settings.service). Shapes:
+  //   aruba_central: { clientId, clientSecret*, customerId }
+  //   juniper_mist:  { apiToken*, orgId }
+  //   cisco_meraki:  { apiKey*, orgId }
+  // (* = encrypted)
+  credentials    Json
+  isActive       Boolean           @default(true)
+  lastTested     DateTime?
+  lastTestStatus TestStatus?
+  notes          String?
+  createdBy      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  devices        Device[]
+
+  @@index([provider, isActive])
+  @@index([userId])
+}
+
+// DEPRECATED (Phase 0 multi-vendor): superseded by CloudIntegration. Rows were
+// copied into CloudIntegration by the multi_vendor_phase0 migration; this table
+// is kept for one release so a rollback path exists, then will be dropped.
 model ArubaCentralConfig {
   id              String    @id @default(uuid())
   baseUrl         String    // Aruba Central API base URL

@@ -43,9 +43,9 @@
             <!-- API Credentials Tab -->
             <v-window-item value="credentials">
               <v-card-text>
-                <!-- Aruba Central API Credentials Section -->
+                <!-- Cloud Integrations (Central / Mist / Meraki) -->
                 <ErrorBoundary :show-details="isDevelopment">
-                  <ArubaCentralCredentials />
+                  <CloudIntegrations />
                 </ErrorBoundary>
 
                 <!-- Divider between sections -->
@@ -98,7 +98,7 @@
 import { ref, watch, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
-import ArubaCentralCredentials from '@/components/settings/ArubaCentralCredentials.vue'
+import CloudIntegrations from '@/components/settings/CloudIntegrations.vue'
 import ApiCredentials from '@/components/settings/ApiCredentials.vue'
 import debugLog, { DebugCategory } from '@/utils/debug'
 

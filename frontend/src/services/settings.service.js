@@ -118,67 +118,79 @@ const settingsService = {
   },
 
   // ============================================
-  // Aruba Central API Configuration
+  // Cloud Integrations (Aruba Central, Juniper Mist, Cisco Meraki)
+  //
+  // Several integrations can be configured at once, including multiple
+  // tenants of the same provider. See docs/MULTI_VENDOR_ROADMAP.md.
   // ============================================
 
   /**
-   * Get current Aruba Central API configuration
-   * @returns {Promise} Aruba Central configuration
+   * List configured cloud integrations plus the catalog of supported providers.
+   * @returns {Promise} { integrations: [], providers: [] }
    */
-  async getArubaCentralConfig() {
+  async getCloudIntegrations() {
     try {
-      const response = await api.get('/settings/aruba-central')
+      const response = await api.get('/settings/cloud-integrations')
       return response.data
     } catch (error) {
-      throw handleApiError(error, 'fetching Aruba Central configuration')
+      throw handleApiError(error, 'fetching cloud integrations')
     }
   },
 
   /**
-   * Save Aruba Central API configuration
-   * @param {Object} configData - Configuration data
-   * @param {string} configData.baseUrl - API base URL
-   * @param {string} configData.clientId - Client ID
-   * @param {string} configData.clientSecret - Client secret
-   * @param {string} configData.customerId - Customer ID
-   * @param {string} configData.notes - Optional notes
-   * @returns {Promise} Saved configuration
+   * Create a cloud integration.
+   * @param {Object} data - { provider, name, baseUrl, credentials, isActive, notes }
+   * @returns {Promise} Created integration (secrets masked)
    */
-  async saveArubaCentralConfig(configData) {
+  async createCloudIntegration(data) {
     try {
-      const response = await api.post('/settings/aruba-central', configData)
+      const response = await api.post('/settings/cloud-integrations', data)
       return response.data
     } catch (error) {
-      throw handleApiError(error, 'saving Aruba Central configuration')
+      throw handleApiError(error, 'creating cloud integration')
     }
   },
 
   /**
-   * Test Aruba Central API connection
-   * @param {string} configId - Optional config ID (uses active config if not provided)
+   * Update a cloud integration. Blank secret fields keep their stored value.
+   * @param {string} id - Integration ID
+   * @param {Object} data - Fields to update
+   * @returns {Promise} Updated integration
+   */
+  async updateCloudIntegration(id, data) {
+    try {
+      const response = await api.put(`/settings/cloud-integrations/${id}`, data)
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'updating cloud integration')
+    }
+  },
+
+  /**
+   * Test a cloud integration's credentials against its provider.
+   * @param {string} id - Integration ID
    * @returns {Promise} Test result
    */
-  async testArubaCentralConnection(configId = null) {
+  async testCloudIntegration(id) {
     try {
-      const payload = configId ? { configId } : {}
-      const response = await api.post('/settings/aruba-central/test', payload)
+      const response = await api.post(`/settings/cloud-integrations/${id}/test`)
       return response.data
     } catch (error) {
-      throw handleApiError(error, 'testing Aruba Central connection')
+      throw handleApiError(error, 'testing cloud integration')
     }
   },
 
   /**
-   * Delete Aruba Central API configuration
-   * @param {string} id - Configuration ID
+   * Delete a cloud integration.
+   * @param {string} id - Integration ID
    * @returns {Promise} Deletion result
    */
-  async deleteArubaCentralConfig(id) {
+  async deleteCloudIntegration(id) {
     try {
-      const response = await api.delete(`/settings/aruba-central/${id}`)
+      const response = await api.delete(`/settings/cloud-integrations/${id}`)
       return response.data
     } catch (error) {
-      throw handleApiError(error, 'deleting Aruba Central configuration')
+      throw handleApiError(error, 'deleting cloud integration')
     }
   },
 

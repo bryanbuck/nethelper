@@ -263,6 +263,30 @@ class CXSwitchAPI extends BaseDeviceAPI {
   }
 
   /**
+   * Get the switch's own view of its Aruba Central relationship.
+   * Real 10.10-era payload: { disable: false, central_source, location,
+   * status: { central_connection: 'connected', ... }, ... }
+   * AOS-CX 10.15+ renames the resource to hpe_anw_central; fall back to it.
+   * @returns {Promise<Object>} Raw aruba_central / hpe_anw_central resource
+   */
+  async getCentralStatus() {
+    try {
+      try {
+        return await this.makeAuthenticatedRequest('GET', '/system/aruba_central');
+      } catch (error) {
+        if (!error.message.includes('404')) throw error;
+        return await this.makeAuthenticatedRequest('GET', '/system/hpe_anw_central');
+      }
+    } catch (error) {
+      logger.error('Failed to get CX Aruba Central status', {
+        device: this.device.name,
+        error: error.message,
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Get interface information
    * @returns {Promise<Object>} Interface information
    */

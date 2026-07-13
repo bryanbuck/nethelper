@@ -171,11 +171,13 @@ export const useDevicesStore = defineStore('devices', () => {
     tableOptions.value.page = 1 // Reset to first page on page size change
   }
 
-  async function syncDevices() {
+  // Pass an integrationId to sync one cloud integration; omit to sync all
+  // active ones.
+  async function syncDevices(integrationId = null) {
     loading.value = true
     error.value = null
     try {
-      const response = await deviceService.syncDevices()
+      const response = await deviceService.syncDevices(integrationId)
       devices.value = response.data
       updateStats()
       lastSync.value = new Date()
@@ -357,10 +359,8 @@ export const useDevicesStore = defineStore('devices', () => {
   }
 
   async function pollAllSwitchesFirmware() {
-    // Get all switch devices
-    const switches = devices.value.filter(d =>
-      d.type && (d.type.toLowerCase().includes('switch') || d.type.toLowerCase() === 'cx')
-    )
+    // Get all switch devices (type is the backend DeviceType enum)
+    const switches = devices.value.filter(d => d.type === 'switch')
 
     if (switches.length === 0) {
       firmwareError.value = 'No switches found to poll'

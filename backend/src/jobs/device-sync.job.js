@@ -8,9 +8,10 @@ const logger = debugLog.createLogger(Services.JOBS);
 // Device sync job processor
 async function processDeviceSync(job) {
   try {
-    logger.progress('Starting device sync job', { jobId: job.id });
-    
-    const result = await deviceService.syncDevicesFromAruba();
+    const integrationId = job.data?.integrationId || null;
+    logger.progress('Starting device sync job', { jobId: job.id, integrationId });
+
+    const result = await deviceService.syncDevicesFromCloud(integrationId);
     
     logger.success('Device sync job completed', { 
       jobId: job.id, 

@@ -1,4 +1,9 @@
 const { body, param, query, validationResult } = require('express-validator');
+const { VENDORS, PLATFORMS } = require('../constants/vendors');
+
+const DEVICE_TYPES = ['access_point', 'switch', 'gateway', 'controller', 'other'];
+const VENDOR_IDS = Object.keys(VENDORS);
+const PLATFORM_IDS = Object.keys(PLATFORMS);
 
 // Handle validation errors
 const handleValidationErrors = (req, res, next) => {
@@ -28,13 +33,16 @@ const validateDevice = {
 
   create: [
     body('name').trim().isLength({ min: 1 }).withMessage('Device name is required'),
-    body('type').isIn(['access_point', 'switch', 'gateway']).withMessage('Invalid device type'),
+    body('type').isIn(DEVICE_TYPES).withMessage('Invalid device type'),
+    body('vendor').optional().isIn(VENDOR_IDS).withMessage('Invalid vendor'),
+    body('platform').optional({ nullable: true }).isIn(PLATFORM_IDS).withMessage('Invalid platform'),
     body('ipAddress').trim().isIP().withMessage('IP address is required and must be valid'),
     body('serial').optional().trim(),
     body('model').optional().trim(),
     body('macAddress').optional().isMACAddress().withMessage('Invalid MAC address'),
     body('location').optional().trim(),
-    body('managementMode').optional().isIn(['central', 'direct']).withMessage('Invalid management mode'),
+    body('managementMode').optional().isIn(['cloud', 'direct']).withMessage('Invalid management mode'),
+    body('cloudIntegrationId').optional({ nullable: true }).isUUID().withMessage('Invalid cloud integration ID'),
     body('apiCredentialId').optional({ nullable: true }).isUUID().withMessage('Invalid credential ID'),
     handleValidationErrors,
   ],
@@ -42,13 +50,16 @@ const validateDevice = {
   update: [
     param('deviceId').isUUID().withMessage('Invalid device ID'),
     body('name').optional().trim().isLength({ min: 1 }),
-    body('type').optional().isIn(['access_point', 'switch', 'gateway']),
+    body('type').optional().isIn(DEVICE_TYPES),
+    body('vendor').optional().isIn(VENDOR_IDS).withMessage('Invalid vendor'),
+    body('platform').optional({ nullable: true }).isIn(PLATFORM_IDS).withMessage('Invalid platform'),
     body('model').optional().trim(),
     body('ipAddress').optional().isIP(),
     body('macAddress').optional().isMACAddress(),
     body('location').optional().trim(),
     body('status').optional().isIn(['online', 'offline', 'warning', 'maintenance']),
-    body('managementMode').optional().isIn(['central', 'direct']).withMessage('Invalid management mode'),
+    body('managementMode').optional().isIn(['cloud', 'direct']).withMessage('Invalid management mode'),
+    body('cloudIntegrationId').optional({ nullable: true }).isUUID().withMessage('Invalid cloud integration ID'),
     body('apiCredentialId').optional({ nullable: true }).isUUID().withMessage('Invalid credential ID'),
     handleValidationErrors,
   ],

@@ -1,5 +1,6 @@
 const deviceService = require('../services/device.service');
-const arubaCentralService = require('../services/aruba-central.service');
+const CloudProviderFactory = require('../services/cloud-providers/cloud-provider-factory');
+const { getPrisma } = require('../config/database');
 const devicePollerService = require('../services/device-poller.service');
 const ArubaErrorHandler = require('../utils/aruba-error-handler');
 const logger = require('../utils/logger');
@@ -46,9 +47,11 @@ class DeviceController {
 
   async syncDevices(req, res, next) {
     try {
-      // Queue device sync job
-      const job = await deviceService.queueDeviceSync();
-      
+      // Optionally scope the sync to one cloud integration; by default every
+      // active integration is synced.
+      const { integrationId } = req.body || {};
+      const job = await deviceService.queueDeviceSync(integrationId || null);
+
       res.json({
         success: true,
         message: 'Device synchronization started',
@@ -73,12 +76,24 @@ class DeviceController {
     }
   }
 
+  /** Device row + its cloud provider for cloud-plane endpoints below. */
+  async deviceProvider(deviceId) {
+    const device = await getPrisma().device.findUnique({ where: { id: deviceId } });
+    if (!device) {
+      const error = new Error('Device not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    return { device, provider: await CloudProviderFactory.forDevice(device) };
+  }
+
   async getDeviceStats(req, res, next) {
     try {
       const { deviceId } = req.params;
       const { metric, duration } = req.query;
-      
-      const stats = await arubaCentralService.getDeviceStats(deviceId, metric, duration);
+
+      const { device, provider } = await deviceController.deviceProvider(deviceId);
+      const stats = await provider.getDeviceStats(device.serial, metric, duration);
       
       res.json({
         success: true,
@@ -93,8 +108,9 @@ class DeviceController {
     try {
       const { deviceId } = req.params;
       const { configuration } = req.body;
-      
-      const result = await arubaCentralService.updateDeviceConfiguration(deviceId, configuration);
+
+      const { device, provider } = await deviceController.deviceProvider(deviceId);
+      const result = await provider.updateDeviceConfiguration(device.serial, configuration);
       
       res.json({
         success: true,
@@ -108,8 +124,9 @@ class DeviceController {
   async backupDeviceConfiguration(req, res, next) {
     try {
       const { deviceId } = req.params;
-      
-      const backup = await arubaCentralService.backupConfiguration(deviceId);
+
+      const { device, provider } = await deviceController.deviceProvider(deviceId);
+      const backup = await provider.backupConfiguration(device.serial);
       
       res.json({
         success: true,
@@ -124,8 +141,9 @@ class DeviceController {
     try {
       const { deviceId } = req.params;
       const { command } = req.body;
-      
-      const result = await arubaCentralService.executeCommand(deviceId, command);
+
+      const { device, provider } = await deviceController.deviceProvider(deviceId);
+      const result = await provider.executeCommand(device.serial, command);
       
       res.json({
         success: true,
@@ -399,4 +417,7 @@ class DeviceController {
   }
 }
 
-module.exports = new DeviceController();
+// Handlers are passed to Express unbound, so helpers are reached through this
+// module-level instance rather than `this`.
+const deviceController = new DeviceController();
+module.exports = deviceController;

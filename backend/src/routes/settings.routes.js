@@ -50,7 +50,47 @@ router.post(
   settingsController.testApiCredential
 );
 
-// Aruba Central Configuration routes
+// Cloud Integration routes (Aruba Central, Juniper Mist, Cisco Meraki).
+// Several integrations can be active at once, including multiple tenants of
+// the same provider — see docs/MULTI_VENDOR_ROADMAP.md.
+
+// List configured cloud integrations (+ the catalog of supported providers)
+router.get('/cloud-integrations', settingsController.getCloudIntegrations);
+
+// Create a cloud integration
+router.post(
+  '/cloud-integrations',
+  authorize('admin'),
+  settingsController.createCloudIntegration
+);
+
+// Update a cloud integration
+router.put(
+  '/cloud-integrations/:id',
+  authorize('admin'),
+  validateUUID('id'),
+  settingsController.updateCloudIntegration
+);
+
+// Test a cloud integration's credentials
+router.post(
+  '/cloud-integrations/:id/test',
+  authorize('admin'),
+  validateUUID('id'),
+  settingsController.testCloudIntegration
+);
+
+// Delete a cloud integration
+router.delete(
+  '/cloud-integrations/:id',
+  authorize('admin'),
+  validateUUID('id'),
+  settingsController.deleteCloudIntegration
+);
+
+// DEPRECATED Aruba Central Configuration routes — kept for one release while
+// clients migrate to /cloud-integrations. They operate on the aruba_central
+// rows of the CloudIntegration table.
 
 // Get Aruba Central configuration
 router.get('/aruba-central', settingsController.getArubaCentralConfig);

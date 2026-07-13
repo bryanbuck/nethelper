@@ -30,7 +30,20 @@ const PLATFORM_PROFILES = {
     config: 'show running-config',
     version: 'show version',
   },
-  // Generic IOS-like fallback (Cisco-style gear that may appear on the network)
+  // Junos (Juniper EX/SRX/MX). `| display set` yields flat, diffable
+  // set-statements rather than the nested brace format.
+  junos: {
+    paging: 'set cli screen-length 0',
+    config: 'show configuration | display set',
+    version: 'show version',
+  },
+  // Cisco IOS / IOS-XE (Catalyst)
+  'ios-xe': {
+    paging: 'terminal length 0',
+    config: 'show running-config',
+    version: 'show version',
+  },
+  // Generic IOS-like fallback (CLI gear we could not classify)
   generic: {
     paging: 'terminal length 0',
     config: 'show running-config',

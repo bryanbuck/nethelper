@@ -1,6 +1,7 @@
 const DeviceAPIFactory = require('../services/device-api/device-api-factory');
 const settingsService = require('../services/settings.service');
 const sshDeviceService = require('../services/ssh-device.service');
+const devicePollerService = require('../services/device-poller.service');
 const { useSshTransport } = require('../utils/device-platform');
 const { getPrisma } = require('../config/database');
 const logger = require('../utils/logger');
@@ -60,6 +61,19 @@ class DeviceAPITestController {
       } else {
         const deviceAPI = DeviceAPIFactory.createDeviceAPI(device, credentials);
         result = await deviceAPI.testConnection();
+
+        // While we have working REST access to a CX switch, refresh its
+        // switch-reported Central state (best-effort, never fails the test).
+        if (result.success) {
+          const centralStatus = await devicePollerService.refreshCentralStatus(device, credentials);
+          if (centralStatus) {
+            result.centralStatus = {
+              centralManaged: centralStatus.centralManaged,
+              connectionStatus: centralStatus.connectionStatus,
+              mode: centralStatus.mode,
+            };
+          }
+        }
       }
 
       // Update credential test status

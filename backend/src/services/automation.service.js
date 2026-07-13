@@ -1,5 +1,5 @@
 const { getPrisma } = require('../config/database');
-const arubaCentralService = require('./aruba-central.service');
+const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const logger = require('../utils/logger');
 
 class AutomationService {
@@ -135,12 +135,25 @@ class AutomationService {
     }
   }
 
+  /**
+   * Resolve a device row and its cloud provider, then run fn(provider, device).
+   * Cloud-plane automation actions route through the device's own integration
+   * (multiple integrations may be active at once).
+   */
+  async withDeviceProvider(deviceId, fn) {
+    const device = await getPrisma().device.findUnique({ where: { id: deviceId } });
+    if (!device) throw new Error(`Device ${deviceId} not found`);
+    const provider = await CloudProviderFactory.forDevice(device);
+    return fn(provider, device);
+  }
+
   async executeBackupConfig(deviceIds, parameters) {
     const results = [];
 
     for (const deviceId of deviceIds) {
       try {
-        const backup = await arubaCentralService.backupConfiguration(deviceId);
+        const backup = await this.withDeviceProvider(deviceId, (provider, device) =>
+          provider.backupConfiguration(device.serial));
         results.push({
           deviceId,
           success: true,
@@ -164,7 +177,8 @@ class AutomationService {
 
     for (const deviceId of deviceIds) {
       try {
-        const result = await arubaCentralService.updateDeviceConfiguration(deviceId, configuration);
+        const result = await this.withDeviceProvider(deviceId, (provider, device) =>
+          provider.updateDeviceConfiguration(device.serial, configuration));
         results.push({
           deviceId,
           success: true,
@@ -187,7 +201,8 @@ class AutomationService {
 
     for (const deviceId of deviceIds) {
       try {
-        const output = await arubaCentralService.executeCommand(deviceId, parameters.command);
+        const output = await this.withDeviceProvider(deviceId, (provider, device) =>
+          provider.executeCommand(device.serial, parameters.command));
         results.push({
           deviceId,
           success: true,

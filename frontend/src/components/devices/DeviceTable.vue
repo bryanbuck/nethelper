@@ -274,50 +274,65 @@
         </template>
 
         <template v-slot:item.managementMode="{ item }">
-          <v-chip
-            :color="item.managementMode === 'central' ? 'primary' : 'secondary'"
-            size="small"
-            variant="tonal"
-          >
-            <v-icon
-              start
-              :icon="item.managementMode === 'central' ? 'mdi-cloud' : 'mdi-lan-connect'"
-              size="x-small"
-            ></v-icon>
-            {{ item.managementMode === 'central' ? 'Central' : 'Direct' }}
-          </v-chip>
+          <div class="d-flex align-center">
+            <v-chip
+              :color="getManagementChip(item).color"
+              size="small"
+              :variant="getManagementChip(item).variant"
+            >
+              <v-icon
+                start
+                :icon="getManagementChip(item).icon"
+                size="x-small"
+              ></v-icon>
+              {{ getManagementChip(item).label }}
+            </v-chip>
+            <v-tooltip v-if="getManagementMismatch(item)" location="top">
+              <template v-slot:activator="{ props }">
+                <v-icon
+                  v-bind="props"
+                  color="warning"
+                  size="small"
+                  class="ml-1"
+                >
+                  mdi-alert
+                </v-icon>
+              </template>
+              <span>{{ getManagementMismatch(item) }}</span>
+            </v-tooltip>
+          </div>
         </template>
 
-        <template v-slot:item.centralStatus="{ item }">
+        <template v-slot:item.cloudStatus="{ item }">
           <v-tooltip location="bottom">
             <template v-slot:activator="{ props }">
               <v-chip
-                v-if="item.centralStatus"
+                v-if="item.cloudStatus"
                 v-bind="props"
-                :color="getStatusColor(item.centralStatus)"
+                :color="getStatusColor(item.cloudStatus)"
                 size="small"
                 variant="tonal"
               >
                 <v-icon
                   start
-                  :icon="getStatusIcon(item.centralStatus)"
+                  :icon="getStatusIcon(item.cloudStatus)"
                   size="x-small"
                 ></v-icon>
-                {{ item.centralStatus }}
+                {{ item.cloudStatus }}
               </v-chip>
               <span v-else class="text-caption text-medium-emphasis">
                 N/A
               </span>
             </template>
             <div class="text-caption">
-              <div v-if="item.centralStatus">
-                <strong>Aruba Central Status:</strong> {{ item.centralStatus }}<br>
+              <div v-if="item.cloudStatus">
+                <strong>{{ cloudPlaneName(item) }} Status:</strong> {{ item.cloudStatus }}<br>
                 <span v-if="item.lastSeen">
                   <strong>Last Updated:</strong> {{ formatLastSeen(item.lastSeen) }}
                 </span>
               </div>
               <div v-else>
-                Not synced from Aruba Central yet
+                Not synced from a cloud platform yet
               </div>
             </div>
           </v-tooltip>
@@ -471,6 +486,7 @@ import { useWebSocket } from '@/composables/useWebSocket'
 import { formatDistanceToNow } from 'date-fns'
 import { debounce } from 'lodash-es'
 import ConnectionStatusBadge from './ConnectionStatusBadge.vue'
+import { cloudProviderLabel } from '@/models/vendors'
 
 const router = useRouter()
 const devicesStore = useDevicesStore()
@@ -517,7 +533,7 @@ const headers = [
     key: 'managementMode',
     sortable: true,
     width: '120px',
-    tooltip: 'How NetHelper reaches this device (Aruba Central or direct via REST/SSH)'
+    tooltip: 'How NetHelper reaches this device (a cloud platform, or direct via REST/SSH)'
   },
   {
     title: 'Status',
@@ -539,11 +555,11 @@ const headers = [
     width: '180px'
   },
   {
-    title: 'Central Status',
-    key: 'centralStatus',
+    title: 'Cloud Status',
+    key: 'cloudStatus',
     sortable: true,
     width: '140px',
-    tooltip: 'Status from Aruba Central'
+    tooltip: 'Status as reported by the device\'s cloud platform'
   },
   {
     title: 'API Status',
@@ -724,6 +740,42 @@ const getDeviceIcon = (type) => {
     'Controller': 'mdi-server'
   }
   return icons[type] || 'mdi-help-circle'
+}
+
+// Name of the cloud plane managing a device ("Central", "Mist", ...), for
+// labels and tooltips. Falls back to the generic "Cloud" when unknown.
+const cloudPlaneName = (item) =>
+  cloudProviderLabel(item.cloudIntegration?.provider)
+
+// Three-state "Managed" chip: prefers the device-reported cloudManaged truth
+// over the record-keeping managementMode field, falling back to the latter
+// (marked "unverified") when the device has never been probed.
+const getManagementChip = (item) => {
+  const plane = cloudPlaneName(item)
+  if (item.cloudManaged === true) {
+    return { label: `${plane}-managed`, color: 'info', variant: 'tonal', icon: 'mdi-cloud' }
+  }
+  if (item.cloudManaged === false) {
+    return { label: 'Locally managed', color: 'success', variant: 'tonal', icon: 'mdi-lan-connect' }
+  }
+  // cloudManaged is null/undefined - fall back to managementMode, unverified
+  if (item.managementMode === 'cloud') {
+    return { label: `${plane} (unverified)`, color: 'grey', variant: 'outlined', icon: 'mdi-cloud-outline' }
+  }
+  return { label: 'Direct (unverified)', color: 'grey', variant: 'outlined', icon: 'mdi-lan-connect' }
+}
+
+// Returns a warning string when the device's own view of cloud ownership
+// disagrees with how the device record was added to inventory, or null.
+const getManagementMismatch = (item) => {
+  const plane = cloudPlaneName(item)
+  if (item.cloudManaged === true && item.managementMode === 'direct') {
+    return `Device reports it is ${plane}-managed but was added as directly managed - direct config changes will be rejected by the device.`
+  }
+  if (item.cloudManaged === false && item.managementMode === 'cloud') {
+    return `Device reports it is locally managed but was added as ${plane}-managed - configuration may not be pushed via ${plane} as expected.`
+  }
+  return null
 }
 
 const getDeviceTypeColor = (type) => {

@@ -176,6 +176,53 @@ Support devices managed directly on the local network rather than through Aruba 
 
 ---
 
+### 5b. Central-managed detection & config-write guardrails
+**Priority**: High
+**Status**: 🔨 Core implemented (2026-07-08) — switch-side probe, schema fields, backup
+routing, and UI shipped and verified against live hardware. Remaining: Central-side
+group/monitor-only enrichment (blocked on tenant API credentials — OAuth 401, see
+`docs/CENTRAL_ENDPOINT_TRIAGE.md`) and restore guardrails (restore itself still deferred).
+
+`Device.managementMode` records record provenance, not the switch's own view of config
+ownership. A CX switch connected to Central in **managed** mode rejects local config writes
+(and with `configuration-lockout central managed`, blocks them outright), which affects
+config backup/restore. Plan: probe the switch's `GET /rest/v10.xx/system/aruba_central`
+resource (authoritative), optionally enrich from Central group properties
+(`monitor_only_cx`), persist as new `centralManaged*` fields, prefer CX REST for config
+reads, and block direct config writes to Central-managed switches. Also triage the
+classic-vs-New-Central endpoint mix in `aruba-central.service.js` (the `central` backup
+path via `getDeviceConfiguration` is likely broken on a New Central tenant).
+
+**Full evaluation & design:** `docs/CENTRAL_MANAGEMENT_MODE_PLAN.md`
+
+---
+
+### 5c. Multi-Vendor Support (Juniper + Cisco)
+**Priority**: High
+**Status**: 🔨 Phase 0 complete (2026-07-12) — vendor abstraction + multi-cloud groundwork
+shipped, Aruba behavior unchanged. Phases 1–4 (Mist, Junos, Meraki, Catalyst) not started.
+
+Extend device support beyond Aruba to Juniper (Mist cloud + Junos direct SSH) and Cisco
+(Meraki Dashboard API + Catalyst direct SSH). MVP bar per vendor: inventory sync + status,
+config backup, connection testing.
+
+**Phase 0 (done):** explicit `vendor`/`platform` fields on Device; `CloudIntegration` table +
+`BaseCloudProvider`/`CloudProviderFactory` abstraction with Aruba Central as the first
+implementation; declarative transport-routing matrix generalizing `pullConfig()`;
+`/settings/cloud-integrations` multi-row CRUD API + `CloudIntegrations.vue`; junos/cisco-ios
+SSH profiles staged. **Multiple cloud environments are supported simultaneously** — including
+several tenants of the same platform (e.g. two Central accounts + a Mist org) — with each
+inventoried device attributed to its owning integration. The old `aruba-central.service.js`
+is gone; its unverified classic endpoints are quarantined behind typed `CapabilityError`s.
+
+**Implementation:**
+- Backend: `src/constants/vendors.js`, `src/utils/transport-router.js`, `src/services/cloud-providers/` (base + factory + aruba-central provider), migration `20260712000000_multi_vendor_phase0`
+- Frontend: `src/models/vendors.js`, `src/components/settings/CloudIntegrations.vue`, vendor/platform/integration selectors in `DevicesView.vue`
+
+**Full design & phased roadmap:** `docs/MULTI_VENDOR_ROADMAP.md`
+
+---
+
 ### 6. Multi-tenancy Support
 **Priority**: Low
 **Status**: Not Started
@@ -273,5 +320,5 @@ _(Items will be moved here once completed)_
 
 ---
 
-**Last Updated**: 2026-07-06
+**Last Updated**: 2026-07-12
 **Maintained By**: Development Team

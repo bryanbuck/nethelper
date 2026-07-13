@@ -2,7 +2,7 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const os = require('os');
 const { getPrisma } = require('../config/database');
-const arubaCentralService = require('./aruba-central.service');
+const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const { getIO } = require('../websocket/socket.handler');
 const logger = require('../utils/logger');
 
@@ -377,31 +377,35 @@ class DiscoveryService {
   }
 
   /**
-   * Fetch the full Aruba Central inventory and index it by normalized MAC.
-   * Returns an empty map when Central is unconfigured or unreachable so the
-   * scan still completes with local-only data.
+   * Fetch the inventory of every active cloud integration and index it by
+   * normalized MAC. An integration that is unconfigured or unreachable is
+   * skipped so the scan still completes with whatever data is available.
    */
   async getCentralInventoryByMac() {
     const byMac = new Map();
-    try {
-      let next = null;
-      do {
-        const response = await arubaCentralService.getAllDevices({ limit: 100, next });
-        for (const item of response.items || []) {
-          const mac = this.normalizeMac(item.macAddress);
+    const providers = await CloudProviderFactory.activeProviders().catch((error) => {
+      logger.warn('Cloud inventory cross-check skipped:', error.message);
+      return [];
+    });
+
+    for (const provider of providers) {
+      try {
+        for (const device of await provider.listInventory()) {
+          const mac = this.normalizeMac(device.macAddress);
           if (!mac) continue;
           byMac.set(mac, {
-            serial: item.serial,
-            deviceName: item.deviceName,
-            deviceType: item.deviceType,
-            model: item.model,
-            status: item.status,
+            serial: device.serial,
+            deviceName: device.name,
+            deviceType: device.type,
+            model: device.model,
+            status: device.status,
+            integrationId: provider.id,
+            integrationName: provider.label,
           });
         }
-        next = response.next || null;
-      } while (next);
-    } catch (error) {
-      logger.warn('Aruba Central cross-check skipped:', error.message);
+      } catch (error) {
+        logger.warn(`Cloud inventory cross-check skipped for ${provider.label}:`, error.message);
+      }
     }
     return byMac;
   }
@@ -498,11 +502,14 @@ class DiscoveryService {
         serial,
         name: overrides.name || discovered.suggestedName || discovered.ipAddress,
         type,
+        vendor: overrides.vendor || 'aruba',
+        platform: overrides.platform || null,
         model: overrides.model || discovered.centralMatch?.model || 'Unknown',
         ipAddress: discovered.ipAddress,
         macAddress: discovered.macAddress,
         location: overrides.location || null,
-        // Discovered devices are on the local network, not Central-managed.
+        // Discovered devices are reached on the local network, regardless of
+        // whether a cloud plane also knows about them.
         managementMode: 'direct',
         apiCredentialId: overrides.apiCredentialId || null,
         metadata: {

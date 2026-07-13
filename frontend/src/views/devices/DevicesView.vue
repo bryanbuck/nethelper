@@ -119,6 +119,28 @@
                   :rules="[rules.required]"
                 />
               </v-col>
+
+              <v-col cols="12" sm="6">
+                <v-select
+                  v-model="newDevice.vendor"
+                  label="Vendor"
+                  :items="vendorOptions"
+                  variant="outlined"
+                  @update:model-value="newDevice.platform = null"
+                />
+              </v-col>
+
+              <v-col cols="12" sm="6">
+                <v-select
+                  v-model="newDevice.platform"
+                  label="Platform"
+                  :items="platformOptions(newDevice.vendor)"
+                  variant="outlined"
+                  clearable
+                  hint="OS family; leave blank to detect from the model"
+                  persistent-hint
+                />
+              </v-col>
               
               <v-col cols="12" sm="6">
                 <v-text-field
@@ -180,6 +202,18 @@
                 />
               </v-col>
 
+              <v-col v-if="newDevice.managementMode === 'cloud'" cols="12" sm="6">
+                <v-select
+                  v-model="newDevice.cloudIntegrationId"
+                  :items="cloudIntegrationOptions"
+                  label="Cloud Integration"
+                  variant="outlined"
+                  clearable
+                  hint="Which cloud platform manages this device"
+                  persistent-hint
+                />
+              </v-col>
+
               <v-col cols="12" sm="6">
                 <v-select
                   v-model="newDevice.apiCredentialId"
@@ -191,7 +225,7 @@
                   clearable
                   hint="Required for direct (REST/SSH) access"
                   persistent-hint
-                  :disabled="newDevice.managementMode === 'central'"
+                  :disabled="newDevice.managementMode === 'cloud'"
                 />
               </v-col>
             </v-row>
@@ -302,6 +336,29 @@
                 />
               </v-col>
 
+              <v-col cols="12" sm="6">
+                <v-select
+                  v-model="editingDevice.vendor"
+                  label="Vendor"
+                  :items="vendorOptions"
+                  variant="outlined"
+                  prepend-inner-icon="mdi-factory"
+                  @update:model-value="editingDevice.platform = null"
+                />
+              </v-col>
+
+              <v-col cols="12" sm="6">
+                <v-select
+                  v-model="editingDevice.platform"
+                  label="Platform"
+                  :items="platformOptions(editingDevice.vendor)"
+                  variant="outlined"
+                  clearable
+                  hint="OS family; leave blank to detect from the model"
+                  persistent-hint
+                />
+              </v-col>
+
               <v-col cols="12">
                 <v-divider class="my-2"></v-divider>
                 <h3 class="text-subtitle-1 mb-3">API Configuration</h3>
@@ -314,7 +371,20 @@
                   label="Management Mode"
                   variant="outlined"
                   prepend-inner-icon="mdi-server-network"
-                  hint="Central pulls config from Aruba Central; Direct uses REST/SSH"
+                  hint="Cloud pulls config from the platform below; Direct uses REST/SSH"
+                  persistent-hint
+                />
+              </v-col>
+
+              <v-col v-if="editingDevice.managementMode === 'cloud'" cols="12" sm="6">
+                <v-select
+                  v-model="editingDevice.cloudIntegrationId"
+                  :items="cloudIntegrationOptions"
+                  label="Cloud Integration"
+                  variant="outlined"
+                  prepend-inner-icon="mdi-cloud"
+                  clearable
+                  hint="Which cloud platform manages this device"
                   persistent-hint
                 />
               </v-col>
@@ -438,6 +508,7 @@ import { useDevicesStore } from '@/stores/devices'
 import { useSettingsStore } from '@/stores/settings'
 import { useWebSocket } from '@/composables/useWebSocket'
 import DeviceTable from '@/components/devices/DeviceTable.vue'
+import { vendorOptions, platformOptions, cloudProviderLabel } from '@/models/vendors'
 
 const router = useRouter()
 const route = useRoute()
@@ -455,29 +526,46 @@ const showEditDialog = ref(false)
 const saving = ref(false)
 const managementModeOptions = [
   { title: 'Direct (REST/SSH)', value: 'direct' },
-  { title: 'Aruba Central', value: 'central' }
+  { title: 'Cloud-managed', value: 'cloud' }
 ]
+
+// Configured cloud tenants; several may be active at once, including more than
+// one of the same platform, so devices are attributed to a specific one.
+const cloudIntegrationOptions = computed(() =>
+  (settingsStore.cloudIntegrations || [])
+    .filter(i => i.isActive)
+    .map(i => ({
+      title: `${i.name} (${cloudProviderLabel(i.provider)})`,
+      value: i.id,
+    }))
+)
 const newDevice = ref({
   name: '',
   type: '',
+  vendor: 'aruba',
+  platform: null,
   ipAddress: '',
   macAddress: '',
   location: '',
   serialNumber: '',
   model: '',
   managementMode: 'direct',
+  cloudIntegrationId: null,
   apiCredentialId: null
 })
 const editingDevice = ref({
   id: '',
   name: '',
   type: '',
+  vendor: 'aruba',
+  platform: null,
   ipAddress: '',
   macAddress: '',
   location: '',
   serialNumber: '',
   model: '',
   managementMode: 'direct',
+  cloudIntegrationId: null,
   apiCredentialId: null
 })
 
@@ -503,11 +591,14 @@ const rules = {
   }
 }
 
-// Device types
+// Device types — values are the backend DeviceType enum, so no display-string
+// round-tripping is needed.
 const deviceTypes = [
-  'Access Point',
-  'Switch',
-  'Gateway'
+  { title: 'Access Point', value: 'access_point' },
+  { title: 'Switch', value: 'switch' },
+  { title: 'Gateway', value: 'gateway' },
+  { title: 'Controller', value: 'controller' },
+  { title: 'Other', value: 'other' }
 ]
 
 // Computed properties
@@ -541,12 +632,15 @@ const closeAddDialog = () => {
   newDevice.value = {
     name: '',
     type: '',
+    vendor: 'aruba',
+    platform: null,
     ipAddress: '',
     macAddress: '',
     location: '',
     serialNumber: '',
     model: '',
     managementMode: 'direct',
+    cloudIntegrationId: null,
     apiCredentialId: null
   }
 }
@@ -562,26 +656,22 @@ const saveDevice = async () => {
   saving.value = true
 
   try {
-    // Map frontend device type to backend format
-    const typeMap = {
-      'Access Point': 'access_point',
-      'Switch': 'switch',
-      'Gateway': 'gateway'
-    }
+    const isCloud = newDevice.value.managementMode === 'cloud'
 
     // Prepare device data for backend
     const deviceData = {
       name: newDevice.value.name,
-      type: typeMap[newDevice.value.type] || 'gateway',
+      type: newDevice.value.type,
+      vendor: newDevice.value.vendor || 'aruba',
+      platform: newDevice.value.platform || null,
       ipAddress: newDevice.value.ipAddress, // Required
       macAddress: newDevice.value.macAddress || generateRandomMac(),
       location: newDevice.value.location,
       serial: newDevice.value.serialNumber || '', // Optional - send empty string if not provided
       model: newDevice.value.model || '',
       managementMode: newDevice.value.managementMode || 'direct',
-      apiCredentialId: newDevice.value.managementMode === 'central'
-        ? null
-        : (newDevice.value.apiCredentialId || null)
+      cloudIntegrationId: isCloud ? (newDevice.value.cloudIntegrationId || null) : null,
+      apiCredentialId: isCloud ? null : (newDevice.value.apiCredentialId || null)
     }
 
     // Create device via API
@@ -620,26 +710,19 @@ const showSnackbar = (message, color = 'success') => {
 
 // Handle edit device event from DeviceTable
 const handleEditDevice = async (device) => {
-  // Map backend device type to frontend format if needed
-  const typeMap = {
-    'access_point': 'Access Point',
-    'switch': 'Switch',
-    'gateway': 'Gateway',
-    'Access Point': 'Access Point',
-    'Switch': 'Switch',
-    'Gateway': 'Gateway'
-  }
-
   editingDevice.value = {
     id: device.id,
     name: device.name || '',
-    type: typeMap[device.type] || device.type || '',
+    type: device.type || '',
+    vendor: device.vendor || 'aruba',
+    platform: device.platform || null,
     ipAddress: device.ipAddress || '',
     macAddress: device.macAddress || '',
     location: device.location || '',
     serialNumber: device.serialNumber || device.serial || '',
     model: device.model || '',
     managementMode: device.managementMode || 'direct',
+    cloudIntegrationId: device.cloudIntegrationId || null,
     apiCredentialId: device.apiCredentialId || null
   }
 
@@ -664,12 +747,15 @@ const closeEditDialog = () => {
     id: '',
     name: '',
     type: '',
+    vendor: 'aruba',
+    platform: null,
     ipAddress: '',
     macAddress: '',
     location: '',
     serialNumber: '',
     model: '',
     managementMode: 'direct',
+    cloudIntegrationId: null,
     apiCredentialId: null
   }
 }
@@ -685,24 +771,22 @@ const updateDevice = async () => {
   saving.value = true
 
   try {
-    // Map frontend device type to backend format
-    const typeMap = {
-      'Access Point': 'access_point',
-      'Switch': 'switch',
-      'Gateway': 'gateway'
-    }
+    const isCloud = editingDevice.value.managementMode === 'cloud'
 
     // Prepare device data for backend
     const deviceData = {
       name: editingDevice.value.name,
-      type: typeMap[editingDevice.value.type] || 'gateway',
+      type: editingDevice.value.type,
+      vendor: editingDevice.value.vendor || 'aruba',
+      platform: editingDevice.value.platform || null,
       ipAddress: editingDevice.value.ipAddress,
       macAddress: editingDevice.value.macAddress || '',
       location: editingDevice.value.location,
       serial: editingDevice.value.serialNumber || '',
       model: editingDevice.value.model || '',
       managementMode: editingDevice.value.managementMode || 'direct',
-      apiCredentialId: editingDevice.value.apiCredentialId || null
+      cloudIntegrationId: isCloud ? (editingDevice.value.cloudIntegrationId || null) : null,
+      apiCredentialId: isCloud ? null : (editingDevice.value.apiCredentialId || null)
     }
 
     // Update device via API
@@ -731,6 +815,10 @@ const handleQueryParams = () => {
 // Initialize
 onMounted(() => {
   handleQueryParams()
+  // Needed by the cloud-integration selector in the add/edit dialogs.
+  settingsStore.fetchCloudIntegrations().catch((error) => {
+    console.error('Failed to load cloud integrations:', error)
+  })
 })
 </script>
 

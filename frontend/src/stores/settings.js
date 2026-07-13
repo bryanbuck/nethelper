@@ -6,7 +6,8 @@ import debugLog, { DebugCategory } from '@/utils/debug'
 export const useSettingsStore = defineStore('settings', () => {
   // State
   const apiCredentials = ref([])
-  const arubaCentralConfigs = ref([])
+  const cloudIntegrations = ref([])
+  const cloudProviders = ref([])
   const loading = ref(false)
   const error = ref(null)
 
@@ -128,86 +129,109 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   // ============================================
-  // Aruba Central API Configuration Actions
+  // Cloud Integration Actions
+  //
+  // Several integrations can be active at once, including multiple tenants of
+  // the same provider (e.g. two Central accounts + a Mist org).
   // ============================================
 
-  const fetchArubaCentralConfigs = async () => {
+  const fetchCloudIntegrations = async () => {
     loading.value = true
     error.value = null
 
     try {
-      debugLog.progress(DebugCategory.SETTINGS, 'Fetching Aruba Central configs')
-      const response = await settingsService.getArubaCentralConfig()
-      // API returns a single active config or array of configs
-      arubaCentralConfigs.value = Array.isArray(response.data) ? response.data : response.data ? [response.data] : []
-      debugLog.success(DebugCategory.SETTINGS, `Fetched ${arubaCentralConfigs.value.length} Aruba Central config(s)`)
-      return arubaCentralConfigs.value
+      debugLog.progress(DebugCategory.SETTINGS, 'Fetching cloud integrations')
+      const response = await settingsService.getCloudIntegrations()
+      cloudIntegrations.value = response.data?.integrations || []
+      cloudProviders.value = response.data?.providers || []
+      debugLog.success(DebugCategory.SETTINGS, `Fetched ${cloudIntegrations.value.length} cloud integration(s)`)
+      return cloudIntegrations.value
     } catch (err) {
       error.value = err.message
-      debugLog.error(DebugCategory.SETTINGS, 'Failed to fetch Aruba Central configs:', err)
+      debugLog.error(DebugCategory.SETTINGS, 'Failed to fetch cloud integrations:', err)
       throw err
     } finally {
       loading.value = false
     }
   }
 
-  const saveArubaCentralConfig = async (configData) => {
+  const createCloudIntegration = async (data) => {
     loading.value = true
     error.value = null
 
     try {
-      debugLog.progress(DebugCategory.SETTINGS, 'Saving Aruba Central config', configData)
-      const response = await settingsService.saveArubaCentralConfig(configData)
-
-      // Replace existing config or add new one
-      const index = arubaCentralConfigs.value.findIndex(c => c.id === response.data.id)
-      if (index !== -1) {
-        arubaCentralConfigs.value[index] = response.data
-      } else {
-        arubaCentralConfigs.value.push(response.data)
-      }
-
-      debugLog.success(DebugCategory.SETTINGS, 'Saved Aruba Central config:', response.data.id)
+      debugLog.progress(DebugCategory.SETTINGS, 'Creating cloud integration', { provider: data.provider, name: data.name })
+      const response = await settingsService.createCloudIntegration(data)
+      cloudIntegrations.value.push(response.data)
+      debugLog.success(DebugCategory.SETTINGS, 'Created cloud integration:', response.data.id)
       return response.data
     } catch (err) {
       error.value = err.message
-      debugLog.error(DebugCategory.SETTINGS, 'Failed to save Aruba Central config:', err)
+      debugLog.error(DebugCategory.SETTINGS, 'Failed to create cloud integration:', err)
       throw err
     } finally {
       loading.value = false
     }
   }
 
-  const testArubaCentralConnection = async (configId = null) => {
+  const updateCloudIntegration = async (id, data) => {
     loading.value = true
     error.value = null
 
     try {
-      debugLog.progress(DebugCategory.SETTINGS, `Testing Aruba Central connection${configId ? ` for config ${configId}` : ''}`)
-      const response = await settingsService.testArubaCentralConnection(configId)
+      debugLog.progress(DebugCategory.SETTINGS, `Updating cloud integration ${id}`)
+      const response = await settingsService.updateCloudIntegration(id, data)
+      const index = cloudIntegrations.value.findIndex(i => i.id === id)
+      if (index !== -1) {
+        cloudIntegrations.value[index] = response.data
+      }
+      debugLog.success(DebugCategory.SETTINGS, 'Updated cloud integration:', id)
+      return response.data
+    } catch (err) {
+      error.value = err.message
+      debugLog.error(DebugCategory.SETTINGS, 'Failed to update cloud integration:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const testCloudIntegration = async (id) => {
+    loading.value = true
+    error.value = null
+
+    try {
+      debugLog.progress(DebugCategory.SETTINGS, `Testing cloud integration ${id}`)
+      const response = await settingsService.testCloudIntegration(id)
+      // Reflect the persisted test status without a full refetch.
+      const integration = cloudIntegrations.value.find(i => i.id === id)
+      if (integration) {
+        integration.lastTested = response.data.testedAt
+        integration.lastTestStatus = response.data.success ? 'success' : 'failed'
+      }
       debugLog.success(DebugCategory.SETTINGS, 'Connection test result:', response.data)
       return response.data
     } catch (err) {
       error.value = err.message
-      debugLog.error(DebugCategory.SETTINGS, 'Failed to test Aruba Central connection:', err)
+      debugLog.error(DebugCategory.SETTINGS, 'Failed to test cloud integration:', err)
       throw err
     } finally {
       loading.value = false
     }
   }
 
-  const deleteArubaCentralConfig = async (id) => {
+  const deleteCloudIntegration = async (id) => {
     loading.value = true
     error.value = null
 
     try {
-      debugLog.progress(DebugCategory.SETTINGS, `Deleting Aruba Central config ${id}`)
-      await settingsService.deleteArubaCentralConfig(id)
-      arubaCentralConfigs.value = arubaCentralConfigs.value.filter(c => c.id !== id)
-      debugLog.success(DebugCategory.SETTINGS, 'Deleted Aruba Central config:', id)
+      debugLog.progress(DebugCategory.SETTINGS, `Deleting cloud integration ${id}`)
+      await settingsService.deleteCloudIntegration(id)
+      cloudIntegrations.value = cloudIntegrations.value.filter(i => i.id !== id)
+      debugLog.success(DebugCategory.SETTINGS, 'Deleted cloud integration:', id)
     } catch (err) {
       error.value = err.message
-      debugLog.error(DebugCategory.SETTINGS, 'Failed to delete Aruba Central config:', err)
+      debugLog.error(DebugCategory.SETTINGS, 'Failed to delete cloud integration:', err)
       throw err
     } finally {
       loading.value = false
@@ -217,7 +241,8 @@ export const useSettingsStore = defineStore('settings', () => {
   return {
     // State
     apiCredentials,
-    arubaCentralConfigs,
+    cloudIntegrations,
+    cloudProviders,
     loading,
     error,
 
@@ -231,10 +256,11 @@ export const useSettingsStore = defineStore('settings', () => {
     updateApiCredential,
     deleteApiCredential,
     testApiCredential,
-    fetchArubaCentralConfigs,
-    saveArubaCentralConfig,
-    testArubaCentralConnection,
-    deleteArubaCentralConfig,
+    fetchCloudIntegrations,
+    createCloudIntegration,
+    updateCloudIntegration,
+    testCloudIntegration,
+    deleteCloudIntegration,
     clearError,
   }
 })

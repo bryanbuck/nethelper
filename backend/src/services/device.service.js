@@ -1,5 +1,6 @@
 const { getPrisma } = require('../config/database');
-const arubaCentralService = require('./aruba-central.service');
+const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
+const { ENV_ARUBA_INTEGRATION_ID } = require('./cloud-providers/cloud-provider-factory');
 const { debugLog, Services } = require('../utils/debug-logger');
 
 // Create service-specific logger
@@ -14,11 +15,11 @@ class DeviceService {
       const where = {};
 
       if (type) where.type = type;
-      // Filter by pingStatus as primary status, fallback to centralStatus
+      // Filter by pingStatus as primary status, fallback to cloudStatus
       if (status) {
         where.OR = [
           { pingStatus: status },
-          { AND: [{ pingStatus: null }, { centralStatus: status }] }
+          { AND: [{ pingStatus: null }, { cloudStatus: status }] }
         ];
       }
       if (location) where.location = { contains: location, mode: 'insensitive' };
@@ -75,11 +76,11 @@ class DeviceService {
       // Map pingStatus to status field for frontend compatibility
       return devices.map(device => ({
         ...device,
-        // Use pingStatus as primary, fallback to centralStatus
-        status: device.pingStatus || device.centralStatus || 'offline',
+        // Use pingStatus as primary, fallback to cloudStatus
+        status: device.pingStatus || device.cloudStatus || 'offline',
         // Include both statuses for frontend display
         pingStatus: device.pingStatus,
-        centralStatus: device.centralStatus,
+        cloudStatus: device.cloudStatus,
       }));
     } catch (error) {
       logger.error('Get devices error', { error: error.message, stack: error.stack });
@@ -142,12 +143,15 @@ class DeviceService {
           serial: deviceData.serial,
           name: deviceData.name,
           type: deviceData.type,
+          vendor: deviceData.vendor || 'aruba',
+          platform: deviceData.platform || null,
           model: deviceData.model,
           ipAddress: deviceData.ipAddress,
           macAddress: deviceData.macAddress,
           location: deviceData.location,
-          centralStatus: deviceData.centralStatus || deviceData.status || 'offline',
+          cloudStatus: deviceData.cloudStatus || deviceData.status || 'offline',
           managementMode: deviceData.managementMode || 'direct',
+          cloudIntegrationId: deviceData.cloudIntegrationId || null,
           firmwareVersion: deviceData.firmwareVersion,
           apiCredentialId: deviceData.apiCredentialId || null,
           metadata: deviceData.metadata || {},
@@ -197,95 +201,112 @@ class DeviceService {
     }
   }
 
-  async syncDevicesFromAruba() {
-    try {
-      logger.progress('Starting device sync from Aruba Central');
+  /**
+   * Sync device inventory from every active cloud integration (or a single
+   * one when integrationId is given). Multiple integrations — including
+   * several tenants of the same provider — sync side by side; each device is
+   * attributed to its owning integration via cloudIntegrationId. Upserts are
+   * serial-keyed: a device already owned by another integration is updated,
+   * with ownership following the most recent sync that saw it.
+   *
+   * @param {string} [integrationId] - CloudIntegration id to sync alone
+   * @returns {Promise<{created, updated, total, integrations: Array}>}
+   */
+  async syncDevicesFromCloud(integrationId = null) {
+    const providers = integrationId
+      ? [await CloudProviderFactory.forIntegration(integrationId)]
+      : await CloudProviderFactory.activeProviders();
 
-      // Get devices from Aruba Central using the unified endpoint
-      // Note: The new API returns {items: [], count, total, next}
-      const response = await arubaCentralService.getAllDevices({ limit: 100 });
-      const arubaDevices = response.items || [];
-      const prisma = getPrisma();
-
-      logger.info('Received devices from Aruba Central', {
-        count: arubaDevices.length,
-        total: response.total
-      });
-
-      let created = 0;
-      let updated = 0;
-
-      for (const arubaDevice of arubaDevices) {
-        try {
-          // Check if device exists
-          const existingDevice = await prisma.device.findUnique({
-            where: { serial: arubaDevice.serial },
-          });
-
-          const deviceData = {
-            name: arubaDevice.deviceName || arubaDevice.serial,
-            type: this.mapDeviceType(arubaDevice.deviceType),
-            model: arubaDevice.model,
-            ipAddress: arubaDevice.ipv4 || arubaDevice.ipv6,
-            macAddress: arubaDevice.macAddress,
-            location: arubaDevice.location,
-            centralStatus: this.mapDeviceStatus(arubaDevice.status),
-            managementMode: 'central',
-            firmwareVersion: arubaDevice.firmwareVersion,
-            lastSeen: arubaDevice.lastSeen ? new Date(arubaDevice.lastSeen * 1000) : null,
-            metadata: {
-              siteId: arubaDevice.siteId,
-              deployment: arubaDevice.deployment,
-              health: arubaDevice.health,
-              uptime: arubaDevice.upTime,
-              // Switch-specific fields
-              stackId: arubaDevice.stackId,
-              switchRole: arubaDevice.switchRole,
-              // Firmware details
-              firmwareBackupVersion: arubaDevice.firmwareBackupVersion,
-              firmwareStatus: arubaDevice.firmwareStatus,
-              firmwareRecommendedVersion: arubaDevice.firmwareRecommendedVersion,
-            },
-          };
-
-          if (existingDevice) {
-            // Update existing device
-            await this.updateDevice(existingDevice.id, deviceData);
-            updated++;
-          } else {
-            // Create new device
-            await this.createDevice({
-              serial: arubaDevice.serial,
-              ...deviceData,
-            });
-            created++;
-          }
-        } catch (deviceError) {
-          logger.error('Error processing device', { error: deviceError.message, serial: arubaDevice.serial });
-        }
-      }
-
-      logger.success('Device sync completed', {
-        created,
-        updated,
-        total: arubaDevices.length,
-        accessPoints: arubaDevices.filter(d => d.deviceType === 'ACCESS_POINT').length,
-        switches: arubaDevices.filter(d => d.deviceType === 'SWITCH').length,
-        gateways: arubaDevices.filter(d => d.deviceType === 'GATEWAY').length
-      });
-      return { created, updated, total: arubaDevices.length };
-    } catch (error) {
-      logger.error('Device sync error', { error: error.message, stack: error.stack });
-      throw error;
+    if (providers.length === 0) {
+      throw new Error('No active cloud integrations configured. Add one in Settings.');
     }
+
+    const totals = { created: 0, updated: 0, total: 0, integrations: [] };
+
+    for (const provider of providers) {
+      const summary = { integrationId: provider.id, name: provider.label, created: 0, updated: 0, total: 0, error: null };
+      try {
+        const devices = await provider.listInventory();
+        summary.total = devices.length;
+        // The env-var fallback integration has no DB row to reference.
+        const ownerId = provider.id === ENV_ARUBA_INTEGRATION_ID ? null : provider.id;
+        for (const normalized of devices) {
+          try {
+            const result = await this.upsertCloudDevice(normalized, ownerId);
+            if (result === 'created') summary.created++;
+            else summary.updated++;
+          } catch (deviceError) {
+            logger.error('Error processing device', { error: deviceError.message, serial: normalized.serial });
+          }
+        }
+        logger.success(`Device sync completed for ${provider.label}`, summary);
+      } catch (error) {
+        summary.error = error.message;
+        logger.error(`Device sync failed for ${provider.label}`, { error: error.message });
+        // Keep syncing the remaining integrations; report per-integration errors.
+      }
+      totals.created += summary.created;
+      totals.updated += summary.updated;
+      totals.total += summary.total;
+      totals.integrations.push(summary);
+    }
+
+    // Preserve the historical all-or-nothing error for the single-tenant
+    // case: if every integration failed, surface the first failure.
+    if (totals.integrations.length > 0 && totals.integrations.every((s) => s.error)) {
+      throw new Error(totals.integrations[0].error);
+    }
+
+    return totals;
   }
 
-  async queueDeviceSync() {
+  /** @deprecated Use syncDevicesFromCloud(); kept as an alias for one release. */
+  async syncDevicesFromAruba() {
+    return this.syncDevicesFromCloud();
+  }
+
+  /** Upsert one NormalizedCloudDevice, stamping its owning integration. */
+  async upsertCloudDevice(normalized, cloudIntegrationId) {
+    const prisma = getPrisma();
+    const existingDevice = await prisma.device.findUnique({
+      where: { serial: normalized.serial },
+    });
+
+    const deviceData = {
+      name: normalized.name,
+      type: normalized.type,
+      vendor: normalized.vendor,
+      platform: normalized.platform,
+      model: normalized.model,
+      ipAddress: normalized.ipAddress,
+      macAddress: normalized.macAddress,
+      location: normalized.site || null,
+      cloudStatus: normalized.status,
+      managementMode: 'cloud',
+      cloudIntegrationId,
+      firmwareVersion: normalized.firmwareVersion,
+      lastSeen: normalized.lastSeen,
+      metadata: normalized.metadata || {},
+    };
+
+    if (existingDevice) {
+      await this.updateDevice(existingDevice.id, deviceData);
+      return 'updated';
+    }
+    await this.createDevice({ serial: normalized.serial, ...deviceData });
+    return 'created';
+  }
+
+  /**
+   * @param {string} [integrationId] - sync only this cloud integration;
+   *   omit to sync every active one.
+   */
+  async queueDeviceSync(integrationId = null) {
     try {
       const { getQueue } = require('../config/bull');
       const deviceSyncQueue = getQueue('deviceSync');
-      
-      const job = await deviceSyncQueue.add('syncDevices', {}, {
+
+      const job = await deviceSyncQueue.add('syncDevices', { integrationId }, {
         attempts: 3,
         backoff: {
           type: 'exponential',
@@ -301,52 +322,6 @@ class DeviceService {
     }
   }
 
-  mapDeviceType(arubaType) {
-    const typeMap = {
-      // New API format (v1alpha1)
-      'ACCESS_POINT': 'access_point',
-      'SWITCH': 'switch',
-      'GATEWAY': 'gateway',
-
-      // Legacy API formats (kept for compatibility)
-      'ap': 'access_point',
-      'access_point': 'access_point',
-      'iap': 'access_point',
-      'instant_ap': 'access_point',
-
-      'switch': 'switch',
-      'cx': 'switch',
-      'aos_switch': 'switch',
-      'aos-s': 'switch',
-      'aos-cx': 'switch',
-
-      'gateway': 'gateway',
-      'gw': 'gateway',
-      'mobility_controller': 'gateway',
-      'controller': 'gateway',
-      'mc': 'gateway'
-    };
-
-    // Handle both uppercase (new API) and lowercase (legacy)
-    const deviceType = typeMap[arubaType] || typeMap[arubaType?.toLowerCase()];
-    if (!deviceType) {
-      logger.warn('Unknown device type encountered', { arubaType });
-      return 'access_point'; // Default fallback
-    }
-    return deviceType;
-  }
-
-  mapDeviceStatus(arubaStatus) {
-    const statusMap = {
-      'Up': 'online',
-      'Down': 'offline',
-      'Warning': 'warning',
-      'Maintenance': 'maintenance',
-    };
-
-    return statusMap[arubaStatus] || 'offline';
-  }
-
   async getDeviceGroups() {
     try {
       const prisma = getPrisma();
@@ -360,7 +335,7 @@ class DeviceService {
               serial: true,
               type: true,
               pingStatus: true,
-              centralStatus: true,
+              cloudStatus: true,
             },
           },
           _count: {
@@ -378,7 +353,7 @@ class DeviceService {
         ...group,
         devices: group.devices.map(device => ({
           ...device,
-          status: device.pingStatus || device.centralStatus || 'offline',
+          status: device.pingStatus || device.cloudStatus || 'offline',
         })),
       }));
     } catch (error) {

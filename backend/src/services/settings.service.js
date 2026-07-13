@@ -2,6 +2,8 @@ const { getPrisma } = require('../config/database');
 const encryption = require('../utils/encryption');
 const axios = require('axios');
 const logger = require('../utils/logger');
+const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
+const { CLOUD_PROVIDERS } = require('../constants/vendors');
 
 class SettingsService {
   /**
@@ -518,214 +520,284 @@ class SettingsService {
     };
   }
 
+  // -----------------------------------------------------------------------
+  // Cloud integrations (Aruba Central, Juniper Mist, Cisco Meraki)
+  //
+  // Several integrations can be configured and active at once, including
+  // multiple tenants of the same provider (e.g. two Central accounts and a
+  // Mist org). Devices are attributed to their owning integration via
+  // Device.cloudIntegrationId. See docs/MULTI_VENDOR_ROADMAP.md.
+  // -----------------------------------------------------------------------
+
   /**
-   * Get Aruba Central configuration for a user
-   * @param {string} userId - User ID
-   * @returns {Promise<Object|null>} Aruba Central configuration (without client secret)
+   * Encrypt the secret credential fields of an integration payload, per the
+   * provider's credentialFields definition in constants/vendors.js.
+   * Fields left blank on update keep their existing stored value.
    */
-  async getArubaCentralConfig(userId) {
-    const prisma = getPrisma();
+  encryptCredentials(provider, credentials = {}, existing = {}) {
+    const spec = CLOUD_PROVIDERS[provider];
+    if (!spec) throw new Error(`Unknown cloud provider "${provider}"`);
 
-    const config = await prisma.arubaCentralConfig.findFirst({
-      where: { userId, isActive: true },
-      select: {
-        id: true,
-        baseUrl: true,
-        clientId: true,
-        customerId: true,
-        isActive: true,
-        lastTested: true,
-        lastTestStatus: true,
-        notes: true,
-        createdAt: true,
-        updatedAt: true,
-        // DO NOT include clientSecret in response
-      },
-    });
+    const stored = {};
+    for (const field of spec.credentialFields) {
+      const value = credentials[field.key];
+      if (value === undefined || value === null || value === '') {
+        // Preserve the existing value (secrets are never echoed back to the
+        // client, so a blank secret on update means "unchanged").
+        if (existing[field.key] !== undefined) {
+          stored[field.key] = existing[field.key];
+          continue;
+        }
+        throw new Error(`Missing required field "${field.key}" for ${spec.label}`);
+      }
+      stored[field.key] = field.secret ? encryption.encrypt(String(value)) : String(value);
+    }
+    return stored;
+  }
 
-    return config;
+  /** Strip secrets from an integration row before it goes over the wire. */
+  sanitizeIntegration(integration) {
+    const spec = CLOUD_PROVIDERS[integration.provider];
+    const credentials = {};
+    for (const field of spec?.credentialFields || []) {
+      if (field.secret) {
+        credentials[field.key] = integration.credentials?.[field.key] ? '********' : null;
+      } else {
+        credentials[field.key] = integration.credentials?.[field.key] ?? null;
+      }
+    }
+    const { credentials: _omit, ...rest } = integration;
+    return { ...rest, credentials };
   }
 
   /**
-   * Save (create or update) Aruba Central configuration
-   * @param {string} userId - User ID
-   * @param {Object} configData - Configuration data
-   * @returns {Promise<Object>} Saved configuration
+   * List every cloud integration for a user (secrets masked).
+   * @param {string} userId
+   * @returns {Promise<Array>}
    */
+  async getCloudIntegrations(userId) {
+    const prisma = getPrisma();
+    const integrations = await prisma.cloudIntegration.findMany({
+      where: { userId },
+      orderBy: [{ provider: 'asc' }, { createdAt: 'asc' }],
+      include: { _count: { select: { devices: true } } },
+    });
+    return integrations.map((integration) => this.sanitizeIntegration(integration));
+  }
+
+  /**
+   * Create a cloud integration.
+   * @param {string} userId
+   * @param {Object} data - { provider, name, baseUrl?, credentials, isActive?, notes? }
+   */
+  async createCloudIntegration(userId, data) {
+    const prisma = getPrisma();
+    const spec = CLOUD_PROVIDERS[data.provider];
+    if (!spec) throw new Error(`Unknown cloud provider "${data.provider}"`);
+    if (!spec.implemented) throw new Error(`${spec.label} support is not implemented yet`);
+    if (!data.name) throw new Error('An integration name is required');
+
+    const integration = await prisma.cloudIntegration.create({
+      data: {
+        provider: data.provider,
+        name: data.name,
+        baseUrl: data.baseUrl || spec.defaultBaseUrl,
+        credentials: this.encryptCredentials(data.provider, data.credentials),
+        isActive: data.isActive !== false,
+        notes: data.notes || null,
+        userId,
+      },
+    });
+
+    return this.sanitizeIntegration(integration);
+  }
+
+  /**
+   * Update a cloud integration. Blank secret fields keep their stored value.
+   */
+  async updateCloudIntegration(integrationId, userId, data) {
+    const prisma = getPrisma();
+    const existing = await prisma.cloudIntegration.findFirst({
+      where: { id: integrationId, userId },
+    });
+    if (!existing) {
+      const error = new Error('Cloud integration not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const integration = await prisma.cloudIntegration.update({
+      where: { id: integrationId },
+      data: {
+        name: data.name ?? undefined,
+        baseUrl: data.baseUrl ?? undefined,
+        credentials: data.credentials
+          ? this.encryptCredentials(existing.provider, data.credentials, existing.credentials)
+          : undefined,
+        isActive: data.isActive ?? undefined,
+        notes: data.notes ?? undefined,
+      },
+    });
+
+    // Credentials or base URL may have changed - drop the cached OAuth token.
+    await this.clearIntegrationCache(integration);
+    return this.sanitizeIntegration(integration);
+  }
+
+  /**
+   * Test a cloud integration's credentials against its provider.
+   * Persists lastTested / lastTestStatus.
+   */
+  async testCloudIntegration(integrationId, userId) {
+    const prisma = getPrisma();
+    const row = await prisma.cloudIntegration.findFirst({
+      where: { id: integrationId, userId },
+    });
+    if (!row) {
+      const error = new Error('Cloud integration not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    let result;
+    try {
+      const provider = await CloudProviderFactory.forIntegration(row);
+      result = await provider.testConnection();
+    } catch (error) {
+      result = { success: false, message: error.message };
+    }
+
+    await prisma.cloudIntegration.update({
+      where: { id: row.id },
+      data: {
+        lastTested: new Date(),
+        lastTestStatus: result.success ? 'success' : 'failed',
+      },
+    });
+
+    return { ...result, testedAt: new Date() };
+  }
+
+  /**
+   * Delete a cloud integration. Devices that referenced it keep their rows
+   * (the FK is SetNull) but lose their cloud attribution.
+   */
+  async deleteCloudIntegration(integrationId, userId) {
+    const prisma = getPrisma();
+    const integration = await prisma.cloudIntegration.findFirst({
+      where: { id: integrationId, userId },
+    });
+    if (!integration) {
+      const error = new Error('Cloud integration not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    await this.clearIntegrationCache(integration);
+    await prisma.cloudIntegration.delete({ where: { id: integrationId } });
+  }
+
+  /** Drop any provider-side cached token for an integration (best-effort). */
+  async clearIntegrationCache(integration) {
+    try {
+      const provider = await CloudProviderFactory.forIntegration(integration);
+      if (typeof provider.clearTokenCache === 'function') {
+        await provider.clearTokenCache();
+      }
+    } catch (error) {
+      logger.warn(`Could not clear cached token for integration ${integration.id}: ${error.message}`);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Deprecated Aruba-Central-shaped wrappers. The frontend has moved to the
+  // /settings/cloud-integrations routes; these keep the old single-tenant
+  // endpoints working for one release and operate on the aruba_central rows
+  // of the CloudIntegration table.
+  // ---------------------------------------------------------------------
+
+  /** @deprecated Use getCloudIntegrations(). */
+  async getArubaCentralConfig(userId) {
+    const prisma = getPrisma();
+    const integration = await prisma.cloudIntegration.findFirst({
+      where: { userId, provider: 'aruba_central', isActive: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (!integration) return null;
+
+    return {
+      id: integration.id,
+      baseUrl: integration.baseUrl,
+      clientId: integration.credentials?.clientId || null,
+      customerId: integration.credentials?.customerId || null,
+      isActive: integration.isActive,
+      lastTested: integration.lastTested,
+      lastTestStatus: integration.lastTestStatus,
+      notes: integration.notes,
+      createdAt: integration.createdAt,
+      updatedAt: integration.updatedAt,
+    };
+  }
+
+  /** @deprecated Use createCloudIntegration()/updateCloudIntegration(). */
   async saveArubaCentralConfig(userId, configData) {
     const prisma = getPrisma();
-    const arubaCentralService = require('./aruba-central.service');
-
-    // Validate required fields
     if (!configData.baseUrl || !configData.clientId || !configData.clientSecret || !configData.customerId) {
       throw new Error('Missing required fields: baseUrl, clientId, clientSecret, and customerId are required');
     }
 
-    // Encrypt client secret
-    const encryptedSecret = encryption.encrypt(configData.clientSecret);
+    const credentials = {
+      clientId: configData.clientId,
+      clientSecret: configData.clientSecret,
+      customerId: configData.customerId,
+    };
 
-    // Check if user already has an active config
-    const existingConfig = await prisma.arubaCentralConfig.findFirst({
-      where: { userId, isActive: true },
+    const existing = await prisma.cloudIntegration.findFirst({
+      where: { userId, provider: 'aruba_central', isActive: true },
     });
 
-    let savedConfig;
-    let isNew = false;
-
-    if (existingConfig) {
-      // Update existing config
-      savedConfig = await prisma.arubaCentralConfig.update({
-        where: { id: existingConfig.id },
-        data: {
-          baseUrl: configData.baseUrl,
-          clientId: configData.clientId,
-          clientSecret: encryptedSecret,
-          customerId: configData.customerId,
-          notes: configData.notes,
-          updatedAt: new Date(),
-        },
-        select: {
-          id: true,
-          baseUrl: true,
-          clientId: true,
-          customerId: true,
-          isActive: true,
-          notes: true,
-          createdAt: true,
-          updatedAt: true,
-        },
+    if (existing) {
+      const updated = await this.updateCloudIntegration(existing.id, userId, {
+        baseUrl: configData.baseUrl,
+        credentials,
+        notes: configData.notes,
       });
-    } else {
-      // Create new config
-      savedConfig = await prisma.arubaCentralConfig.create({
-        data: {
-          baseUrl: configData.baseUrl,
-          clientId: configData.clientId,
-          clientSecret: encryptedSecret,
-          customerId: configData.customerId,
-          isActive: true,
-          notes: configData.notes,
-          userId,
-        },
-        select: {
-          id: true,
-          baseUrl: true,
-          clientId: true,
-          customerId: true,
-          isActive: true,
-          notes: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
-      isNew = true;
+      return { data: await this.getArubaCentralConfig(userId), isNew: false, integration: updated };
     }
 
-    // Clear the config cache in aruba-central.service
-    arubaCentralService.clearConfigCache();
-
-    // Clear the access token cache to force re-authentication with new credentials
-    const redis = arubaCentralService.getRedis();
-    await redis.del('aruba:access_token');
-
-    return { data: savedConfig, isNew };
+    const created = await this.createCloudIntegration(userId, {
+      provider: 'aruba_central',
+      name: configData.name || 'Aruba Central',
+      baseUrl: configData.baseUrl,
+      credentials,
+      notes: configData.notes,
+    });
+    return { data: await this.getArubaCentralConfig(userId), isNew: true, integration: created };
   }
 
-  /**
-   * Test Aruba Central configuration
-   * @param {string} userId - User ID
-   * @param {string} configId - Config ID (optional, uses active if not provided)
-   * @returns {Promise<Object>} Test result
-   */
+  /** @deprecated Use testCloudIntegration(). */
   async testArubaCentralConfig(userId, configId) {
     const prisma = getPrisma();
-    const arubaCentralService = require('./aruba-central.service');
+    const integration = configId
+      ? await prisma.cloudIntegration.findFirst({ where: { id: configId, userId, provider: 'aruba_central' } })
+      : await prisma.cloudIntegration.findFirst({ where: { userId, provider: 'aruba_central', isActive: true } });
 
-    let config;
-    if (configId) {
-      config = await prisma.arubaCentralConfig.findFirst({
-        where: { id: configId, userId },
-      });
-    } else {
-      config = await prisma.arubaCentralConfig.findFirst({
-        where: { userId, isActive: true },
-      });
-    }
-
-    if (!config) {
+    if (!integration) {
       throw new Error('Aruba Central configuration not found');
     }
-
-    try {
-      // Clear caches to force using this config
-      arubaCentralService.clearConfigCache();
-      const redis = arubaCentralService.getRedis();
-      await redis.del('aruba:access_token');
-
-      // Try to get access token (this will test OAuth credentials)
-      const startTime = Date.now();
-      await arubaCentralService.getAccessToken();
-      const responseTime = Date.now() - startTime;
-
-      // Update test status
-      await prisma.arubaCentralConfig.update({
-        where: { id: config.id },
-        data: {
-          lastTested: new Date(),
-          lastTestStatus: 'success',
-        },
-      });
-
-      return {
-        success: true,
-        message: 'Successfully authenticated with Aruba Central',
-        responseTime: `${responseTime}ms`,
-        testedAt: new Date(),
-      };
-    } catch (error) {
-      // Update test status
-      await prisma.arubaCentralConfig.update({
-        where: { id: config.id },
-        data: {
-          lastTested: new Date(),
-          lastTestStatus: 'failed',
-        },
-      });
-
-      return {
-        success: false,
-        message: error.message || 'Failed to authenticate with Aruba Central',
-        error: error.message,
-        testedAt: new Date(),
-      };
-    }
+    return this.testCloudIntegration(integration.id, userId);
   }
 
-  /**
-   * Delete Aruba Central configuration
-   * @param {string} configId - Config ID
-   * @param {string} userId - User ID
-   */
+  /** @deprecated Use deleteCloudIntegration(). */
   async deleteArubaCentralConfig(configId, userId) {
     const prisma = getPrisma();
-    const arubaCentralService = require('./aruba-central.service');
-
-    const config = await prisma.arubaCentralConfig.findFirst({
-      where: { id: configId, userId },
+    const integration = await prisma.cloudIntegration.findFirst({
+      where: { id: configId, userId, provider: 'aruba_central' },
     });
-
-    if (!config) {
+    if (!integration) {
       throw new Error('Aruba Central configuration not found');
     }
-
-    await prisma.arubaCentralConfig.delete({
-      where: { id: configId },
-    });
-
-    // Clear caches
-    arubaCentralService.clearConfigCache();
-    const redis = arubaCentralService.getRedis();
-    await redis.del('aruba:access_token');
+    return this.deleteCloudIntegration(configId, userId);
   }
 }
 

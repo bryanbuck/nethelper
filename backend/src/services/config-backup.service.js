@@ -4,11 +4,12 @@ const crypto = require('crypto');
 const Diff = require('diff');
 const { CronExpressionParser } = require('cron-parser');
 const { getPrisma } = require('../config/database');
-const arubaCentralService = require('./aruba-central.service');
+const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const settingsService = require('./settings.service');
 const devicePollerService = require('./device-poller.service');
 const sshDeviceService = require('./ssh-device.service');
 const { isCxRestCapable } = require('../utils/device-platform');
+const { resolveTransport } = require('../utils/transport-router');
 const { getQueue } = require('../config/bull');
 const { getIO } = require('../websocket/socket.handler');
 const logger = require('../utils/logger');
@@ -190,11 +191,16 @@ class ConfigBackupService {
   }
 
   /**
-   * Pull a device's configuration using the right transport for how it's
-   * managed:
-   *   - central:            Aruba Central configuration API
-   *   - direct + AOS-CX:    device REST API (reuses the existing CX backup poller)
-   *   - direct + other:     SSH `show running-config`
+   * Pull a device's configuration over the transports the router deems
+   * appropriate for it, in order (see utils/transport-router.js):
+   *   - device-rest: AOS-CX REST, preferred even when cloud-managed. Local
+   *     REST *reads* keep working when a switch is Central-managed and return
+   *     the complete running config; the probe piggybacked here also
+   *     refreshes the switch-reported cloudManaged state.
+   *   - cloud:       the device's cloud integration (per its capabilities)
+   *   - ssh:         `show running-config` over the platform's SSH profile
+   * See docs/CENTRAL_MANAGEMENT_MODE_PLAN.md section 3.3 and
+   * docs/MULTI_VENDOR_ROADMAP.md section 5.
    *
    * @param {Object} deviceStub - at least { id, serial, name }
    * @returns {Promise<{ text: string, source: string }>}
@@ -204,30 +210,48 @@ class ConfigBackupService {
     const device = await prisma.device.findUnique({ where: { id: deviceStub.id } });
     if (!device) throw new Error(`Device ${deviceStub.id} not found`);
 
-    // Central-managed devices always come from the Central API.
-    if (device.managementMode === 'central') {
-      const config = await arubaCentralService.getDeviceConfiguration(device.serial);
-      const text = typeof config === 'string' ? config : JSON.stringify(config, null, 2);
-      return { text, source: 'Aruba Central' };
-    }
-
-    // Direct-managed: need per-device credentials.
     const credentials = await settingsService.getDeviceCredentialsForUse(device.id);
-    if (!credentials) {
-      throw new Error(`No credentials linked to device "${device.name}" for direct backup`);
+    const transports = resolveTransport(device, 'config');
+    const skipped = [];
+
+    for (const transport of transports) {
+      if (transport === 'device-rest') {
+        if (!(isCxRestCapable(device) && device.ipAddress && credentials)) {
+          skipped.push('device-rest (needs IP address and linked credentials)');
+          continue;
+        }
+        // Refresh the switch-reported cloud-management state first
+        // (best-effort; never blocks the backup).
+        await devicePollerService.refreshCentralStatus(device, credentials);
+        const result = await devicePollerService.backupPoller(device, credentials);
+        const running = result.running_config;
+        const text = typeof running === 'string' ? running : JSON.stringify(running, null, 2);
+        return { text, source: 'AOS-CX REST' };
+      }
+
+      if (transport === 'cloud') {
+        const provider = await CloudProviderFactory.forDevice(device);
+        // CapabilityError (e.g. Central's quarantined config endpoints)
+        // propagates as-is: an honest "not supported" beats a fake retry,
+        // and we never SSH into cloud-managed devices.
+        const config = await provider.getDeviceConfiguration(device.serial);
+        const text = typeof config === 'string' ? config : JSON.stringify(config, null, 2);
+        return { text, source: provider.label };
+      }
+
+      if (transport === 'ssh') {
+        if (!credentials) {
+          throw new Error(`No credentials linked to device "${device.name}" for direct backup`);
+        }
+        const text = await sshDeviceService.getRunningConfig(device, credentials);
+        return { text, source: 'SSH' };
+      }
     }
 
-    if (isCxRestCapable(device)) {
-      // Reuse the working CX REST config poller (returns running/startup objects).
-      const result = await devicePollerService.backupPoller(device, credentials);
-      const running = result.running_config;
-      const text = typeof running === 'string' ? running : JSON.stringify(running, null, 2);
-      return { text, source: 'AOS-CX REST' };
-    }
-
-    // Everything else: SSH CLI.
-    const text = await sshDeviceService.getRunningConfig(device, credentials);
-    return { text, source: 'SSH' };
+    throw new Error(
+      `No transport available to back up "${device.name}"`
+      + (skipped.length ? ` — skipped: ${skipped.join('; ')}` : '')
+    );
   }
 
   /**

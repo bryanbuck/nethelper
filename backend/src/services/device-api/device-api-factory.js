@@ -1,18 +1,23 @@
 const CXSwitchAPI = require('./cx-switch-api');
 const logger = require('../../utils/logger');
+const { PLATFORMS, VENDORS } = require('../../constants/vendors');
+const { detectPlatform } = require('../../utils/device-platform');
 
 /**
  * Device API Factory
  *
- * Factory class for creating device-specific API instances based on device type.
- * This provides a single entry point for accessing device APIs and makes it easy
- * to add support for new device types in the future.
+ * Creates per-device REST API clients (the "talk to ONE device directly"
+ * plane). Cloud-managed devices do NOT come through here — they route to
+ * their CloudIntegration's provider in services/cloud-providers/.
  *
- * Supported Device Types:
- * - cx_switch: Aruba CX switches (AOS-CX)
- * - aos_switch: Aruba AOS switches (future)
- * - ap: Aruba Instant APs (future)
- * - controller: Aruba Controllers (future)
+ * The API type is derived from the device's explicit vendor/platform fields
+ * via the PLATFORMS table in constants/vendors.js (`deviceApiType`), so
+ * adding a vendor means adding a constant + a client, not editing heuristics.
+ * The Aruba model-string heuristics survive only inside device-platform.js,
+ * as a fallback for legacy rows whose platform was never classified.
+ *
+ * Implemented today: cx_switch (AOS-CX). Everything else is SSH-only until
+ * its roadmap phase lands (docs/MULTI_VENDOR_ROADMAP.md).
  */
 class DeviceAPIFactory {
   /**
@@ -40,15 +45,9 @@ class DeviceAPIFactory {
       case 'cx_switch':
         return new CXSwitchAPI(device, credentials);
 
-      // Future device types can be added here:
-      // case 'aos_switch':
-      //   return new AOSSwitchAPI(device, credentials);
-      //
-      // case 'instant_ap':
-      //   return new InstantAPAPI(device, credentials);
-      //
-      // case 'aruba_controller':
-      //   return new ArubaControllerAPI(device, credentials);
+      // Future clients slot in here as their phases land:
+      // case 'junos':             return new JunosAPI(device, credentials);
+      // case 'catalyst_restconf': return new CatalystAPI(device, credentials);
 
       default:
         throw new Error(`Unsupported device API type: ${apiType}`);
@@ -56,135 +55,58 @@ class DeviceAPIFactory {
   }
 
   /**
-   * Determine the device API type based on device and credential information
+   * Determine the device API type from the device's platform.
    *
-   * This method uses various heuristics to determine which API to use:
-   * 1. Explicit credential type (if specified)
-   * 2. Device model/type information
-   * 3. Device metadata
+   * Platform is the explicit Device.platform column when set, falling back to
+   * device-platform.js's legacy Aruba heuristics for unclassified rows. The
+   * platform -> API type mapping lives in constants/vendors.js.
    *
    * @param {Object} device - Device object
-   * @param {Object} credentials - Credentials object (may include type hint)
+   * @param {Object} credentials - Credentials object (unused; kept for call-site compatibility)
    * @returns {string} Device API type
    */
-  static determineDeviceAPIType(device, credentials) {
-    // If credentials specify a type, use that as a hint
-    if (credentials.type) {
-      switch (credentials.type) {
-        case 'switch':
-          // Determine if it's CX or AOS based on model or metadata
-          return DeviceAPIFactory.determineSwitchType(device);
-        case 'ap':
-          return 'instant_ap';
-        case 'gateway':
-          return 'aruba_gateway';
-        case 'controller':
-          return 'aruba_controller';
-      }
+  static determineDeviceAPIType(device, credentials) { // eslint-disable-line no-unused-vars
+    const platform = detectPlatform(device);
+    const apiType = PLATFORMS[platform]?.deviceApiType;
+
+    if (apiType) return apiType;
+
+    // Unclassified switches keep the historical CX default: this codebase has
+    // always assumed an unknown switch speaks AOS-CX REST, and the transport
+    // router preserves that for connection tests.
+    if (device.type === 'switch' && platform === 'unknown') {
+      logger.warn('Could not determine switch platform, defaulting to AOS-CX REST', {
+        deviceName: device.name,
+        model: device.model,
+      });
+      return 'cx_switch';
     }
 
-    // Fall back to device type
-    switch (device.type) {
-      case 'switch':
-        return DeviceAPIFactory.determineSwitchType(device);
-      case 'access_point':
-        return 'instant_ap';
-      case 'gateway':
-        return 'aruba_gateway';
-      default:
-        throw new Error(`Cannot determine API type for device type: ${device.type}`);
-    }
+    throw new Error(
+      `No device REST API for ${device.vendor || 'unknown vendor'}/${platform} `
+      + `(device "${device.name}"). This device is reached over SSH or its cloud platform.`
+    );
   }
 
   /**
-   * Determine switch type (CX vs AOS) based on device information
-   *
-   * @param {Object} device - Device object
-   * @returns {string} Switch API type (cx_switch or aos_switch)
-   */
-  static determineSwitchType(device) {
-    // Check device model
-    if (device.model) {
-      const model = device.model.toLowerCase();
-
-      // CX switch models typically contain 'cx' or specific model numbers
-      if (model.includes('cx') ||
-          model.includes('8360') ||
-          model.includes('8325') ||
-          model.includes('6300') ||
-          model.includes('6400')) {
-        return 'cx_switch';
-      }
-
-      // AOS switch models
-      if (model.includes('2930') ||
-          model.includes('2540') ||
-          model.includes('5400') ||
-          model.includes('3810')) {
-        return 'aos_switch';
-      }
-    }
-
-    // Check metadata for hints
-    if (device.metadata) {
-      if (device.metadata.operatingSystem === 'AOS-CX' ||
-          device.metadata.os === 'AOS-CX') {
-        return 'cx_switch';
-      }
-
-      if (device.metadata.operatingSystem === 'AOS-Switch' ||
-          device.metadata.os === 'AOS-Switch') {
-        return 'aos_switch';
-      }
-    }
-
-    // Default to CX for now (most modern switches)
-    logger.warn('Could not definitively determine switch type, defaulting to CX', {
-      deviceName: device.name,
-      model: device.model,
-    });
-
-    return 'cx_switch';
-  }
-
-  /**
-   * Get list of supported device API types
+   * Get list of supported device API types, generated from the vendor/platform
+   * catalog so the UI never drifts from what the factory can actually build.
    *
    * @returns {Array<Object>} Array of supported device types with metadata
    */
   static getSupportedDeviceTypes() {
-    return [
-      {
-        type: 'cx_switch',
-        name: 'Aruba CX Switch',
-        description: 'Aruba CX switches running AOS-CX',
-        implemented: true,
-      },
-      {
-        type: 'aos_switch',
-        name: 'Aruba AOS Switch',
-        description: 'Legacy Aruba switches running AOS-Switch',
-        implemented: false,
-      },
-      {
-        type: 'instant_ap',
-        name: 'Aruba Instant AP',
-        description: 'Aruba Instant Access Points',
-        implemented: false,
-      },
-      {
-        type: 'aruba_controller',
-        name: 'Aruba Controller',
-        description: 'Aruba wireless controllers',
-        implemented: false,
-      },
-      {
-        type: 'aruba_gateway',
-        name: 'Aruba Gateway',
-        description: 'Aruba gateways and mobility controllers',
-        implemented: false,
-      },
-    ];
+    const IMPLEMENTED = new Set(['cx_switch']);
+
+    return Object.values(PLATFORMS)
+      .filter((platform) => platform.deviceApiType)
+      .map((platform) => ({
+        type: platform.deviceApiType,
+        name: `${VENDORS[platform.vendor]?.label || platform.vendor} ${platform.label}`,
+        description: `${platform.label} devices reached over their REST API`,
+        vendor: platform.vendor,
+        platform: platform.id,
+        implemented: IMPLEMENTED.has(platform.deviceApiType),
+      }));
   }
 
   /**
