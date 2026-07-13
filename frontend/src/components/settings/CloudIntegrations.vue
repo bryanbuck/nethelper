@@ -104,7 +104,21 @@
               :rules="[v => !!v || 'A name is required']"
             />
 
+            <!-- Providers whose orgs live in a specific regional cloud (Mist)
+                 get a picker; everyone else types a base URL. -->
+            <v-select
+              v-if="regions.length"
+              v-model="form.baseUrl"
+              :items="regions"
+              item-title="label"
+              item-value="baseUrl"
+              label="Regional Cloud"
+              hint="Your org lives in exactly one region — using the wrong one fails to authenticate. Check the address bar of your Mist portal."
+              persistent-hint
+              class="mb-3"
+            />
             <v-text-field
+              v-else
               v-model="form.baseUrl"
               label="API Base URL"
               :hint="`Default: ${selectedProvider?.defaultBaseUrl || ''}`"
@@ -207,6 +221,8 @@ const selectedProvider = computed(() =>
 )
 
 const credentialFields = computed(() => selectedProvider.value?.credentialFields || [])
+
+const regions = computed(() => selectedProvider.value?.regions || [])
 
 const providerLabel = (id) =>
   cloudProviders.value.find(p => p.id === id)?.label || CloudProviderInfo[id]?.label || id

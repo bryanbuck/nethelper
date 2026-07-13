@@ -199,8 +199,9 @@ path via `getDeviceConfiguration` is likely broken on a New Central tenant).
 
 ### 5c. Multi-Vendor Support (Juniper + Cisco)
 **Priority**: High
-**Status**: 🔨 Phase 0 complete (2026-07-12) — vendor abstraction + multi-cloud groundwork
-shipped, Aruba behavior unchanged. Phases 1–4 (Mist, Junos, Meraki, Catalyst) not started.
+**Status**: 🔨 Phases 0–1 complete (2026-07-12) — vendor abstraction + multi-cloud
+groundwork shipped (Aruba behavior unchanged), and Juniper Mist is live as the second
+cloud platform. Phases 2–4 (Junos direct, Meraki, Catalyst direct) not started.
 
 Extend device support beyond Aruba to Juniper (Mist cloud + Junos direct SSH) and Cisco
 (Meraki Dashboard API + Catalyst direct SSH). MVP bar per vendor: inventory sync + status,
@@ -215,8 +216,13 @@ several tenants of the same platform (e.g. two Central accounts + a Mist org) �
 inventoried device attributed to its owning integration. The old `aruba-central.service.js`
 is gone; its unverified classic endpoints are quarantined behind typed `CapabilityError`s.
 
+**Phase 1 (done):** Juniper Mist provider — token auth, org-scope validation, paginated
+inventory, live stats enrichment, and config backup of Mist-managed EX/SRX devices as
+canonical-JSON snapshots of their Mist config object (Mist is intent-based; it has no
+running-config — that comes over SSH in Phase 2). Regional-cloud picker in the UI.
+
 **Implementation:**
-- Backend: `src/constants/vendors.js`, `src/utils/transport-router.js`, `src/services/cloud-providers/` (base + factory + aruba-central provider), migration `20260712000000_multi_vendor_phase0`
+- Backend: `src/constants/vendors.js`, `src/utils/transport-router.js`, `src/services/cloud-providers/` (base + factory + aruba-central + mist providers), migration `20260712000000_multi_vendor_phase0`
 - Frontend: `src/models/vendors.js`, `src/components/settings/CloudIntegrations.vue`, vendor/platform/integration selectors in `DevicesView.vue`
 
 **Full design & phased roadmap:** `docs/MULTI_VENDOR_ROADMAP.md`

@@ -5,6 +5,7 @@ const { getPrisma } = require('../../config/database');
 const encryption = require('../../utils/encryption');
 const { CLOUD_PROVIDERS } = require('../../constants/vendors');
 const ArubaCentralProvider = require('./aruba-central.provider');
+const MistProvider = require('./mist.provider');
 const logger = require('../../utils/logger');
 
 // Synthetic integration id used when falling back to ARUBA_CENTRAL_* env vars
@@ -14,8 +15,8 @@ const ENV_ARUBA_INTEGRATION_ID = 'env:aruba_central';
 
 const PROVIDER_CLASSES = {
   aruba_central: ArubaCentralProvider,
-  // juniper_mist: Phase 1 (docs/MULTI_VENDOR_ROADMAP.md)
-  // cisco_meraki: Phase 3
+  juniper_mist: MistProvider,
+  // cisco_meraki: Phase 3 (docs/MULTI_VENDOR_ROADMAP.md)
 };
 
 /**

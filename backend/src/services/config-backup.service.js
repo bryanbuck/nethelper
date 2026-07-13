@@ -175,7 +175,16 @@ class ConfigBackupService {
       });
       return true;
     } catch (error) {
-      logger.error(`Config backup failed for device ${device.serial}:`, error);
+      // A CapabilityError means the device's platform genuinely has nothing to
+      // back up (e.g. Mist configures APs via site/WLAN templates, not
+      // per-device config). That is expected on an "all devices" schedule, so
+      // it is a warning, not an error — but it is still recorded on the backup
+      // row so the reason is visible in the UI.
+      if (error.name === 'CapabilityError') {
+        logger.warn(`Config backup not supported for ${device.name}: ${error.message}`);
+      } else {
+        logger.error(`Config backup failed for device ${device.serial}:`, error);
+      }
       await prisma.configBackup.update({
         where: { id: record.id },
         data: { status: 'failed', error: error.message },
@@ -235,8 +244,12 @@ class ConfigBackupService {
         // propagates as-is: an honest "not supported" beats a fake retry,
         // and we never SSH into cloud-managed devices.
         const config = await provider.getDeviceConfiguration(device.serial);
-        const text = typeof config === 'string' ? config : JSON.stringify(config, null, 2);
-        return { text, source: provider.label };
+        // Providers return { text, format, source } per BaseCloudProvider.
+        // Intent-based clouds (Mist, and Meraki later) yield a canonical-JSON
+        // settings snapshot rather than a CLI running-config; `format` records
+        // which, so the UI can label the backup honestly.
+        const text = typeof config === 'string' ? config : config.text;
+        return { text, source: config.source || provider.label };
       }
 
       if (transport === 'ssh') {

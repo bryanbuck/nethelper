@@ -43,6 +43,22 @@ const PLATFORMS = {
   meraki: { id: 'meraki', vendor: 'cisco', label: 'Meraki (cloud-managed)', deviceApiType: null, sshProfile: null },
 };
 
+// Juniper Mist regional clouds (juniper.net "API Endpoints and Global Regions").
+const MIST_REGIONS = [
+  { id: 'global01', label: 'Global 01 (api.mist.com)', baseUrl: 'https://api.mist.com' },
+  { id: 'global02', label: 'Global 02 (api.gc1.mist.com)', baseUrl: 'https://api.gc1.mist.com' },
+  { id: 'global03', label: 'Global 03 (api.ac2.mist.com)', baseUrl: 'https://api.ac2.mist.com' },
+  { id: 'global04', label: 'Global 04 (api.gc2.mist.com)', baseUrl: 'https://api.gc2.mist.com' },
+  { id: 'global05', label: 'Global 05 (api.gc4.mist.com)', baseUrl: 'https://api.gc4.mist.com' },
+  { id: 'emea01', label: 'EMEA 01 (api.eu.mist.com)', baseUrl: 'https://api.eu.mist.com' },
+  { id: 'emea02', label: 'EMEA 02 (api.gc3.mist.com)', baseUrl: 'https://api.gc3.mist.com' },
+  { id: 'emea03', label: 'EMEA 03 (api.ac6.mist.com)', baseUrl: 'https://api.ac6.mist.com' },
+  { id: 'emea04', label: 'EMEA 04 (api.gc6.mist.com)', baseUrl: 'https://api.gc6.mist.com' },
+  { id: 'apac01', label: 'APAC 01 (api.ac5.mist.com)', baseUrl: 'https://api.ac5.mist.com' },
+  { id: 'apac02', label: 'APAC 02 (api.gc5.mist.com)', baseUrl: 'https://api.gc5.mist.com' },
+  { id: 'apac03', label: 'APAC 03 (api.gc7.mist.com)', baseUrl: 'https://api.gc7.mist.com' },
+];
+
 const CLOUD_PROVIDERS = {
   aruba_central: {
     id: 'aruba_central',
@@ -67,7 +83,10 @@ const CLOUD_PROVIDERS = {
       { key: 'apiToken', label: 'API Token', secret: true },
       { key: 'orgId', label: 'Organization ID', secret: false },
     ],
-    implemented: false, // Phase 1 of docs/MULTI_VENDOR_ROADMAP.md
+    // A Mist org lives in exactly one regional cloud; the wrong host 401s, so
+    // the base URL is part of the integration config and the UI offers a picker.
+    regions: MIST_REGIONS,
+    implemented: true,
   },
   cisco_meraki: {
     id: 'cisco_meraki',

@@ -314,6 +314,10 @@ class SettingsController {
             vendor: provider.vendor,
             defaultBaseUrl: provider.defaultBaseUrl,
             credentialFields: provider.credentialFields,
+            // Providers whose tenants live in a specific regional cloud (Mist)
+            // ship a region list; the UI renders a picker instead of asking the
+            // user to type a base URL.
+            regions: provider.regions || null,
             implemented: provider.implemented,
           })),
         },

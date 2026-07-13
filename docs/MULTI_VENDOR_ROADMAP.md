@@ -270,11 +270,19 @@ Shipped, no behavior change for Aruba:
 
 **Verified** against the live dev DB: two Central tenants configured simultaneously and both returned by `activeProviders()`; a device attributed to the second tenant resolved through `forDevice()` to exactly that tenant; secrets stored as ciphertext and masked over the API; a Juniper switch with an Aruba-looking model (`6300F`) correctly routed to SSH instead of CX REST (proving the vendor field, not the model regex, now drives transport); quarantined Central config endpoint threw `CapabilityError`; transport routing reproduces all prior Aruba behavior including the legacy unclassified-switch quirk. Frontend builds clean.
 
-### Phase 1 — Juniper Mist (cloud)
+### Phase 1 — Juniper Mist (cloud) ✅ **COMPLETE** (2026-07-12)
 
-- `mist.provider.js`: token auth (`Authorization: Token <key>`), testConnection via `GET /api/v1/self`, org inventory (`/api/v1/orgs/:org_id/inventory`) + site devices → NormalizedCloudDevice, device status, `getDeviceConfiguration` for Mist-managed EX switches. Per-integration base URL for regional clouds (api.mist.com, api.eu.mist.com, …).
-- Frontend: Mist form section + chip branding.
-- **Verify (MVP bar)**: add Mist integration → test passes; sync populates vendor=juniper devices with correct types and live status; scheduled + manual config backup of a Mist-managed EX produces diffable snapshots; Aruba regression still green.
+`mist.provider.js`, built against the official OpenAPI spec (github.com/mistsys/mist_openapi) rather than from memory — which caught several things worth knowing:
+
+- **Auth** is a plain org API token (`Authorization: Token <key>`), so unlike Central there is no OAuth dance and nothing to cache in Redis. `testConnection()` hits `GET /api/v1/self` and additionally checks the token actually has privileges on the configured org — a valid token pointed at the wrong org (or the wrong regional cloud) is the most likely misconfiguration, and it now reports that specifically.
+- **Regional clouds matter.** A Mist org lives in exactly one of 12 regional clouds; the wrong host 401s. The region list lives in `constants/vendors.js` and the settings UI renders a picker (generic: any provider that declares `regions` gets one).
+- **Inventory is paginated** (default 100, max 1000 as of early 2026), so `listInventory()` follows `page`/`limit` to completion — a single unpaginated call would silently truncate large orgs.
+- **`/stats/devices` defaults to `type=ap`.** Without `type=all` the sync would silently enrich only access points and lose IP/firmware for switches and gateways. Inventory (not stats) is the source of truth for what exists; stats failures degrade gracefully.
+- **Config-backup semantics**: Mist is intent-based, so a "config" is the device's **Mist configuration object**, snapshotted as canonical (sorted-key) JSON so diffs show real changes rather than key reordering. The `config_cmd` endpoint is *not* the device's config — it returns only the CLI Mist *would* generate when adopting a brownfield switch. For a true Junos running-config, reach the device over SSH (Phase 2). APs have no per-device config at all (they are configured by site/WLAN templates), so they return a typed `CapabilityError` rather than a misleading near-empty "backup".
+
+Also fixed a latent Phase 0 bug this exercised: `pullConfig()`'s cloud branch was `JSON.stringify`-ing the provider's whole `{text, format, source}` wrapper instead of storing `text`. It never fired because Central's config path is quarantined, but Mist hit it immediately.
+
+**Verified** end-to-end against a local mock of the Mist API built from the spec's response shapes: integration created with the token encrypted at rest and masked over the API; `testConnection` authenticated and validated org scope; sync produced `vendor=juniper` devices with correct type mapping (`ap`/`switch`/`gateway`), `platform=junos` on the switch and gateway but not the AP, and live IP/firmware from stats; config backup of a Mist-managed EX4400 stored and checksummed, and after mutating a port description in Mist the second backup's diff showed exactly that one line; an AP backup recorded an honest "not supported" reason instead of failing opaquely; a Mist org and a Central account were active simultaneously in `activeProviders()`.
 
 ### Phase 2 — Junos direct (SSH)
 
