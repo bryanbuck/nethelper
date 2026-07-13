@@ -1,6 +1,5 @@
 const { getPrisma } = require('../config/database');
 const encryption = require('../utils/encryption');
-const axios = require('axios');
 const logger = require('../utils/logger');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const { CLOUD_PROVIDERS } = require('../constants/vendors');
@@ -348,22 +347,18 @@ class SettingsService {
     // Basic timeout for connection test
     const timeout = 10000; // 10 seconds
 
-    try {
-      // Different connection logic based on device type
-      switch (type) {
-        case 'switch':
-        case 'ap':
-        case 'gateway':
-          return await this.testNetworkDeviceConnection(device, credentials, timeout);
+    // Different connection logic based on device type
+    switch (type) {
+      case 'switch':
+      case 'ap':
+      case 'gateway':
+        return this.testNetworkDeviceConnection(device, credentials, timeout);
 
-        case 'controller':
-          return await this.testControllerConnection(device, credentials, timeout);
+      case 'controller':
+        return this.testControllerConnection(device, credentials, timeout);
 
-        default:
-          return await this.testGenericConnection(device, credentials, timeout);
-      }
-    } catch (error) {
-      throw error;
+      default:
+        return this.testGenericConnection(device, credentials, timeout);
     }
   }
 

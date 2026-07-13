@@ -355,7 +355,7 @@
           </div>
           
           <div v-if="validationResult?.isValid && validationResult?.warnings.length === 0">
-            <p class="text-success"> Your workflow is valid and ready to deploy!</p>
+            <p class="text-success">✓ Your workflow is valid and ready to deploy!</p>
           </div>
         </v-card-text>
         

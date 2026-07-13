@@ -368,7 +368,7 @@
             <div class="text-caption text-medium-emphasis">{{ item.temperature }}</div>
           </div>
           <div v-else>
-            <div class="text-caption text-medium-emphasis"></div>
+            <div class="text-caption text-medium-emphasis">—</div>
           </div>
         </template>
         

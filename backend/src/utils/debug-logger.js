@@ -44,7 +44,7 @@ class ServiceDebugLogger {
   createWinstonLogger() {
     const logDir = 'logs';
     
-    return winston.createLogger({
+    const logger = winston.createLogger({
       level: this.globalLogLevel,
       format: winston.format.combine(
         winston.format.timestamp({
