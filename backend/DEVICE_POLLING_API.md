@@ -1,8 +1,10 @@
 # Device Polling API - Frontend Integration Guide
 
+> **Note:** Still current for the poller system, with one addition since writing: pollers now fall back to **SSH** for direct devices without a REST API (AOS-S, Junos, IOS) via `ssh-device.service.js`, in addition to the AOS-CX REST path described here. Transport selection goes through `utils/device-platform.js` / `utils/transport-router.js`. See [`../CLAUDE.md`](../CLAUDE.md).
+
 ## Overview
 
-The Device Polling API provides the capability to poll information directly from network devices using device-specific APIs, separate from Aruba Central. This is a modular system that currently supports multiple polling capabilities from AOS-CX switches:
+The Device Polling API provides the capability to poll information directly from network devices using device-specific APIs, separate from any cloud provider. This is a modular system that currently supports multiple polling capabilities from AOS-CX switches:
 
 - **Firmware** - Firmware version information
 - **System** - System information (hostname, platform, software version, etc.)

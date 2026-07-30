@@ -1,24 +1,27 @@
-# Aruba Central Automation Platform - Backend
+# NetHelper — Backend
 
-Node.js backend for the Aruba Central Automation Platform, providing REST APIs and WebSocket connections for network device management and automation.
+Node.js backend for NetHelper, a **multi-vendor** network automation and monitoring platform. Provides REST APIs and WebSocket connections for device management, config backup, discovery, and automation across Aruba, Juniper, and Cisco — via cloud providers (Aruba Central, Juniper Mist, Cisco Meraki) or direct device access (REST / NETCONF / SSH).
+
+> Architecture, conventions, and the multi-vendor design live in [`../CLAUDE.md`](../CLAUDE.md) and [`../docs/MULTI_VENDOR_ROADMAP.md`](../docs/MULTI_VENDOR_ROADMAP.md). This README is setup/run only.
 
 ## Features
 
 - JWT-based authentication with refresh tokens
-- Aruba Central API integration
-- Automation workflow engine
-- Cron-based scheduling
+- Multi-vendor cloud-provider integration (Aruba Central, Juniper Mist; Meraki planned) + direct device access
+- Configuration backup (cloud / device-REST / NETCONF / SSH) with scheduling, diffing, retention
+- Automated device discovery (nmap-based)
+- Automation workflow engine + cron scheduling
 - Real-time updates via WebSocket
-- Device monitoring and statistics
-- Multi-channel notifications
-- Comprehensive audit logging
+- ICMP + API device monitoring
+- Multi-channel notifications, comprehensive audit logging
 
 ## Prerequisites
 
-- Node.js 18+ 
+- Node.js 18+
 - PostgreSQL 15+
 - Redis 7+
-- Aruba Central API credentials
+- `nmap` on the host (device discovery)
+- Credentials for whatever you connect to: a cloud integration (Aruba Central / Mist / Meraki) and/or per-device SSH/REST credentials
 
 ## Quick Start
 
@@ -61,7 +64,7 @@ Run tests in watch mode: `npm run test:watch`
 
 Test login functionality: `npm run test:login user@example.com password`
 
-For detailed login testing and troubleshooting guide, see [docs/LOGIN_TESTING.md](docs/LOGIN_TESTING.md)
+For the (historical) login testing guide, see [../docs/archive/LOGIN_TESTING.md](../docs/archive/LOGIN_TESTING.md)
 
 ## Deployment
 

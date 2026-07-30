@@ -1,4 +1,7 @@
-# Aruba Central Network Automation Platform - Architectural Overview
+# NetHelper — Backend Architectural Overview
+
+> ⚠️ **Partially superseded (predates the multi-vendor migration).** The layered-architecture, middleware, queue, and WebSocket descriptions below remain accurate, but any Aruba-Central-specific framing does not: the platform is now **multi-vendor** with a cloud-provider abstraction, a transport router, and `managementMode: cloud|direct`. The `aruba-central.service.js` referenced in older text was **deleted**.
+> **Authoritative sources:** [`../CLAUDE.md`](../CLAUDE.md) (current architecture summary) and [`../docs/MULTI_VENDOR_ROADMAP.md`](../docs/MULTI_VENDOR_ROADMAP.md). Read those first; use this doc for the still-valid layer/middleware detail.
 
 ## System Architecture
 

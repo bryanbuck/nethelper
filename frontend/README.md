@@ -1,6 +1,8 @@
-# Aruba Central Automation Platform - Frontend
+# NetHelper — Frontend
 
-Vue.js frontend for the Aruba Central Automation Platform, providing an intuitive web interface for network device management, automation workflows, and real-time monitoring.
+Vue 3 frontend for NetHelper, a **multi-vendor** network automation and monitoring platform — a web interface for device management, config backup, discovery, automation workflows, and real-time monitoring across Aruba, Juniper, and Cisco.
+
+> Architecture and conventions live in [`../CLAUDE.md`](../CLAUDE.md) and [`../docs/MULTI_VENDOR_ROADMAP.md`](../docs/MULTI_VENDOR_ROADMAP.md). This README is setup/run only.
 
 ## Features
 
@@ -235,7 +237,7 @@ The application implements several performance optimizations:
 - Check Node.js version meets requirements (18+)
 - Verify all environment variables are set
 
-For more detailed troubleshooting, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+For historical settings-page troubleshooting notes, see [../docs/archive/FRONTEND_SETTINGS_TROUBLESHOOTING.md](../docs/archive/FRONTEND_SETTINGS_TROUBLESHOOTING.md)
 
 ## Contributing
 

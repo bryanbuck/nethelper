@@ -1,19 +1,27 @@
-# NetHelper Platform - Long Term TODOs
+# NetHelper Platform — Roadmap & TODO
 
-This document tracks features and improvements that are planned for future implementation but are not currently prioritized for immediate development.
+The single forward-looking backlog for NetHelper: features and improvements planned but not yet prioritized, plus the status of recently-shipped work.
+
+- **Architecture & the multi-vendor phased plan** live in [`MULTI_VENDOR_ROADMAP.md`](MULTI_VENDOR_ROADMAP.md) (authoritative).
+- **Project conventions** live in [`../CLAUDE.md`](../CLAUDE.md).
+- **Historical/superseded docs** are in [`archive/`](archive/) — do not treat them as current.
+
+> Context: NetHelper is now **multi-vendor** (Aruba/Juniper/Cisco) with a `cloud`/`direct` management model. Some items below were written in the earlier Aruba-Central-only era; where they still apply, read "Aruba Central" as "any cloud provider" and "central/direct" as "cloud/direct." Corrected inline where it matters.
 
 ---
 
 ## 🔮 Future Enhancements
 
-### 1. WebSocket Real-time Updates from Aruba Central
+### 1. Real-time Updates from Cloud Providers (webhooks / event streams)
 
 **Priority**: Medium
 **Status**: Not Started
 **Estimated Effort**: 2-3 weeks
 
+> **Multi-vendor note:** originally scoped to Aruba Central webhooks; now applies per cloud provider. Aruba Central and Meraki offer webhooks; **Mist offers a WebSocket event stream** (already noted as post-MVP in the multi-vendor roadmap). Implement as a capability on `BaseCloudProvider` (e.g. `subscribeEvents`) so each provider supplies its own mechanism, feeding the same internal device-update path.
+
 #### Description
-Integrate with Aruba Central's webhook/event notification system to receive real-time device status updates directly from Aruba Central, rather than relying solely on periodic sync operations.
+Integrate with each cloud provider's webhook/event notification system to receive real-time device status updates directly, rather than relying solely on periodic sync operations.
 
 #### Benefits
 - **Real-time visibility**: Instant notification when devices go online/offline in Aruba Central
@@ -127,6 +135,8 @@ Automatically discover devices on the local network:
 - Real-time: WebSocket events `discovery:progress` / `discovery:completed` / `discovery:failed`
 - Requires `nmap` on the backend host (installed). Env: `DISCOVERY_SCAN_TIMEOUT`
 
+**Multi-vendor follow-up (open):** built Aruba-only — the OUI table and the cloud cross-check know only Aruba/HPE. Generalize to (a) match Juniper/Cisco OUIs and (b) cross-check against **all** active cloud integrations via `activeProviders()`, and rename `DiscoveredDevice.isArubaVendor` → `matchedVendor Vendor?`. Flagged as post-MVP in `MULTI_VENDOR_ROADMAP.md` §8.
+
 ---
 
 ### 5. Configuration Backup Scheduling
@@ -181,7 +191,7 @@ Support devices managed directly on the local network rather than through Aruba 
 **Status**: 🔨 Core implemented (2026-07-08) — switch-side probe, schema fields, backup
 routing, and UI shipped and verified against live hardware. Remaining: Central-side
 group/monitor-only enrichment (blocked on tenant API credentials — OAuth 401, see
-`docs/CENTRAL_ENDPOINT_TRIAGE.md`) and restore guardrails (restore itself still deferred).
+`docs/archive/CENTRAL_ENDPOINT_TRIAGE.md`) and restore guardrails (restore itself still deferred).
 
 `Device.managementMode` records record provenance, not the switch's own view of config
 ownership. A CX switch connected to Central in **managed** mode rejects local config writes
@@ -193,7 +203,7 @@ reads, and block direct config writes to Central-managed switches. Also triage t
 classic-vs-New-Central endpoint mix in `aruba-central.service.js` (the `central` backup
 path via `getDeviceConfiguration` is likely broken on a New Central tenant).
 
-**Full evaluation & design:** `docs/CENTRAL_MANAGEMENT_MODE_PLAN.md`
+**Full evaluation & design:** `docs/archive/CENTRAL_MANAGEMENT_MODE_PLAN.md` (historical)
 
 ---
 
@@ -330,9 +340,15 @@ When an item is completed:
 
 ## ✅ Completed Items
 
-_(Items will be moved here once completed)_
+Recently shipped (details in the sections above): Automated Device Discovery (item 4), Configuration Backup Scheduling (item 5), Direct-managed device support / SSH config pull (5a), Central-managed detection core (5b), Multi-Vendor Phases 0–2 (5c).
 
 ---
 
-**Last Updated**: 2026-07-12
+## 🗂️ Historical backlog note
+
+The old per-tier backlogs (`backend_todo.txt` / `frontend_todo.txt`, dated March 2025) were reviewed during the 2026-07 doc consolidation and found **obsolete** — every concrete item sampled (execution status transitions, `auth/register`, `auth/me` GET/PUT, nested schedule/execution routes) is already implemented, and they still reference the deleted `aruba-central.service.js`. They were archived rather than merged; see `archive/BACKEND_TODO_2025-03.txt` and `archive/FRONTEND_TODO_2025-03.txt`. No open items were carried forward from them.
+
+---
+
+**Last Updated**: 2026-07-30 (doc consolidation; content through 2026-07-12)
 **Maintained By**: Development Team

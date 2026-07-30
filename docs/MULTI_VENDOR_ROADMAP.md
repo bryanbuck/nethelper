@@ -15,7 +15,7 @@ NetHelper is Aruba-only, and the vendor coupling is uneven — some layers are a
 | `BaseDeviceAPI` (`backend/src/services/device-api/base-device-api.js`) | Vendor-neutral interface (login/testConnection/getDeviceInfo/getConfiguration/...) — good |
 | `DeviceAPIFactory` | Switch only handles `cx_switch`; `determineDeviceAPIType()` infers platform from hardcoded Aruba model regexes, defaults to CX |
 | `utils/device-platform.js` | The transport-decision choke point (`detectPlatform`, `isCxRestCapable`, `useSshTransport`) — knows only `aos-cx`/`aos-s`, classifies via Aruba model-number regexes |
-| Cloud plane | `aruba-central.service.js` singleton + bespoke `ArubaCentralConfig` table, imported **directly** by device sync, config backup, automation, discovery. Several methods are dead (unset `this.baseURL`); tenant OAuth currently 401s (`docs/CENTRAL_ENDPOINT_TRIAGE.md`) |
+| Cloud plane | `aruba-central.service.js` singleton + bespoke `ArubaCentralConfig` table, imported **directly** by device sync, config backup, automation, discovery. Several methods are dead (unset `this.baseURL`); tenant OAuth currently 401s (`docs/archive/CENTRAL_ENDPOINT_TRIAGE.md`) |
 | Data model | **No `vendor` field anywhere.** `DeviceType` is category-only (access_point/switch/gateway). Platform is regex-inferred from `Device.model`. `managementMode` enum is `central \| direct`; `centralManaged*` columns are Aruba-shaped |
 | Config backup | `pullConfig()` in `config-backup.service.js` has the cleanest transport dispatch in the app (CX REST → Central → SSH) — the pattern to generalize |
 | SSH | `ssh-device.service.js` `PLATFORM_PROFILES` keyed `aos-s`/`aos-cx`/`generic`; the `generic` profile is already IOS-style |
@@ -321,7 +321,7 @@ Per-vendor pollers (generalize `device-poller.service.js`), automation actions f
 1. **Meraki backup semantics** — biggest product-level risk: settings snapshot ≠ running-config. Needs UI honesty and a decision on which settings objects constitute the snapshot.
 2. **Mist regional clouds** — confirm the regional hostname list at implementation time; offer a region picker in the UI.
 3. **central→cloud rename migration** — riskiest single migration; rehearse on a DB copy; `@map` fallback exists.
-4. **Central's broken endpoints** — if Phase 0 cleanup shows classic-Central config retrieval never worked, scope Aruba cloud backup down rather than letting the abstraction inherit fictional capabilities. (Related: item 5b in `LONG_TERM_TODOS.md`, OAuth 401 blocker.)
+4. **Central's broken endpoints** — if Phase 0 cleanup shows classic-Central config retrieval never worked, scope Aruba cloud backup down rather than letting the abstraction inherit fictional capabilities. (Related: item 5b in `docs/ROADMAP_AND_TODO.md`, OAuth 401 blocker.)
 5. **DeviceType classification** — Meraki MX → gateway; cameras/sensors → `other`, excluded from backup.
 6. **Credential model split** — direct creds in `ApiCredential`, cloud creds in `CloudIntegration.credentials` JSON; accept the mild inconsistency for MVP.
 7. ~~**NETCONF dependency** — deferred~~ — **Resolved in Phase 2.** Hand-rolled over `ssh2.subsys('netconf')` exactly as this note anticipated; no npm dependency added. The npm `netconf` package was confirmed stale (last release 2022).
