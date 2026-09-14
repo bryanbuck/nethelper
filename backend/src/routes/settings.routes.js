@@ -117,4 +117,12 @@ router.delete(
   settingsController.deleteArubaCentralConfig
 );
 
+// --- Git backup mirror (admin only) ---
+// Storage configuration for the config-backup Git mirror. Secrets are masked
+// on read; a blank secret on write keeps the stored value.
+router.get('/git-backup', authorize('admin'), settingsController.getGitBackupConfig);
+router.put('/git-backup', authorize('admin'), settingsController.saveGitBackupConfig);
+router.post('/git-backup/test', authorize('admin'), settingsController.testGitBackupConfig);
+router.delete('/git-backup', authorize('admin'), settingsController.deleteGitBackupConfig);
+
 module.exports = router;

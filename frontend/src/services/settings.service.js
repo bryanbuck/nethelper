@@ -171,6 +171,55 @@ const settingsService = {
    * @param {string} id - Integration ID
    * @returns {Promise} Test result
    */
+  /**
+   * Get the Git backup mirror configuration (secrets masked) and its field catalog.
+   */
+  async getGitBackupConfig() {
+    try {
+      const response = await api.get('/settings/git-backup')
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'fetching Git backup configuration')
+    }
+  },
+
+  /**
+   * Create or update the Git backup mirror configuration.
+   * Blank secret fields keep their stored value.
+   */
+  async saveGitBackupConfig(payload) {
+    try {
+      const response = await api.put('/settings/git-backup', payload)
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'saving Git backup configuration')
+    }
+  },
+
+  /**
+   * Validate the stored Git backup configuration (repo + remote reachability).
+   */
+  async testGitBackupConfig() {
+    try {
+      const response = await api.post('/settings/git-backup/test')
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'testing Git backup configuration')
+    }
+  },
+
+  /**
+   * Forget the Git backup configuration. The repository is left on disk.
+   */
+  async deleteGitBackupConfig() {
+    try {
+      const response = await api.delete('/settings/git-backup')
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'deleting Git backup configuration')
+    }
+  },
+
   async testCloudIntegration(id) {
     try {
       const response = await api.post(`/settings/cloud-integrations/${id}/test`)

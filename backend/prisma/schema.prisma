@@ -138,6 +138,7 @@ model User {
   apiCredentials        ApiCredential[]
   arubaCentralConfigs   ArubaCentralConfig[]
   cloudIntegrations     CloudIntegration[]
+  gitBackupConfigs      GitBackupConfig[]
 }
 
 model Device {
@@ -390,6 +391,8 @@ model ConfigBackup {
   checksum      String?       // SHA-256 of config content
   sizeBytes     Int?
   hasChanges    Boolean?      // Differs from previous successful backup of this device
+  commitSha     String?       // Git commit holding this config, when the Git mirror is enabled
+  format        String?       // 'cli-text' | 'junos-set' | 'aoscx-json' | 'mist-config-json' | ...
   error         String?
   triggeredBy   String?       // User id (manual runs)
   createdAt     DateTime      @default(now())
@@ -428,6 +431,37 @@ model CloudIntegration {
   devices        Device[]
 
   @@index([provider, isActive])
+  @@index([userId])
+}
+
+// Git mirror for configuration backups. A single active row configures the
+// repository that config-backup.service commits each captured config into.
+// The flat-file store (BACKUP_STORAGE_PATH / ConfigBackup.filePath) remains
+// authoritative; Git is an additive mirror that preserves full history even
+// after retention prunes the rows and files.
+model GitBackupConfig {
+  id             String      @id @default(uuid())
+  name           String      @default("Config Backup Repository")
+  repoPath       String      // Local repo dir; defaults to ./storage/config-repo
+  remoteUrl      String?     // Optional push target; no remote = local history only
+  branch         String      @default("main")
+  authorName     String      @default("NetHelper")
+  authorEmail    String      @default("nethelper@localhost")
+  // Secret values are field-encrypted before persist (see settings.service).
+  // Shape: { sshKeyPath, token* }   (* = encrypted)
+  credentials    Json        @default("{}")
+  isActive       Boolean     @default(false)
+  lastTested     DateTime?
+  lastTestStatus TestStatus?
+  lastPush       DateTime?
+  lastPushError  String?
+  notes          String?
+  createdBy      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([isActive])
   @@index([userId])
 }
 

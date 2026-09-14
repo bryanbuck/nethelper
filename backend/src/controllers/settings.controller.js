@@ -4,14 +4,12 @@ const logger = require('../utils/logger');
 
 class SettingsController {
   /**
-   * Get all API credentials for the authenticated user
+   * Get all API credentials (shared across all users)
    * GET /api/v1/settings/api-credentials
    */
   async getApiCredentials(req, res, next) {
     try {
-      const userId = req.user.id;
-
-      const credentials = await settingsService.getApiCredentials(userId);
+      const credentials = await settingsService.getApiCredentials();
 
       res.json({
         success: true,
@@ -30,9 +28,8 @@ class SettingsController {
   async getApiCredential(req, res, next) {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
 
-      const credential = await settingsService.getApiCredential(id, userId);
+      const credential = await settingsService.getApiCredential(id);
 
       if (!credential) {
         return res.status(404).json({
@@ -58,9 +55,8 @@ class SettingsController {
   async getApiCredentialByDevice(req, res, next) {
     try {
       const { deviceId } = req.params;
-      const userId = req.user.id;
 
-      const credential = await settingsService.getApiCredentialByDevice(deviceId, userId);
+      const credential = await settingsService.getApiCredentialByDevice(deviceId);
 
       res.json({
         success: true,
@@ -109,10 +105,9 @@ class SettingsController {
   async updateApiCredential(req, res, next) {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
       const updateData = req.body;
 
-      const credential = await settingsService.updateApiCredential(id, updateData, userId);
+      const credential = await settingsService.updateApiCredential(id, updateData);
 
       res.json({
         success: true,
@@ -146,9 +141,8 @@ class SettingsController {
   async deleteApiCredential(req, res, next) {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
 
-      await settingsService.deleteApiCredential(id, userId);
+      await settingsService.deleteApiCredential(id);
 
       res.json({
         success: true,
@@ -176,10 +170,9 @@ class SettingsController {
   async testApiCredential(req, res, next) {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
       const { deviceId } = req.body || {};
 
-      const testResult = await settingsService.testApiCredential(id, userId, deviceId);
+      const testResult = await settingsService.testApiCredential(id, deviceId);
 
       res.json({
         success: true,
@@ -402,6 +395,73 @@ class SettingsController {
       });
     } catch (error) {
       logger.error('Delete cloud integration error:', error);
+      next(error);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Git backup mirror
+  // ---------------------------------------------------------------------
+
+  /**
+   * Get the Git mirror configuration (secrets masked) plus its field catalog.
+   * GET /api/v1/settings/git-backup
+   */
+  async getGitBackupConfig(req, res, next) {
+    try {
+      const data = await settingsService.getGitBackupConfig();
+      res.json({ success: true, data });
+    } catch (error) {
+      logger.error('Get git backup config error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Create or update the Git mirror configuration.
+   * PUT /api/v1/settings/git-backup
+   */
+  async saveGitBackupConfig(req, res, next) {
+    try {
+      const config = await settingsService.saveGitBackupConfig(req.user.id, req.body);
+      res.json({
+        success: true,
+        data: config,
+        message: 'Git backup configuration saved',
+      });
+    } catch (error) {
+      logger.error('Save git backup config error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Validate the stored Git mirror configuration.
+   * POST /api/v1/settings/git-backup/test
+   */
+  async testGitBackupConfig(req, res, next) {
+    try {
+      const result = await settingsService.testGitBackupConfig();
+      res.json({ success: result.success, message: result.message, data: result });
+    } catch (error) {
+      logger.error('Test git backup config error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Forget the Git mirror configuration (the repository is left on disk).
+   * DELETE /api/v1/settings/git-backup
+   */
+  async deleteGitBackupConfig(req, res, next) {
+    try {
+      await settingsService.deleteGitBackupConfig();
+      res.json({
+        success: true,
+        message: 'Git backup configuration removed. The repository was left on disk.',
+      });
+    } catch (error) {
+      logger.error('Delete git backup config error:', error);
       next(error);
     }
   }

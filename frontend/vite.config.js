@@ -8,6 +8,7 @@ export default defineConfig({
   server: {
     allowedHosts: [
       'dev-nethelper.buck.local',
+      'dev-nethelper',
       'buck.local',
       'localhost'
     ],

@@ -148,17 +148,19 @@ Scheduled configuration backups with:
 - ✅ Configuration diff detection (SHA-256 change detection per device; unified-diff comparison between any two versions)
 - ✅ Rollback capability — first iteration is **view / diff / download** (browse versions, compare, download to apply manually). Automated push-to-device restore is intentionally deferred (see note below).
 - ✅ Backup retention policies (per-schedule retentionDays + retentionMaxCount, 0 = unlimited; pruned after each run)
-- ⏳ Export to external storage — local disk storage implemented with versioning; S3/NFS export deferred (config pulled via Aruba Central API)
+- ✅ Export to external storage — **Git mirror shipped 2026-09-14** (opt-in; commits every captured config, optional `git push` to a remote for off-box replication). S3/NFS export still deferred.
 
 **Implementation:**
 - Backend: `src/services/config-backup.service.js`, `src/jobs/config-backup.job.js`, `src/controllers/backup.controller.js`, `src/routes/backup.routes.js` (`/api/v1/backups/*`), Bull `config-backup` queue, models `BackupSchedule` + `ConfigBackup`, schedule sync on server startup
 - Frontend: `src/views/devices/ConfigBackupsView.vue` (route `/devices/backups`), `src/stores/backups.js`, `src/services/backup.service.js`, `src/components/backups/ConfigDiffViewer.vue` (hand-rolled colored unified-diff viewer)
 - Config source: routed per device by management mode (see "Direct-managed device support" below) — Central API, AOS-CX REST, or SSH; stored to local disk under `BACKUP_STORAGE_PATH`
+- Git mirror (2026-09-14): `src/services/git-backup.service.js`, model `GitBackupConfig`, admin routes `/api/v1/settings/git-backup`, UI `frontend/src/components/settings/GitBackupSettings.vue`. Shells out to the system `git` binary — no library dependency. One repo, one directory per device serial holding the config plus a `meta.json` sidecar; the filename follows the captured `format` (`.cfg` / `.set` / `.json`), which is now persisted on `ConfigBackup.format` instead of being discarded. Commits only when the config actually changed (the dedup the flat-file store cannot do), pushes once per batch. **Additive and best-effort**: the flat file remains authoritative, and neither a commit nor a push failure can fail a backup. **Retention deliberately does not prune Git history** — rows and flat files are pruned as before, so the repo is the long-term archive under a bounded working index.
 - Real-time: WebSocket events `backup:completed` / `backup:failed` / `backup:run:completed`
 
 **Deferred follow-ups (next iteration):**
 - Automated restore/rollback (push a selected version back via Central API or SSH — riskier, needs per-platform apply logic)
 - S3-compatible and NFS export targets
+- Git mirror follow-ups: browse/restore from a commit in the UI (`GET /api/v1/backups/:backupId/history` already returns the device's commit log), and `git gc`/shallow-clone tuning if a large fleet makes the repo unwieldy
 - ✅ ~~SSH-based config pull for non-cloud-managed devices~~ — completed (2026-07-06), see below
 
 ---

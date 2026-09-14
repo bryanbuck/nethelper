@@ -55,6 +55,14 @@
                 <ErrorBoundary :show-details="isDevelopment">
                   <ApiCredentials />
                 </ErrorBoundary>
+
+                <!-- Divider between sections -->
+                <v-divider class="my-8"></v-divider>
+
+                <!-- Configuration backup Git mirror -->
+                <ErrorBoundary :show-details="isDevelopment">
+                  <GitBackupSettings />
+                </ErrorBoundary>
               </v-card-text>
             </v-window-item>
 
@@ -99,6 +107,7 @@ import { ref, watch, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
 import CloudIntegrations from '@/components/settings/CloudIntegrations.vue'
+import GitBackupSettings from '@/components/settings/GitBackupSettings.vue'
 import ApiCredentials from '@/components/settings/ApiCredentials.vue'
 import debugLog, { DebugCategory } from '@/utils/debug'
 

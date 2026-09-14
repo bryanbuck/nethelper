@@ -25,6 +25,8 @@ router.get('/:backupId', validateBackup.backupId, backupController.getBackup);
 router.get('/:backupId/content', validateBackup.backupId, backupController.getBackupContent);
 router.get('/:backupId/download', validateBackup.backupId, backupController.downloadBackup);
 router.get('/:backupId/diff/:otherId', validateBackup.diff, backupController.diffBackups);
+// Git commit history for this backup's device (empty when the mirror is off)
+router.get('/:backupId/history', validateBackup.backupId, backupController.getBackupHistory);
 router.delete('/:backupId', authorize('admin'), validateBackup.backupId, backupController.deleteBackup);
 
 module.exports = router;

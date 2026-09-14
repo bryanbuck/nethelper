@@ -8,6 +8,9 @@ export const useSettingsStore = defineStore('settings', () => {
   const apiCredentials = ref([])
   const cloudIntegrations = ref([])
   const cloudProviders = ref([])
+  const gitBackupConfig = ref(null)
+  const gitBackupDefaults = ref({})
+  const gitBackupFields = ref([])
   const loading = ref(false)
   const error = ref(null)
 
@@ -238,11 +241,91 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
+  // --- Git backup mirror ---
+
+  const fetchGitBackupConfig = async () => {
+    loading.value = true
+    error.value = null
+
+    try {
+      debugLog.progress(DebugCategory.SETTINGS, 'Fetching Git backup configuration')
+      const response = await settingsService.getGitBackupConfig()
+      gitBackupConfig.value = response.data.config
+      gitBackupDefaults.value = response.data.defaults || {}
+      gitBackupFields.value = response.data.credentialFields || []
+      debugLog.success(DebugCategory.SETTINGS, 'Fetched Git backup configuration')
+      return response.data
+    } catch (err) {
+      error.value = err.message
+      debugLog.error(DebugCategory.SETTINGS, 'Failed to fetch Git backup configuration:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const saveGitBackupConfig = async (payload) => {
+    loading.value = true
+    error.value = null
+
+    try {
+      debugLog.progress(DebugCategory.SETTINGS, 'Saving Git backup configuration')
+      const response = await settingsService.saveGitBackupConfig(payload)
+      gitBackupConfig.value = response.data
+      debugLog.success(DebugCategory.SETTINGS, 'Saved Git backup configuration')
+      return response.data
+    } catch (err) {
+      error.value = err.message
+      debugLog.error(DebugCategory.SETTINGS, 'Failed to save Git backup configuration:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const testGitBackupConfig = async () => {
+    error.value = null
+
+    try {
+      debugLog.progress(DebugCategory.SETTINGS, 'Testing Git backup configuration')
+      const response = await settingsService.testGitBackupConfig()
+      // Refresh so lastTested / lastTestStatus reflect the run.
+      await fetchGitBackupConfig()
+      debugLog.success(DebugCategory.SETTINGS, 'Tested Git backup configuration')
+      return response
+    } catch (err) {
+      error.value = err.message
+      debugLog.error(DebugCategory.SETTINGS, 'Failed to test Git backup configuration:', err)
+      throw err
+    }
+  }
+
+  const deleteGitBackupConfig = async () => {
+    loading.value = true
+    error.value = null
+
+    try {
+      debugLog.progress(DebugCategory.SETTINGS, 'Deleting Git backup configuration')
+      await settingsService.deleteGitBackupConfig()
+      gitBackupConfig.value = null
+      debugLog.success(DebugCategory.SETTINGS, 'Deleted Git backup configuration')
+    } catch (err) {
+      error.value = err.message
+      debugLog.error(DebugCategory.SETTINGS, 'Failed to delete Git backup configuration:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     // State
     apiCredentials,
     cloudIntegrations,
     cloudProviders,
+    gitBackupConfig,
+    gitBackupDefaults,
+    gitBackupFields,
     loading,
     error,
 
@@ -261,6 +344,10 @@ export const useSettingsStore = defineStore('settings', () => {
     updateCloudIntegration,
     testCloudIntegration,
     deleteCloudIntegration,
+    fetchGitBackupConfig,
+    saveGitBackupConfig,
+    testGitBackupConfig,
+    deleteGitBackupConfig,
     clearError,
   }
 })

@@ -80,14 +80,27 @@
               </template>
 
               <template #[`item.hasChanges`]="{ item }">
-                <v-chip
-                  v-if="item.status === 'success'"
-                  :color="item.hasChanges ? 'warning' : 'default'"
-                  size="x-small"
-                  variant="tonal"
-                >
-                  {{ item.hasChanges ? 'Changed' : 'No change' }}
-                </v-chip>
+                <template v-if="item.status === 'success'">
+                  <v-chip
+                    :color="item.hasChanges ? 'warning' : 'default'"
+                    size="x-small"
+                    variant="tonal"
+                  >
+                    {{ item.hasChanges ? 'Changed' : 'No change' }}
+                  </v-chip>
+                  <!-- Present only when the Git mirror is enabled and committed this run -->
+                  <v-chip
+                    v-if="item.commitSha"
+                    class="ml-1"
+                    size="x-small"
+                    variant="tonal"
+                    color="info"
+                    prepend-icon="mdi-source-commit"
+                    :title="`Committed to the backup repository as ${item.commitSha}`"
+                  >
+                    {{ item.commitSha.slice(0, 7) }}
+                  </v-chip>
+                </template>
                 <span v-else>—</span>
               </template>
 

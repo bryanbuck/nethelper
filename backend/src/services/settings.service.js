@@ -3,19 +3,18 @@ const encryption = require('../utils/encryption');
 const logger = require('../utils/logger');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const { CLOUD_PROVIDERS } = require('../constants/vendors');
+const gitBackupService = require('./git-backup.service');
 
 class SettingsService {
   /**
-   * Get all API credentials for a user
-   * @param {string} userId - User ID
+   * Get all API credentials (shared across all users)
    * @returns {Promise<Array>} Array of API credentials (with masked sensitive fields and device count)
    */
-  async getApiCredentials(userId) {
+  async getApiCredentials() {
     try {
       const prisma = getPrisma();
 
       const credentials = await prisma.apiCredential.findMany({
-        where: { userId },
         include: {
           devices: {
             select: {
@@ -44,17 +43,15 @@ class SettingsService {
   /**
    * Get a single API credential by ID
    * @param {string} credentialId - Credential ID
-   * @param {string} userId - User ID (for authorization)
    * @returns {Promise<Object|null>} API credential (with masked sensitive fields)
    */
-  async getApiCredential(credentialId, userId) {
+  async getApiCredential(credentialId) {
     try {
       const prisma = getPrisma();
 
-      const credential = await prisma.apiCredential.findFirst({
+      const credential = await prisma.apiCredential.findUnique({
         where: {
-          id: credentialId,
-          userId
+          id: credentialId
         },
         include: {
           devices: {
@@ -87,10 +84,9 @@ class SettingsService {
   /**
    * Get API credential associated with a specific device
    * @param {string} deviceId - Device ID
-   * @param {string} userId - User ID (for authorization)
    * @returns {Promise<Object|null>} API credential or null
    */
-  async getApiCredentialByDevice(deviceId, userId) {
+  async getApiCredentialByDevice(deviceId) {
     try {
       const prisma = getPrisma();
 
@@ -102,11 +98,6 @@ class SettingsService {
       });
 
       if (!device || !device.apiCredential) {
-        return null;
-      }
-
-      // Verify the credential belongs to the user
-      if (device.apiCredential.userId !== userId) {
         return null;
       }
 
@@ -160,16 +151,15 @@ class SettingsService {
    * Update an API credential
    * @param {string} credentialId - Credential ID
    * @param {Object} updateData - Data to update
-   * @param {string} userId - User ID (for authorization)
    * @returns {Promise<Object>} Updated API credential (with masked sensitive fields)
    */
-  async updateApiCredential(credentialId, updateData, userId) {
+  async updateApiCredential(credentialId, updateData) {
     try {
       const prisma = getPrisma();
 
-      // Verify credential exists and belongs to user
-      const existing = await prisma.apiCredential.findFirst({
-        where: { id: credentialId, userId },
+      // Verify credential exists
+      const existing = await prisma.apiCredential.findUnique({
+        where: { id: credentialId },
       });
 
       if (!existing) {
@@ -211,16 +201,15 @@ class SettingsService {
   /**
    * Delete an API credential
    * @param {string} credentialId - Credential ID
-   * @param {string} userId - User ID (for authorization)
    * @returns {Promise<boolean>} True if deleted
    */
-  async deleteApiCredential(credentialId, userId) {
+  async deleteApiCredential(credentialId) {
     try {
       const prisma = getPrisma();
 
-      // Verify credential exists and belongs to user
-      const existing = await prisma.apiCredential.findFirst({
-        where: { id: credentialId, userId },
+      // Verify credential exists
+      const existing = await prisma.apiCredential.findUnique({
+        where: { id: credentialId },
       });
 
       if (!existing) {
@@ -241,17 +230,16 @@ class SettingsService {
   /**
    * Test an API credential by attempting to connect to a device
    * @param {string} credentialId - Credential ID
-   * @param {string} userId - User ID (for authorization)
    * @param {string} deviceId - Optional device ID to test against
    * @returns {Promise<Object>} Test result
    */
-  async testApiCredential(credentialId, userId, deviceId = null) {
+  async testApiCredential(credentialId, deviceId = null) {
     try {
       const prisma = getPrisma();
 
       // Get credential with decrypted values
-      const credential = await prisma.apiCredential.findFirst({
-        where: { id: credentialId, userId },
+      const credential = await prisma.apiCredential.findUnique({
+        where: { id: credentialId },
         include: {
           devices: true,
         },
@@ -793,6 +781,129 @@ class SettingsService {
       throw new Error('Aruba Central configuration not found');
     }
     return this.deleteCloudIntegration(configId, userId);
+  }
+
+  // ---------------------------------------------------------------------
+  // Git backup mirror
+  // ---------------------------------------------------------------------
+
+  /**
+   * Encrypt secret fields on a Git mirror credential blob. Mirrors
+   * encryptCredentials(): a blank secret on update means "unchanged".
+   */
+  encryptGitCredentials(credentials = {}, existing = {}) {
+    const stored = {};
+    for (const field of gitBackupService.credentialFields) {
+      const value = credentials[field.key];
+      if (value === undefined || value === null || value === '') {
+        if (existing[field.key] !== undefined) stored[field.key] = existing[field.key];
+        continue;
+      }
+      stored[field.key] = field.secret ? encryption.encrypt(String(value)) : String(value);
+    }
+    return stored;
+  }
+
+  /** Strip secrets from a Git mirror row before it goes over the wire. */
+  sanitizeGitConfig(row) {
+    if (!row) return null;
+    const credentials = {};
+    for (const field of gitBackupService.credentialFields) {
+      if (field.secret) {
+        credentials[field.key] = row.credentials?.[field.key] ? '********' : null;
+      } else {
+        credentials[field.key] = row.credentials?.[field.key] ?? null;
+      }
+    }
+    const { credentials: _omit, ...rest } = row;
+    return { ...rest, credentials };
+  }
+
+  /**
+   * The Git mirror configuration (secrets masked), plus the field catalog the
+   * UI renders its form from. Returns defaults when nothing is configured yet.
+   */
+  async getGitBackupConfig() {
+    const prisma = getPrisma();
+    const row = await prisma.gitBackupConfig.findFirst({ orderBy: { createdAt: 'asc' } });
+    return {
+      config: this.sanitizeGitConfig(row),
+      defaults: { repoPath: gitBackupService.defaultRepoPath, branch: 'main' },
+      credentialFields: gitBackupService.credentialFields,
+    };
+  }
+
+  /**
+   * Create or update the Git mirror configuration. There is one row; passing
+   * no id updates the existing one rather than creating a second.
+   */
+  async saveGitBackupConfig(userId, data) {
+    const prisma = getPrisma();
+    const existing = await prisma.gitBackupConfig.findFirst({ orderBy: { createdAt: 'asc' } });
+
+    const repoPath = (data.repoPath || existing?.repoPath || gitBackupService.defaultRepoPath).trim();
+    if (!repoPath) throw new Error('A repository path is required');
+
+    const credentials = this.encryptGitCredentials(data.credentials, existing?.credentials || {});
+
+    const fields = {
+      name: data.name ?? existing?.name ?? 'Config Backup Repository',
+      repoPath,
+      remoteUrl: data.remoteUrl === '' ? null : (data.remoteUrl ?? existing?.remoteUrl ?? null),
+      branch: (data.branch || existing?.branch || 'main').trim(),
+      authorName: data.authorName || existing?.authorName || 'NetHelper',
+      authorEmail: data.authorEmail || existing?.authorEmail || 'nethelper@localhost',
+      credentials,
+      isActive: data.isActive ?? existing?.isActive ?? false,
+      notes: data.notes ?? existing?.notes ?? null,
+    };
+
+    const row = existing
+      ? await prisma.gitBackupConfig.update({ where: { id: existing.id }, data: fields })
+      : await prisma.gitBackupConfig.create({ data: { ...fields, userId } });
+
+    logger.info(`Git backup mirror ${existing ? 'updated' : 'configured'} (active: ${row.isActive})`);
+    return this.sanitizeGitConfig(row);
+  }
+
+  /**
+   * Validate the stored Git mirror configuration and persist the result.
+   * Returns { success, message } rather than throwing on a bad remote.
+   */
+  async testGitBackupConfig() {
+    const prisma = getPrisma();
+    const row = await prisma.gitBackupConfig.findFirst({ orderBy: { createdAt: 'asc' } });
+    if (!row) {
+      const error = new Error('No Git backup configuration to test');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const result = await gitBackupService.testConnection(gitBackupService.decryptConfig(row));
+    await prisma.gitBackupConfig.update({
+      where: { id: row.id },
+      data: {
+        lastTested: new Date(),
+        lastTestStatus: result.success ? 'success' : 'failed',
+      },
+    });
+    return result;
+  }
+
+  /**
+   * Forget the Git mirror configuration. The repository itself is left on disk
+   * — deleting a config must never destroy backup history.
+   */
+  async deleteGitBackupConfig() {
+    const prisma = getPrisma();
+    const row = await prisma.gitBackupConfig.findFirst({ orderBy: { createdAt: 'asc' } });
+    if (!row) {
+      const error = new Error('No Git backup configuration to delete');
+      error.statusCode = 404;
+      throw error;
+    }
+    await prisma.gitBackupConfig.delete({ where: { id: row.id } });
+    logger.info(`Git backup mirror configuration removed (repository at ${row.repoPath} left intact)`);
   }
 }
 

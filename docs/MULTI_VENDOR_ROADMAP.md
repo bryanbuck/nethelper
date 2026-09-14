@@ -316,9 +316,23 @@ The deciding argument was correctness, not elegance. Screen-scraping an interact
 
 Per-vendor pollers (generalize `device-poller.service.js`), automation actions for new vendors, Juniper/Cisco discovery OUI tables, Mist WebSocket streaming, NETCONF, restore/rollback.
 
+## 8b. Config-backup storage (2026-09-14)
+
+Backups are stored twice, on purpose:
+
+1. **Flat files** under `BACKUP_STORAGE_PATH` — one immutable timestamped file per run, pointed at by `ConfigBackup.filePath`. **Authoritative.** Every read path (content, download, diff, delete) goes through it.
+2. **An optional Git mirror** (`services/git-backup.service.js`, configured by the single-row `GitBackupConfig`) — one repo, one directory per device serial holding the config plus a `meta.json` sidecar, committed only when the config actually changed, pushed once per batch.
+
+Two consequences matter for the vendor work:
+
+- **`format` is now persisted, not discarded.** `pullConfig()` returns `{ text, source, format }` and the value lands on `ConfigBackup.format`. This closes the gap flagged in §9.1: an intent-based settings snapshot (Mist today, Meraki later) is recorded as `mist-config-json` / `meraki-settings-json` and committed as `settings.json`, while a real running-config is `cli-text` → `running-config.cfg` and Junos set-format is `junos-set` → `running-config.set`. The repo is self-describing, so "settings snapshot ≠ running-config" is visible on disk rather than only in the UI.
+- **Retention and history are deliberately asymmetric.** `pruneRetention()` drops rows and flat files; Git history is never rewritten (that would require a force-push that breaks clones). The repo is the long-term archive beneath a bounded working index.
+
+The mirror is additive and best-effort throughout: a commit or push failure is logged and the backup still succeeds, because the authoritative bytes are already on disk. A `CapabilityError` still produces no commit at all — an honest "not supported" must not leave a phantom version in history.
+
 ## 9. Risks & open questions
 
-1. **Meraki backup semantics** — biggest product-level risk: settings snapshot ≠ running-config. Needs UI honesty and a decision on which settings objects constitute the snapshot.
+1. **Meraki backup semantics** — biggest product-level risk: settings snapshot ≠ running-config. Needs UI honesty and a decision on which settings objects constitute the snapshot. (Partly addressed 2026-09-14: `format` is now persisted per backup and drives the filename in the Git mirror — see §8b — so the distinction is recorded. The UI labelling decision remains open.)
 2. **Mist regional clouds** — confirm the regional hostname list at implementation time; offer a region picker in the UI.
 3. **central→cloud rename migration** — riskiest single migration; rehearse on a DB copy; `@map` fallback exists.
 4. **Central's broken endpoints** — if Phase 0 cleanup shows classic-Central config retrieval never worked, scope Aruba cloud backup down rather than letting the abstraction inherit fictional capabilities. (Related: item 5b in `docs/ROADMAP_AND_TODO.md`, OAuth 401 blocker.)

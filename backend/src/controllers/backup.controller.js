@@ -78,6 +78,15 @@ class BackupController {
     }
   }
 
+  async getBackupHistory(req, res, next) {
+    try {
+      const data = await configBackupService.getBackupHistory(req.params.backupId, req.query.limit);
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async deleteBackup(req, res, next) {
     try {
       await configBackupService.deleteBackup(req.params.backupId);

@@ -12,6 +12,7 @@ const JunosAPI = require('./device-api/junos-api');
 const NetconfClient = require('./device-api/netconf-client');
 const { isCxRestCapable, detectPlatform } = require('../utils/device-platform');
 const { resolveTransport } = require('../utils/transport-router');
+const gitBackupService = require('./git-backup.service');
 const { getQueue } = require('../config/bull');
 const { getIO } = require('../websocket/socket.handler');
 const logger = require('../utils/logger');
@@ -112,9 +113,20 @@ class ConfigBackupService {
       });
     }
 
-    this.emit('backup:run:completed', { scheduleId: scheduleId || null, ...results });
+    // One push per run rather than per device: fewer round-trips, and a failed
+    // push never fails the run (commits stay local and the next push catches up).
+    const push = await gitBackupService.pushIfConfigured().catch((error) => {
+      logger.warn(`Config backup git push failed: ${error.message}`);
+      return { pushed: false, error: error.message };
+    });
+
+    this.emit('backup:run:completed', {
+      scheduleId: scheduleId || null,
+      ...results,
+      gitPushed: push.pushed === true,
+    });
     logger.info('Config backup run completed', { scheduleId, ...results });
-    return results;
+    return { ...results, gitPushed: push.pushed === true };
   }
 
   /**
@@ -136,7 +148,7 @@ class ConfigBackupService {
     });
 
     try {
-      const { text, source } = await this.pullConfig(device);
+      const { text, source, format, device: fullDevice } = await this.pullConfig(device);
       if (!text || text.trim().length === 0) {
         throw new Error(`${source} returned an empty configuration`);
       }
@@ -158,6 +170,24 @@ class ConfigBackupService {
 
       logger.info(`Config backup for ${device.name} pulled via ${source}`);
 
+      // Mirror into Git when enabled. Best-effort by design: the flat file above
+      // is authoritative and already written, so a git failure must not fail the
+      // backup — it is logged and the run continues.
+      let commitSha = null;
+      try {
+        const result = await gitBackupService.commitDeviceConfig({
+          device: fullDevice || device,
+          text,
+          format,
+          source,
+          backupId: record.id,
+          trigger,
+        });
+        commitSha = result.commitSha || null;
+      } catch (gitError) {
+        logger.warn(`Git mirror failed for ${device.name}: ${gitError.message}`);
+      }
+
       const updated = await prisma.configBackup.update({
         where: { id: record.id },
         data: {
@@ -166,6 +196,8 @@ class ConfigBackupService {
           checksum,
           sizeBytes: Buffer.byteLength(text, 'utf8'),
           hasChanges,
+          format,
+          commitSha,
         },
       });
 
@@ -219,7 +251,12 @@ class ConfigBackupService {
    * docs/MULTI_VENDOR_ROADMAP.md section 5.
    *
    * @param {Object} deviceStub - at least { id, serial, name }
-   * @returns {Promise<{ text: string, source: string }>}
+   * @returns {Promise<{ text: string, source: string, format: string, device: Object }>}
+   *   `format` records what kind of artefact this is ('cli-text', 'junos-set',
+   *   'aoscx-json', 'mist-config-json', ...). It is persisted on the backup row
+   *   and picks the filename in the Git mirror, so an intent-based JSON
+   *   snapshot is never mislabelled as a CLI running-config. `device` is the
+   *   full row loaded here, so callers need not re-query for vendor/platform.
    */
   async pullConfig(deviceStub) {
     const prisma = getPrisma();
@@ -243,15 +280,16 @@ class ConfigBackupService {
           await devicePollerService.refreshCentralStatus(device, credentials);
           const result = await devicePollerService.backupPoller(device, credentials);
           const running = result.running_config;
-          const text = typeof running === 'string' ? running : JSON.stringify(running, null, 2);
-          return { text, source: 'AOS-CX REST' };
+          const isText = typeof running === 'string';
+          const text = isText ? running : JSON.stringify(running, null, 2);
+          return { text, source: 'AOS-CX REST', format: isText ? 'cli-text' : 'aoscx-json', device };
         }
 
         if (detectPlatform(device) === 'junos') {
           const api = new JunosAPI(device, credentials);
           try {
             const text = await api.getConfiguration();
-            return { text, source: 'Junos NETCONF' };
+            return { text, source: 'Junos NETCONF', format: 'junos-set', device };
           } catch (error) {
             // NETCONF is not enabled by default on Junos. If the device refused
             // the subsystem, that is not a failure — fall through to the SSH CLI
@@ -278,7 +316,8 @@ class ConfigBackupService {
         // settings snapshot rather than a CLI running-config; `format` records
         // which, so the UI can label the backup honestly.
         const text = typeof config === 'string' ? config : config.text;
-        return { text, source: config.source || provider.label };
+        const format = (typeof config === 'object' && config.format) || 'cli-text';
+        return { text, source: config.source || provider.label, format, device };
       }
 
       if (transport === 'ssh') {
@@ -286,7 +325,12 @@ class ConfigBackupService {
           throw new Error(`No credentials linked to device "${device.name}" for direct backup`);
         }
         const text = await sshDeviceService.getRunningConfig(device, credentials);
-        return { text, source: 'SSH' };
+        return {
+          text,
+          source: 'SSH',
+          format: detectPlatform(device) === 'junos' ? 'junos-set' : 'cli-text',
+          device,
+        };
       }
     }
 
@@ -300,6 +344,11 @@ class ConfigBackupService {
    * Apply a schedule's retention policy to the given devices: keep at most
    * retentionMaxCount successful backups per device and drop anything older
    * than retentionDays. Zero disables the respective limit.
+   *
+   * This prunes NetHelper's own rows and flat files only. The Git mirror's
+   * history is deliberately left intact — keeping every version cheaply is the
+   * reason the mirror exists, and rewriting history would mean a force-push
+   * that breaks any existing clone. Not an oversight.
    */
   async pruneRetention(deviceIds, schedule) {
     const prisma = getPrisma();
@@ -415,6 +464,16 @@ class ConfigBackupService {
       deletions,
       patch,
     };
+  }
+
+  /**
+   * Git commit history for a backup's device. Empty when the mirror is off.
+   * Backed by `git log`, so it outlives retention pruning of the rows.
+   */
+  async getBackupHistory(backupId, limit = 50) {
+    const backup = await this.getBackup(backupId);
+    const commits = await gitBackupService.getDeviceHistory(backup.deviceSerial, limit);
+    return { deviceSerial: backup.deviceSerial, deviceName: backup.deviceName, commits };
   }
 
   async deleteBackup(backupId) {
