@@ -159,3 +159,8 @@ frontend/yarn.lock
 backend/yarn.lock
 frontend/pnpm-lock.yaml
 backend/pnpm-lock.yaml
+
+# CLAUDE.md files are local-only so each contributor can keep their own
+# style/additions without them being pushed to or overwritten by others.
+CLAUDE.md
+**/CLAUDE.md
