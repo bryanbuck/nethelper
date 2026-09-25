@@ -1,0 +1,94 @@
+# NetHelper: Docker Compose deployment.
+#
+#   cp .env.example .env    # then fill in every secret
+#   docker compose up -d --build
+#
+# The UI (and the API behind it, same origin) listens on HTTP_PORT. Put a TLS
+# terminator in front of it for anything beyond a lab: see README.md.
+#
+# For MAC-address discovery on the local L2 segment, also layer on
+# docker-compose.host-network.yml (see README.md).
+
+name: nethelper
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nethelper}
+      POSTGRES_USER: ${POSTGRES_USER:-nethelper}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in deploy/.env}
+      # redis-cli reads this, so the health check needn't put the password on its command line.
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ../backend
+    image: nethelper-backend:${NETHELPER_VERSION:-0.9.0-beta.1}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-nethelper}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-nethelper}?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in deploy/.env}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET in deploy/.env}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in deploy/.env}
+      # One proxy hop: the frontend container's nginx. Add one per extra
+      # proxy in front (e.g. 2 behind a TLS terminator).
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PING_MONITOR_ENABLED: ${PING_MONITOR_ENABLED:-true}
+    volumes:
+      - nethelper-data:/data
+    # ICMP for the ping monitor (in Docker's default set; listed so it's explicit).
+    cap_add:
+      - NET_RAW
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ../frontend
+      args:
+        VITE_APP_VERSION: ${NETHELPER_VERSION:-0.9.0-beta.1}
+    image: nethelper-frontend:${NETHELPER_VERSION:-0.9.0-beta.1}
+    restart: unless-stopped
+    environment:
+      BACKEND_UPSTREAM: backend:3000
+    ports:
+      - "${HTTP_BIND:-0.0.0.0}:${HTTP_PORT:-8080}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
+  nethelper-data:

@@ -29,8 +29,10 @@ Node.js backend for NetHelper, a **multi-vendor** network automation and monitor
 2. Install dependencies: `npm install`
 3. Copy `.env.example` to `.env` and configure
 4. Run database migrations: `npm run db:migrate`
-5. Seed initial data: `npm run db:seed`
+5. Create the first admin: `npm run user:manage`
 6. Start development server: `npm run dev`
+
+For production deployment (Docker Compose or systemd + nginx), see [`../deploy/README.md`](../deploy/README.md).
 
 ## API Documentation
 

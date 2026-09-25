@@ -14,7 +14,10 @@ const GIT_CREDENTIAL_FIELDS = [
   { key: 'token', label: 'HTTPS access token', secret: true },
 ];
 
-const DEFAULT_REPO_PATH = path.resolve(__dirname, '../../storage/config-repo');
+// Used when the saved config has no repoPath. Deployments point it at their data volume.
+const DEFAULT_REPO_PATH = process.env.BACKUP_GIT_REPO_PATH
+  ? path.resolve(process.env.BACKUP_GIT_REPO_PATH)
+  : path.resolve(__dirname, '../../storage/config-repo');
 const GIT_TIMEOUT_MS = Number(process.env.BACKUP_GIT_TIMEOUT_MS || 60000);
 
 // Transports git may use for the mirror. Excludes ext:: and fd::, which run

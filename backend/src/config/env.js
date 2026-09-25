@@ -26,6 +26,7 @@ const SECRET_KEYS = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'ENCRYPTION_KEY'];
 const schema = Joi.object({
   NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
   PORT: Joi.number().port().default(3000),
+  BIND_ADDRESS: Joi.string().default('0.0.0.0'),
   API_PREFIX: Joi.string().default('/api/v1'),
 
   DATABASE_URL: Joi.string().required(),
@@ -51,6 +52,13 @@ const schema = Joi.object({
   AUTH_RATE_LIMIT_MAX: Joi.number().integer().min(1).default(10),
 
   LOG_LEVEL: Joi.string().valid('error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly').default('info'),
+  // File logging (utils/log-transports.js). Containers turn it off and log to stdout.
+  LOG_FILES: Joi.string().valid('true', 'false').default('true'),
+  LOG_DIR: Joi.string().optional(),
+
+  // Where config backups live. Defaults are under backend/storage/.
+  BACKUP_STORAGE_PATH: Joi.string().optional(),
+  BACKUP_GIT_REPO_PATH: Joi.string().optional(),
 });
 
 function secretProblems(env) {

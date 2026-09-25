@@ -1,8 +1,6 @@
 const winston = require('winston');
-const path = require('path');
 const { redactFormat } = require('./redact');
-
-const logDir = 'logs';
+const { fileTransports } = require('./log-transports');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -18,29 +16,20 @@ const logger = winston.createLogger({
     winston.format.json()
   ),
   defaultMeta: { service: 'nethelper-backend' },
-  transports: [
-    // Write all logs with level 'error' and below to error.log
-    new winston.transports.File({
-      filename: path.join(logDir, 'error.log'),
-      level: 'error',
-    }),
-    // Write all logs with level 'info' and below to combined.log
-    new winston.transports.File({
-      filename: path.join(logDir, 'combined.log'),
-    }),
-  ],
+  transports: fileTransports(),
 });
 
-// If we're not in production, log to the console too
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(
-    new winston.transports.Console({
+// Console: colorized text in development. In production, the same JSON as the
+// files, which Docker and journald collect from stdout.
+logger.add(
+  process.env.NODE_ENV === 'production'
+    ? new winston.transports.Console()
+    : new winston.transports.Console({
       format: winston.format.combine(
         winston.format.colorize(),
         winston.format.simple()
       ),
     })
-  );
-}
+);
 
 module.exports = logger;

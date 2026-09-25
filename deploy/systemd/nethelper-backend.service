@@ -1,0 +1,67 @@
+# NetHelper backend: bare-metal systemd unit.
+#
+# Assumes (see deploy/README.md):
+#   code         /opt/nethelper            (git checkout or release tarball)
+#   config       /etc/nethelper/backend.env (mode 0640, root:nethelper)
+#   data         /var/lib/nethelper         (config backups, Git mirror; the user's HOME)
+#   logs         /var/log/nethelper         (rotated by size; also in the journal)
+#   user         nethelper                  (system user, no login shell)
+#   node         /usr/bin/node              (Node 20+; adjust if installed elsewhere)
+#
+# Install:  cp nethelper-backend.service /etc/systemd/system/
+#           systemctl daemon-reload && systemctl enable --now nethelper-backend
+
+[Unit]
+Description=NetHelper backend (API, jobs, WebSocket)
+Documentation=file:///opt/nethelper/deploy/README.md
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nethelper
+Group=nethelper
+WorkingDirectory=/opt/nethelper/backend
+EnvironmentFile=/etc/nethelper/backend.env
+Environment=NODE_ENV=production
+Environment=BIND_ADDRESS=127.0.0.1
+Environment=TRUST_PROXY=loopback
+Environment=LOG_DIR=/var/log/nethelper
+Environment=BACKUP_STORAGE_PATH=/var/lib/nethelper/config-backups
+Environment=BACKUP_GIT_REPO_PATH=/var/lib/nethelper/config-repo
+
+# Apply pending database migrations before every start (no-op when current).
+ExecStartPre=/usr/bin/node node_modules/prisma/build/index.js migrate deploy
+ExecStart=/usr/bin/node server.js
+
+Restart=on-failure
+RestartSec=5
+# server.js closes connections and queues on SIGTERM, with its own 10 s cap.
+KillMode=mixed
+TimeoutStopSec=20
+
+# Sandboxing. The only privilege the service needs is raw ICMP for the ping
+# monitor; nmap discovery runs unprivileged (-sn) and reads MACs via netlink.
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/nethelper /var/log/nethelper
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

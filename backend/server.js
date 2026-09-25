@@ -20,8 +20,11 @@ const { connectDatabase, disconnectDatabase } = require('./src/config/database')
 const { connectRedis, disconnectRedis } = require('./src/config/redis');
 const { initializeQueues, closeQueues } = require('./src/config/bull');
 const pingMonitorService = require('./src/services/ping-monitor.service');
+const { version } = require('./package.json');
 
 const PORT = process.env.PORT || 3000;
+// 127.0.0.1 when nginx runs on the same host, so the API isn't reachable around it.
+const BIND_ADDRESS = process.env.BIND_ADDRESS || '0.0.0.0';
 const SHUTDOWN_TIMEOUT_MS = 10000;
 
 async function startServer() {
@@ -54,8 +57,8 @@ async function startServer() {
     logger.info('Ping monitoring service started');
 
     // Start server
-    server.listen(PORT, '0.0.0.0', () => {
-      logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
+    server.listen(PORT, BIND_ADDRESS, () => {
+      logger.info(`NetHelper ${version} listening on ${BIND_ADDRESS}:${PORT} in ${process.env.NODE_ENV} mode`);
     });
 
     // Graceful shutdown. Runs once even if several signals arrive: under

@@ -23,6 +23,9 @@ const backupRoutes = require('./routes/backup.routes');
 const errorMiddleware = require('./middleware/error.middleware');
 const logger = require('./utils/logger');
 const { allowedOrigins } = require('./config/cors');
+const { getPrisma } = require('./config/database');
+const { getRedis } = require('./config/redis');
+const { version } = require('../package.json');
 
 const app = express();
 
@@ -113,10 +116,13 @@ app.use((req, res, next) => {
     });
   }
   
-  logger.info(`${req.method} ${req.path}`, {
-    ip: req.ip,
-    userAgent: req.get('user-agent'),
-  });
+  // Health probes arrive every few seconds; logging them would drown the rest.
+  if (!req.path.startsWith('/health')) {
+    logger.info(`${req.method} ${req.path}`, {
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+  }
   next();
 });
 
@@ -126,6 +132,37 @@ app.use((req, res, next) => {
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'healthy',
+    version,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Readiness: the process is up AND its dependencies answer. Container health
+// checks and load balancers use this; /health stays a cheap liveness probe.
+// Reports only up/down per dependency, never connection details.
+app.get('/health/ready', async (req, res) => {
+  const withTimeout = (promise) => Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000).unref()),
+  ]);
+  const check = async (fn) => {
+    try {
+      await withTimeout(fn());
+      return 'up';
+    } catch {
+      return 'down';
+    }
+  };
+
+  const [database, redis] = await Promise.all([
+    check(() => getPrisma().$queryRaw`SELECT 1`),
+    check(() => getRedis().ping()),
+  ]);
+  const ready = database === 'up' && redis === 'up';
+  res.status(ready ? 200 : 503).json({
+    status: ready ? 'ready' : 'unavailable',
+    version,
+    checks: { database, redis },
     timestamp: new Date().toISOString(),
   });
 });

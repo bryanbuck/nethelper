@@ -5,8 +5,8 @@
  */
 
 const winston = require('winston');
-const path = require('path');
 const { redactFormat } = require('./redact');
+const { fileTransports } = require('./log-transports');
 
 // Debug log levels
 const LogLevel = {
@@ -43,8 +43,6 @@ class ServiceDebugLogger {
   }
 
   createWinstonLogger() {
-    const logDir = 'logs';
-    
     const logger = winston.createLogger({
       level: this.globalLogLevel,
       silent: process.env.NODE_ENV === 'test',
@@ -63,21 +61,15 @@ class ServiceDebugLogger {
         })
       ),
       defaultMeta: { service: 'nethelper-backend' },
-      transports: [
-        // Write all logs with level 'error' and below to error.log
-        new winston.transports.File({
-          filename: path.join(logDir, 'error.log'),
-          level: 'error',
-        }),
-        // Write all logs to combined.log
-        new winston.transports.File({
-          filename: path.join(logDir, 'combined.log'),
-        }),
-      ],
+      // Own files (services-error.log / services-combined.log): two loggers
+      // rotating the same file would clobber each other.
+      transports: fileTransports('services-'),
     });
 
-    // Add console transport in non-production
-    if (process.env.NODE_ENV !== 'production') {
+    if (process.env.NODE_ENV === 'production') {
+      // JSON on stdout, for Docker and journald.
+      logger.add(new winston.transports.Console({ format: winston.format.json() }));
+    } else {
       logger.add(
         new winston.transports.Console({
           format: winston.format.combine(
