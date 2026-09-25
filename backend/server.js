@@ -1,4 +1,17 @@
 require('dotenv').config();
+
+// Validate configuration before any module reads process.env at load time.
+const { validateEnv } = require('./src/config/env');
+try {
+  const warnings = validateEnv();
+  for (const warning of warnings) {
+    console.warn(`[config] WARNING: ${warning} (fatal when NODE_ENV=production)`);
+  }
+} catch (error) {
+  console.error(`[config] ${error.message}`);
+  process.exit(1);
+}
+
 const http = require('http');
 const app = require('./src/app');
 const { initializeSocket } = require('./src/websocket/socket.handler');

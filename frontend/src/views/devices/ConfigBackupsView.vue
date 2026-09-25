@@ -113,7 +113,7 @@
               </template>
 
               <template #[`item.actions`]="{ item }">
-                <v-tooltip text="View" location="top">
+                <v-tooltip v-if="canManage" text="View" location="top">
                   <template #activator="{ props }">
                     <v-btn
                       v-bind="props"
@@ -125,7 +125,7 @@
                     />
                   </template>
                 </v-tooltip>
-                <v-tooltip text="Download" location="top">
+                <v-tooltip v-if="canManage" text="Download" location="top">
                   <template #activator="{ props }">
                     <v-btn
                       v-bind="props"
@@ -137,7 +137,7 @@
                     />
                   </template>
                 </v-tooltip>
-                <v-tooltip text="Compare" location="top">
+                <v-tooltip v-if="canManage" text="Compare" location="top">
                   <template #activator="{ props }">
                     <v-btn
                       v-bind="props"

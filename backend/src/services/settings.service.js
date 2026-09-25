@@ -858,6 +858,8 @@ class SettingsService {
       notes: data.notes ?? existing?.notes ?? null,
     };
 
+    gitBackupService.validateMirrorSettings({ ...fields, sshKeyPath: credentials?.sshKeyPath });
+
     const row = existing
       ? await prisma.gitBackupConfig.update({ where: { id: existing.id }, data: fields })
       : await prisma.gitBackupConfig.create({ data: { ...fields, userId } });

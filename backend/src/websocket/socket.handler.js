@@ -1,21 +1,14 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const logger = require('../utils/logger');
+const { allowedOrigins } = require('../config/cors');
 
 let io;
 
 function initializeSocket(server) {
   io = new Server(server, {
     cors: {
-      origin: [
-        process.env.FRONTEND_URL,
-        'http://localhost:5173',
-        'http://192.168.0.169:5173',
-        /^http:\/\/192\.168\.0\.\d+:5173$/,
-        /^https:\/\/192\.168\.0\.\d+:5173$/,
-        /^http:\/\/192\.168\.2\d\.\d+:5173$/,
-        /^https:\/\/192\.168\.2\d\.\d+:5173$/
-      ].filter(Boolean),
+      origin: allowedOrigins(),
       credentials: true,
       methods: ['GET', 'POST'],
     },

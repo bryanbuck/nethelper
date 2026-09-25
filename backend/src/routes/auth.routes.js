@@ -8,6 +8,9 @@ const logger = require('../utils/logger');
 
 const router = express.Router();
 
+// Hash of a random string, used to equalize login timing for unknown users.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(require('crypto').randomBytes(16).toString('hex'), 12);
+
 // Register validation rules
 const registerValidation = [
   body('email').isEmail().normalizeEmail(),
@@ -158,6 +161,9 @@ router.post('/login', loginValidation, async (req, res) => {
 
     if (!user) {
       logger.debug(`[${requestId}] User not found`, { email });
+      // Compare against a dummy hash so unknown emails take as long as wrong
+      // passwords, and response timing doesn't reveal which accounts exist.
+      await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
       return res.status(401).json({
         success: false,
         error: 'Invalid credentials',
@@ -314,16 +320,13 @@ router.post('/refresh', async (req, res) => {
 // Logout endpoint
 router.post('/logout', authenticate, async (req, res) => {
   try {
-    const { refreshToken } = req.body;
     const prisma = getPrisma();
 
-    if (refreshToken) {
-      // Clear refresh token from user
-      await prisma.user.update({
-        where: { id: req.user.id },
-        data: { refreshToken: null },
-      });
-    }
+    // Always revoke the stored refresh token, even if the client didn't send it.
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { refreshToken: null },
+    });
 
     logger.info('User logged out successfully', { userId: req.user.id });
 

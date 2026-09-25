@@ -6,6 +6,7 @@
 
 const winston = require('winston');
 const path = require('path');
+const { redactFormat } = require('./redact');
 
 // Debug log levels
 const LogLevel = {
@@ -52,6 +53,7 @@ class ServiceDebugLogger {
         }),
         winston.format.errors({ stack: true }),
         winston.format.splat(),
+        redactFormat(),
         winston.format.printf(({ timestamp, level, message, service, requestId, ...meta }) => {
           const servicePrefix = service ? `[${service}]` : '';
           const requestPrefix = requestId ? `[${requestId}]` : '';

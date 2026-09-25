@@ -10,6 +10,24 @@ The single forward-looking backlog for NetHelper: features and improvements plan
 
 ---
 
+## 🚀 Beta Release Readiness
+
+**Status**: 🔨 In progress (started 2026-09-25, branch `release/beta`)
+
+Preparing the dev-environment build for a private, in-house beta. Deploy targets are Docker Compose and bare metal (systemd + nginx). Scope is frozen on multi-vendor Phases 0–2; Meraki/Catalyst are post-beta, and the automation builder is labeled experimental.
+
+- ✅ Repo hygiene (2026-09-25): untracked `backend/.env` and `backend/node_modules`; lockfiles committed; AGPL-3.0-or-later `LICENSE`.
+- ✅ Auth (2026-09-25): `/auth/register` is admin-only (no self-signup); 12-character password minimum; failed-attempt rate limit on login/refresh; constant-time response for unknown users on login; logout always revokes the refresh token.
+- ✅ Config & secrets (2026-09-25): startup env validation (`config/env.js`); removed the hardcoded encryption fallback key; `npm run key:rotate` re-encrypts stored secrets; log redaction (`utils/redact.js`).
+- ✅ HTTP hardening (2026-09-25): `CORS_ORIGINS` replaces the hardcoded dev hosts (Express + Socket.io); `TRUST_PROXY`; `BODY_LIMIT` (2 MB default); 5xx messages are hidden in production.
+- ✅ Authorization (2026-09-25): all mutating routes are role-gated; backup content/download/diff restricted to admin/operator.
+- ✅ Injection (2026-09-25): nmap arguments already strictly validated. Git mirror remote URL, branch, and paths are now validated, `GIT_ALLOW_PROTOCOL` is set, and `GIT_SSH_COMMAND` quoting is fixed.
+- ✅ Dependencies (2026-09-25): `npm audit fix` in both tiers; nodemailer 6 → 10; removed unused `node-cron` and `@faker-js/faker`; Vuetify 3.9.0-beta.1 → 3.13.5. Accepted: a moderate `uuid` advisory via `bull` (the only "fix" is a downgrade to bull 1.x).
+- ⏳ Remaining: remove dev/demo code, tests, Docker/systemd packaging, install docs, a hardware validation pass. Full plan: `~/.claude/plans/i-d-like-to-take-scalable-cake.md` (local).
+- ⏸ Deferred to the going-public review: rotating the secrets that were in the tracked `.env`, and a `git filter-repo` history purge.
+
+---
+
 ## 🔮 Future Enhancements
 
 ### 1. Real-time Updates from Cloud Providers (webhooks / event streams)

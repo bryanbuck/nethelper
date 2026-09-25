@@ -22,9 +22,11 @@ router.post('/schedules/:scheduleId/run', authorize('admin', 'operator'), valida
 
 // Single backup record / content / download / diff
 router.get('/:backupId', validateBackup.backupId, backupController.getBackup);
-router.get('/:backupId/content', validateBackup.backupId, backupController.getBackupContent);
-router.get('/:backupId/download', validateBackup.backupId, backupController.downloadBackup);
-router.get('/:backupId/diff/:otherId', validateBackup.diff, backupController.diffBackups);
+// Config bodies carry device secrets (SNMP communities, RADIUS keys, local
+// user hashes), so viewers see backup metadata but not contents.
+router.get('/:backupId/content', authorize('admin', 'operator'), validateBackup.backupId, backupController.getBackupContent);
+router.get('/:backupId/download', authorize('admin', 'operator'), validateBackup.backupId, backupController.downloadBackup);
+router.get('/:backupId/diff/:otherId', authorize('admin', 'operator'), validateBackup.diff, backupController.diffBackups);
 // Git commit history for this backup's device (empty when the mirror is off)
 router.get('/:backupId/history', validateBackup.backupId, backupController.getBackupHistory);
 router.delete('/:backupId', authorize('admin'), validateBackup.backupId, backupController.deleteBackup);

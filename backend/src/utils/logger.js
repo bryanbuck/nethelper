@@ -1,5 +1,6 @@
 const winston = require('winston');
 const path = require('path');
+const { redactFormat } = require('./redact');
 
 const logDir = 'logs';
 
@@ -11,9 +12,10 @@ const logger = winston.createLogger({
     }),
     winston.format.errors({ stack: true }),
     winston.format.splat(),
+    redactFormat(),
     winston.format.json()
   ),
-  defaultMeta: { service: 'aruba-automation' },
+  defaultMeta: { service: 'nethelper-backend' },
   transports: [
     // Write all logs with level 'error' and below to error.log
     new winston.transports.File({

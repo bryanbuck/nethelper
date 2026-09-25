@@ -16,6 +16,53 @@ const GIT_CREDENTIAL_FIELDS = [
 const DEFAULT_REPO_PATH = path.resolve(__dirname, '../../storage/config-repo');
 const GIT_TIMEOUT_MS = Number(process.env.BACKUP_GIT_TIMEOUT_MS || 60000);
 
+// Transports git may use for the mirror. Excludes ext:: and fd::, which run
+// arbitrary commands, and anything else exotic.
+const GIT_ALLOWED_PROTOCOLS = 'https:http:ssh:git:file';
+
+/** Quote a value for the POSIX shell that git runs GIT_SSH_COMMAND through. */
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, "'\\''")}'`;
+}
+
+/**
+ * Validate admin-supplied mirror settings before they reach git's argv or
+ * environment. Each value lands in an argv slot, so a leading "-" would be
+ * parsed as a git option (e.g. a branch of "--receive-pack=...").
+ * Throws an Error with statusCode 400 on the first problem.
+ */
+function validateMirrorSettings({ repoPath, remoteUrl, branch, sshKeyPath }) {
+  const fail = (message) => {
+    const err = new Error(message);
+    err.statusCode = 400;
+    throw err;
+  };
+
+  if (repoPath && !path.isAbsolute(repoPath)) fail('Repository path must be absolute');
+
+  // Simplified git check-ref-format: no leading "-" or "/", no "..", "@{", "//",
+  // control characters, spaces, or ~^:?*[\ characters, and no ".lock" / "/" / "." ending.
+  if (branch && (
+    !/^[A-Za-z0-9._/-]+$/.test(branch) ||
+    /^[-/.]|\.\.|\/\/|\/\.|@\{|\.lock$|[/.]$/.test(branch)
+  )) {
+    fail(`Invalid branch name: ${branch}`);
+  }
+
+  if (remoteUrl) {
+    const scheme = /^([a-z][a-z0-9+.-]*):\/\//i.exec(remoteUrl);
+    const scpLike = /^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:[^\s]+$/.test(remoteUrl);
+    const allowedScheme = scheme && GIT_ALLOWED_PROTOCOLS.split(':').includes(scheme[1].toLowerCase());
+    if (remoteUrl.startsWith('-') || /\s/.test(remoteUrl) || remoteUrl.includes('::') || !(allowedScheme || scpLike)) {
+      fail('Remote URL must be an https://, ssh://, git://, file:// or user@host:path URL');
+    }
+  }
+
+  if (sshKeyPath && (!path.isAbsolute(sshKeyPath) || /[\0\n\r]/.test(sshKeyPath))) {
+    fail('SSH key path must be an absolute path');
+  }
+}
+
 // `* -text` stops git normalising line endings: a device config must round-trip
 // byte-for-byte or the checksum in ConfigBackup stops matching the committed file.
 const GITATTRIBUTES = '* -text\n';
@@ -78,11 +125,12 @@ class GitBackupService {
       GIT_TERMINAL_PROMPT: '0',
       GIT_ASKPASS: 'echo',
       LC_ALL: 'C',
+      GIT_ALLOW_PROTOCOL: GIT_ALLOWED_PROTOCOLS,
     };
 
     const sshKeyPath = config?.credentials?.sshKeyPath;
     if (sshKeyPath) {
-      env.GIT_SSH_COMMAND = `ssh -i ${JSON.stringify(sshKeyPath)} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o BatchMode=yes`;
+      env.GIT_SSH_COMMAND = `ssh -i ${shellQuote(sshKeyPath)} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o BatchMode=yes`;
     }
 
     return new Promise((resolve, reject) => {
@@ -470,3 +518,4 @@ class GitBackupService {
 module.exports = new GitBackupService();
 module.exports.GIT_CREDENTIAL_FIELDS = GIT_CREDENTIAL_FIELDS;
 module.exports.DEFAULT_REPO_PATH = DEFAULT_REPO_PATH;
+module.exports.validateMirrorSettings = validateMirrorSettings;
