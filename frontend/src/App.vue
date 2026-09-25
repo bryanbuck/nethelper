@@ -4,12 +4,15 @@ import { useTheme } from 'vuetify'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import NotificationDisplay from '@/components/common/NotificationDisplay.vue'
+import ChangePasswordDialog from '@/components/common/ChangePasswordDialog.vue'
 
 const theme = useTheme()
 const route = useRoute()
 const authStore = useAuthStore()
 
 const drawer = ref(false)
+const changePasswordOpen = ref(false)
+const appVersion = import.meta.env.VITE_APP_VERSION
 
 const isAuthPage = computed(() => {
   return route.meta?.requiresAuth === false
@@ -27,7 +30,7 @@ const logout = async () => {
   }
 }
 
-const navigationItems = [
+const allNavigationItems = [
   {
     title: 'Dashboard',
     icon: 'mdi-view-dashboard',
@@ -55,11 +58,21 @@ const navigationItems = [
     badge: 'Experimental'
   },
   {
+    title: 'Users',
+    icon: 'mdi-account-multiple',
+    to: '/users',
+    adminOnly: true
+  },
+  {
     title: 'Settings',
     icon: 'mdi-cog',
     to: '/settings'
   }
 ]
+
+const navigationItems = computed(() =>
+  allNavigationItems.filter((item) => !item.adminOnly || authStore.isAdmin)
+)
 
 // Initialize auth on app mount
 onMounted(() => {
@@ -85,6 +98,7 @@ onMounted(() => {
         <v-toolbar-title>
           <v-icon class="mr-2">mdi-network</v-icon>
           NetHelper
+          <v-chip size="x-small" variant="outlined" label class="ml-2" :title="`Version ${appVersion}`">Beta</v-chip>
         </v-toolbar-title>
 
         <v-spacer />
@@ -96,10 +110,6 @@ onMounted(() => {
           <v-icon>
             {{ theme.global.current.value.dark ? 'mdi-weather-sunny' : 'mdi-weather-night' }}
           </v-icon>
-        </v-btn>
-
-        <v-btn icon>
-          <v-icon>mdi-bell</v-icon>
         </v-btn>
 
         <v-menu offset-y>
@@ -115,11 +125,18 @@ onMounted(() => {
           <v-list>
             <v-list-item>
               <v-list-item-title>{{ authStore.userName }}</v-list-item-title>
-              <v-list-item-subtitle>{{ authStore.user?.email }}</v-list-item-subtitle>
+              <v-list-item-subtitle>{{ authStore.user?.email }} · {{ authStore.userRole }}</v-list-item-subtitle>
             </v-list-item>
-            
+
             <v-divider />
-            
+
+            <v-list-item @click="changePasswordOpen = true">
+              <template #prepend>
+                <v-icon>mdi-lock-reset</v-icon>
+              </template>
+              <v-list-item-title>Change password</v-list-item-title>
+            </v-list-item>
+
             <v-list-item @click="logout">
               <template #prepend>
                 <v-icon>mdi-logout</v-icon>
@@ -137,8 +154,8 @@ onMounted(() => {
       >
         <v-list>
           <v-list-item
-            :title="authStore.userName || 'Network Admin'"
-            :subtitle="authStore.user?.email || 'admin@company.com'"
+            :title="authStore.userName"
+            :subtitle="authStore.user?.email"
           >
             <template #prepend>
               <v-avatar color="primary">
@@ -191,9 +208,11 @@ onMounted(() => {
       app
     >
       <v-spacer />
-      <div>&copy; {{ new Date().getFullYear() }} — NetHelper Automation Platform</div>
+      <div class="text-caption text-medium-emphasis">NetHelper {{ appVersion }} · Beta</div>
       <v-spacer />
     </v-footer>
+
+    <ChangePasswordDialog v-model="changePasswordOpen" />
 
     <!-- Global Notification Display -->
     <NotificationDisplay />

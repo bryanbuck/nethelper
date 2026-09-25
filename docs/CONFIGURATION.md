@@ -1,0 +1,137 @@
+# Configuration reference
+
+Most of NetHelper is configured in the app:
+
+- **Cloud integrations**: Settings → Cloud Integrations
+- **Device credentials**: Settings → Credentials
+- **Backup schedules**: Config Backups → Schedules
+- **The Git mirror**: Settings, admin only
+- **Users**: the Users page
+
+The backend's environment covers only what has to be known at startup: secrets, connections, and limits.
+
+Where environment settings live:
+
+- **Docker Compose**: `deploy/.env`, passed through `deploy/docker-compose.yml`. Compose sets the connection settings itself.
+- **Bare metal**: `/etc/nethelper/backend.env`. Start from `backend/.env.example`; the systemd unit sets the paths and bind address.
+- **Development**: `backend/.env` and `frontend/.env`.
+
+`backend/src/config/env.js` validates the environment at startup. A missing required value always stops the server. A weak or placeholder secret stops it in production and prints a warning in development.
+
+## Backend
+
+### Required
+
+| Variable | Notes |
+|---|---|
+| `DATABASE_URL` | `postgresql://user:password@host:5432/db?schema=public`. Use a URL-safe (hex) password. |
+| `JWT_SECRET` | Signs access tokens. At least 32 characters. |
+| `JWT_REFRESH_SECRET` | Signs refresh tokens. At least 32 characters, and different from `JWT_SECRET`. |
+| `ENCRYPTION_KEY` | Encrypts stored device, cloud, and Git credentials. At least 32 characters. **Back it up separately from the database**: without it the stored credentials can't be decrypted. To change it, see "Rotating the encryption key" in `deploy/README.md`. |
+
+Generate secrets with `openssl rand -hex 32`.
+
+### Server
+
+| Variable | Default | Notes |
+|---|---|---|
+| `NODE_ENV` | `development` | `production` for any real install. It enforces strong secrets, hides 5xx details, and logs JSON. |
+| `PORT` | `3000` | |
+| `BIND_ADDRESS` | `0.0.0.0` | `127.0.0.1` when nginx runs on the same host. |
+| `API_PREFIX` | `/api/v1` | The SPA and nginx assume the default. |
+| `TRUST_PROXY` | *(off)* | Number of proxy hops in front of the backend, `true`, or an Express value like `loopback`. Set it behind nginx so rate limits and logs see real client IPs. |
+| `CORS_ORIGINS` | *(empty)* | Comma-separated browser origins allowed to call the API. Not needed when nginx serves the UI on the same origin. Development also allows localhost, private-LAN, and `.local` origins. |
+| `FRONTEND_URL` | *(empty)* | Legacy; treated as one more allowed origin. |
+| `BODY_LIMIT` | `2mb` | Maximum request body. |
+
+### Redis
+
+| Variable | Default |
+|---|---|
+| `REDIS_HOST` | `localhost` |
+| `REDIS_PORT` | `6379` |
+| `REDIS_PASSWORD` | *(none)* |
+
+### Sessions and rate limits
+
+| Variable | Default | Notes |
+|---|---|---|
+| `JWT_EXPIRES_IN` | `1h` | Access token lifetime. |
+| `JWT_REFRESH_EXPIRES_IN` | `7d` | Refresh token lifetime. Logout and password changes revoke it earlier. |
+| `RATE_LIMIT_WINDOW` | `15` | Minutes. |
+| `RATE_LIMIT_MAX_REQUESTS` | `300` | Per IP per window, across `/api`. |
+| `AUTH_RATE_LIMIT_MAX` | `10` | **Failed** login, refresh, and change-password attempts per IP per window. |
+
+### Logging
+
+| Variable | Default | Notes |
+|---|---|---|
+| `LOG_LEVEL` | `info` | `error`, `warn`, `info`, `http`, `verbose`, `debug`, or `silly`. |
+| `LOG_FILES` | `true` | `false` sends logs to stdout only. The Docker image sets `false`. |
+| `LOG_DIR` | `logs` | Holds `error.log`, `combined.log`, and `services-*.log`. Each rotates at 10 MB, keeping 5. |
+| `SERVICE_LOG_LEVELS` | *(empty)* | Per-area levels, e.g. `ARUBA_CENTRAL:debug,AUTH:warn`. |
+| `DEBUG_SERVICES` | *(all)* | Comma-separated areas to log. |
+
+Production writes JSON logs to stdout. Values under secret-looking keys (password, token, secret, apiKey, ...) are masked.
+
+### Monitoring, discovery, device access
+
+| Variable | Default | Notes |
+|---|---|---|
+| `PING_MONITOR_ENABLED` | `true` | ICMP status checks for directly managed devices. |
+| `PING_MONITOR_INTERVAL` | `60000` | Milliseconds between sweeps. |
+| `PING_MONITOR_TIMEOUT` | `5` | Seconds per ping. |
+| `PING_MONITOR_BATCH_SIZE` | `20` | Devices pinged concurrently. |
+| `PING_MONITOR_FAILURE_THRESHOLD` | `3` | Consecutive failures before a device is marked offline. |
+| `DISCOVERY_SCAN_TIMEOUT` | `300000` | Milliseconds allowed per nmap run. |
+| `SSH_PORT` | `22` | SSH CLI transport (AOS-S, Junos fallback, IOS-XE). |
+| `NETCONF_PORT` | `830` | Junos NETCONF. |
+| `SSH_CONNECT_TIMEOUT` | `15000` | Milliseconds; SSH and NETCONF. |
+| `SSH_COMMAND_TIMEOUT` | `45000` | Milliseconds; SSH and NETCONF. |
+
+### Config backups
+
+| Variable | Default | Notes |
+|---|---|---|
+| `BACKUP_STORAGE_PATH` | `backend/storage/config-backups` | Flat config files (authoritative). Docker: `/data/config-backups`. Bare metal: `/var/lib/nethelper/config-backups`. |
+| `BACKUP_GIT_REPO_PATH` | `backend/storage/config-repo` | Default Git mirror repository, used when the in-app setting is blank. |
+| `BACKUP_GIT_TIMEOUT_MS` | `60000` | Per git command. |
+
+### Optional integrations
+
+| Variable | Notes |
+|---|---|
+| `SMTP_HOST`, `SMTP_PORT` (587), `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Email notifications; turned on when `SMTP_HOST` and `SMTP_USER` are set. |
+| `SLACK_WEBHOOK_URL` | Slack notifications. |
+| `ARUBA_CENTRAL_BASE_URL`, `_CLIENT_ID`, `_CLIENT_SECRET`, `_CUSTOMER_ID` | **Legacy.** When no cloud integration exists and the first two are set, a single Central integration is built from these. Prefer Settings → Cloud Integrations. |
+
+### Scripts and containers only
+
+| Variable | Used by |
+|---|---|
+| `RUN_MIGRATIONS` | Docker entrypoint. Default `true`; `false` skips `prisma migrate deploy` on start. |
+| `NETHELPER_ADMIN_PASSWORD` | `npm run user:manage -- create-admin`. If unset, a password is generated and printed once. |
+| `OLD_ENCRYPTION_KEY` | `npm run key:rotate`. |
+
+## Docker Compose (`deploy/.env`)
+
+| Variable | Default | Notes |
+|---|---|---|
+| `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `ENCRYPTION_KEY` | *(required)* | Compose refuses to start if any is empty. |
+| `POSTGRES_DB`, `POSTGRES_USER` | `nethelper` | |
+| `NETHELPER_VERSION` | `0.9.0-beta.1` | Image tag and the version shown in the UI. |
+| `HTTP_BIND`, `HTTP_PORT` | `0.0.0.0`, `8080` | Where the UI is published. |
+| `TRUST_PROXY` | `1` | `2` behind an extra TLS proxy. |
+| `CORS_ORIGINS`, `LOG_LEVEL`, `PING_MONITOR_ENABLED` | | Passed through to the backend. |
+
+## Frontend
+
+The SPA is configured at build time, and the defaults suit every supported deployment: it calls the API and WebSocket on its own origin.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `VITE_API_URL` | `/api/v1` | Only change it if the API is on a different origin (then set `CORS_ORIGINS`). |
+| `VITE_WS_URL` | page origin | |
+| `VITE_APP_VERSION` | `package.json` version | Set it in the build environment to override. |
+| `VITE_DEBUG_LOGGING` | `false` | Verbose browser console logging in a production build. |
+| `DEV_PROXY_TARGET`, `DEV_ALLOWED_HOSTS` | | Vite dev server only (`frontend/.env`). They never reach the bundle. |

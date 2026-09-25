@@ -37,7 +37,7 @@ class NotificationService {
       }
 
       const mailOptions = {
-        from: process.env.SMTP_FROM || 'noreply@aruba-automation.com',
+        from: process.env.SMTP_FROM || 'nethelper@localhost',
         to,
         subject,
         text,

@@ -16,6 +16,7 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => !!token.value && !!user.value)
   const userRole = computed(() => user.value?.role || null)
   const userName = computed(() => user.value?.name || user.value?.email || '')
+  const isAdmin = computed(() => user.value?.role === 'admin')
 
   // Actions
   const login = async (credentials) => {
@@ -114,6 +115,16 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  // Change the signed-in user's password; keep this session on the new tokens.
+  const changePassword = async (currentPassword, newPassword) => {
+    const response = await authService.changePassword({ currentPassword, newPassword })
+    const { accessToken, refreshToken: newRefreshToken } = response.data.data
+    token.value = accessToken
+    refreshToken.value = newRefreshToken
+    localStorage.setItem('access_token', accessToken)
+    localStorage.setItem('refresh_token', newRefreshToken)
+  }
+
   const clearAuthData = () => {
     user.value = null
     token.value = null
@@ -175,11 +186,13 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     userRole,
     userName,
+    isAdmin,
     
     // Actions
     login,
     logout,
     refreshAccessToken,
+    changePassword,
     clearAuthData,
     initializeAuth,
     checkTokenExpiry,

@@ -1,5 +1,7 @@
 # Deploying NetHelper
 
+What's supported, known limitations, and how to report problems: [`docs/BETA_NOTES.md`](../docs/BETA_NOTES.md). Every setting: [`docs/CONFIGURATION.md`](../docs/CONFIGURATION.md).
+
 Two supported ways to run the 0.9 beta:
 
 - **Docker Compose**: everything, including Postgres and Redis, in containers. Quickest to stand up.
@@ -37,13 +39,19 @@ docker compose ps          # backend and frontend should become "healthy"
 
 The backend applies database migrations every time it starts, and does nothing when the schema is already current. Set `RUN_MIGRATIONS=false` on the backend service to turn that off.
 
-**First admin.** There's no self-signup. Create the first admin with the interactive CLI:
+**First admin.** There's no self-signup. Create the first admin from the command line:
 
 ```sh
-docker compose run --rm backend npm run user:manage
+docker compose run --rm backend npm run user:manage -- create-admin --email you@example.com --name "Your Name"
 ```
 
-Then browse to `http://<host>:8080` (or your `HTTP_PORT`) and sign in. Admins create further users in the app.
+It prints a generated password once. To choose the password instead, pass `-e NETHELPER_ADMIN_PASSWORD=...` after `run`. Then:
+
+1. Browse to `http://<host>:8080` (or your `HTTP_PORT`) and sign in.
+2. Change the password from the account menu (top right).
+3. Add everyone else on the **Users** page.
+
+Running `npm run user:manage` with no arguments opens an interactive menu for listing, editing, and deleting users, and resetting passwords.
 
 **Network access and discovery.** In the default (bridge) setup, the backend reaches devices through Docker's NAT. That covers ping monitoring, SSH, REST, NETCONF, cloud APIs, and discovery of hosts on any routed subnet. What it can't see is the host's own ARP table, so hosts discovered on the local L2 segment come back **without MAC addresses or vendors**. If you need those, add the host-network override:
 
@@ -123,7 +131,6 @@ Tested layout (adjust the unit file if yours differs):
 
 5. **Configuration.** Copy `backend/.env.example` to `/etc/nethelper/backend.env`, then:
    - Set `DATABASE_URL`, `REDIS_PASSWORD`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, and `ENCRYPTION_KEY`. Generate each secret with `openssl rand -hex 32`.
-   - Remove the placeholder `ARUBA_CENTRAL_*` and SMTP lines you don't use.
    - Leave `NODE_ENV`, `BIND_ADDRESS`, `TRUST_PROXY`, `LOG_DIR`, and the backup paths alone: the unit sets them.
 
    Then lock the file down:
@@ -150,11 +157,11 @@ Tested layout (adjust the unit file if yours differs):
    nginx -t && systemctl reload nginx
    ```
 
-8. **First admin**:
+8. **First admin.** It prints a generated password once; change it after signing in, then add other users on the Users page:
 
    ```sh
    cd /opt/nethelper/backend
-   sudo -u nethelper sh -c 'set -a; . /etc/nethelper/backend.env; set +a; npm run user:manage'
+   sudo -u nethelper sh -c 'set -a; . /etc/nethelper/backend.env; set +a; npm run user:manage -- create-admin --email you@example.com --name "Your Name"'
    ```
 
 The unit is sandboxed:

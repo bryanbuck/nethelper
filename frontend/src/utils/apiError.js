@@ -121,3 +121,19 @@ export function handleApiError(error, action = 'completing the request') {
 
   return enhancedError
 }
+
+/**
+ * The most specific message to show for a failed request: the server's own
+ * error, else its first validation message (express-validator's
+ * `{ errors: [{ msg }] }`), else the enriched/axios message.
+ * @param {Error} error - raw axios error or one returned by handleApiError
+ * @returns {string}
+ */
+export function apiErrorMessage(error) {
+  const data = error?.response?.data || error?.originalError?.response?.data
+  return data?.error
+    || data?.errors?.[0]?.msg
+    || error?.userMessage
+    || error?.message
+    || 'Request failed'
+}

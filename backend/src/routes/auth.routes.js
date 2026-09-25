@@ -425,4 +425,44 @@ router.put('/me', authenticate, [
   }
 });
 
+// Change your own password. Requires the current one. Issues a fresh token
+// pair for this session; the stored refresh token is replaced, so any other
+// session is signed out when its access token expires.
+router.post('/change-password', authenticate, [
+  body('currentPassword').notEmpty().withMessage('Current password is required'),
+  body('newPassword').isLength({ min: 12 }).withMessage('New password must be at least 12 characters'),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+    const prisma = getPrisma();
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+
+    // 400, not 401: the session is valid, and a 401 would make the SPA's
+    // interceptor try a token refresh. The auth rate limiter still counts it.
+    if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
+      return res.status(400).json({ success: false, error: 'Current password is incorrect' });
+    }
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ success: false, error: 'New password must differ from the current one' });
+    }
+
+    const { accessToken, refreshToken } = generateTokens(user.id);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: await bcrypt.hash(newPassword, 12), refreshToken },
+    });
+
+    logger.info('User changed their password', { userId: user.id });
+    res.json({ success: true, data: { accessToken, refreshToken } });
+  } catch (error) {
+    logger.error('Change password error:', error);
+    res.status(500).json({ success: false, error: 'Failed to change password' });
+  }
+});
+
 module.exports = router;

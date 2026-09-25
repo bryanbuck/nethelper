@@ -26,8 +26,7 @@ const ERROR_TRANSLATIONS = {
     message: 'Invalid client credentials',
     explanation: 'Your client ID or client secret is incorrect',
     actions: [
-      'Verify ARUBA_CENTRAL_CLIENT_ID in your .env file',
-      'Verify ARUBA_CENTRAL_CLIENT_SECRET in your .env file',
+      'Verify the Client ID and Client Secret in Settings → Cloud Integrations',
       'Check for extra spaces or special characters',
       'Regenerate credentials in Aruba Central if needed'
     ]
@@ -78,7 +77,7 @@ const ERROR_TRANSLATIONS = {
     message: 'Invalid customer ID',
     explanation: 'The customer_id parameter is incorrect or missing',
     actions: [
-      'Verify ARUBA_CENTRAL_CUSTOMER_ID in your .env file',
+      'Verify the Customer ID in Settings → Cloud Integrations',
       'Check your Aruba Central account settings for the correct customer ID'
     ]
   }

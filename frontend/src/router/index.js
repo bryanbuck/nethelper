@@ -144,6 +144,17 @@ const routes = [
     }
   },
   {
+    path: '/users',
+    name: 'Users',
+    component: () => import('@/views/users/UsersView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresRole: 'admin',
+      title: 'Users',
+      icon: 'mdi-account-multiple'
+    }
+  },
+  {
     path: '/settings/device-api-testing',
     name: 'DeviceApiTesting',
     component: DeviceApiTestingView,
@@ -227,6 +238,14 @@ router.beforeEach(async (to, from, next) => {
         return
       }
     }
+  }
+
+  // Role-restricted pages. The API enforces roles regardless; this only keeps
+  // people off pages whose every request would be refused.
+  if (to.meta.requiresRole && authStore.user?.role !== to.meta.requiresRole) {
+    debugLog.warn(DebugCategory.ROUTER, `Route requires role ${to.meta.requiresRole}, redirecting to dashboard`)
+    next({ name: 'Dashboard' })
+    return
   }
 
   // Redirect authenticated users away from auth pages

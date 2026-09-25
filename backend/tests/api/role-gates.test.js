@@ -20,6 +20,7 @@ const ROUTERS = {
   'device-api': require('../../src/routes/device-api-test.routes'),
   discovery: require('../../src/routes/discovery.routes'),
   backups: require('../../src/routes/backup.routes'),
+  users: require('../../src/routes/users.routes'),
 };
 
 // Reads that are still restricted, because the response carries secrets or
@@ -29,6 +30,7 @@ const RESTRICTED_READS = [
   'GET /backups/:backupId/download',
   'GET /backups/:backupId/diff/:otherId',
   'GET /settings/git-backup',
+  'GET /users/',
 ];
 
 // Operator-level actions that only admins may take.
@@ -49,6 +51,10 @@ const ADMIN_ONLY = [
   'DELETE /discovery/scans/:scanId',
   'DELETE /backups/:backupId',
   'DELETE /backups/schedules/:scheduleId',
+  'GET /users/',
+  'PUT /users/:id',
+  'POST /users/:id/reset-password',
+  'DELETE /users/:id',
 ];
 
 const UUID = '00000000-0000-4000-8000-000000000000';
