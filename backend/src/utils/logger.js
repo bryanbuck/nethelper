@@ -6,6 +6,8 @@ const logDir = 'logs';
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
+  // Jest runs are quiet and don't write to logs/.
+  silent: process.env.NODE_ENV === 'test',
   format: winston.format.combine(
     winston.format.timestamp({
       format: 'YYYY-MM-DD HH:mm:ss',

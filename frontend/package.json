@@ -7,10 +7,11 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
-    "test:unit": "vitest",
-    "test:e2e": "cypress run",
+    "test:unit": "vitest run",
     "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix"
+    "lint:fix": "eslint src/ --fix",
+    "test:watch": "vitest",
+    "ci": "npm run lint && npm run test:unit && npm run build"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.18",

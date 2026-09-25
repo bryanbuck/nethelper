@@ -1,0 +1,29 @@
+{
+  "page1": {
+    "items": [
+      {
+        "serial": "SG30KW0001", "deviceName": "core-cx-1", "model": "6300M 48G", "macAddress": "aa:bb:cc:00:00:01",
+        "ipv4": "10.0.0.2", "deviceType": "SWITCH", "status": "Up", "firmwareVersion": "10.13.1000",
+        "siteId": "site-1", "lastSeen": 1758800000, "deployment": "Standalone", "health": "Good", "upTime": 12345
+      },
+      {
+        "serial": "SG30KW0002", "deviceName": "edge-aoss-1", "model": "2930F-48G", "macAddress": "aa:bb:cc:00:00:02",
+        "ipv4": "10.0.0.3", "deviceType": "SWITCH", "status": "Down", "firmwareVersion": "WC.16.11.0012",
+        "siteId": "site-1", "lastSeen": 1758700000
+      }
+    ],
+    "next": "cursor-2"
+  },
+  "page2": {
+    "items": [
+      {
+        "serial": "CNKL0003", "deviceName": null, "model": "AP-515", "macAddress": "aa:bb:cc:00:00:03",
+        "ipv6": "fd00::3", "deviceType": "ACCESS_POINT", "status": "UP", "siteId": "site-2"
+      },
+      {
+        "serial": "GW0004", "deviceName": "branch-gw", "model": "9004", "deviceType": "mobility_controller",
+        "status": "Maintenance"
+      }
+    ]
+  }
+}

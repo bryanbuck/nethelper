@@ -15,7 +15,8 @@
     "db:seed": "node scripts/seed-data.js",
     "user:manage": "node scripts/user-manager.js",
     "setup": "npm install && npm run db:generate && npm run db:migrate",
-    "key:rotate": "node scripts/rotate-encryption-key.js"
+    "key:rotate": "node scripts/rotate-encryption-key.js",
+    "ci": "npm run lint && npm test"
   },
   "dependencies": {
     "@prisma/client": "^5.7.0",
@@ -50,5 +51,15 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "license": "AGPL-3.0-or-later"
+  "license": "AGPL-3.0-or-later",
+  "jest": {
+    "testEnvironment": "node",
+    "roots": [
+      "<rootDir>/tests"
+    ],
+    "setupFiles": [
+      "<rootDir>/tests/setup-env.js"
+    ],
+    "clearMocks": true
+  }
 }

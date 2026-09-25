@@ -47,6 +47,7 @@ class ServiceDebugLogger {
     
     const logger = winston.createLogger({
       level: this.globalLogLevel,
+      silent: process.env.NODE_ENV === 'test',
       format: winston.format.combine(
         winston.format.timestamp({
           format: 'YYYY-MM-DD HH:mm:ss.SSS',

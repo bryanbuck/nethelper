@@ -1,0 +1,16 @@
+[
+  {
+    "id": "00000000-0000-0000-1000-5c5b35000001", "serial": "FX0001", "mac": "5C5B35000001", "model": "EX4100-48P",
+    "type": "switch", "name": "idf-ex-1", "hostname": "idf-ex-1", "site_id": "site-a", "connected": true,
+    "sku": "EX4100-48P", "hw_rev": "A", "adopted": true
+  },
+  {
+    "id": "00000000-0000-0000-1000-5c5b35000002", "serial": "AP0002", "mac": "5c5b35000002", "model": "AP45",
+    "type": "ap", "name": "", "hostname": "ap-lobby", "site_id": "site-a", "connected": false,
+    "last_disconnected": 1758600000
+  },
+  {
+    "id": "00000000-0000-0000-1000-5c5b35000003", "serial": "SRX0003", "mac": "5c5b35000003", "model": "SRX320",
+    "type": "gateway", "site_id": null, "connected": false
+  }
+]

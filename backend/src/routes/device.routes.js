@@ -30,6 +30,30 @@ router.get('/poll/pollers', deviceController.getAvailablePollers);
 // Poll devices for specific information (bulk operation)
 router.post('/poll', authorize('admin', 'operator'), deviceController.pollDevices);
 
+// Device group routes. Declared before /:deviceId, which would otherwise
+// capture GET /groups as a device lookup.
+router.get('/groups', deviceController.getDeviceGroups);
+
+router.post(
+  '/groups',
+  authorize('admin', 'operator'),
+  validateDeviceGroup.create,
+  deviceController.createDeviceGroup
+);
+
+router.put(
+  '/groups/:groupId',
+  authorize('admin', 'operator'),
+  validateDeviceGroup.update,
+  deviceController.updateDeviceGroup
+);
+
+router.delete(
+  '/groups/:groupId',
+  authorize('admin'),
+  deviceController.deleteDeviceGroup
+);
+
 // Get specific device
 router.get('/:deviceId', deviceController.getDevice);
 
@@ -70,29 +94,6 @@ router.post(
   '/:deviceId/ping',
   authorize('admin', 'operator'),
   deviceController.pingDevice
-);
-
-// Device group routes
-router.get('/groups', deviceController.getDeviceGroups);
-
-router.post(
-  '/groups',
-  authorize('admin', 'operator'),
-  validateDeviceGroup.create,
-  deviceController.createDeviceGroup
-);
-
-router.put(
-  '/groups/:groupId',
-  authorize('admin', 'operator'),
-  validateDeviceGroup.update,
-  deviceController.updateDeviceGroup
-);
-
-router.delete(
-  '/groups/:groupId',
-  authorize('admin'),
-  deviceController.deleteDeviceGroup
 );
 
 module.exports = router;

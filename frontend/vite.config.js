@@ -59,7 +59,8 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       globals: true,
-      environment: 'jsdom'
+      environment: 'jsdom',
+      include: ['tests/unit/**/*.spec.js']
     }
   }
 })
