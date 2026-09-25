@@ -1,5 +1,4 @@
 const deviceService = require('../services/device.service');
-const ArubaErrorHandler = require('../utils/aruba-error-handler');
 const { debugLog, Services } = require('../utils/debug-logger');
 
 // Create service-specific logger

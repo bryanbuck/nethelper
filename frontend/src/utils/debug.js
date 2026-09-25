@@ -4,10 +4,11 @@
  */
 
 // Check if debug mode is enabled
+// On in development; in production builds only with an explicit
+// VITE_DEBUG_LOGGING=true (a dev .env's VITE_LOG_LEVEL=debug must not leak
+// verbose logging into a production bundle).
 const isDebugEnabled = () => {
-  return import.meta.env.VITE_DEBUG_LOGGING === 'true' || 
-         import.meta.env.VITE_LOG_LEVEL === 'debug' ||
-         import.meta.env.DEV
+  return import.meta.env.DEV || import.meta.env.VITE_DEBUG_LOGGING === 'true'
 }
 
 // Debug log levels

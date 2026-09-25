@@ -3,7 +3,6 @@ const CloudProviderFactory = require('../services/cloud-providers/cloud-provider
 const { getPrisma } = require('../config/database');
 const devicePollerService = require('../services/device-poller.service');
 const ArubaErrorHandler = require('../utils/aruba-error-handler');
-const logger = require('../utils/logger');
 
 class DeviceController {
   async getDevices(req, res, next) {
@@ -378,8 +377,6 @@ class DeviceController {
    */
   async pingAllDevices(req, res, next) {
     try {
-      const pingMonitorService = require('../services/ping-monitor.service');
-
       // Queue the job instead of running synchronously
       const { getQueue } = require('../config/bull');
       const pingMonitorQueue = getQueue('pingMonitor');

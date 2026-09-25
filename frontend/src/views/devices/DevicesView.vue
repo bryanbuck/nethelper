@@ -243,8 +243,8 @@
           <v-btn
             color="primary"
             variant="flat"
-            @click="saveDevice"
             :loading="saving"
+            @click="saveDevice"
           >
             Add Device
           </v-btn>
@@ -403,12 +403,12 @@
                   hint="Select the API credentials to use for this device"
                   persistent-hint
                 >
-                  <template v-slot:item="{ props, item }">
+                  <template #item="{ props, item }">
                     <v-list-item
                       v-bind="props"
                       :subtitle="`${item.raw.type} - ${item.raw.username || 'No username'}`"
                     >
-                      <template v-slot:append v-if="item.raw.lastTestStatus">
+                      <template v-if="item.raw.lastTestStatus" #append>
                         <v-chip
                           :color="item.raw.lastTestStatus === 'success' ? 'success' : 'error'"
                           size="x-small"
@@ -420,7 +420,7 @@
                     </v-list-item>
                   </template>
 
-                  <template v-slot:selection="{ item }">
+                  <template #selection="{ item }">
                     <div class="d-flex align-center">
                       <span>{{ item.title }}</span>
                       <v-chip
@@ -435,7 +435,7 @@
                     </div>
                   </template>
 
-                  <template v-slot:prepend-item>
+                  <template #prepend-item>
                     <v-list-item
                       title="Manage Credentials"
                       prepend-icon="mdi-cog"
@@ -472,8 +472,8 @@
           <v-btn
             color="primary"
             variant="flat"
-            @click="updateDevice"
             :loading="saving"
+            @click="updateDevice"
           >
             Save Changes
           </v-btn>
@@ -489,7 +489,7 @@
       location="bottom right"
     >
       {{ snackbar.message }}
-      <template v-slot:actions>
+      <template #actions>
         <v-btn
           icon="mdi-close"
           variant="text"
@@ -503,14 +503,13 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
 import { useSettingsStore } from '@/stores/settings'
 import { useWebSocket } from '@/composables/useWebSocket'
 import DeviceTable from '@/components/devices/DeviceTable.vue'
 import { vendorOptions, platformOptions, cloudProviderLabel } from '@/models/vendors'
 
-const router = useRouter()
 const route = useRoute()
 const devicesStore = useDevicesStore()
 const settingsStore = useSettingsStore()
@@ -665,9 +664,9 @@ const saveDevice = async () => {
       vendor: newDevice.value.vendor || 'aruba',
       platform: newDevice.value.platform || null,
       ipAddress: newDevice.value.ipAddress, // Required
-      macAddress: newDevice.value.macAddress || generateRandomMac(),
+      macAddress: newDevice.value.macAddress || undefined, // optional; never invent one
       location: newDevice.value.location,
-      serial: newDevice.value.serialNumber || '', // Optional - send empty string if not provided
+      serial: newDevice.value.serialNumber?.trim() || null, // optional; blank is stored as no serial
       model: newDevice.value.model || '',
       managementMode: newDevice.value.managementMode || 'direct',
       cloudIntegrationId: isCloud ? (newDevice.value.cloudIntegrationId || null) : null,
@@ -687,16 +686,6 @@ const saveDevice = async () => {
   } finally {
     saving.value = false
   }
-}
-
-const generateRandomMac = () => {
-  const hex = '0123456789ABCDEF'
-  let mac = ''
-  for (let i = 0; i < 6; i++) {
-    if (i > 0) mac += ':'
-    mac += hex[Math.floor(Math.random() * 16)] + hex[Math.floor(Math.random() * 16)]
-  }
-  return mac
 }
 
 const showSnackbar = (message, color = 'success') => {
@@ -782,7 +771,7 @@ const updateDevice = async () => {
       ipAddress: editingDevice.value.ipAddress,
       macAddress: editingDevice.value.macAddress || '',
       location: editingDevice.value.location,
-      serial: editingDevice.value.serialNumber || '',
+      serial: editingDevice.value.serialNumber?.trim() || null,
       model: editingDevice.value.model || '',
       managementMode: editingDevice.value.managementMode || 'direct',
       cloudIntegrationId: isCloud ? (editingDevice.value.cloudIntegrationId || null) : null,

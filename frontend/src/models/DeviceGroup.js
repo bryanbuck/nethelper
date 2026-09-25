@@ -159,7 +159,7 @@ export class DeviceGroup {
     
     this.devices.forEach(device => {
       const status = device.status || 'offline'
-      if (distribution.hasOwnProperty(status)) {
+      if (Object.hasOwn(distribution, status)) {
         distribution[status]++
       }
     })

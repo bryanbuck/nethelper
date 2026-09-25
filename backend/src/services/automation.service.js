@@ -147,7 +147,7 @@ class AutomationService {
     return fn(provider, device);
   }
 
-  async executeBackupConfig(deviceIds, parameters) {
+  async executeBackupConfig(deviceIds, _parameters) {
     const results = [];
 
     for (const deviceId of deviceIds) {

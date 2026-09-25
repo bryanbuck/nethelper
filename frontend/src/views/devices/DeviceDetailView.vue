@@ -10,7 +10,7 @@
               divider=">"
               class="pa-0"
             >
-              <template v-slot:item="{ item }">
+              <template #item="{ item }">
                 <v-breadcrumbs-item
                   :to="item.to"
                   :disabled="item.disabled"
@@ -193,7 +193,7 @@
               <v-alert type="warning" variant="tonal">
                 <v-alert-title>Unable to retrieve system information</v-alert-title>
                 {{ systemError }}
-                <template v-slot:append>
+                <template #append>
                   <v-btn
                     variant="text"
                     size="small"
@@ -211,7 +211,7 @@
                 <v-col cols="12" md="6">
                   <v-list density="compact">
                     <v-list-item>
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-icon>mdi-server</v-icon>
                       </template>
                       <v-list-item-title>Hostname</v-list-item-title>
@@ -221,7 +221,7 @@
                     </v-list-item>
 
                     <v-list-item>
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-icon>mdi-chip</v-icon>
                       </template>
                       <v-list-item-title>Platform</v-list-item-title>
@@ -231,7 +231,7 @@
                     </v-list-item>
 
                     <v-list-item>
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-icon>mdi-package-variant</v-icon>
                       </template>
                       <v-list-item-title>Software Version</v-list-item-title>
@@ -241,7 +241,7 @@
                     </v-list-item>
 
                     <v-list-item>
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-icon>mdi-clock</v-icon>
                       </template>
                       <v-list-item-title>Boot Time</v-list-item-title>
@@ -251,7 +251,7 @@
                     </v-list-item>
 
                     <v-list-item v-if="systemData.boot_time">
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-icon>mdi-timer</v-icon>
                       </template>
                       <v-list-item-title>Uptime</v-list-item-title>
@@ -265,7 +265,7 @@
                 <v-col cols="12" md="6">
                   <v-list density="compact">
                     <v-list-item>
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-icon>mdi-earth</v-icon>
                       </template>
                       <v-list-item-title>Timezone</v-list-item-title>
@@ -275,7 +275,7 @@
                     </v-list-item>
 
                     <v-list-item v-if="systemData.location">
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-icon>mdi-map-marker</v-icon>
                       </template>
                       <v-list-item-title>System Location</v-list-item-title>
@@ -285,7 +285,7 @@
                     </v-list-item>
 
                     <v-list-item v-if="systemData.contact">
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-icon>mdi-account</v-icon>
                       </template>
                       <v-list-item-title>System Contact</v-list-item-title>
@@ -295,7 +295,7 @@
                     </v-list-item>
 
                     <v-list-item v-if="systemData.description">
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-icon>mdi-text</v-icon>
                       </template>
                       <v-list-item-title>Description</v-list-item-title>
@@ -305,7 +305,7 @@
                     </v-list-item>
 
                     <v-list-item v-if="systemData.usb_status">
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-icon>mdi-usb</v-icon>
                       </template>
                       <v-list-item-title>USB Status</v-list-item-title>
@@ -622,7 +622,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
 import { useNotificationsStore } from '@/stores/notifications'
 import { formatDistanceToNow, format, fromUnixTime } from 'date-fns'
@@ -631,7 +631,6 @@ import deviceApiService from '@/services/deviceApi.service'
 import { cloudProviderLabel } from '@/models/vendors'
 
 const route = useRoute()
-const router = useRouter()
 const devicesStore = useDevicesStore()
 const notificationStore = useNotificationsStore()
 
@@ -797,7 +796,7 @@ const loadDevice = async () => {
       device.value = storeDevice
     } else {
       // Fetch from API
-      const response = await devicesStore.fetchDevices()
+      await devicesStore.fetchDevices()
       device.value = devicesStore.devices.find(d => d.id === route.params.id)
 
       if (!device.value) {

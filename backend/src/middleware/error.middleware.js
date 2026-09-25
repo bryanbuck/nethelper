@@ -1,6 +1,7 @@
 const logger = require('../utils/logger');
 
-function errorMiddleware(err, req, res, next) {
+// Express identifies error handlers by arity, so the 4th param must stay.
+function errorMiddleware(err, req, res, _next) {
   logger.error('Error caught by middleware:', {
     error: err.message,
     stack: err.stack,

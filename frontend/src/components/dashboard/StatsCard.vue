@@ -79,6 +79,7 @@ const props = defineProps({
   },
   trend: {
     type: String,
+    default: 'neutral',
     validator: value => ['up', 'down', 'neutral'].includes(value)
   },
   trendValue: {

@@ -703,7 +703,7 @@ const selectedDeviceIds = ref([])
 
 const filteredDevices = computed(() => devicesStore.devices)
 const deviceSelectItems = computed(() =>
-  devicesStore.devices.map(d => ({ title: `${d.name} (${d.serial})`, value: d.id }))
+  devicesStore.devices.map(d => ({ title: d.serial ? `${d.name} (${d.serial})` : d.name, value: d.id }))
 )
 
 async function openRunDialog() {

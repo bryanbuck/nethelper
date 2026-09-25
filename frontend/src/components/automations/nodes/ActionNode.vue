@@ -24,7 +24,10 @@ import { computed } from 'vue'
 import BaseNode from './BaseNode.vue'
 
 const props = defineProps({
-  id: String,
+  id: {
+    type: String,
+    default: ''
+  },
   data: {
     type: Object,
     default: () => ({})

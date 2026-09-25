@@ -1,12 +1,11 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useTheme } from 'vuetify'
-import { useRouter, useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import NotificationDisplay from '@/components/common/NotificationDisplay.vue'
 
 const theme = useTheme()
-const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 
@@ -52,17 +51,8 @@ const navigationItems = [
   {
     title: 'Automations',
     icon: 'mdi-cogs',
-    to: '/automations'
-  },
-  {
-    title: 'Schedule',
-    icon: 'mdi-calendar',
-    to: '/schedule'
-  },
-  {
-    title: 'Executions',
-    icon: 'mdi-history',
-    to: '/executions'
+    to: '/automations',
+    badge: 'Experimental'
   },
   {
     title: 'Settings',
@@ -88,8 +78,8 @@ onMounted(() => {
         elevation="2"
       >
         <v-app-bar-nav-icon
-          @click.stop="drawer = !drawer"
           icon="mdi-menu"
+          @click.stop="drawer = !drawer"
         ></v-app-bar-nav-icon>
         
         <v-toolbar-title>
@@ -113,7 +103,7 @@ onMounted(() => {
         </v-btn>
 
         <v-menu offset-y>
-          <template v-slot:activator="{ props }">
+          <template #activator="{ props }">
             <v-btn
               icon
               v-bind="props"
@@ -131,7 +121,7 @@ onMounted(() => {
             <v-divider />
             
             <v-list-item @click="logout">
-              <template v-slot:prepend>
+              <template #prepend>
                 <v-icon>mdi-logout</v-icon>
               </template>
               <v-list-item-title>Sign Out</v-list-item-title>
@@ -150,7 +140,7 @@ onMounted(() => {
             :title="authStore.userName || 'Network Admin'"
             :subtitle="authStore.user?.email || 'admin@company.com'"
           >
-            <template v-slot:prepend>
+            <template #prepend>
               <v-avatar color="primary">
                 <v-icon>mdi-account</v-icon>
               </v-avatar>
@@ -168,10 +158,14 @@ onMounted(() => {
             :title="item.title"
             :to="item.to"
             color="primary"
-          />
+          >
+            <template v-if="item.badge" #append>
+              <v-chip size="x-small" color="warning" variant="tonal" label>{{ item.badge }}</v-chip>
+            </template>
+          </v-list-item>
         </v-list>
 
-        <template v-slot:append>
+        <template #append>
           <div class="pa-2">
             <v-btn
               block

@@ -16,7 +16,7 @@
             <Form v-slot="{ handleSubmit, isSubmitting }" :validation-schema="validationSchema">
               <form @submit.prevent="handleSubmit(onSubmit)">
                 <!-- Email Field -->
-                <Field name="email" v-slot="{ field, errors }">
+                <Field v-slot="{ field, errors }" name="email">
                   <v-text-field
                     v-bind="field"
                     label="Email Address"
@@ -32,7 +32,7 @@
                 </Field>
 
                 <!-- Password Field -->
-                <Field name="password" v-slot="{ field, errors }">
+                <Field v-slot="{ field, errors }" name="password">
                   <v-text-field
                     ref="passwordField"
                     v-bind="field"
@@ -85,14 +85,9 @@
                 </v-btn>
 
 
-                <!-- Forgot Password Link -->
-                <div class="text-center">
-                  <router-link
-                    to="/forgot-password"
-                    class="text-primary text-decoration-none"
-                  >
-                    Forgot your password?
-                  </router-link>
+                <!-- No self-service reset: accounts are managed by an admin -->
+                <div class="text-center text-body-2 text-medium-emphasis">
+                  Forgot your password? Ask a NetHelper administrator to reset it.
                 </div>
               </form>
             </Form>

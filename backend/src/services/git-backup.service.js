@@ -4,6 +4,7 @@ const { execFile } = require('child_process');
 const { getPrisma } = require('../config/database');
 const encryption = require('../utils/encryption');
 const logger = require('../utils/logger');
+const { deviceStorageKey } = require('../utils/device-key');
 
 // Secret values inside GitBackupConfig.credentials. Drives encryption on write
 // and masking on read, the same way CLOUD_PROVIDERS[x].credentialFields does
@@ -309,7 +310,7 @@ class GitBackupService {
     return this.serialize(async () => {
       await this.ensureRepo(config);
 
-      const dirName = this.deviceDirName(device.serial);
+      const dirName = this.deviceDirName(deviceStorageKey(device));
       const deviceDir = this.resolveInRepo(config.repoPath, dirName);
       await fs.mkdir(deviceDir, { recursive: true });
 
@@ -335,7 +336,7 @@ class GitBackupService {
         lastBackupAt: new Date().toISOString(),
         managementMode: device.managementMode || null,
         platform: device.platform || null,
-        serial: device.serial,
+        serial: device.serial || null,
         source: source || null,
         vendor: device.vendor || null,
       };

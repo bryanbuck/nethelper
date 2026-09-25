@@ -146,8 +146,8 @@
         variant="outlined" 
         size="small" 
         prepend-icon="mdi-help-circle"
-        @click="showHelp = true"
         class="text-none"
+        @click="showHelp = true"
       >
         Help
       </v-btn>
@@ -200,7 +200,7 @@
 <script setup>
 import { ref } from 'vue'
 
-const props = defineProps({
+defineProps({
   collapsed: {
     type: Boolean,
     default: false

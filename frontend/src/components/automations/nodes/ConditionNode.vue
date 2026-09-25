@@ -18,15 +18,15 @@
     <!-- Custom handles for true/false branches -->
     <template v-if="data?.conditionType">
       <Handle 
+        id="true" 
         type="source" 
-        position="Position.Right" 
-        id="true"
+        position="Position.Right"
         :style="{ background: '#4caf50', top: '30%' }"
       />
       <Handle 
+        id="false" 
         type="source" 
-        position="Position.Right" 
-        id="false"
+        position="Position.Right"
         :style="{ background: '#f44336', top: '70%' }"
       />
       
@@ -48,10 +48,13 @@
 <script setup>
 import { computed } from 'vue'
 import BaseNode from './BaseNode.vue'
-import { Handle, Position } from '@vue-flow/core'
+import { Handle } from '@vue-flow/core'
 
 const props = defineProps({
-  id: String,
+  id: {
+    type: String,
+    default: ''
+  },
   data: {
     type: Object,
     default: () => ({})
@@ -82,13 +85,17 @@ const nodeSubtitle = computed(() => {
     case 'device-property':
       return props.data.config.property || 'Select property'
     case 'time-window':
-      return `${props.data.config.startTime} - ${props.data.config.endTime}` || 'Set time window'
+      return props.data.config.startTime && props.data.config.endTime
+        ? `${props.data.config.startTime} - ${props.data.config.endTime}`
+        : 'Set time window'
     case 'user-approval':
       return props.data.config.approver || 'Set approver'
     case 'custom-script':
       return props.data.config.scriptName || 'Configure script'
     case 'device-count':
-      return `Count ${props.data.config.operator} ${props.data.config.count}` || 'Set count condition'
+      return props.data.config.operator && props.data.config.count != null
+        ? `Count ${props.data.config.operator} ${props.data.config.count}`
+        : 'Set count condition'
     default:
       return 'Configure condition'
   }

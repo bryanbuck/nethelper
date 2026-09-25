@@ -39,7 +39,7 @@ const PLATFORMS = {
   'aos-cx': { id: 'aos-cx', vendor: 'aruba', label: 'AOS-CX', deviceApiType: 'cx_switch', sshProfile: 'aos-cx' },
   'aos-s': { id: 'aos-s', vendor: 'aruba', label: 'AOS-S (AOS-Switch)', deviceApiType: null, sshProfile: 'aos-s' },
   junos: { id: 'junos', vendor: 'juniper', label: 'Junos', deviceApiType: 'junos', sshProfile: 'junos' },
-  'ios-xe': { id: 'ios-xe', vendor: 'cisco', label: 'IOS / IOS-XE', deviceApiType: null, sshProfile: 'cisco-ios' },
+  'ios-xe': { id: 'ios-xe', vendor: 'cisco', label: 'IOS / IOS-XE', deviceApiType: null, sshProfile: 'ios-xe' },
   meraki: { id: 'meraki', vendor: 'cisco', label: 'Meraki (cloud-managed)', deviceApiType: null, sshProfile: null },
 };
 
@@ -123,8 +123,12 @@ const TRANSPORT_MATRIX = {
   // `set system services netconf ssh` authenticates and then refuses the
   // subsystem, and the router retries over the CLI rather than failing.
   'juniper/junos': { config: ['device-rest', 'ssh'], test: ['device-rest', 'ssh'], poll: ['device-rest', 'ssh'] },
-  // Cisco Catalyst — Phase 4 (harmless now: no device rows carry this platform).
+  // Cisco Catalyst — Phase 4. Direct SSH uses the ios-xe CLI profile; not yet
+  // validated on hardware.
   'cisco/ios-xe': { config: ['ssh'], test: ['ssh'], poll: ['ssh'] },
+  // Meraki is cloud-only (Phase 3, not implemented). No direct transports, so a
+  // Meraki row marked "direct" reports "no transport" instead of trying SSH.
+  'cisco/meraki': { config: [], test: [], poll: [] },
 };
 
 // Fallback rows for devices without a matrix entry (legacy/unclassified).

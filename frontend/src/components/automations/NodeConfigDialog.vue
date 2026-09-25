@@ -293,14 +293,14 @@
                 label="Request Body (JSON)"
                 variant="outlined"
                 rows="4"
-                placeholder='{"message": "Hello World"}'
+                placeholder="{&quot;message&quot;: &quot;Hello World&quot;}"
               />
               <v-textarea
                 v-model="nodeConfig.config.headers"
                 label="Headers (JSON)"
                 variant="outlined"
                 rows="3"
-                placeholder='{"Content-Type": "application/json"}'
+                placeholder="{&quot;Content-Type&quot;: &quot;application/json&quot;}"
               />
             </div>
           </div>
@@ -385,7 +385,7 @@
                 label="Payload (JSON)"
                 variant="outlined"
                 rows="4"
-                placeholder='{"text": "Automation completed"}'
+                placeholder="{&quot;text&quot;: &quot;Automation completed&quot;}"
               />
             </div>
           </div>
@@ -442,8 +442,8 @@
         <v-btn 
           variant="outlined"
           prepend-icon="mdi-test-tube"
-          @click="testConfiguration"
           :disabled="!formValid"
+          @click="testConfiguration"
         >
           Test
         </v-btn>
@@ -454,9 +454,9 @@
           color="primary"
           variant="flat"
           prepend-icon="mdi-content-save"
-          @click="handleSave"
           :disabled="!formValid"
           :loading="saving"
+          @click="handleSave"
         >
           Save
         </v-btn>
@@ -466,7 +466,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { useDevicesStore } from '@/stores/devices'
 
 const props = defineProps({
   modelValue: {
@@ -561,14 +562,14 @@ const notificationTypes = [
   { title: 'Log Entry', value: 'log' }
 ]
 
-// Mock data for dropdowns
-const availableDevices = [
-  'AP-Office-01',
-  'SW-Core-01',
-  'GW-Main-01',
-  'AP-Conference-01',
-  'SW-Floor2-01'
-]
+// Real inventory names for the device pickers (loaded on first open)
+const devicesStore = useDevicesStore()
+const availableDevices = computed(() => devicesStore.devices.map((d) => d.name).filter(Boolean))
+onMounted(() => {
+  if (devicesStore.devices.length === 0) {
+    devicesStore.fetchDevices().catch(() => {}) // store records the error
+  }
+})
 
 const statusConditions = [
   { title: 'Goes Online', value: 'online' },

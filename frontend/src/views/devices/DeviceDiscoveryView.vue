@@ -89,7 +89,7 @@
           :items-per-page="10"
           no-data-text="No discovery scans yet. Start a new scan to find devices on your network."
         >
-          <template v-slot:item.status="{ item }">
+          <template #item.status="{ item }">
             <v-chip
               :color="getScanStatusColor(item.status)"
               size="small"
@@ -99,19 +99,19 @@
             </v-chip>
           </template>
 
-          <template v-slot:item.subnets="{ item }">
+          <template #item.subnets="{ item }">
             <span class="text-body-2">{{ formatSubnets(item.subnets) }}</span>
           </template>
 
-          <template v-slot:item.discovered="{ item }">
+          <template #item.discovered="{ item }">
             {{ item._count?.discoveredDevices ?? 0 }}
           </template>
 
-          <template v-slot:item.createdAt="{ item }">
+          <template #item.createdAt="{ item }">
             {{ formatDate(item.createdAt) }}
           </template>
 
-          <template v-slot:item.actions="{ item }">
+          <template #item.actions="{ item }">
             <v-btn
               icon="mdi-eye"
               size="small"
@@ -202,11 +202,11 @@
           :items-per-page="25"
           no-data-text="No devices found in this scan"
         >
-          <template v-slot:item.ipAddress="{ item }">
+          <template #item.ipAddress="{ item }">
             <span class="font-weight-medium">{{ item.ipAddress }}</span>
           </template>
 
-          <template v-slot:item.vendor="{ item }">
+          <template #item.vendor="{ item }">
             <div class="d-flex align-center">
               <v-icon
                 v-if="item.isArubaVendor"
@@ -220,11 +220,11 @@
             </div>
           </template>
 
-          <template v-slot:item.openPorts="{ item }">
+          <template #item.openPorts="{ item }">
             <span class="text-body-2">{{ (item.openPorts || []).join(', ') || '—' }}</span>
           </template>
 
-          <template v-slot:item.suggestedType="{ item }">
+          <template #item.suggestedType="{ item }">
             <v-chip
               v-if="item.suggestedType"
               size="small"
@@ -236,7 +236,7 @@
             <span v-else class="text-medium-emphasis">—</span>
           </template>
 
-          <template v-slot:item.centralMatch="{ item }">
+          <template #item.centralMatch="{ item }">
             <v-chip
               v-if="item.centralMatch"
               size="small"
@@ -253,7 +253,7 @@
             <span v-else class="text-medium-emphasis">—</span>
           </template>
 
-          <template v-slot:item.conflictType="{ item }">
+          <template #item.conflictType="{ item }">
             <v-chip
               v-if="item.conflictType"
               size="small"
@@ -265,7 +265,7 @@
             <span v-else class="text-medium-emphasis">—</span>
           </template>
 
-          <template v-slot:item.status="{ item }">
+          <template #item.status="{ item }">
             <v-chip
               :color="getDiscoveredStatusColor(item.status)"
               size="small"
@@ -275,7 +275,7 @@
             </v-chip>
           </template>
 
-          <template v-slot:item.actions="{ item }">
+          <template #item.actions="{ item }">
             <template v-if="item.status === 'new'">
               <v-btn
                 size="small"
@@ -549,7 +549,7 @@
       location="bottom right"
     >
       {{ snackbar.message }}
-      <template v-slot:actions>
+      <template #actions>
         <v-btn
           icon="mdi-close"
           variant="text"

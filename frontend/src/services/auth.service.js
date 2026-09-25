@@ -74,30 +74,6 @@ export const authService = {
   },
 
   /**
-   * Request password reset
-   * @param {string} email - User email
-   * @returns {Promise} API response
-   */
-  async forgotPassword(email) {
-    return await api.post('/auth/forgot-password', {
-      email
-    })
-  },
-
-  /**
-   * Reset password with token
-   * @param {string} token - Reset token from email
-   * @param {string} password - New password
-   * @returns {Promise} API response
-   */
-  async resetPassword(token, password) {
-    return await api.post('/auth/reset-password', {
-      token,
-      password
-    })
-  },
-
-  /**
    * Get current user profile
    * @returns {Promise} API response
    */

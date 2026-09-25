@@ -250,7 +250,7 @@ class ArubaErrorHandler {
    * Add context-specific troubleshooting actions
    */
   static addContextualActions(enhancedError, context) {
-    let actions = [...(enhancedError.actions || [])];
+    const actions = [...(enhancedError.actions || [])];
 
     if (context === 'authentication' && enhancedError.category === 'auth_error') {
       actions.push('Check your .env file configuration');

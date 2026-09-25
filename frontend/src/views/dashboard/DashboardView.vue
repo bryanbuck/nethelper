@@ -94,7 +94,7 @@
 
       <v-row class="mt-4">
         <v-col cols="12" lg="8">
-          <NetworkHealthChart />
+          <DeviceStatusChart />
         </v-col>
         
         <v-col cols="12" lg="4">
@@ -105,7 +105,7 @@
         </v-col>
       </v-row>
 
-      <v-row class="mt-4" v-if="quickActions.length > 0">
+      <v-row v-if="quickActions.length > 0" class="mt-4">
         <v-col cols="12">
           <v-card elevation="2">
             <v-card-title>
@@ -160,7 +160,7 @@
       location="bottom right"
     >
       {{ snackbar.message }}
-      <template v-slot:actions>
+      <template #actions>
         <v-btn
           icon="mdi-close"
           variant="text"
@@ -178,7 +178,7 @@ import { useRouter } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
 import { useWebSocket } from '@/composables/useWebSocket'
 import StatsCard from '@/components/dashboard/StatsCard.vue'
-import NetworkHealthChart from '@/components/dashboard/NetworkHealthChart.vue'
+import DeviceStatusChart from '@/components/dashboard/DeviceStatusChart.vue'
 import RecentDevicesList from '@/components/dashboard/RecentDevicesList.vue'
 
 const router = useRouter()

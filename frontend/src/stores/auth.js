@@ -114,36 +114,6 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  const forgotPassword = async (email) => {
-    try {
-      isLoading.value = true
-      error.value = null
-      
-      const response = await authService.forgotPassword(email)
-      return response.data
-    } catch (err) {
-      error.value = err.response?.data?.message || 'Failed to send reset email'
-      throw err
-    } finally {
-      isLoading.value = false
-    }
-  }
-
-  const resetPassword = async (token, password) => {
-    try {
-      isLoading.value = true
-      error.value = null
-      
-      const response = await authService.resetPassword(token, password)
-      return response.data
-    } catch (err) {
-      error.value = err.response?.data?.message || 'Password reset failed'
-      throw err
-    } finally {
-      isLoading.value = false
-    }
-  }
-
   const clearAuthData = () => {
     user.value = null
     token.value = null
@@ -210,8 +180,6 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     logout,
     refreshAccessToken,
-    forgotPassword,
-    resetPassword,
     clearAuthData,
     initializeAuth,
     checkTokenExpiry,

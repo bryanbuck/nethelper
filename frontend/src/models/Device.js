@@ -265,10 +265,7 @@ export class Device {
   validate() {
     const errors = []
 
-    // Serial validation
-    if (!this.serial || this.serial.trim().length === 0) {
-      errors.push('Serial number is required')
-    }
+    // Serial is optional (directly-managed devices may not have one)
 
     // Name validation
     if (!this.name || this.name.trim().length < 2) {

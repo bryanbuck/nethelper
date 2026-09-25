@@ -71,7 +71,7 @@
           </v-btn>
           
           <v-menu>
-            <template v-slot:activator="{ props }">
+            <template #activator="{ props }">
               <v-btn
                 variant="outlined"
                 prepend-icon="mdi-dots-vertical"
@@ -142,14 +142,14 @@
                   clearable
                   @update:model-value="applyFilters"
                 >
-                  <template v-slot:selection="{ item }">
+                  <template #selection="{ item }">
                     <v-chip :color="getStatusColor(item.value)" size="small">
                       {{ item.title }}
                     </v-chip>
                   </template>
-                  <template v-slot:item="{ props, item }">
+                  <template #item="{ props, item }">
                     <v-list-item v-bind="props">
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-chip :color="getStatusColor(item.value)" size="small">
                           {{ item.title }}
                         </v-chip>
@@ -187,8 +187,8 @@
                 <v-btn
                   variant="outlined"
                   prepend-icon="mdi-filter-remove"
-                  @click="clearFilters"
                   :disabled="activeFiltersCount === 0"
+                  @click="clearFilters"
                 >
                   Clear Filters
                 </v-btn>
@@ -209,11 +209,11 @@
         :loading="devicesStore.tableLoading"
         item-value="id"
         show-select
+        class="device-data-table"
         @update:options="loadItems"
         @click:row="handleRowClick"
-        class="device-data-table"
       >
-        <template v-slot:item.name="{ item }">
+        <template #item.name="{ item }">
           <div class="d-flex align-center">
             <v-avatar 
               :color="getDeviceTypeColor(item.type)" 
@@ -229,9 +229,9 @@
           </div>
         </template>
         
-        <template v-slot:item.status="{ item }">
+        <template #item.status="{ item }">
           <v-tooltip location="bottom">
-            <template v-slot:activator="{ props }">
+            <template #activator="{ props }">
               <v-chip
                 v-bind="props"
                 :color="getStatusColor(item.status)"
@@ -261,7 +261,7 @@
           </v-tooltip>
         </template>
         
-        <template v-slot:item.type="{ item }">
+        <template #item.type="{ item }">
           <div class="d-flex align-center">
             <v-icon
               :color="getDeviceTypeColor(item.type)"
@@ -273,7 +273,7 @@
           </div>
         </template>
 
-        <template v-slot:item.managementMode="{ item }">
+        <template #item.managementMode="{ item }">
           <div class="d-flex align-center">
             <v-chip
               :color="getManagementChip(item).color"
@@ -288,7 +288,7 @@
               {{ getManagementChip(item).label }}
             </v-chip>
             <v-tooltip v-if="getManagementMismatch(item)" location="top">
-              <template v-slot:activator="{ props }">
+              <template #activator="{ props }">
                 <v-icon
                   v-bind="props"
                   color="warning"
@@ -303,9 +303,9 @@
           </div>
         </template>
 
-        <template v-slot:item.cloudStatus="{ item }">
+        <template #item.cloudStatus="{ item }">
           <v-tooltip location="bottom">
-            <template v-slot:activator="{ props }">
+            <template #activator="{ props }">
               <v-chip
                 v-if="item.cloudStatus"
                 v-bind="props"
@@ -338,7 +338,7 @@
           </v-tooltip>
         </template>
 
-        <template v-slot:item.apiStatus="{ item }">
+        <template #item.apiStatus="{ item }">
           <ConnectionStatusBadge
             :status="getApiConnectionStatus(item)"
             :last-tested="item.apiCredential?.lastTested || item.apiLastTested"
@@ -347,14 +347,14 @@
           />
         </template>
 
-        <template v-slot:item.lastSeen="{ item }">
+        <template #item.lastSeen="{ item }">
           <div>
             <div class="text-body-2">{{ formatLastSeen(item.lastSeen) }}</div>
             <div class="text-caption text-medium-emphasis">{{ formatUptime(item.uptime) }}</div>
           </div>
         </template>
         
-        <template v-slot:item.performance="{ item }">
+        <template #item.performance="{ item }">
           <div v-if="item.type === 'Access Point'">
             <div class="text-body-2">{{ item.clients }} clients</div>
             <div class="text-caption text-medium-emphasis">{{ item.bandwidth }}</div>
@@ -372,7 +372,7 @@
           </div>
         </template>
         
-        <template v-slot:item.actions="{ item }">
+        <template #item.actions="{ item }">
           <v-btn
             variant="text"
             size="small"
@@ -386,7 +386,7 @@
             @click.stop="editDevice(item)"
           ></v-btn>
           <v-menu>
-            <template v-slot:activator="{ props }">
+            <template #activator="{ props }">
               <v-btn
                 variant="text"
                 size="small"
@@ -417,11 +417,11 @@
           </v-menu>
         </template>
         
-        <template v-slot:loading>
+        <template #loading>
           <v-skeleton-loader type="table-row@10"></v-skeleton-loader>
         </template>
         
-        <template v-slot:no-data>
+        <template #no-data>
           <div class="text-center pa-8">
             <v-icon size="64" color="grey-lighten-1" class="mb-4">
               mdi-server-off
@@ -479,7 +479,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
 import { useWebSocket } from '@/composables/useWebSocket'

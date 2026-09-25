@@ -24,8 +24,8 @@
             <v-btn
               color="primary"
               size="large"
-              @click="goHome"
               class="mr-4"
+              @click="goHome"
             >
               <v-icon left>mdi-home</v-icon>
               Go Home

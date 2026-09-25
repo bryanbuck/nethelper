@@ -23,7 +23,7 @@
       </div>
     </div>
 
-    <template v-slot:actions>
+    <template #actions>
       <v-btn
         icon="mdi-close"
         size="small"

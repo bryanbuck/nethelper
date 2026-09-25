@@ -2,7 +2,7 @@
   <v-card>
     <v-card-title>API Connection Test</v-card-title>
     <v-card-text>
-      <v-btn @click="testConnection" :loading="testing" color="primary">
+      <v-btn :loading="testing" color="primary" @click="testConnection">
         Test API Connection
       </v-btn>
       

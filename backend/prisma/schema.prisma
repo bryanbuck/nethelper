@@ -143,7 +143,7 @@ model User {
 
 model Device {
   id            String         @id @default(uuid())
-  serial        String         @unique
+  serial        String?        @unique // optional: direct devices may have none (see utils/device-key.js)
   name          String
   type          DeviceType
   vendor        Vendor         @default(aruba)

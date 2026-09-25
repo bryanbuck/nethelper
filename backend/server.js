@@ -18,10 +18,11 @@ const { initializeSocket } = require('./src/websocket/socket.handler');
 const logger = require('./src/utils/logger');
 const { connectDatabase, disconnectDatabase } = require('./src/config/database');
 const { connectRedis, disconnectRedis } = require('./src/config/redis');
-const { initializeQueues } = require('./src/config/bull');
+const { initializeQueues, closeQueues } = require('./src/config/bull');
 const pingMonitorService = require('./src/services/ping-monitor.service');
 
 const PORT = process.env.PORT || 3000;
+const SHUTDOWN_TIMEOUT_MS = 10000;
 
 async function startServer() {
   try {
@@ -45,7 +46,7 @@ async function startServer() {
     const server = http.createServer(app);
 
     // Initialize WebSocket
-    initializeSocket(server);
+    const io = initializeSocket(server);
     logger.info('WebSocket server initialized');
 
     // Start ping monitoring
@@ -57,21 +58,34 @@ async function startServer() {
       logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
     });
 
-    // Graceful shutdown
-    process.on('SIGTERM', async () => {
-      logger.info('SIGTERM signal received: closing HTTP server');
+    // Graceful shutdown. Runs once even if several signals arrive: under
+    // systemd + npm + nodemon every process in the group gets the signal, so
+    // node commonly sees it twice.
+    let shuttingDown = false;
+    const shutdown = async (signal) => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      logger.info(`${signal} received: shutting down`);
 
-      // Stop ping monitoring
+      // Don't hang forever on a stuck connection or job.
+      setTimeout(() => {
+        logger.error('Graceful shutdown timed out; forcing exit');
+        process.exit(1);
+      }, SHUTDOWN_TIMEOUT_MS).unref();
+
       pingMonitorService.stopMonitoring();
-      logger.info('Ping monitoring stopped');
-
-      server.close(async () => {
-        logger.info('HTTP server closed');
-        await disconnectDatabase();
-        await disconnectRedis();
-        process.exit(0);
-      });
-    });
+      // io.close() disconnects WebSocket clients and closes the HTTP server;
+      // plain server.close() would wait on those long-lived connections.
+      await new Promise((resolve) => io.close(() => resolve()));
+      server.closeAllConnections?.(); // idle keep-alive HTTP sockets
+      logger.info('HTTP and WebSocket servers closed');
+      await closeQueues();
+      await disconnectDatabase();
+      await disconnectRedis();
+      process.exit(0);
+    };
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
 
   } catch (error) {
     logger.error('Failed to start server:', error);

@@ -93,7 +93,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
     alerts.value.unshift(alert)
     
     // Also add as notification for UI display
-    const notificationId = addNotification({
+    addNotification({
       id: `alert_${alert.id}`,
       type: getNotificationTypeFromSeverity(alert.severity),
       title: `${alert.severity.toUpperCase()}: ${alert.title}`,

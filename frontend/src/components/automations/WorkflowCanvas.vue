@@ -17,6 +17,7 @@
       :delete-key-code="'Delete'"
       :connection-line-style="connectionLineStyle"
       :default-edge-options="defaultEdgeOptions"
+      class="vue-flow-container"
       @node-click="onNodeClick"
       @node-double-click="onNodeDoubleClick"
       @edge-click="onEdgeClick"
@@ -28,7 +29,6 @@
       @dragover="onDragOver"
       @selection-change="onSelectionChange"
       @pane-click="onPaneClick"
-      class="vue-flow-container"
     >
       <!-- Background -->
       <Background 
@@ -176,10 +176,8 @@ const {
   removeNodes, 
   removeEdges,
   findNode,
-  findEdge,
   getConnectedEdges,
   fitView,
-  setViewport,
   toObject
 } = useVueFlow()
 
@@ -393,13 +391,13 @@ const onEdgeUpdate = ({ edge, connection }) => {
   }
 }
 
-const onNodesChange = (changes) => {
+const onNodesChange = () => {
   // Handle node position changes, deletions, etc.
   elements.value = [...nodes.value, ...edges.value]
   emit('elements-change', elements.value)
 }
 
-const onEdgesChange = (changes) => {
+const onEdgesChange = () => {
   // Handle edge changes
   elements.value = [...nodes.value, ...edges.value]
   emit('elements-change', elements.value)

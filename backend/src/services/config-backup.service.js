@@ -6,6 +6,7 @@ const { CronExpressionParser } = require('cron-parser');
 const { getPrisma } = require('../config/database');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const settingsService = require('./settings.service');
+const { deviceStorageKey } = require('../utils/device-key');
 const devicePollerService = require('./device-poller.service');
 const sshDeviceService = require('./ssh-device.service');
 const JunosAPI = require('./device-api/junos-api');
@@ -138,7 +139,7 @@ class ConfigBackupService {
     const record = await prisma.configBackup.create({
       data: {
         deviceId: device.id,
-        deviceSerial: device.serial,
+        deviceSerial: deviceStorageKey(device),
         deviceName: device.name,
         status: 'running',
         trigger,
@@ -161,8 +162,8 @@ class ConfigBackupService {
       });
       const hasChanges = !previous || previous.checksum !== checksum;
 
-      const safeSerial = device.serial.replace(/[^A-Za-z0-9_-]/g, '_');
-      const deviceDir = path.join(this.storageDir, safeSerial);
+      const safeKey = deviceStorageKey(device).replace(/[^A-Za-z0-9_-]/g, '_');
+      const deviceDir = path.join(this.storageDir, safeKey);
       await fs.mkdir(deviceDir, { recursive: true });
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filePath = path.join(deviceDir, `${timestamp}_${record.id}.cfg`);
@@ -217,7 +218,7 @@ class ConfigBackupService {
       if (error.name === 'CapabilityError') {
         logger.warn(`Config backup not supported for ${device.name}: ${error.message}`);
       } else {
-        logger.error(`Config backup failed for device ${device.serial}:`, error);
+        logger.error(`Config backup failed for device ${device.name} (${deviceStorageKey(device)}):`, error);
       }
       await prisma.configBackup.update({
         where: { id: record.id },

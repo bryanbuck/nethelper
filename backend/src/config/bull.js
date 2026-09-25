@@ -84,7 +84,17 @@ function getQueue(name) {
   return queues[name];
 }
 
+/**
+ * Close every queue (stops workers taking new jobs, releases Redis connections).
+ * Called during graceful shutdown.
+ */
+async function closeQueues() {
+  await Promise.allSettled(Object.values(queues).map((q) => q.close()));
+  logger.info('Job queues closed');
+}
+
 module.exports = {
   initializeQueues,
   getQueue,
+  closeQueues,
 };

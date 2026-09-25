@@ -8,12 +8,13 @@
             <v-btn 
               variant="text" 
               icon="mdi-arrow-left"
-              @click="handleBack"
               class="mr-2"
+              @click="handleBack"
             />
             <div>
               <h1 class="text-h5 font-weight-bold mb-1">
                 {{ isEditing ? 'Edit Automation' : 'Create Automation' }}
+                <v-chip size="small" color="warning" variant="tonal" label class="ml-2 align-middle">Experimental</v-chip>
               </h1>
               <p class="text-body-2 text-medium-emphasis mb-0">
                 {{ workflowMetadata.name || 'Untitled Workflow' }}
@@ -38,8 +39,8 @@
             <v-btn
               variant="outlined"
               prepend-icon="mdi-play"
-              @click="testWorkflow"
               :disabled="!canTestWorkflow"
+              @click="testWorkflow"
             >
               Test
             </v-btn>
@@ -47,8 +48,8 @@
             <v-btn
               variant="outlined"
               prepend-icon="mdi-content-save"
-              @click="saveWorkflow"
               :loading="saving"
+              @click="saveWorkflow"
             >
               Save
             </v-btn>
@@ -56,15 +57,15 @@
             <v-btn
               color="primary"
               prepend-icon="mdi-rocket-launch"
-              @click="deployWorkflow"
               :disabled="!canDeployWorkflow"
               :loading="deploying"
+              @click="deployWorkflow"
             >
               Deploy
             </v-btn>
             
             <v-menu>
-              <template v-slot:activator="{ props }">
+              <template #activator="{ props }">
                 <v-btn
                   variant="outlined"
                   icon="mdi-dots-vertical"
@@ -105,8 +106,8 @@
               variant="outlined"
               size="small"
               prepend-icon="mdi-undo"
-              @click="undo"
               :disabled="!canUndo"
+              @click="undo"
             >
               Undo
             </v-btn>
@@ -115,8 +116,8 @@
               variant="outlined"
               size="small"
               prepend-icon="mdi-redo"
-              @click="redo"
               :disabled="!canRedo"
+              @click="redo"
             >
               Redo
             </v-btn>
@@ -240,9 +241,9 @@
                 variant="outlined"
                 size="small"
                 prepend-icon="mdi-cog"
-                @click="configureSelectedNode"
                 class="mt-3"
                 block
+                @click="configureSelectedNode"
               >
                 Configure Node
               </v-btn>
@@ -384,10 +385,10 @@
             label="Or paste JSON here"
             variant="outlined"
             rows="8"
-            placeholder='{
-  "nodes": [...],
-  "edges": [...]
-}'
+            placeholder="{
+  &quot;nodes&quot;: [...],
+  &quot;edges&quot;: [...]
+}"
           />
         </v-card-text>
         
@@ -442,7 +443,7 @@
       location="bottom right"
     >
       {{ snackbar.message }}
-      <template v-slot:actions>
+      <template #actions>
         <v-btn
           icon="mdi-close"
           variant="text"
@@ -830,16 +831,16 @@ const exportWorkflow = () => {
   showSnackbar('Workflow exported successfully', 'success')
 }
 
-const handleImport = () => {
+const handleImport = async () => {
   try {
     let jsonData
     
     if (importJson.value) {
       jsonData = JSON.parse(importJson.value)
     } else if (importFile.value) {
-      // Handle file import (would need FileReader in real implementation)
-      showSnackbar('File import not implemented in demo', 'warning')
-      return
+      // v-file-input yields a File, or a File[] in some Vuetify versions
+      const file = Array.isArray(importFile.value) ? importFile.value[0] : importFile.value
+      jsonData = JSON.parse(await file.text())
     } else {
       showSnackbar('Please provide JSON data or select a file', 'warning')
       return

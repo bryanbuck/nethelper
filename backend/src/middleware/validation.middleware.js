@@ -37,7 +37,7 @@ const validateDevice = {
     body('vendor').optional().isIn(VENDOR_IDS).withMessage('Invalid vendor'),
     body('platform').optional({ nullable: true }).isIn(PLATFORM_IDS).withMessage('Invalid platform'),
     body('ipAddress').trim().isIP().withMessage('IP address is required and must be valid'),
-    body('serial').optional().trim(),
+    body('serial').optional({ values: 'null' }).trim(),
     body('model').optional().trim(),
     body('macAddress').optional().isMACAddress().withMessage('Invalid MAC address'),
     body('location').optional().trim(),

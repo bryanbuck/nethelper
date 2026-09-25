@@ -65,9 +65,9 @@
     
     <div v-if="hasValidationErrors" class="node-errors">
       <v-tooltip location="bottom">
-        <template v-slot:activator="{ props }">
+        <template #activator="{ props: tooltipProps }">
           <v-icon 
-            v-bind="props"
+            v-bind="tooltipProps"
             color="error" 
             size="small"
             class="error-icon"

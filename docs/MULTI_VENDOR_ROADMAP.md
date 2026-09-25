@@ -267,7 +267,7 @@ Shipped, no behavior change for Aruba:
 - **Abstractions**: `constants/vendors.js` (vendors, platforms, providers, transport matrix), `utils/transport-router.js`, field-first `device-platform.js`, `BaseCloudProvider` + `CloudProviderFactory` (`forIntegration` / `forDevice` / `activeProviders`).
 - **Consumers migrated**: `syncDevicesFromCloud()` (loops every active integration, stamps `cloudIntegrationId`), `pullConfig()` (ordered-fallback over the router), automation actions, discovery cross-check, device controller, sync job. Zero `require('.../aruba-central.service')` remain.
 - **Settings**: `/settings/cloud-integrations` CRUD + test (multi-row, multi-provider); deprecated `/settings/aruba-central` routes still work against the `aruba_central` rows.
-- **SSH profiles**: `junos` and `cisco-ios` added ahead of Phases 2/4.
+- **SSH profiles**: `junos` and `ios-xe` (planned as `cisco-ios`; shipped keyed by platform id) added ahead of Phases 2/4.
 - **Frontend**: `models/vendors.js`, `CloudIntegrations.vue` (replaces `ArubaCentralCredentials.vue`), vendor/platform/cloud-integration selectors in the device modals, Central→Cloud column and chip renames with provider-branded labels, device-type dropdowns now use enum values (killed the display-cased-string round-trip).
 
 **Verified** against the live dev DB: two Central tenants configured simultaneously and both returned by `activeProviders()`; a device attributed to the second tenant resolved through `forDevice()` to exactly that tenant; secrets stored as ciphertext and masked over the API; a Juniper switch with an Aruba-looking model (`6300F`) correctly routed to SSH instead of CX REST (proving the vendor field, not the model regex, now drives transport); quarantined Central config endpoint threw `CapabilityError`; transport routing reproduces all prior Aruba behavior including the legacy unclassified-switch quirk. Frontend builds clean.
@@ -350,6 +350,6 @@ The mirror is additive and best-effort throughout: a commit or push failure is l
 | `backend/src/services/aruba-central.service.js` | cleanup → `cloud-providers/aruba-central.provider.js`; template for `BaseCloudProvider` |
 | `backend/src/services/config-backup.service.js` | `pullConfig()` — the dispatch pattern to generalize; every vendor's backup path |
 | `backend/src/services/device-api/device-api-factory.js` | vendor-driven `determineDeviceAPIType`, constants-driven supported types |
-| `backend/src/services/ssh-device.service.js` | `PLATFORM_PROFILES` additions for junos / cisco-ios |
+| `backend/src/services/ssh-device.service.js` | `PLATFORM_PROFILES` additions for junos / ios-xe |
 | `frontend/src/views/devices/DevicesView.vue` | vendor/platform/cloud-integration selectors in Add/Edit |
 | `frontend/src/components/settings/ArubaCentralCredentials.vue` | → generic `CloudIntegrations.vue` |

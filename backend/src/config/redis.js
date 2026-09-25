@@ -44,7 +44,8 @@ async function connectRedis() {
  * @returns {Promise<void>} Promise that resolves when disconnection is complete
  */
 async function disconnectRedis() {
-  if (redisClient) {
+  // isOpen guards against a second shutdown path quitting a closed client.
+  if (redisClient?.isOpen) {
     await redisClient.quit();
     logger.info('Redis disconnected');
   }

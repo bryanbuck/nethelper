@@ -197,7 +197,7 @@ class SshDeviceService {
    * shell output, leaving just the command result.
    */
   stripEcho(raw, command) {
-    let text = raw.replace(/\r\n/g, '\n');
+    const text = raw.replace(/\r\n/g, '\n');
     const lines = text.split('\n');
     // Drop the first line if it echoes the command we sent.
     if (lines.length && lines[0].includes(command)) lines.shift();

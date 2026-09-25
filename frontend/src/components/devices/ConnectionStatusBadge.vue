@@ -1,6 +1,6 @@
 <template>
   <v-tooltip :text="tooltipText" location="top">
-    <template v-slot:activator="{ props: tooltipProps }">
+    <template #activator="{ props: tooltipProps }">
       <v-chip
         v-bind="tooltipProps"
         :color="statusColor"

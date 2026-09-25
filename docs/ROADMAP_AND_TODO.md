@@ -23,7 +23,12 @@ Preparing the dev-environment build for a private, in-house beta. Deploy targets
 - ✅ Authorization (2026-09-25): all mutating routes are role-gated; backup content/download/diff restricted to admin/operator.
 - ✅ Injection (2026-09-25): nmap arguments already strictly validated. Git mirror remote URL, branch, and paths are now validated, `GIT_ALLOW_PROTOCOL` is set, and `GIT_SSH_COMMAND` quoting is fixed.
 - ✅ Dependencies (2026-09-25): `npm audit fix` in both tiers; nodemailer 6 → 10; removed unused `node-cron` and `@faker-js/faker`; Vuetify 3.9.0-beta.1 → 3.13.5. Accepted: a moderate `uuid` advisory via `bull` (the only "fix" is a downgrade to bull 1.x).
-- ⏳ Remaining: remove dev/demo code, tests, Docker/systemd packaging, install docs, a hardware validation pass. Full plan: `~/.claude/plans/i-d-like-to-take-scalable-cake.md` (local).
+- ✅ Dev/demo removal (2026-09-25): mock device generators, the dev WebSocket event simulator, and the random dashboard "network health" series removed (replaced by a real current-status chart); the add-device form no longer invents a MAC; automation node pickers use real device names; workflow JSON file import implemented; 20 empty placeholder components/pages deleted; Schedule/Executions nav items removed (routes redirect to Automations); broken forgot-password flow replaced by "ask an administrator"; Automations marked Experimental.
+- ✅ Honest tests (2026-09-25): the API-credential "Test" button was a placeholder that reported success if fields were filled; it now runs the real transport-routed test via `services/connection-test.service.js`.
+- ✅ Config & build (2026-09-25): Vite dev hosts/proxy target from `DEV_ALLOWED_HOSTS`/`DEV_PROXY_TARGET`; `/socket.io` proxied; same-origin API/WS defaults; production bundles strip debug console output; debug logging only via `VITE_DEBUG_LOGGING` in production. Lint is clean in both tiers (was 194 frontend warnings).
+- ✅ Shutdown (2026-09-25): idempotent SIGTERM/SIGINT handling closes Socket.io, Bull queues, DB, and Redis with a 10 s force-exit (previously crashed on the duplicate signal systemd+npm+nodemon deliver).
+- ✅ Optional device serial (2026-09-25): migration `optional_device_serial` makes `Device.serial` nullable (blank → NULL); per-device storage uses `deviceStorageKey()` (serial, else `device-<id>`), so any number of serial-less direct devices can exist.
+- ⏳ Remaining: tests, Docker/systemd packaging, install docs, a hardware validation pass. Full plan: `~/.claude/plans/i-d-like-to-take-scalable-cake.md` (local).
 - ⏸ Deferred to the going-public review: rotating the secrets that were in the tracked `.env`, and a `git filter-repo` history purge.
 
 ---

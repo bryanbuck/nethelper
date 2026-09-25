@@ -1,4 +1,5 @@
 const { getPrisma } = require('../config/database');
+const { normalizeSerial } = require('../utils/device-key');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const { ENV_ARUBA_INTEGRATION_ID } = require('./cloud-providers/cloud-provider-factory');
 const { debugLog, Services } = require('../utils/debug-logger');
@@ -140,7 +141,7 @@ class DeviceService {
 
       const device = await prisma.device.create({
         data: {
-          serial: deviceData.serial,
+          serial: normalizeSerial(deviceData.serial) ?? null,
           name: deviceData.name,
           type: deviceData.type,
           vendor: deviceData.vendor || 'aruba',
@@ -170,10 +171,13 @@ class DeviceService {
     try {
       const prisma = getPrisma();
 
+      const data = { ...updateData };
+      if ('serial' in data) data.serial = normalizeSerial(data.serial);
+
       const device = await prisma.device.update({
         where: { id: deviceId },
         data: {
-          ...updateData,
+          ...data,
           updatedAt: new Date(),
         },
       });

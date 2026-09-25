@@ -266,20 +266,18 @@ class SettingsService {
       let testResult;
 
       try {
-        // Decrypt credentials
-        const decryptedCreds = {
-          username: credential.username ? credential.username : null,
-          password: credential.password ? encryption.decrypt(credential.password) : null,
-          apiKey: credential.apiKey ? encryption.decrypt(credential.apiKey) : null,
-          apiSecret: credential.apiSecret ? encryption.decrypt(credential.apiSecret) : null,
-        };
+        if (!device) {
+          throw new Error('Link this credential to a device (or pick one) to test it');
+        }
+        if (!device.ipAddress) {
+          throw new Error(`Device "${device.name}" has no IP address`);
+        }
 
-        // Attempt connection based on device type
-        testResult = await this.testDeviceConnection(
-          credential.type,
-          device,
-          decryptedCreds
-        );
+        // A real connection attempt, routed like any other operation. Lazy
+        // require: connection-test pulls in device-poller, which requires this
+        // module.
+        const { testDeviceConnection } = require('./connection-test.service');
+        testResult = await testDeviceConnection(device, this.decryptCredential(credential));
 
         // Update credential with test results
         await prisma.apiCredential.update({
@@ -314,125 +312,6 @@ class SettingsService {
     } catch (error) {
       logger.error('Test API credential error:', error);
       throw error;
-    }
-  }
-
-  /**
-   * Test device connection based on type
-   * @param {string} type - Credential type
-   * @param {Object} device - Device object
-   * @param {Object} credentials - Decrypted credentials
-   * @returns {Promise<Object>} Test result
-   */
-  async testDeviceConnection(type, device, credentials) {
-    // This is a basic implementation - expand based on actual device APIs
-    // For now, we'll do a simple validation and mock response
-
-    if (!device || !device.ipAddress) {
-      throw new Error('Device IP address not configured');
-    }
-
-    // Basic timeout for connection test
-    const timeout = 10000; // 10 seconds
-
-    // Different connection logic based on device type
-    switch (type) {
-      case 'switch':
-      case 'ap':
-      case 'gateway':
-        return this.testNetworkDeviceConnection(device, credentials, timeout);
-
-      case 'controller':
-        return this.testControllerConnection(device, credentials, timeout);
-
-      default:
-        return this.testGenericConnection(device, credentials, timeout);
-    }
-  }
-
-  /**
-   * Test network device connection (switch, AP, gateway)
-   * @param {Object} device - Device object
-   * @param {Object} credentials - Decrypted credentials
-   * @param {number} timeout - Connection timeout
-   * @returns {Promise<Object>} Test result
-   */
-  async testNetworkDeviceConnection(device, credentials, timeout) {
-    // This is a placeholder implementation
-    // In production, you would:
-    // 1. Use SSH for switches/APs with username/password
-    // 2. Use REST API if device supports it with API keys
-    // 3. Use SNMP for basic connectivity
-
-    // For now, just validate that credentials are provided
-    if (credentials.username && credentials.password) {
-      return {
-        success: true,
-        message: 'Credentials validated successfully',
-        testedAt: new Date().toISOString(),
-        deviceInfo: {
-          type: device.type,
-          model: device.model,
-          ipAddress: device.ipAddress,
-        },
-      };
-    } else if (credentials.apiKey) {
-      return {
-        success: true,
-        message: 'API key validated successfully',
-        testedAt: new Date().toISOString(),
-        deviceInfo: {
-          type: device.type,
-          model: device.model,
-          ipAddress: device.ipAddress,
-        },
-      };
-    } else {
-      throw new Error('No valid credentials provided');
-    }
-  }
-
-  /**
-   * Test controller connection
-   * @param {Object} device - Device object
-   * @param {Object} credentials - Decrypted credentials
-   * @param {number} timeout - Connection timeout
-   * @returns {Promise<Object>} Test result
-   */
-  async testControllerConnection(device, credentials, timeout) {
-    // Placeholder for controller-specific connection testing
-    if (credentials.apiKey && credentials.apiSecret) {
-      return {
-        success: true,
-        message: 'Controller API credentials validated',
-        testedAt: new Date().toISOString(),
-        deviceInfo: {
-          type: device.type,
-          model: device.model,
-        },
-      };
-    } else {
-      throw new Error('API key and secret required for controller');
-    }
-  }
-
-  /**
-   * Test generic connection
-   * @param {Object} device - Device object
-   * @param {Object} credentials - Decrypted credentials
-   * @param {number} timeout - Connection timeout
-   * @returns {Promise<Object>} Test result
-   */
-  async testGenericConnection(device, credentials, timeout) {
-    // Basic validation for generic devices
-    if (credentials.username || credentials.apiKey) {
-      return {
-        success: true,
-        message: 'Credentials validated',
-        testedAt: new Date().toISOString(),
-      };
-    } else {
-      throw new Error('No credentials provided');
     }
   }
 

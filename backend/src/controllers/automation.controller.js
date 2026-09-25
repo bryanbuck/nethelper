@@ -1,7 +1,5 @@
-const { getPrisma } = require('../config/database');
 const automationService = require('../services/automation.service');
 const { getQueue } = require('../config/bull');
-const logger = require('../utils/logger');
 
 class AutomationController {
   async createAutomation(req, res, next) {

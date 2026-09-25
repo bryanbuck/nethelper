@@ -1,4 +1,3 @@
-const logger = require('../../utils/logger');
 
 /**
  * Base Device API Interface
@@ -90,7 +89,7 @@ class BaseDeviceAPI {
    * @param {string} command - Command to execute
    * @returns {Promise<Object>} Command result
    */
-  async executeCommand(command) {
+  async executeCommand(_command) {
     throw new Error('executeCommand() is not implemented for this device type');
   }
 

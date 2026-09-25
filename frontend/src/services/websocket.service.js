@@ -51,7 +51,8 @@ class WebSocketService {
     this.connecting = true
     this.initializeStores()
 
-    const wsUrl = url || import.meta.env.VITE_WS_URL || 'ws://localhost:3000'
+    // Same origin by default: nginx (prod) or the Vite proxy (dev) forwards /socket.io
+    const wsUrl = url || import.meta.env.VITE_WS_URL || window.location.origin
     
     const defaultOptions = {
       transports: ['websocket', 'polling'],
