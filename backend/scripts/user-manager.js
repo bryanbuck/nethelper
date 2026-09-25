@@ -112,13 +112,13 @@ async function createUser() {
     // Get password
     let password;
     while (true) {
-      password = await question('Password (min 6 characters): ');
+      password = await question('Password (min 12 characters): ');
       if (!password) {
         console.log(colorize('Password is required.', 'red'));
         continue;
       }
-      if (password.length < 6) {
-        console.log(colorize('Password must be at least 6 characters.', 'red'));
+      if (password.length < 12) {
+        console.log(colorize('Password must be at least 12 characters.', 'red'));
         continue;
       }
       break;
@@ -292,13 +292,13 @@ async function changePassword(user) {
   try {
     let newPassword;
     while (true) {
-      newPassword = await question('New password (min 6 characters): ');
+      newPassword = await question('New password (min 12 characters): ');
       if (!newPassword) {
         console.log(colorize('Password is required.', 'red'));
         continue;
       }
-      if (newPassword.length < 6) {
-        console.log(colorize('Password must be at least 6 characters.', 'red'));
+      if (newPassword.length < 12) {
+        console.log(colorize('Password must be at least 12 characters.', 'red'));
         continue;
       }
       break;

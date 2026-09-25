@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const { getPrisma } = require('../config/database');
-const { authenticate } = require('../middleware/auth.middleware');
+const { authenticate, authorize } = require('../middleware/auth.middleware');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -11,7 +11,7 @@ const router = express.Router();
 // Register validation rules
 const registerValidation = [
   body('email').isEmail().normalizeEmail(),
-  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('password').isLength({ min: 12 }).withMessage('Password must be at least 12 characters'),
   body('name').trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
   body('role').optional().isIn(['admin', 'operator', 'viewer']).withMessage('Invalid role'),
 ];
@@ -54,8 +54,10 @@ function generateTokens(userId) {
   }
 }
 
-// Register endpoint
-router.post('/register', registerValidation, async (req, res) => {
+// Register endpoint — admin-only. There is no self-signup; the first admin is
+// created with `npm run user:manage`. The new user signs in separately, so no
+// tokens are issued here (that would hand the admin the new user's session).
+router.post('/register', authenticate, authorize('admin'), registerValidation, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -100,24 +102,16 @@ router.post('/register', registerValidation, async (req, res) => {
       },
     });
 
-    // Generate tokens
-    const { accessToken, refreshToken } = generateTokens(user.id);
-
-    // Store refresh token
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { refreshToken },
+    logger.info('User registered successfully', {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      createdBy: req.user.id,
     });
-
-    logger.info('User registered successfully', { userId: user.id, email: user.email });
 
     res.status(201).json({
       success: true,
-      data: {
-        user,
-        accessToken,
-        refreshToken,
-      },
+      data: { user },
     });
   } catch (error) {
     logger.error('Registration error:', error);

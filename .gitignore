@@ -153,8 +153,6 @@ frontend/*.local
 # Node.js specific files
 frontend/node_modules/
 backend/node_modules/
-frontend/package-lock.json
-backend/package-lock.json
 frontend/yarn.lock
 backend/yarn.lock
 frontend/pnpm-lock.yaml
