@@ -53,7 +53,7 @@ router.get('/', [
             select: {
               id: true,
               name: true,
-              type: true,
+              category: true,
             },
           },
           device: {
@@ -115,7 +115,7 @@ router.get('/:id', async (req, res) => {
           select: {
             id: true,
             name: true,
-            type: true,
+            category: true,
             workflow: true,
           },
         },
@@ -199,7 +199,7 @@ router.patch('/:id/cancel', authorize('admin', 'operator'), async (req, res) => 
           select: {
             id: true,
             name: true,
-            type: true,
+            category: true,
           },
         },
         device: {
@@ -388,7 +388,7 @@ router.get('/device/:deviceId', [
             select: {
               id: true,
               name: true,
-              type: true,
+              category: true,
             },
           },
           triggeredBy: {

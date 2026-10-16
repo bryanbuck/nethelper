@@ -10,6 +10,11 @@
  * missing fields are filled, cloud ownership moves to the target so the next
  * sync matches it by serial, and every row that references a source device
  * is re-pointed. If you add a model with a deviceId, re-point it in merge().
+ *
+ * Hand-added devices sometimes carry a typed-in placeholder serial/MAC
+ * ("STUDIO", cc:cc:...). Rows with the same name and IP are therefore offered
+ * even when their serials differ, and the merge then needs identityFrom: the
+ * row whose serial and MAC are real (normally the one the cloud reported).
  */
 
 const { getPrisma } = require('../config/database');
@@ -30,11 +35,13 @@ const DEVICE_SUMMARY = {
   macAddress: true,
   location: true,
   managementMode: true,
+  cloudStatus: true,
   cloudIntegrationId: true,
   cloudIntegration: { select: { id: true, name: true, provider: true } },
   apiCredentialId: true,
   liveMonitoring: true,
   firmwareVersion: true,
+  metadata: true,
   createdAt: true,
 };
 
@@ -67,19 +74,22 @@ function serialsOf(devices) {
 
 /**
  * Group devices that are probably the same hardware. Pure, for testing.
- * - same MAC (normalized): strong evidence
- * - same IP, where at least one row has no serial: the manual-add vs cloud
- *   sync case. Two rows that both have serials are two devices, even if an
- *   IP got reused.
- * Groups whose rows carry two different serials are dropped.
+ * - 'mac': same MAC (normalized). Strong evidence.
+ * - 'name-ip': same name (case-insensitive) and same IP. Offered even when
+ *   the serials differ, because a hand-added row may hold a placeholder
+ *   serial; the merge then asks which serial is real.
+ * - 'ip': same IP, where at least one row has no serial (the manual-add vs
+ *   cloud sync case). Two rows that both have serials are two devices, even
+ *   if an IP got reused.
+ * 'mac' and 'ip' groups whose rows carry two different serials are dropped.
  *
- * @returns {Array<{ key: string, reason: 'mac'|'ip', devices: Object[] }>}
+ * @returns {Array<{ key, reason: 'mac'|'name-ip'|'ip', serialConflict, devices }>}
  */
 function groupDuplicates(devices) {
   const groups = [];
   const grouped = new Set();
 
-  const collect = (reason, keyOf, accept) => {
+  const collect = (reason, keyOf, accept, { allowSerialConflict = false } = {}) => {
     const buckets = new Map();
     for (const device of devices) {
       if (grouped.has(device.id)) continue;
@@ -90,14 +100,21 @@ function groupDuplicates(devices) {
     }
     for (const members of buckets.values()) {
       if (members.length < 2 || !accept(members)) continue;
-      if (serialsOf(members).length > 1) continue;
+      const serialConflict = serialsOf(members).length > 1;
+      if (serialConflict && !allowSerialConflict) continue;
       members.forEach((d) => grouped.add(d.id));
       const ids = members.map((d) => d.id).sort();
-      groups.push({ key: ids.join(','), reason, devices: members });
+      groups.push({ key: ids.join(','), reason, serialConflict, devices: members });
     }
   };
 
   collect('mac', (d) => normalizeMac(d.macAddress), () => true);
+  collect(
+    'name-ip',
+    (d) => (d.ipAddress && d.name ? `${d.name.trim().toLowerCase()}|${d.ipAddress.trim()}` : null),
+    () => true,
+    { allowSerialConflict: true },
+  );
   collect('ip', (d) => (d.ipAddress ? d.ipAddress.trim() : null), (members) => members.some((d) => !d.serial));
   return groups;
 }
@@ -106,8 +123,9 @@ function groupDuplicates(devices) {
  * The field values the target ends up with. Pure, for testing.
  * @param {Object} target - full Device row
  * @param {Object[]} sources - full Device rows
+ * @param {Object} [identity] - row whose serial and MAC win (serial conflict)
  */
-function mergedFields(target, sources) {
+function mergedFields(target, sources, identity = null) {
   const all = [target, ...sources];
   const data = {};
 
@@ -117,7 +135,16 @@ function mergedFields(target, sources) {
     if (donor) data[field] = donor[field];
   }
 
-  const cloudRow = all.find((d) => d.managementMode === 'cloud');
+  if (identity) {
+    for (const field of ['serial', 'macAddress']) {
+      if (!isBlank(identity[field]) && identity[field] !== target[field]) data[field] = identity[field];
+    }
+  }
+
+  // The identity row's cloud data is the real one; otherwise any cloud row.
+  const cloudRow = identity?.managementMode === 'cloud'
+    ? identity
+    : all.find((d) => d.managementMode === 'cloud');
   if (cloudRow) {
     data.managementMode = 'cloud';
     if (cloudRow !== target) {
@@ -155,9 +182,9 @@ class DeviceMergeService {
   }
 
   /** Why these devices can't be merged, or null. Pure, for testing. */
-  validate(target, sources) {
-    if (serialsOf([target, ...sources]).length > 1) {
-      return 'These devices have different serial numbers, so they are different hardware';
+  validate(target, sources, identity = null) {
+    if (serialsOf([target, ...sources]).length > 1 && !identity?.serial) {
+      return 'These devices have different serial numbers; choose which one is real (identityFrom)';
     }
     const integrations = new Set(
       [target, ...sources].filter((d) => d.managementMode === 'cloud' && d.cloudIntegrationId).map((d) => d.cloudIntegrationId)
@@ -170,7 +197,7 @@ class DeviceMergeService {
    * Fold sourceIds into targetId.
    * @returns {Promise<Object>} the merged device
    */
-  async merge(targetId, sourceIds) {
+  async merge(targetId, sourceIds, { identityFrom = null } = {}) {
     const ids = [...new Set(sourceIds || [])];
     if (!targetId || ids.length === 0) throw new MergeError('Choose a device to keep and at least one to merge into it');
     if (ids.includes(targetId)) throw new MergeError('The device to keep cannot also be merged away');
@@ -178,16 +205,19 @@ class DeviceMergeService {
     const prisma = getPrisma();
     const rows = await prisma.device.findMany({
       where: { id: { in: [targetId, ...ids] } },
+      // full rows: mergedFields() copies cloud columns
       include: { deviceGroups: { select: { id: true } } },
     });
     const target = rows.find((d) => d.id === targetId);
     const sources = ids.map((id) => rows.find((d) => d.id === id));
     if (!target || sources.some((s) => !s)) throw new MergeError('Device not found', 404);
+    const identity = identityFrom ? rows.find((d) => d.id === identityFrom) : null;
+    if (identityFrom && !identity) throw new MergeError('identityFrom must be one of the devices being merged');
 
-    const reason = this.validate(target, sources);
+    const reason = this.validate(target, sources, identity);
     if (reason) throw new MergeError(reason, 409);
 
-    const data = mergedFields(target, sources);
+    const data = mergedFields(target, sources, identity);
     const groupIds = [...new Set(sources.flatMap((s) => s.deviceGroups.map((g) => g.id)))]
       .filter((id) => !target.deviceGroups.some((g) => g.id === id));
     const schedules = await prisma.backupSchedule.findMany({ select: { id: true, deviceSelection: true } });
@@ -224,6 +254,7 @@ class DeviceMergeService {
     logger.info('Devices merged', {
       targetId,
       sourceIds: ids,
+      identityFrom,
       fields: Object.keys(data),
       groups: groupIds.length,
       schedules: scheduleUpdates.length,

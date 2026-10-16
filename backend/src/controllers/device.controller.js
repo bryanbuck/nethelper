@@ -89,8 +89,8 @@ class DeviceController {
   /** Fold sourceIds into targetId; the sources are deleted. */
   async mergeDevices(req, res, next) {
     try {
-      const { targetId, sourceIds } = req.body;
-      const device = await deviceMerge.merge(targetId, sourceIds);
+      const { targetId, sourceIds, identityFrom } = req.body;
+      const device = await deviceMerge.merge(targetId, sourceIds, { identityFrom: identityFrom || null });
       res.json({ success: true, data: device });
     } catch (error) {
       if (error instanceof deviceMerge.MergeError) {

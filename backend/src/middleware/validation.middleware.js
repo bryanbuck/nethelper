@@ -35,6 +35,7 @@ const validateDevice = {
     body('targetId').isUUID().withMessage('Invalid device ID to keep'),
     body('sourceIds').isArray({ min: 1, max: 20 }).withMessage('sourceIds must list the devices to merge'),
     body('sourceIds.*').isUUID().withMessage('Invalid device ID to merge'),
+    body('identityFrom').optional({ values: 'null' }).isUUID().withMessage('Invalid identityFrom device ID'),
     handleValidationErrors,
   ],
 

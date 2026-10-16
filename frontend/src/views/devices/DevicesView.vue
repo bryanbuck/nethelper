@@ -94,7 +94,7 @@
         </div>
         <div class="text-body-2">
           {{ currentDuplicate.devices.map((d) => `"${d.name}"`).join(' and ') }} share
-          {{ currentDuplicate.reason === 'mac' ? 'a MAC address' : `IP ${currentDuplicate.devices[0].ipAddress}` }}
+          {{ currentDuplicate.reason === 'mac' ? 'a MAC address' : `${currentDuplicate.reason === 'name-ip' ? 'a name and ' : ''}IP ${currentDuplicate.devices[0].ipAddress}` }}
           and are probably the same device.
         </div>
         <template #append>

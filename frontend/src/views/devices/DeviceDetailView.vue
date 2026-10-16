@@ -90,7 +90,7 @@
       <v-col cols="12">
         <v-alert type="warning" variant="tonal" icon="mdi-content-duplicate">
           {{ duplicateGroup.devices.length - 1 === 1 ? 'Another device has' : `${duplicateGroup.devices.length - 1} other devices have` }}
-          the same {{ duplicateGroup.reason === 'mac' ? 'MAC address' : 'IP address' }} and is probably this switch,
+          the same {{ { mac: 'MAC address', 'name-ip': 'name and IP address' }[duplicateGroup.reason] || 'IP address' }} and is probably this device,
           for example after a cloud sync found a device that was added by hand.
           <template v-if="canEdit" #append>
             <v-btn variant="tonal" color="warning" @click="mergeDialog = true">Review and merge</v-btn>

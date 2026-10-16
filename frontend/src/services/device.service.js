@@ -36,9 +36,9 @@ class DeviceService {
   }
 
   /** Fold sourceIds into targetId; the sources are deleted. Returns the merged device. */
-  async mergeDevices(targetId, sourceIds) {
+  async mergeDevices(targetId, sourceIds, identityFrom = null) {
     try {
-      const response = await api.post('/devices/merge', { targetId, sourceIds })
+      const response = await api.post('/devices/merge', { targetId, sourceIds, identityFrom })
       return response.data
     } catch (error) {
       throw handleApiError(error, 'merging devices')

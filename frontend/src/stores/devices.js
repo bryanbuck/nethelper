@@ -208,8 +208,8 @@ export const useDevicesStore = defineStore('devices', () => {
     return duplicateGroups.value
   }
 
-  async function mergeDevices(targetId, sourceIds) {
-    const response = await deviceService.mergeDevices(targetId, sourceIds)
+  async function mergeDevices(targetId, sourceIds, identityFrom = null) {
+    const response = await deviceService.mergeDevices(targetId, sourceIds, identityFrom)
     devices.value = devices.value.filter((d) => !sourceIds.includes(d.id))
     updateDeviceLocally(targetId, response.data)
     await fetchDuplicates().catch(() => {})

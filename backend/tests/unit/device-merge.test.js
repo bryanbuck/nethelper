@@ -52,7 +52,7 @@ beforeEach(() => {
 
 describe('groupDuplicates', () => {
   it('groups a serial-less row with a cloud row on the same IP', () => {
-    const groups = groupDuplicates([direct(), cloud(), { id: 'other', serial: 'X', ipAddress: '10.0.0.9' }]);
+    const groups = groupDuplicates([direct({ name: 'core-sw' }), cloud(), { id: 'other', serial: 'X', ipAddress: '10.0.0.9' }]);
     expect(groups).toHaveLength(1);
     expect(groups[0].reason).toBe('ip');
     expect(groups[0].key).toBe('d-cloud,d-direct');
@@ -63,9 +63,15 @@ describe('groupDuplicates', () => {
     expect(groups).toEqual([expect.objectContaining({ reason: 'mac' })]);
   });
 
-  it('ignores two serialed rows sharing an IP, and conflicting serials', () => {
-    expect(groupDuplicates([cloud(), cloud({ id: 'b', serial: 'OTHER', macAddress: null })])).toEqual([]);
-    expect(groupDuplicates([cloud(), cloud({ id: 'b', serial: 'OTHER' })])).toEqual([]);
+  it('offers same name + IP even with a placeholder serial, flagging the conflict', () => {
+    const handAdded = direct({ serial: 'STUDIO', macAddress: 'cc:Cc:cc:Cc:Cc:Cc', managementMode: 'cloud' });
+    const groups = groupDuplicates([handAdded, cloud({ name: 'SW-CORE ' })]);
+    expect(groups).toEqual([expect.objectContaining({ reason: 'name-ip', serialConflict: true })]);
+  });
+
+  it('ignores differently named serialed rows sharing an IP or MAC with conflicting serials', () => {
+    expect(groupDuplicates([cloud(), cloud({ id: 'b', name: 'sw-edge', serial: 'OTHER', macAddress: null })])).toEqual([]);
+    expect(groupDuplicates([cloud(), cloud({ id: 'b', name: 'sw-edge', serial: 'OTHER' })])).toEqual([]);
   });
 });
 
@@ -84,6 +90,16 @@ describe('mergedFields', () => {
     const data = mergedFields(cloud(), [direct()]);
     expect(data).toMatchObject({ apiCredentialId: 'cred-1', liveMonitoring: true, managementMode: 'cloud' });
     expect(data).not.toHaveProperty('cloudIntegrationId');
+  });
+});
+
+describe('mergedFields with a chosen identity', () => {
+  it("replaces a placeholder serial and MAC with the identity row's", () => {
+    const handAdded = direct({ serial: 'STUDIO', macAddress: 'cc:Cc:cc:Cc:Cc:Cc', model: '6200F' });
+    const data = mergedFields(handAdded, [cloud()], cloud());
+    expect(data).toMatchObject({
+      serial: 'SG123', macAddress: 'AA-BB-CC-00-11-22', model: '6200F', managementMode: 'cloud', cloudIntegrationId: 'int-1',
+    });
   });
 });
 
@@ -120,7 +136,17 @@ describe('merge', () => {
     expect(mockMonitor.setAlwaysOn).toHaveBeenCalled();
   });
 
-  it('refuses different serials and self-merges', async () => {
+  it('merges conflicting serials when identityFrom names the real one', async () => {
+    const handAdded = direct({ serial: 'STUDIO' });
+    mockPrisma.device.findMany.mockResolvedValue([handAdded, cloud()]);
+    mockPrisma.backupSchedule.findMany.mockResolvedValue([]);
+    mockRows.set('d-direct', handAdded);
+    const merged = await deviceMerge.merge('d-direct', ['d-cloud'], { identityFrom: 'd-cloud' });
+    expect(merged.serial).toBe('SG123');
+    expect(calls[0][1].data).toEqual({ serial: null });
+  });
+
+  it('refuses different serials without identityFrom, and self-merges', async () => {
     mockPrisma.device.findMany.mockResolvedValue([cloud(), cloud({ id: 'b', serial: 'OTHER' })]);
     await expect(deviceMerge.merge('d-cloud', ['b'])).rejects.toThrow(MergeError);
     await expect(deviceMerge.merge('a', ['a'])).rejects.toThrow(/cannot also be merged/);
