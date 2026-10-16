@@ -28,6 +28,9 @@ const mockMonitor = {
 jest.mock('../../src/config/database', () => ({ getPrisma: () => mockPrisma }));
 jest.mock('../../src/services/live/state-monitor.service', () => mockMonitor);
 jest.mock('../../src/services/cloud-providers/cloud-provider-factory', () => ({ activeProviders: jest.fn() }));
+// Nothing to ask by default; tests that need a cloud/device answer set it.
+const mockIdentity = { resolve: jest.fn(async () => null) };
+jest.mock('../../src/services/device-identity.service', () => mockIdentity);
 
 const deviceMerge = require('../../src/services/device-merge.service');
 const { groupDuplicates, mergedFields, rewriteSelection, MergeError } = deviceMerge;
@@ -96,7 +99,7 @@ describe('mergedFields', () => {
 describe('mergedFields with a chosen identity', () => {
   it("replaces a placeholder serial and MAC with the identity row's", () => {
     const handAdded = direct({ serial: 'STUDIO', macAddress: 'cc:Cc:cc:Cc:Cc:Cc', model: '6200F' });
-    const data = mergedFields(handAdded, [cloud()], cloud());
+    const data = mergedFields(handAdded, [cloud()], { serial: 'SG123', macAddress: null, row: cloud() });
     expect(data).toMatchObject({
       serial: 'SG123', macAddress: 'AA-BB-CC-00-11-22', model: '6200F', managementMode: 'cloud', cloudIntegrationId: 'int-1',
     });
@@ -134,6 +137,25 @@ describe('merge', () => {
     expect(merged.serial).toBe('SG123');
     expect(mockMonitor.forget).toHaveBeenCalledWith('d-cloud');
     expect(mockMonitor.setAlwaysOn).toHaveBeenCalled();
+  });
+
+  it('takes the serial and MAC the cloud confirms, with no choice needed', async () => {
+    const handAdded = direct({ serial: 'STUDIO', macAddress: 'cc:Cc:cc:Cc:Cc:Cc' });
+    mockPrisma.device.findMany.mockResolvedValue([handAdded, cloud()]);
+    mockPrisma.backupSchedule.findMany.mockResolvedValue([]);
+    mockRows.set('d-direct', handAdded);
+    mockIdentity.resolve.mockResolvedValueOnce({ serial: 'SG123', macAddress: 'aa:bb:cc:00:11:22', source: 'cloud', label: 'Central' });
+    const merged = await deviceMerge.merge('d-direct', ['d-cloud']);
+    expect(merged).toMatchObject({ serial: 'SG123', macAddress: 'aa:bb:cc:00:11:22', cloudIntegrationId: 'int-1' });
+  });
+
+  it('preview reports the established identity, or that a choice is needed', async () => {
+    mockPrisma.device.findMany.mockResolvedValue([direct({ serial: 'STUDIO' }), cloud()]);
+    mockIdentity.resolve.mockResolvedValueOnce({ serial: 'SG123', macAddress: null, source: 'device', label: 'the device' });
+    await expect(deviceMerge.preview('d-direct', ['d-cloud'])).resolves
+      .toMatchObject({ identity: { serial: 'SG123', source: 'device' }, serialConflict: true, needsChoice: false });
+    await expect(deviceMerge.preview('d-direct', ['d-cloud'])).resolves
+      .toMatchObject({ identity: null, needsChoice: true });
   });
 
   it('merges conflicting serials when identityFrom names the real one', async () => {

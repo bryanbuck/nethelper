@@ -15,6 +15,8 @@ router.post('/', authorize('admin', 'operator'), validateDevice.create, deviceCo
 
 // Likely duplicate devices, and merging them into one
 router.get('/duplicates', deviceController.getDuplicates);
+// Asks the cloud and/or device for the real serial and MAC; changes nothing.
+router.post('/merge/preview', authorize('admin', 'operator'), validateDevice.merge, deviceController.previewMerge);
 router.post('/merge', authorize('admin', 'operator'), validateDevice.merge, deviceController.mergeDevices);
 
 // Sync devices from Aruba Central

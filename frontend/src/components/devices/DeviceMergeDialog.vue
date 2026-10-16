@@ -18,11 +18,19 @@
           {{ conflict }}
         </v-alert>
 
-        <v-alert v-else-if="serialConflict" type="warning" variant="tonal" density="compact" class="mb-4">
+        <!-- Serial/MAC: established by the cloud or the device; a person picks only as a last resort -->
+        <v-alert v-else-if="checking" type="info" variant="tonal" density="compact" class="mb-4" icon="mdi-progress-clock">
+          Checking the real serial number and MAC with the cloud and the device…
+        </v-alert>
+        <v-alert v-else-if="identity" type="success" variant="tonal" density="compact" class="mb-4" icon="mdi-check-decagram">
+          Serial <strong>{{ identity.serial }}</strong><template v-if="identity.macAddress"> and MAC <strong>{{ identity.macAddress }}</strong></template>
+          confirmed by {{ identity.label }}. The merged device uses them.
+        </v-alert>
+        <v-alert v-else-if="needsChoice" type="warning" variant="tonal" density="compact" class="mb-4">
           <div class="mb-2">
-            These rows have different serial numbers. If one was typed in by hand (a placeholder),
-            choose the real one. The merged device gets that row's serial and MAC. Pick the serial
-            the cloud reports, or the next sync adds the device again.
+            These rows have different serial numbers, and neither the cloud nor the device could
+            confirm the real one{{ checkError ? ` (${checkError})` : '' }}. Choose it: the merged
+            device gets that row's serial and MAC.
           </div>
           <v-radio-group v-model="identityId" hide-details density="compact">
             <v-radio
@@ -76,7 +84,7 @@
           color="primary"
           variant="flat"
           :loading="merging"
-          :disabled="!target || Boolean(conflict) || devices.length < 2 || (serialConflict && !identityId)"
+          :disabled="!target || Boolean(conflict) || devices.length < 2 || checking || (needsChoice && !identityId)"
           @click="merge"
         >
           Merge {{ devices.length }} devices
@@ -92,6 +100,7 @@ import { format } from 'date-fns'
 import { useDevicesStore } from '@/stores/devices'
 import { useNotificationsStore } from '@/stores/notifications'
 import { cloudProviderLabel } from '@/models/vendors'
+import deviceService from '@/services/device.service'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -111,8 +120,34 @@ const merging = ref(false)
 const serialRows = computed(() => props.devices.filter((d) => d.serial))
 const serialConflict = computed(() => new Set(serialRows.value.map((d) => d.serial)).size > 1)
 
-// Default real serial: the row the cloud inventory filled in (cloud-managed,
-// with provider metadata), newest first. A hand-added row's metadata is empty.
+// What the cloud/device say the serial and MAC are (POST /devices/merge/preview).
+const checking = ref(false)
+const identity = ref(null)
+const checkError = ref(null)
+const unresolved = ref(false) // the server could not establish the identity
+const needsChoice = computed(() => !checking.value && !identity.value && (unresolved.value || serialConflict.value))
+
+async function checkIdentity() {
+  const ids = props.devices.map((d) => d.id)
+  identity.value = null
+  checkError.value = null
+  unresolved.value = false
+  if (ids.length < 2) return
+  checking.value = true
+  try {
+    const result = await deviceService.previewMerge(ids[0], ids.slice(1))
+    if (props.devices[0]?.id !== ids[0]) return // dialog reopened with other devices
+    identity.value = result.data?.identity || null
+    unresolved.value = Boolean(result.data?.needsChoice)
+  } catch (err) {
+    checkError.value = err.userMessage || err.message
+  } finally {
+    checking.value = false
+  }
+}
+
+// Fallback default when a person must choose: the row the cloud inventory
+// filled in (cloud-managed, with provider metadata), newest first.
 function defaultIdentity() {
   const score = (d) => (d.managementMode === 'cloud' ? 2 : 0) + (Object.keys(d.metadata || {}).length ? 1 : 0)
   const ranked = [...serialRows.value].sort((a, b) =>
@@ -135,6 +170,7 @@ watch(() => [props.modelValue, props.devices], () => {
   if (!props.modelValue) return
   targetId.value = defaultTarget()
   identityId.value = defaultIdentity()
+  checkIdentity()
 }, { immediate: true })
 
 const target = computed(() => props.devices.find((d) => d.id === targetId.value) || null)
@@ -167,10 +203,12 @@ const preview = computed(() => {
   const t = target.value
   if (!t) return ''
   const all = [t, ...sources.value]
-  const identity = serialConflict.value ? props.devices.find((d) => d.id === identityId.value) : null
-  const pick = (field) => (identity && ['serial', 'macAddress'].includes(field) && identity[field])
+  const chosen = needsChoice.value ? props.devices.find((d) => d.id === identityId.value) : null
+  const real = identity.value || chosen
+  const realRow = identity.value ? props.devices.find((d) => d.serial === identity.value.serial) : chosen
+  const pick = (field) => (real && ['serial', 'macAddress'].includes(field) && real[field])
     || t[field] || sources.value.find((s) => s[field])?.[field]
-  const cloudRow = identity?.managementMode === 'cloud' ? identity : all.find((d) => d.managementMode === 'cloud')
+  const cloudRow = realRow?.managementMode === 'cloud' ? realRow : all.find((d) => d.managementMode === 'cloud')
   const parts = [
     `"${t.name}"`,
     pick('ipAddress') || 'no IP',
@@ -188,11 +226,16 @@ async function merge() {
     const merged = await devicesStore.mergeDevices(
       targetId.value,
       sources.value.map((d) => d.id),
-      serialConflict.value ? identityId.value : null,
+      needsChoice.value ? identityId.value : null,
     )
     notifications.showSuccess(`Merged ${props.devices.length} devices into ${merged.name}`)
     emit('merged', merged)
   } catch (err) {
+    // The cloud/device answered at preview time but not now: let a person choose.
+    if (err.response?.data?.code === 'identity_unresolved') {
+      identity.value = null
+      unresolved.value = true
+    }
     notifications.showError(err.userMessage || err.message || 'Could not merge the devices')
   } finally {
     merging.value = false

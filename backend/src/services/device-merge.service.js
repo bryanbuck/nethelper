@@ -13,11 +13,14 @@
  *
  * Hand-added devices sometimes carry a typed-in placeholder serial/MAC
  * ("STUDIO", cc:cc:...). Rows with the same name and IP are therefore offered
- * even when their serials differ, and the merge then needs identityFrom: the
- * row whose serial and MAC are real (normally the one the cloud reported).
+ * even when their serials differ. The real serial/MAC is then established,
+ * not guessed: from the cloud inventory, else from the device itself
+ * (device-identity.service.js). Only when neither can answer does a person
+ * choose (identityFrom: the row whose serial and MAC are right).
  */
 
 const { getPrisma } = require('../config/database');
+const deviceIdentity = require('./device-identity.service');
 const { normalizeMac } = require('../utils/device-key');
 const { debugLog, Services } = require('../utils/debug-logger');
 
@@ -58,10 +61,11 @@ const CLOUD_FIELDS = [
 ];
 
 class MergeError extends Error {
-  constructor(message, statusCode = 400) {
+  constructor(message, statusCode = 400, code = null) {
     super(message);
     this.name = 'MergeError';
     this.statusCode = statusCode;
+    this.code = code;
   }
 }
 
@@ -123,7 +127,8 @@ function groupDuplicates(devices) {
  * The field values the target ends up with. Pure, for testing.
  * @param {Object} target - full Device row
  * @param {Object[]} sources - full Device rows
- * @param {Object} [identity] - row whose serial and MAC win (serial conflict)
+ * @param {Object} [identity] - the real { serial, macAddress }, plus the merged
+ *   row that already carries that serial ({ row }) if any
  */
 function mergedFields(target, sources, identity = null) {
   const all = [target, ...sources];
@@ -136,14 +141,20 @@ function mergedFields(target, sources, identity = null) {
   }
 
   if (identity) {
+    const real = {
+      serial: identity.serial,
+      macAddress: identity.macAddress || identity.row?.macAddress || null,
+    };
     for (const field of ['serial', 'macAddress']) {
-      if (!isBlank(identity[field]) && identity[field] !== target[field]) data[field] = identity[field];
+      if (isBlank(real[field])) continue;
+      if (field === 'macAddress' && normalizeMac(real.macAddress) === normalizeMac(target.macAddress)) continue;
+      if (real[field] !== target[field]) data[field] = real[field];
     }
   }
 
-  // The identity row's cloud data is the real one; otherwise any cloud row.
-  const cloudRow = identity?.managementMode === 'cloud'
-    ? identity
+  // The row carrying the real serial has the real cloud data; else any cloud row.
+  const cloudRow = identity?.row?.managementMode === 'cloud'
+    ? identity.row
     : all.find((d) => d.managementMode === 'cloud');
   if (cloudRow) {
     data.managementMode = 'cloud';
@@ -184,7 +195,7 @@ class DeviceMergeService {
   /** Why these devices can't be merged, or null. Pure, for testing. */
   validate(target, sources, identity = null) {
     if (serialsOf([target, ...sources]).length > 1 && !identity?.serial) {
-      return 'These devices have different serial numbers; choose which one is real (identityFrom)';
+      return 'These devices have different serial numbers, and neither the cloud nor the device could confirm the real one; choose it';
     }
     const integrations = new Set(
       [target, ...sources].filter((d) => d.managementMode === 'cloud' && d.cloudIntegrationId).map((d) => d.cloudIntegrationId)
@@ -193,17 +204,12 @@ class DeviceMergeService {
     return null;
   }
 
-  /**
-   * Fold sourceIds into targetId.
-   * @returns {Promise<Object>} the merged device
-   */
-  async merge(targetId, sourceIds, { identityFrom = null } = {}) {
+  async loadRows(targetId, sourceIds) {
     const ids = [...new Set(sourceIds || [])];
     if (!targetId || ids.length === 0) throw new MergeError('Choose a device to keep and at least one to merge into it');
     if (ids.includes(targetId)) throw new MergeError('The device to keep cannot also be merged away');
 
-    const prisma = getPrisma();
-    const rows = await prisma.device.findMany({
+    const rows = await getPrisma().device.findMany({
       where: { id: { in: [targetId, ...ids] } },
       // full rows: mergedFields() copies cloud columns
       include: { deviceGroups: { select: { id: true } } },
@@ -211,11 +217,58 @@ class DeviceMergeService {
     const target = rows.find((d) => d.id === targetId);
     const sources = ids.map((id) => rows.find((d) => d.id === id));
     if (!target || sources.some((s) => !s)) throw new MergeError('Device not found', 404);
-    const identity = identityFrom ? rows.find((d) => d.id === identityFrom) : null;
-    if (identityFrom && !identity) throw new MergeError('identityFrom must be one of the devices being merged');
+    return { ids, rows, target, sources };
+  }
+
+  /**
+   * The real serial/MAC: established by the cloud or the device when either
+   * answers (that wins over a person's choice), else the row a person named.
+   * @returns {Promise<{serial, macAddress, source, label, row}|null>}
+   */
+  async identityFor(rows, identityFrom = null) {
+    const truth = await deviceIdentity.resolve(rows);
+    if (truth?.serial) return { ...truth, row: rows.find((r) => r.serial === truth.serial) || null };
+    if (!identityFrom) return null;
+    const row = rows.find((r) => r.id === identityFrom);
+    if (!row) throw new MergeError('identityFrom must be one of the devices being merged');
+    return { serial: row.serial, macAddress: row.macAddress, source: 'user', label: 'your choice', row };
+  }
+
+  /**
+   * How a merge would settle serial/MAC, without changing anything. Contacts
+   * the cloud and/or the device.
+   * @returns {Promise<{identity, serialConflict, needsChoice}>}
+   */
+  async preview(targetId, sourceIds) {
+    const { rows } = await this.loadRows(targetId, sourceIds);
+    const truth = await deviceIdentity.resolve(rows);
+    const serialConflict = serialsOf(rows).length > 1;
+    return {
+      identity: truth?.serial ? truth : null,
+      serialConflict,
+      needsChoice: serialConflict && !truth?.serial,
+    };
+  }
+
+  /**
+   * Fold sourceIds into targetId.
+   * @returns {Promise<Object>} the merged device
+   */
+  async merge(targetId, sourceIds, { identityFrom = null } = {}) {
+    const prisma = getPrisma();
+    const { ids, rows, target, sources } = await this.loadRows(targetId, sourceIds);
+    const identity = await this.identityFor(rows, identityFrom);
 
     const reason = this.validate(target, sources, identity);
-    if (reason) throw new MergeError(reason, 409);
+    if (reason) throw new MergeError(reason, 409, identity ? null : 'identity_unresolved');
+
+    // The real serial may sit on a device outside this merge.
+    if (identity?.serial) {
+      const holder = await prisma.device.findUnique({ where: { serial: identity.serial }, select: { id: true, name: true } });
+      if (holder && !rows.some((r) => r.id === holder.id)) {
+        throw new MergeError(`Serial ${identity.serial} belongs to another device, "${holder.name}"; include it in the merge`, 409);
+      }
+    }
 
     const data = mergedFields(target, sources, identity);
     const groupIds = [...new Set(sources.flatMap((s) => s.deviceGroups.map((g) => g.id)))]
@@ -254,7 +307,7 @@ class DeviceMergeService {
     logger.info('Devices merged', {
       targetId,
       sourceIds: ids,
-      identityFrom,
+      identity: identity && { serial: identity.serial, source: identity.source },
       fields: Object.keys(data),
       groups: groupIds.length,
       schedules: scheduleUpdates.length,

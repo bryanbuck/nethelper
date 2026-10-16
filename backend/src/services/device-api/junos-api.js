@@ -107,6 +107,19 @@ class JunosAPI extends BaseDeviceAPI {
     });
   }
 
+  /** Chassis serial and public base MAC (spec-derived; not yet seen on hardware). */
+  async getIdentity() {
+    return this.withSession(async (client) => {
+      const inventory = await client.rpc('<get-chassis-inventory/>');
+      const macs = await client.rpc('<get-chassis-mac-addresses/>');
+      return {
+        // The chassis element comes first, so the first serial is the chassis's.
+        serial: client.extractText(inventory, 'serial-number') || null,
+        macAddress: client.extractText(macs, 'public-base-address') || null,
+      };
+    });
+  }
+
   /** Firmware view of the same RPC, shaped like the other device APIs. */
   async getFirmwareInfo() {
     const info = await this.getDeviceInfo();

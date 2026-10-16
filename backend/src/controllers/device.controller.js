@@ -94,7 +94,21 @@ class DeviceController {
       res.json({ success: true, data: device });
     } catch (error) {
       if (error instanceof deviceMerge.MergeError) {
-        return res.status(error.statusCode).json({ success: false, error: error.message });
+        return res.status(error.statusCode).json({ success: false, error: error.message, code: error.code });
+      }
+      next(error);
+    }
+  }
+
+  /** How a merge would settle serial/MAC (asks the cloud and/or device); changes nothing. */
+  async previewMerge(req, res, next) {
+    try {
+      const { targetId, sourceIds } = req.body;
+      const preview = await deviceMerge.preview(targetId, sourceIds);
+      res.json({ success: true, data: preview });
+    } catch (error) {
+      if (error instanceof deviceMerge.MergeError) {
+        return res.status(error.statusCode).json({ success: false, error: error.message, code: error.code });
       }
       next(error);
     }
