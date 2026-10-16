@@ -39,6 +39,13 @@ const validateDevice = {
     handleValidationErrors,
   ],
 
+  assignCredential: [
+    body('deviceIds').isArray({ min: 1, max: 500 }).withMessage('deviceIds must list 1 to 500 devices'),
+    body('deviceIds.*').isUUID().withMessage('Invalid device ID'),
+    body('apiCredentialId').optional({ values: 'null' }).isUUID().withMessage('Invalid credential ID'),
+    handleValidationErrors,
+  ],
+
   create: [
     body('name').trim().isLength({ min: 1 }).withMessage('Device name is required'),
     body('type').isIn(DEVICE_TYPES).withMessage('Invalid device type'),

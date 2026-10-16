@@ -59,6 +59,30 @@ class DeviceService {
     }
   }
 
+  /**
+   * What linking apiCredentialId to these devices would do (null = unlink):
+   * { credential, devices: [{ id, name, outcome, reason, warning, current, ... }], counts }.
+   * Changes nothing.
+   */
+  async previewCredentialAssignment(deviceIds, apiCredentialId) {
+    try {
+      const response = await api.post('/devices/credential/preview', { deviceIds, apiCredentialId })
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'checking the credential assignment')
+    }
+  }
+
+  /** Link apiCredentialId to the devices (null unlinks). Same shape as the preview, plus `updated`. */
+  async assignCredential(deviceIds, apiCredentialId) {
+    try {
+      const response = await api.post('/devices/credential', { deviceIds, apiCredentialId })
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'assigning the credential')
+    }
+  }
+
   async getDevices(params = {}) {
     try {
       const response = await api.get('/devices', { params })
