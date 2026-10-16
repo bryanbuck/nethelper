@@ -5,6 +5,8 @@ import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import NotificationDisplay from '@/components/common/NotificationDisplay.vue'
 import ChangePasswordDialog from '@/components/common/ChangePasswordDialog.vue'
+import { THEMES, writeThemePreference } from '@/utils/theme-preference'
+import { defaultsForTheme } from '@/plugins/theme-defaults'
 
 const theme = useTheme()
 const route = useRoute()
@@ -18,8 +20,15 @@ const isAuthPage = computed(() => {
   return route.meta?.requiresAuth === false
 })
 
-const toggleTheme = () => {
-  theme.global.name.value = theme.global.current.value.dark ? 'light' : 'dark'
+const currentTheme = computed(() => THEMES.find((t) => t.id === theme.global.name.value) || THEMES[0])
+const themeDefaults = computed(() => defaultsForTheme(theme.global.name.value))
+// The global VBtn default is color: 'primary', which vanishes on the primary app
+// bar. Vuetify has no text-on-* class, so pass the token as a CSS color.
+const onPrimary = 'rgb(var(--v-theme-on-primary))'
+
+const selectTheme = (id) => {
+  theme.global.name.value = id
+  writeThemePreference(id)
 }
 
 const logout = async () => {
@@ -82,159 +91,167 @@ onMounted(() => {
 
 <template>
   <v-app>
-    <!-- Auth pages don't show navigation -->
-    <template v-if="!isAuthPage && authStore.isAuthenticated">
-      <v-app-bar
-        app
-        color="primary"
-        dark
-        elevation="2"
-      >
-        <v-app-bar-nav-icon
-          icon="mdi-menu"
-          @click.stop="drawer = !drawer"
-        ></v-app-bar-nav-icon>
-        
-        <v-toolbar-title>
-          <v-icon class="mr-2">mdi-network</v-icon>
-          NetHelper
-          <v-chip size="x-small" variant="outlined" label class="ml-2" :title="`Version ${appVersion}`">Beta</v-chip>
-        </v-toolbar-title>
-
-        <v-spacer />
-
-        <v-btn
-          icon
-          @click="toggleTheme"
+    <v-defaults-provider :defaults="themeDefaults">
+      <!-- Auth pages don't show navigation -->
+      <template v-if="!isAuthPage && authStore.isAuthenticated">
+        <v-app-bar
+          app
+          color="primary"
+          dark
+          elevation="2"
         >
-          <v-icon>
-            {{ theme.global.current.value.dark ? 'mdi-weather-sunny' : 'mdi-weather-night' }}
-          </v-icon>
-        </v-btn>
+          <v-app-bar-nav-icon
+            icon="mdi-menu"
+            :color="onPrimary"
+            @click.stop="drawer = !drawer"
+          ></v-app-bar-nav-icon>
+        
+          <v-toolbar-title>
+            <v-icon class="mr-2">mdi-network</v-icon>
+            NetHelper
+            <v-chip size="x-small" variant="outlined" label class="ml-2" :title="`Version ${appVersion}`">Beta</v-chip>
+          </v-toolbar-title>
 
-        <v-menu offset-y>
-          <template #activator="{ props }">
-            <v-btn
-              icon
-              v-bind="props"
-            >
-              <v-icon>mdi-account-circle</v-icon>
-            </v-btn>
-          </template>
+          <v-spacer />
+
+          <v-menu>
+            <template #activator="{ props }">
+              <v-btn
+                icon
+                :color="onPrimary"
+                v-bind="props"
+                :title="`Theme: ${currentTheme.label}`"
+              >
+                <v-icon>mdi-palette</v-icon>
+              </v-btn>
+            </template>
+
+            <v-list>
+              <v-list-subheader>Theme</v-list-subheader>
+              <v-list-item
+                v-for="t in THEMES"
+                :key="t.id"
+                :prepend-icon="t.icon"
+                :title="t.label"
+                :active="t.id === currentTheme.id"
+                color="primary"
+                @click="selectTheme(t.id)"
+              />
+            </v-list>
+          </v-menu>
+
+          <v-menu offset-y>
+            <template #activator="{ props }">
+              <v-btn
+                icon
+                :color="onPrimary"
+                v-bind="props"
+              >
+                <v-icon>mdi-account-circle</v-icon>
+              </v-btn>
+            </template>
           
+            <v-list>
+              <v-list-item>
+                <v-list-item-title>{{ authStore.userName }}</v-list-item-title>
+                <v-list-item-subtitle>{{ authStore.user?.email }} · {{ authStore.userRole }}</v-list-item-subtitle>
+              </v-list-item>
+
+              <v-divider />
+
+              <v-list-item @click="changePasswordOpen = true">
+                <template #prepend>
+                  <v-icon>mdi-lock-reset</v-icon>
+                </template>
+                <v-list-item-title>Change password</v-list-item-title>
+              </v-list-item>
+
+              <v-list-item @click="logout">
+                <template #prepend>
+                  <v-icon>mdi-logout</v-icon>
+                </template>
+                <v-list-item-title>Sign Out</v-list-item-title>
+              </v-list-item>
+            </v-list>
+          </v-menu>
+        </v-app-bar>
+
+        <v-navigation-drawer
+          v-model="drawer"
+          app
+          temporary
+        >
           <v-list>
-            <v-list-item>
-              <v-list-item-title>{{ authStore.userName }}</v-list-item-title>
-              <v-list-item-subtitle>{{ authStore.user?.email }} · {{ authStore.userRole }}</v-list-item-subtitle>
-            </v-list-item>
-
-            <v-divider />
-
-            <v-list-item @click="changePasswordOpen = true">
+            <v-list-item
+              :title="authStore.userName"
+              :subtitle="authStore.user?.email"
+            >
               <template #prepend>
-                <v-icon>mdi-lock-reset</v-icon>
+                <v-avatar color="primary">
+                  <v-icon>mdi-account</v-icon>
+                </v-avatar>
               </template>
-              <v-list-item-title>Change password</v-list-item-title>
-            </v-list-item>
-
-            <v-list-item @click="logout">
-              <template #prepend>
-                <v-icon>mdi-logout</v-icon>
-              </template>
-              <v-list-item-title>Sign Out</v-list-item-title>
             </v-list-item>
           </v-list>
-        </v-menu>
-      </v-app-bar>
 
-      <v-navigation-drawer
-        v-model="drawer"
-        app
-        temporary
-      >
-        <v-list>
-          <v-list-item
-            :title="authStore.userName"
-            :subtitle="authStore.user?.email"
-          >
-            <template #prepend>
-              <v-avatar color="primary">
-                <v-icon>mdi-account</v-icon>
-              </v-avatar>
-            </template>
-          </v-list-item>
-        </v-list>
+          <v-divider />
 
-        <v-divider />
-
-        <v-list density="compact" nav>
-          <v-list-item
-            v-for="item in navigationItems"
-            :key="item.title"
-            :prepend-icon="item.icon"
-            :title="item.title"
-            :to="item.to"
-            color="primary"
-          >
-            <template v-if="item.badge" #append>
-              <v-chip size="x-small" color="warning" variant="tonal" label>{{ item.badge }}</v-chip>
-            </template>
-          </v-list-item>
-        </v-list>
-
-        <template #append>
-          <div class="pa-2">
-            <v-btn
-              block
-              color="error"
-              variant="outlined"
-              @click="logout"
+          <v-list density="compact" nav>
+            <v-list-item
+              v-for="item in navigationItems"
+              :key="item.title"
+              :prepend-icon="item.icon"
+              :title="item.title"
+              :to="item.to"
+              color="primary"
             >
-              <v-icon left>mdi-logout</v-icon>
-              Sign Out
-            </v-btn>
-          </div>
-        </template>
-      </v-navigation-drawer>
-    </template>
+              <template v-if="item.badge" #append>
+                <v-chip size="x-small" color="warning" variant="tonal" label>{{ item.badge }}</v-chip>
+              </template>
+            </v-list-item>
+          </v-list>
 
-    <v-main>
-      <router-view />
-    </v-main>
+          <template #append>
+            <div class="pa-2">
+              <v-btn
+                block
+                color="error"
+                variant="outlined"
+                @click="logout"
+              >
+                <v-icon left>mdi-logout</v-icon>
+                Sign Out
+              </v-btn>
+            </div>
+          </template>
+        </v-navigation-drawer>
+      </template>
 
-    <!-- Footer only for authenticated pages -->
-    <v-footer
-      v-if="!isAuthPage && authStore.isAuthenticated"
-      app
-    >
-      <v-spacer />
-      <div class="text-caption text-medium-emphasis">NetHelper {{ appVersion }} · Beta</div>
-      <v-spacer />
-    </v-footer>
+      <v-main>
+        <router-view />
+      </v-main>
 
-    <ChangePasswordDialog v-model="changePasswordOpen" />
+      <!-- Footer only for authenticated pages -->
+      <v-footer
+        v-if="!isAuthPage && authStore.isAuthenticated"
+        app
+      >
+        <v-spacer />
+        <div class="text-caption text-medium-emphasis">NetHelper {{ appVersion }} · Beta</div>
+        <v-spacer />
+      </v-footer>
 
-    <!-- Global Notification Display -->
-    <NotificationDisplay />
+      <ChangePasswordDialog v-model="changePasswordOpen" />
+
+      <!-- Global Notification Display -->
+      <NotificationDisplay />
+    </v-defaults-provider>
   </v-app>
 </template>
 
 <style scoped>
-.v-application {
-  font-family: 'Roboto', sans-serif;
-}
-
 /* Loading overlay */
 .v-overlay {
   backdrop-filter: blur(2px);
-}
-
-/* Ensure app bar nav icon is visible */
-:deep(.v-app-bar-nav-icon) {
-  color: white !important;
-}
-
-:deep(.v-app-bar-nav-icon .v-icon) {
-  opacity: 1 !important;
 }
 </style>

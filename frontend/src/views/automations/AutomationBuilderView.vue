@@ -1041,18 +1041,18 @@ onUnmounted(() => {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #fafafa;
+  background-color: rgb(var(--v-theme-background));
 }
 
 .builder-header {
-  background: white;
-  border-bottom: 1px solid #e0e0e0;
+  background: rgb(var(--v-theme-surface));
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   z-index: 10;
 }
 
 .builder-toolbar {
   padding: 8px 0;
-  background: rgba(0, 0, 0, 0.02);
+  background: rgba(var(--v-theme-on-surface), 0.03);
   border-radius: 6px;
 }
 
@@ -1065,8 +1065,8 @@ onUnmounted(() => {
 .node-palette {
   width: 280px;
   flex-shrink: 0;
-  background: white;
-  border-right: 1px solid #e0e0e0;
+  background: rgb(var(--v-theme-surface));
+  border-right: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 
 .workflow-canvas-container {
@@ -1077,8 +1077,8 @@ onUnmounted(() => {
 .properties-panel {
   width: 300px;
   flex-shrink: 0;
-  background: white;
-  border-left: 1px solid #e0e0e0;
+  background: rgb(var(--v-theme-surface));
+  border-left: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   padding: 16px;
 }
 
@@ -1088,7 +1088,7 @@ onUnmounted(() => {
 }
 
 .configuration-info {
-  background: #f5f5f5;
+  background: rgba(var(--v-theme-on-surface), 0.05);
   border-radius: 4px;
   padding: 8px;
   max-height: 200px;
@@ -1104,7 +1104,7 @@ onUnmounted(() => {
 .help-content h3 {
   margin-top: 16px;
   margin-bottom: 8px;
-  color: #333;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
 }
 
 .help-content ul {

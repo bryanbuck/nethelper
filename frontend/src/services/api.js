@@ -1,5 +1,6 @@
 import axios from 'axios'
 import router from '@/router'
+import { THEME_STORAGE_KEY } from '@/utils/theme-preference'
 
 // Create axios instance with base configuration
 const api = axios.create({
@@ -9,6 +10,14 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 })
+
+// On an unrecoverable auth failure, drop everything stored for the session but
+// keep the viewer's theme choice (a display preference, not session data).
+const clearSessionStorage = () => {
+  const theme = localStorage.getItem(THEME_STORAGE_KEY)
+  localStorage.clear()
+  if (theme) localStorage.setItem(THEME_STORAGE_KEY, theme)
+}
 
 // Flag to prevent multiple token refresh attempts
 let isRefreshing = false
@@ -69,7 +78,7 @@ api.interceptors.response.use(
       
       if (!refreshToken) {
         // No refresh token, redirect to login
-        localStorage.clear()
+        clearSessionStorage()
         router.push('/login')
         return Promise.reject(error)
       }
@@ -101,7 +110,7 @@ api.interceptors.response.use(
       } catch (refreshError) {
         // Refresh failed, clear auth data and redirect
         processQueue(refreshError, null)
-        localStorage.clear()
+        clearSessionStorage()
         router.push('/login')
         return Promise.reject(refreshError)
       } finally {

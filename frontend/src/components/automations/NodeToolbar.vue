@@ -437,15 +437,15 @@ const addNode = (category, nodeData) => {
   align-items: center;
   gap: 12px;
   padding: 8px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
-  background: white;
+  background: rgb(var(--v-theme-surface));
 }
 
 .node-item:hover {
-  border-color: #FF8300;
+  border-color: rgb(var(--v-theme-primary));
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   transform: translateY(-1px);
 }
@@ -473,14 +473,14 @@ const addNode = (category, nodeData) => {
 .node-item-title {
   font-weight: 600;
   font-size: 13px;
-  color: #333;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
   line-height: 1.2;
   margin-bottom: 2px;
 }
 
 .node-item-description {
   font-size: 11px;
-  color: #666;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   line-height: 1.2;
 }
 
@@ -491,7 +491,7 @@ const addNode = (category, nodeData) => {
 
 .help-content h3 {
   margin-bottom: 12px;
-  color: #333;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
 }
 
 .help-content ul {

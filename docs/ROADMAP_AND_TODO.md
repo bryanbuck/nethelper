@@ -338,6 +338,17 @@ Comprehensive audit trail:
 
 ---
 
+### 11. Built-in UI Themes
+**Priority**: Low
+**Status**: 🔨 Spike done (2026-10-15, branch `spike/classic-theme`): Light, Dark and Classic (circa-2010 admin portal) themes, a theme menu, and the choice saved per browser
+
+Built-in themes only. Users can't define their own. See "Themes" in `CLAUDE.md` for how it works.
+- Done: theme tokens instead of hardcoded colors across the automations builder; vue-flow CSS imported and themed; Dark primary changed to `#2D6A00`.
+- Remaining: `LoginView.vue` (orange gradient), `DeviceStatusChart.vue` (literal chart colors), `DeviceInfoDisplay.vue`, `NotFound.vue` still hardcode colors; delete the unused `src/style.css`.
+- Open questions: `#2D6A00` is about 2.8:1 against Dark's background, so green text and outlines may need a lighter variant. Per-user (server-side) theme preference only if testers ask.
+
+---
+
 ## 🎯 How to Use This File
 
 ### Adding New Items

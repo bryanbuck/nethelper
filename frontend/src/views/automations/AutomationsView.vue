@@ -645,14 +645,14 @@ onMounted(async () => {
 
 <style scoped>
 .automations-view {
-  background-color: #fafafa;
+  background-color: rgb(var(--v-theme-background));
   min-height: 100vh;
 }
 
 .automations-header {
-  background: white;
+  background: rgb(var(--v-theme-surface));
   padding: 24px 0;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 
 .stats-card {
@@ -673,7 +673,7 @@ onMounted(async () => {
 }
 
 .automations-table :deep(.v-data-table__tr:hover) {
-  background-color: rgba(0, 0, 0, 0.02);
+  background-color: rgba(var(--v-theme-on-surface), 0.03);
 }
 
 .empty-state {
