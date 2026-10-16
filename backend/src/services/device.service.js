@@ -1,5 +1,5 @@
 const { getPrisma } = require('../config/database');
-const { normalizeSerial } = require('../utils/device-key');
+const { normalizeSerial, normalizeMac } = require('../utils/device-key');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const { ENV_ARUBA_INTEGRATION_ID } = require('./cloud-providers/cloud-provider-factory');
 const { debugLog, Services } = require('../utils/debug-logger');
@@ -112,6 +112,9 @@ class DeviceService {
               description: true,
             },
           },
+          cloudIntegration: {
+            select: { id: true, name: true, provider: true },
+          },
           executions: {
             take: 10,
             orderBy: { createdAt: 'desc' },
@@ -128,7 +131,8 @@ class DeviceService {
         },
       });
 
-      return device;
+      // Same status mapping as getDevices(), so a fetched row matches a listed one.
+      return device && { ...device, status: device.pingStatus || device.cloudStatus || 'offline' };
     } catch (error) {
       logger.error('Get device error', { error: error.message, stack: error.stack });
       throw error;
@@ -233,10 +237,10 @@ class DeviceService {
       throw new Error('No active cloud integrations configured. Add one in Settings.');
     }
 
-    const totals = { created: 0, updated: 0, total: 0, integrations: [] };
+    const totals = { created: 0, updated: 0, adopted: 0, total: 0, integrations: [] };
 
     for (const provider of providers) {
-      const summary = { integrationId: provider.id, name: provider.label, created: 0, updated: 0, total: 0, error: null };
+      const summary = { integrationId: provider.id, name: provider.label, created: 0, updated: 0, adopted: 0, total: 0, error: null };
       try {
         const devices = await provider.listInventory();
         summary.total = devices.length;
@@ -247,6 +251,7 @@ class DeviceService {
             const result = await this.upsertCloudDevice(normalized, ownerId);
             if (result === 'created') summary.created++;
             else summary.updated++;
+            if (result === 'adopted') summary.adopted++;
           } catch (deviceError) {
             logger.error('Error processing device', { error: deviceError.message, serial: normalized.serial });
           }
@@ -259,6 +264,7 @@ class DeviceService {
       }
       totals.created += summary.created;
       totals.updated += summary.updated;
+      totals.adopted += summary.adopted;
       totals.total += summary.total;
       totals.integrations.push(summary);
     }
@@ -267,6 +273,15 @@ class DeviceService {
     // case: if every integration failed, surface the first failure.
     if (totals.integrations.length > 0 && totals.integrations.every((s) => s.error)) {
       throw new Error(totals.integrations[0].error);
+    }
+
+    // Rows sync couldn't prove are the same device (IP match only, or an
+    // ambiguous MAC) are left for a person to merge; tell the UI how many.
+    try {
+      const deviceMerge = require('./device-merge.service');
+      totals.possibleDuplicates = (await deviceMerge.findDuplicateGroups()).length;
+    } catch (error) {
+      logger.warn('Duplicate check after sync failed', { error: error.message });
     }
 
     return totals;
@@ -287,6 +302,11 @@ class DeviceService {
     const existingDevice = await prisma.device.findUnique({
       where: { serial: normalized.serial },
     });
+    // A device added by hand (no serial) that this cloud now reports: adopt
+    // it rather than create a duplicate, but only on proof, i.e. exactly one
+    // serial-less row with the same MAC. Weaker matches (IP, name) are left
+    // to findDuplicateGroups() and a person.
+    const adoptable = existingDevice ? null : await this.findAdoptableDevice(normalized.macAddress);
 
     const deviceData = {
       name: normalized.name,
@@ -310,8 +330,29 @@ class DeviceService {
       await this.updateDevice(existingDevice.id, deviceData);
       return 'updated';
     }
+    if (adoptable) {
+      // Keep the name the user gave it; everything else comes from the cloud.
+      const { name: _cloudName, ...adopted } = deviceData;
+      await this.updateDevice(adoptable.id, { serial: normalized.serial, ...adopted });
+      logger.info('Cloud sync adopted an existing device by MAC', {
+        deviceId: adoptable.id, serial: normalized.serial, mac: normalizeMac(normalized.macAddress),
+      });
+      return 'adopted';
+    }
     await this.createDevice({ serial: normalized.serial, ...deviceData });
     return 'created';
+  }
+
+  /** The single serial-less device with this MAC, or null (none, or ambiguous). */
+  async findAdoptableDevice(macAddress) {
+    const mac = normalizeMac(macAddress);
+    if (!mac) return null;
+    const candidates = await getPrisma().device.findMany({
+      where: { serial: null, macAddress: { not: null } },
+      select: { id: true, macAddress: true },
+    });
+    const matches = candidates.filter((d) => normalizeMac(d.macAddress) === mac);
+    return matches.length === 1 ? matches[0] : null;
   }
 
   /**

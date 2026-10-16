@@ -9,6 +9,10 @@ export const useDevicesStore = defineStore('devices', () => {
   const loading = ref(false)
   const error = ref(null)
   const lastSync = ref(null)
+  // Outcome of the last cloud sync job (device:sync:completed), and the
+  // likely-duplicate groups to offer for merging.
+  const lastSyncResult = ref(null)
+  const duplicateGroups = ref([])
   const stats = ref({
     total: 0,
     online: 0,
@@ -177,11 +181,8 @@ export const useDevicesStore = defineStore('devices', () => {
     loading.value = true
     error.value = null
     try {
-      const response = await deviceService.syncDevices(integrationId)
-      devices.value = response.data
-      updateStats()
-      lastSync.value = new Date()
-      return response
+      // Only queues the job; the result arrives as device:sync:completed.
+      return await deviceService.syncDevices(integrationId)
     } catch (err) {
       console.error('Failed to sync devices:', err)
       error.value = err
@@ -189,6 +190,30 @@ export const useDevicesStore = defineStore('devices', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  /**
+   * device:sync:completed. Views watch lastSyncResult and reload what they
+   * show (the device table pages through `devices`, so a full fetch here
+   * would clobber its page).
+   */
+  async function applySyncResult(result) {
+    lastSyncResult.value = { ...result, at: new Date() }
+    await fetchDuplicates().catch(() => {})
+  }
+
+  async function fetchDuplicates() {
+    const response = await deviceService.getDuplicates()
+    duplicateGroups.value = response.data || []
+    return duplicateGroups.value
+  }
+
+  async function mergeDevices(targetId, sourceIds) {
+    const response = await deviceService.mergeDevices(targetId, sourceIds)
+    devices.value = devices.value.filter((d) => !sourceIds.includes(d.id))
+    updateDeviceLocally(targetId, response.data)
+    await fetchDuplicates().catch(() => {})
+    return response.data
   }
 
   function clearError() {
@@ -417,6 +442,8 @@ export const useDevicesStore = defineStore('devices', () => {
     loading,
     error,
     lastSync,
+    lastSyncResult,
+    duplicateGroups,
     stats,
     pagination,
     tableOptions,
@@ -433,6 +460,9 @@ export const useDevicesStore = defineStore('devices', () => {
     fetchDevices,
     fetchDevicesWithPagination,
     syncDevices,
+    applySyncResult,
+    fetchDuplicates,
+    mergeDevices,
     clearError,
     createDevice,
     updateDeviceStatus,

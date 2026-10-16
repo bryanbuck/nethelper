@@ -85,6 +85,20 @@
       </v-col>
     </v-row>
 
+    <!-- Another row looks like the same hardware -->
+    <v-row v-if="device && duplicateGroup">
+      <v-col cols="12">
+        <v-alert type="warning" variant="tonal" icon="mdi-content-duplicate">
+          {{ duplicateGroup.devices.length - 1 === 1 ? 'Another device has' : `${duplicateGroup.devices.length - 1} other devices have` }}
+          the same {{ duplicateGroup.reason === 'mac' ? 'MAC address' : 'IP address' }} and is probably this switch,
+          for example after a cloud sync found a device that was added by hand.
+          <template v-if="canEdit" #append>
+            <v-btn variant="tonal" color="warning" @click="mergeDialog = true">Review and merge</v-btn>
+          </template>
+        </v-alert>
+      </v-col>
+    </v-row>
+
     <!-- Central/Direct Management Mismatch Warning -->
     <v-row v-if="device && managementMismatch">
       <v-col cols="12">
@@ -134,7 +148,7 @@
     </v-row>
 
     <!-- Live port/PoE state; subscribes only while this tab is open -->
-    <DeviceLivePanel v-else-if="device && tab === 'live'" :device="device" />
+    <DeviceLivePanel v-else-if="device && tab === 'live'" :device="device" @update="applyDevicePatch" />
 
     <!-- Device Content -->
     <template v-else-if="device">
@@ -632,17 +646,28 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <DeviceMergeDialog
+      v-if="duplicateGroup"
+      v-model="mergeDialog"
+      :devices="duplicateGroup.devices"
+      :preferred-id="route.params.id"
+      @merged="onMerged"
+    />
   </v-container>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
 import { useNotificationsStore } from '@/stores/notifications'
+import { useAuthStore } from '@/stores/auth'
 import { formatDistanceToNow, format, fromUnixTime } from 'date-fns'
 import DeviceConnectionTest from '@/components/devices/DeviceConnectionTest.vue'
 import DeviceLivePanel from '@/components/devices/DeviceLivePanel.vue'
+import DeviceMergeDialog from '@/components/devices/DeviceMergeDialog.vue'
+import deviceService from '@/services/device.service'
 import deviceApiService from '@/services/deviceApi.service'
 import { cloudProviderLabel } from '@/models/vendors'
 
@@ -650,8 +675,19 @@ const route = useRoute()
 const router = useRouter()
 const devicesStore = useDevicesStore()
 const notificationStore = useNotificationsStore()
+const authStore = useAuthStore()
+const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole))
 
-const device = ref(null)
+// The row shown is the store's own object whenever the store holds it, so
+// changes made elsewhere (live monitoring toggle, socket status updates) show
+// here. The store's array is replaced by every list fetch and holds only one
+// table page, so keep a by-id copy as the fallback; never cache the store
+// object itself (that copy goes stale the moment the array is replaced).
+const fetchedDevice = ref(null)
+const device = computed(() =>
+  devicesStore.devices.find(d => d.id === route.params.id)
+  || (fetchedDevice.value?.id === route.params.id ? fetchedDevice.value : null)
+)
 const loading = ref(false)
 const error = ref(null)
 const testingConnection = ref(false)
@@ -671,10 +707,28 @@ const systemData = computed(() => devicesStore.systemData)
 const systemLoading = computed(() => devicesStore.systemLoading)
 const systemError = computed(() => devicesStore.systemError)
 
-const breadcrumbs = [
+const breadcrumbs = computed(() => [
   { text: 'Devices', to: '/devices', disabled: false },
   { text: device.value?.name || 'Device Details', disabled: true }
-]
+])
+
+/** Apply a change to the shown device, wherever that object lives. */
+const applyDevicePatch = (patch) => {
+  devicesStore.updateDeviceLocally(route.params.id, patch)
+  if (fetchedDevice.value?.id === route.params.id) Object.assign(fetchedDevice.value, patch)
+}
+
+// Another row that looks like the same hardware (e.g. added by hand, then
+// synced from the cloud). Offer to merge them.
+const mergeDialog = ref(false)
+const duplicateGroup = computed(() =>
+  (devicesStore.duplicateGroups || []).find(g => g.devices.some(d => d.id === route.params.id)) || null
+)
+const onMerged = (merged) => {
+  mergeDialog.value = false
+  if (merged.id !== route.params.id) router.replace({ path: `/devices/${merged.id}`, query: route.query })
+  else fetchDevice()
+}
 
 const getStatusColor = (status) => {
   const colors = {
@@ -807,26 +861,29 @@ const clearError = () => {
   devicesStore.clearError()
 }
 
+/** Fetch the current row by id and refresh the store's copy too. */
+const fetchDevice = async () => {
+  const id = route.params.id
+  const response = await deviceService.getDevice(id)
+  if (route.params.id !== id || !response?.data) return
+  fetchedDevice.value = response.data
+  devicesStore.updateDeviceLocally(id, response.data)
+}
+
 const loadDevice = async () => {
+  const id = route.params.id
   loading.value = true
   error.value = null
+  devicesStore.clearSystemData()
 
   try {
-    // First check if device is in store
-    const storeDevice = devicesStore.devices.find(d => d.id === route.params.id)
-
-    if (storeDevice) {
-      device.value = storeDevice
-    } else {
-      // Fetch from API
-      await devicesStore.fetchDevices()
-      device.value = devicesStore.devices.find(d => d.id === route.params.id)
-
-      if (!device.value) {
-        error.value = 'Device not found'
-        return
-      }
+    await fetchDevice()
+    if (route.params.id !== id) return
+    if (!device.value) {
+      error.value = 'Device not found'
+      return
     }
+    devicesStore.fetchDuplicates().catch(() => {})
 
     // Automatically poll system info on load
     await refreshSystemInfo()
@@ -834,9 +891,19 @@ const loadDevice = async () => {
     console.error('Failed to load device:', err)
     error.value = err.userMessage || err.message || 'Failed to load device details'
   } finally {
-    loading.value = false
+    if (route.params.id === id) loading.value = false
   }
 }
+
+// The same view is reused when navigating from one device to another.
+watch(() => route.params.id, (id, previous) => {
+  if (id && id !== previous) loadDevice()
+})
+
+// A cloud sync may have changed this device (or merged it by MAC).
+watch(() => devicesStore.lastSyncResult, () => {
+  fetchDevice().catch(() => {})
+})
 
 const openConnectionTestDialog = () => {
   showConnectionTestDialog.value = true

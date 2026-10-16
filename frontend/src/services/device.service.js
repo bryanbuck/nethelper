@@ -25,6 +25,26 @@ class DeviceService {
     }
   }
 
+  /** Groups of devices that look like the same hardware: [{ key, reason, devices }]. */
+  async getDuplicates() {
+    try {
+      const response = await api.get('/devices/duplicates')
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'checking for duplicate devices')
+    }
+  }
+
+  /** Fold sourceIds into targetId; the sources are deleted. Returns the merged device. */
+  async mergeDevices(targetId, sourceIds) {
+    try {
+      const response = await api.post('/devices/merge', { targetId, sourceIds })
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'merging devices')
+    }
+  }
+
   async getDevices(params = {}) {
     try {
       const response = await api.get('/devices', { params })

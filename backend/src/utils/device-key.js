@@ -17,4 +17,12 @@ function normalizeSerial(serial) {
   return trimmed ? trimmed : null;
 }
 
-module.exports = { deviceStorageKey, normalizeSerial };
+/** Canonical lower-case colon form (aa:bb:cc:dd:ee:ff), or null if not a MAC. */
+function normalizeMac(mac) {
+  if (!mac || typeof mac !== 'string') return null;
+  const hex = mac.toLowerCase().replace(/[^0-9a-f]/g, '');
+  if (hex.length !== 12) return null;
+  return hex.match(/.{2}/g).join(':');
+}
+
+module.exports = { deviceStorageKey, normalizeSerial, normalizeMac };

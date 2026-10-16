@@ -5,6 +5,7 @@ const { getPrisma } = require('../config/database');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const { getIO } = require('../websocket/socket.handler');
 const logger = require('../utils/logger');
+const { normalizeMac } = require('../utils/device-key');
 
 const execFileAsync = promisify(execFile);
 
@@ -84,10 +85,7 @@ class DiscoveryService {
   }
 
   normalizeMac(mac) {
-    if (!mac) return null;
-    const hex = mac.toLowerCase().replace(/[^0-9a-f]/g, '');
-    if (hex.length !== 12) return null;
-    return hex.match(/.{2}/g).join(':');
+    return normalizeMac(mac);
   }
 
   lookupVendor(mac) {

@@ -1,4 +1,5 @@
 const deviceService = require('../services/device.service');
+const deviceMerge = require('../services/device-merge.service');
 const CloudProviderFactory = require('../services/cloud-providers/cloud-provider-factory');
 const { getPrisma } = require('../config/database');
 const devicePollerService = require('../services/device-poller.service');
@@ -70,6 +71,30 @@ class DeviceController {
           timestamp: new Date().toISOString()
         });
         return res.status(error.statusCode || 500).json(errorResponse);
+      }
+      next(error);
+    }
+  }
+
+  /** Groups of devices that are probably the same hardware (see device-merge.service). */
+  async getDuplicates(req, res, next) {
+    try {
+      const groups = await deviceMerge.findDuplicateGroups();
+      res.json({ success: true, data: groups });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /** Fold sourceIds into targetId; the sources are deleted. */
+  async mergeDevices(req, res, next) {
+    try {
+      const { targetId, sourceIds } = req.body;
+      const device = await deviceMerge.merge(targetId, sourceIds);
+      res.json({ success: true, data: device });
+    } catch (error) {
+      if (error instanceof deviceMerge.MergeError) {
+        return res.status(error.statusCode).json({ success: false, error: error.message });
       }
       next(error);
     }

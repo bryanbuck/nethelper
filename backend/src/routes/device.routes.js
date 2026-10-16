@@ -13,6 +13,10 @@ router.get('/', deviceController.getDevices);
 // Create new device
 router.post('/', authorize('admin', 'operator'), validateDevice.create, deviceController.createDevice);
 
+// Likely duplicate devices, and merging them into one
+router.get('/duplicates', deviceController.getDuplicates);
+router.post('/merge', authorize('admin', 'operator'), validateDevice.merge, deviceController.mergeDevices);
+
 // Sync devices from Aruba Central
 router.post('/sync', authorize('admin', 'operator'), deviceController.syncDevices);
 
