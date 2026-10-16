@@ -57,8 +57,12 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config
 
+    // A 401 from login/refresh means bad credentials or a dead refresh token,
+    // not an expired session, so it must not enter the refresh flow.
+    const isAuthEndpoint = /\/auth\/(login|refresh)$/.test(originalRequest?.url || '')
+
     // Handle 401 Unauthorized errors
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !isAuthEndpoint && !originalRequest._retry) {
       if (isRefreshing) {
         // If already refreshing, queue the request
         return new Promise((resolve, reject) => {
@@ -77,7 +81,11 @@ api.interceptors.response.use(
       const refreshToken = localStorage.getItem('refresh_token')
       
       if (!refreshToken) {
-        // No refresh token, redirect to login
+        // No refresh token, redirect to login. Reset the flag here too: this
+        // early return skips the finally below, and a stuck flag would park
+        // every later 401 in failedQueue forever.
+        isRefreshing = false
+        processQueue(error, null)
         clearSessionStorage()
         router.push('/login')
         return Promise.reject(error)
