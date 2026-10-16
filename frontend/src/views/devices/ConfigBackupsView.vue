@@ -227,8 +227,9 @@
             </v-card-title>
             <v-card-subtitle class="text-wrap pb-2">
               Configuration a cloud holds above the device: a Juniper Mist org and its sites
-              (WLANs, RF templates, device profiles, switch templates). Access points are configured
-              here, not per device. Aruba Central scopes are not supported yet.
+              (WLANs, RF templates, device profiles, switch templates), and Aruba Central's global
+              scope, site collections, sites and device groups (profiles and where they are assigned).
+              Access points are configured here, not per device.
             </v-card-subtitle>
 
             <v-data-table-server
@@ -702,7 +703,7 @@
             <v-switch
               v-model="scheduleForm.includeScopes"
               label="Also back up cloud scopes"
-              hint="Mist org and site configuration, which is where access point configuration lives"
+              hint="Mist org/site and Central scope configuration, which is where access point configuration lives"
               persistent-hint
               color="primary"
               class="mb-2"
@@ -866,6 +867,7 @@ const FORMAT_LABELS = {
   'aoscx-json': 'AOS-CX REST config (JSON)',
   'mist-config-json': 'Mist device config (JSON)',
   'mist-scope-json': 'Mist org/site config (JSON)',
+  'central-scope-json': 'Central scope config (JSON)',
   'meraki-settings-json': 'Meraki settings (JSON)'
 }
 const KIND_ORDER = ['cli', 'structured']
@@ -895,7 +897,13 @@ function isApConfigError(error) {
 }
 
 function scopeTypeLabel(type) {
-  return { org: 'Organization', site: 'Site', group: 'Group' }[type] || type
+  return {
+    org: 'Organization',
+    'site-collection': 'Site collection',
+    site: 'Site',
+    'device-group': 'Device group',
+    group: 'Group',
+  }[type] || type
 }
 
 /**
@@ -905,7 +913,7 @@ function scopeTypeLabel(type) {
 function applyHint(artifact, device, isScope) {
   if (!artifact) return null
   if (isScope) {
-    return 'Configuration held by the cloud for this org or site. Changes are applied through the cloud dashboard or API, not on a device.'
+    return 'Configuration held by the cloud for this scope. Changes are applied through the cloud dashboard or API, not on a device. Secrets are replaced by fingerprints that change when the secret does.'
   }
   const cloudManaged = device && (device.managementMode === 'cloud' || device.cloudManaged === true)
   if (artifact.kind === 'cli') {

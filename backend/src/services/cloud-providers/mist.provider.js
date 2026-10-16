@@ -1,5 +1,6 @@
 const axios = require('axios');
 const BaseCloudProvider = require('./base-cloud-provider');
+const { redactConfigSecrets } = require('../../utils/config-redact');
 const { CLOUD_PROVIDERS } = require('../../constants/vendors');
 const logger = require('../../utils/logger');
 
@@ -277,7 +278,7 @@ class MistProvider extends BaseCloudProvider {
     }
 
     return {
-      text: this.canonicalJson(bundle),
+      text: this.canonicalJson(redactConfigSecrets(bundle)),
       format: 'mist-scope-json',
       source: this.label,
     };
@@ -287,23 +288,6 @@ class MistProvider extends BaseCloudProvider {
   sortById(value) {
     if (!Array.isArray(value)) return value;
     return [...value].sort((a, b) => String(a?.id ?? '').localeCompare(String(b?.id ?? '')));
-  }
-
-  /** Stable JSON: sorted keys, so diffs show real changes, not key reordering. */
-  canonicalJson(value) {
-    const sortKeys = (node) => {
-      if (Array.isArray(node)) return node.map(sortKeys);
-      if (node && typeof node === 'object') {
-        return Object.keys(node)
-          .sort()
-          .reduce((acc, key) => {
-            acc[key] = sortKeys(node[key]);
-            return acc;
-          }, {});
-      }
-      return node;
-    };
-    return JSON.stringify(sortKeys(value), null, 2);
   }
 
   /**

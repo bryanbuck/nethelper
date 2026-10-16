@@ -72,9 +72,10 @@ class BaseCloudProvider {
 
   /**
    * Configuration scopes above the device that this plane holds config for
-   * (a Mist org and its sites, a Central group). Access points are configured
-   * here rather than per device, so this is where their config is backed up.
-   * @returns {Promise<Array<{ scopeType: 'org'|'site'|'group', scopeId: string, name: string }>>}
+   * (a Mist org and its sites; Central's global scope, site collections,
+   * sites and device groups). Access points are configured here rather than
+   * per device, so this is where their config is backed up.
+   * @returns {Promise<Array<{ scopeType: 'org'|'site-collection'|'site'|'device-group', scopeId: string, name: string }>>}
    */
   async listConfigScopes() {
     this.unsupported('scope-backup');
@@ -109,6 +110,23 @@ class BaseCloudProvider {
       message: error.message,
       ...(error.details && { details: error.details }),
     };
+  }
+
+  /** Stable JSON: sorted keys, so diffs show real changes, not key reordering. */
+  canonicalJson(value) {
+    const sortKeys = (node) => {
+      if (Array.isArray(node)) return node.map(sortKeys);
+      if (node && typeof node === 'object') {
+        return Object.keys(node)
+          .sort()
+          .reduce((acc, key) => {
+            acc[key] = sortKeys(node[key]);
+            return acc;
+          }, {});
+      }
+      return node;
+    };
+    return JSON.stringify(sortKeys(value), null, 2);
   }
 
   /** Helper for subclasses: throw a typed unsupported-capability error. */

@@ -15,6 +15,11 @@ surprises will show up.
 `mist-scope.json` is spec-derived too: the org/site objects behind
 `MistProvider.getScopeConfiguration()` (scope backups).
 
+`central-scope.json` follows **live** New Central `network-config/v1alpha1`
+responses (captured 2026-10-16, values anonymised). `scopeMapsText` is kept as
+raw text because Central sends `scope-id` as a JSON number above 2^53; the
+test parses it the way the provider does.
+
 `aos-cx-live/` is different: trimmed **real captures** from an Aruba 6200F on
 ML.10.16.1010 (2026-10-15), with port descriptions anonymised. They are the
 REST responses behind `CXSwitchAPI.getPortState()` / `getInterfaceCounters()`

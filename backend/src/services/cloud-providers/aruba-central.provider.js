@@ -1,5 +1,6 @@
 const axios = require('axios');
 const BaseCloudProvider = require('./base-cloud-provider');
+const { redactConfigSecrets } = require('../../utils/config-redact');
 const ArubaErrorHandler = require('../../utils/aruba-error-handler');
 const { getRedis } = require('../../config/redis');
 const { detectPlatform } = require('../../utils/device-platform');
@@ -32,6 +33,37 @@ function platformFromFirmware(version) {
   return null;
 }
 
+// New Central configuration API. Profiles live in a library; config
+// assignments bind them to a scope (global, site collection, site, device
+// group, device) for a device function, and scope maps index every object in
+// effect at each scope. Shapes verified against a live tenant on 2026-10-16.
+const CONFIG_API = '/network-config/v1alpha1';
+
+// Scopes backed up, in hierarchy order. Device scopes are left out: a device's
+// own config is what its device backup captures.
+const SCOPE_LISTS = [
+  { scopeType: 'site-collection', endpoint: 'site-collections' },
+  { scopeType: 'site', endpoint: 'sites' },
+  { scopeType: 'device-group', endpoint: 'device-groups' },
+];
+
+// Central sends scope ids as JSON numbers above 2^53 (e.g. 68797217769316352),
+// which JSON.parse rounds. Quote them before parsing so they stay exact.
+function parseKeepingScopeIds(text) {
+  if (typeof text !== 'string' || !text) return text;
+  try {
+    return JSON.parse(text.replace(/("scope-id"\s*:\s*)(-?\d+)/g, '$1"$2"'));
+  } catch {
+    return text; // not JSON (an error page): let the HTTP status speak
+  }
+}
+
+/** A profile's identity within its list, so lists sort the same every run. */
+function profileKey(item) {
+  if (!item || typeof item !== 'object') return String(item);
+  return String(item.name ?? item.ssid ?? item.vlan ?? item.id ?? JSON.stringify(item));
+}
+
 /** Classic Central's API gateway (apigw-*): a different API, unreachable with GreenLake tokens. */
 function isClassicGateway(baseUrl) {
   try {
@@ -56,7 +88,7 @@ class ArubaCentralProvider extends BaseCloudProvider {
   }
 
   supports(capability) {
-    return ['inventory', 'status', 'test'].includes(capability);
+    return ['inventory', 'status', 'test', 'scope-backup'].includes(capability);
     // NOT 'config-backup': the classic /configuration/v2 endpoint is
     // quarantined (see getDeviceConfiguration). CX configs are still backed
     // up over device REST; AOS-S over SSH.
@@ -118,7 +150,7 @@ class ArubaCentralProvider extends BaseCloudProvider {
     }
   }
 
-  async makeRequest(method, endpoint, { params = {}, data = null, context = 'api_call' } = {}) {
+  async makeRequest(method, endpoint, { params = {}, data = null, context = 'api_call', exactScopeIds = false } = {}) {
     try {
       const accessToken = await this.getAccessToken();
       const response = await axios({
@@ -130,6 +162,7 @@ class ArubaCentralProvider extends BaseCloudProvider {
         },
         params,
         ...(data ? { data } : {}),
+        ...(exactScopeIds ? { transformResponse: [parseKeepingScopeIds] } : {}),
       });
       return response.data;
     } catch (error) {
@@ -303,6 +336,134 @@ class ArubaCentralProvider extends BaseCloudProvider {
     if (value === null || value === undefined || value === '') return null;
     const date = typeof value === 'number' ? new Date(value * 1000) : new Date(value);
     return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  // -----------------------------------------------------------------------
+  // Scope backups (read-only): the config Central holds above the device,
+  // which is where access point config lives.
+  // -----------------------------------------------------------------------
+
+  /** Every item of a paged scope list (`limit`/`offset`; the reply's own offset is unreliable). */
+  async listAllScopeItems(endpoint) {
+    const items = [];
+    for (;;) {
+      const page = await this.makeRequest('GET', `${CONFIG_API}/${endpoint}`, {
+        params: { limit: 100, offset: items.length },
+        context: 'scope_list',
+      });
+      const batch = page?.items || [];
+      items.push(...batch);
+      if (!batch.length || items.length >= (page.total ?? items.length)) return items;
+    }
+  }
+
+  /** Global first, then site collections, sites and device groups, each by name. */
+  async listConfigScopes() {
+    const scopes = [{ scopeType: 'org', scopeId: 'global', name: 'Global' }];
+    for (const { scopeType, endpoint } of SCOPE_LISTS) {
+      const items = await this.listAllScopeItems(endpoint);
+      scopes.push(...items
+        .map((item) => {
+          const scopeId = String(item.scopeId ?? item.id);
+          return { scopeType, scopeId, name: item.scopeName || scopeId };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name)));
+    }
+    return scopes;
+  }
+
+  /**
+   * Snapshot one scope as a canonical-JSON bundle:
+   *   assignments - the library profiles assigned at this scope, per device function
+   *   objects     - every object in effect at this scope (Central's LOCAL view
+   *                 of each profile type its scope map lists), local or library
+   * The global scope also carries `library`: every profile of every type the
+   * tenant assigns or maps anywhere, since lower scopes refer to them by name.
+   *
+   * A profile type Central won't list here (400/404) is recorded as null
+   * rather than failing the scope; anything else fails it.
+   */
+  async getScopeConfiguration(scope) {
+    const assignments = (await this.makeRequest('GET', `${CONFIG_API}/config-assignments`, {
+      context: 'scope_config',
+      exactScopeIds: true,
+    }))?.['config-assignment'] || [];
+    const scopeMaps = (await this.makeRequest('GET', `${CONFIG_API}/scope-maps`, {
+      context: 'scope_config',
+      exactScopeIds: true,
+    }))?.['scope-map'] || [];
+
+    // The global scope's id is the tenant's; learn it from its assignments.
+    const centralScopeId = scope.scopeType === 'org'
+      ? assignments.find((a) => a['scope-type'] === 'GLOBAL')?.['scope-id'] ?? null
+      : String(scope.scopeId);
+
+    const typeOf = (resource) => String(resource || '').split('/')[0];
+    const atScope = (id) => String(id) === String(centralScopeId);
+    const scopedTypes = [...new Set(scopeMaps.filter((m) => atScope(m['scope-id'])).map((m) => typeOf(m.resource)))]
+      .filter(Boolean)
+      .sort();
+
+    const bundle = {
+      scope: { type: scope.scopeType, id: scope.scopeId, name: scope.name, centralScopeId },
+      assignments: assignments
+        .filter((a) => atScope(a['scope-id']))
+        .map((a) => ({
+          deviceFunction: a['device-function'],
+          profileType: a['profile-type'],
+          profileInstance: a['profile-instance'],
+        }))
+        .sort((a, b) => [a.profileType, a.profileInstance, a.deviceFunction].join('|')
+          .localeCompare([b.profileType, b.profileInstance, b.deviceFunction].join('|'))),
+      objects: {},
+    };
+
+    // Sequential, to stay inside Central's per-second rate limit.
+    if (centralScopeId) {
+      for (const type of scopedTypes) {
+        bundle.objects[type] = await this.readProfiles(type, { 'scope-id': centralScopeId, 'view-type': 'LOCAL' });
+      }
+    }
+
+    if (scope.scopeType === 'org') {
+      const libraryTypes = [...new Set([
+        ...assignments.map((a) => a['profile-type']),
+        ...scopeMaps.map((m) => typeOf(m.resource)),
+      ])].filter(Boolean).sort();
+      bundle.library = {};
+      for (const type of libraryTypes) {
+        bundle.library[type] = await this.readProfiles(type);
+      }
+    }
+
+    return {
+      text: this.canonicalJson(redactConfigSecrets(bundle)),
+      format: 'central-scope-json',
+      source: this.label,
+    };
+  }
+
+  /**
+   * One profile type's objects. Each type names its list differently
+   * (`profile`, `l2-vlan`, `wlan-ssid`, ...), so the reply is kept whole,
+   * minus Central's object counters, with each list sorted by identity.
+   */
+  async readProfiles(type, params = {}) {
+    let body;
+    try {
+      body = await this.makeRequest('GET', `${CONFIG_API}/${encodeURIComponent(type)}`, { params, context: 'scope_config' });
+    } catch (error) {
+      if (error.statusCode === 400 || error.statusCode === 404) return null;
+      throw error;
+    }
+    if (!body || typeof body !== 'object') return body ?? null;
+    const { metadata, ...rest } = body; // eslint-disable-line no-unused-vars
+    for (const [key, value] of Object.entries(rest)) {
+      if (Array.isArray(value)) {
+        rest[key] = [...value].sort((a, b) => profileKey(a).localeCompare(profileKey(b)));
+      }
+    }
+    return rest;
   }
 
   // -----------------------------------------------------------------------

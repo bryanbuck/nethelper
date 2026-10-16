@@ -17,6 +17,7 @@ const CONFIG_FORMATS = {
   'mist-config-json': { kind: 'structured', ext: 'json', gitName: 'settings.json' },
   'meraki-settings-json': { kind: 'structured', ext: 'json', gitName: 'settings.json' },
   'mist-scope-json': { kind: 'structured', ext: 'json', gitName: 'settings.json' },
+  'central-scope-json': { kind: 'structured', ext: 'json', gitName: 'settings.json' },
 };
 
 const ARTIFACT_KINDS = ['cli', 'structured'];

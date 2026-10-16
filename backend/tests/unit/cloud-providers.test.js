@@ -361,13 +361,108 @@ describe('MistProvider', () => {
   });
 });
 
-describe('scope backups on other providers', () => {
-  test('Central is an honest CapabilityError until its config endpoints are verified', async () => {
-    const central = new ArubaCentralProvider({
-      id: 'int-1', provider: 'aruba_central', name: 'Central', baseUrl: 'https://example.invalid',
-      credentials: { clientId: 'c', clientSecret: 's', customerId: 'cust' },
+describe('ArubaCentralProvider scope backups', () => {
+  const fixture = require('../fixtures/central-scope.json');
+  const GLOBAL = { scopeType: 'org', scopeId: 'global', name: 'Global' };
+  let provider;
+  let requests;
+
+  // Serve raw JSON text and run the request's own transformResponse, so the
+  // scope-id precision handling is exercised the way axios would run it.
+  function serve(config) {
+    const url = new URL(config.url);
+    const route = url.pathname.replace('/network-config/v1alpha1/', '');
+    requests.push({ route, params: config.params });
+    const bodies = {
+      sites: fixture.sites,
+      'site-collections': fixture.siteCollections,
+      'device-groups': fixture.deviceGroups,
+      'config-assignments': fixture.configAssignments,
+    };
+    let text;
+    if (route === 'scope-maps') text = fixture.scopeMapsText;
+    else if (bodies[route]) text = JSON.stringify(bodies[route]);
+    else if (fixture.profiles[route]) text = JSON.stringify(fixture.profiles[route]);
+    else return Promise.reject(Object.assign(new Error('not found'), { response: { status: 404, data: {} } }));
+    const transform = config.transformResponse?.[0];
+    return Promise.resolve({ data: transform ? transform(text) : JSON.parse(text) });
+  }
+
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = 'test-key-for-hmac-fingerprints-0123456789';
+    axios.mockReset();
+    axios.mockImplementation(serve);
+    requests = [];
+    provider = new ArubaCentralProvider({
+      id: 'int-1', provider: 'aruba_central', name: 'Central', baseUrl: 'https://central.example.com',
+      credentials: { clientId: 'c', clientSecret: 's' },
     });
-    expect(central.supports('scope-backup')).toBe(false);
-    await expect(central.listConfigScopes()).rejects.toMatchObject({ name: 'CapabilityError' });
+    jest.spyOn(provider, 'getAccessToken').mockResolvedValue('tok');
+  });
+
+  test('supports scope-backup', () => {
+    expect(provider.supports('scope-backup')).toBe(true);
+  });
+
+  test('lists global, then site collections, sites and device groups by name', async () => {
+    expect(await provider.listConfigScopes()).toEqual([
+      GLOBAL,
+      { scopeType: 'site-collection', scopeId: '68797217769316352', name: 'Prod Sites' },
+      { scopeType: 'site', scopeId: '66470128371', name: 'Branch' },
+      { scopeType: 'site', scopeId: '66470128290', name: 'HQ' },
+      { scopeType: 'device-group', scopeId: '96971477242781696', name: 'Wired' },
+    ]);
+  });
+
+  test('global bundles its assignments, its objects and the whole library', async () => {
+    const config = await provider.getScopeConfiguration(GLOBAL);
+    expect(config.format).toBe('central-scope-json');
+    const bundle = JSON.parse(config.text);
+    expect(bundle.scope).toEqual({ type: 'org', id: 'global', name: 'Global', centralScopeId: '67816348241' });
+    expect(bundle.assignments).toEqual([
+      { deviceFunction: 'ACCESS_SWITCH', profileInstance: 'internal_ntp', profileType: 'ntp' },
+      { deviceFunction: 'CAMPUS_AP', profileInstance: 'Corp', profileType: 'wlan-ssids' },
+    ]);
+    // Objects in effect at the scope come from the LOCAL view of each mapped type.
+    expect(Object.keys(bundle.objects)).toEqual(['alert-configs', 'wlan-ssids']);
+    expect(bundle.objects['alert-configs']).toBeNull(); // 404 → recorded as unavailable
+    expect(requests).toContainEqual({ route: 'wlan-ssids', params: { 'scope-id': '67816348241', 'view-type': 'LOCAL' } });
+    // Lists sorted by identity, Central's counters dropped.
+    expect(bundle.objects['wlan-ssids']).toEqual({ 'wlan-ssid': [
+      expect.objectContaining({ ssid: 'Corp' }), expect.objectContaining({ ssid: 'Guest' }),
+    ] });
+    expect(Object.keys(bundle.library)).toEqual(['alert-configs', 'auth-servers', 'layer2-vlan', 'ntp', 'wlan-ssids']);
+    expect(bundle.library['layer2-vlan']['l2-vlan'].map((v) => v.vlan)).toEqual([1, 20]);
+  });
+
+  test('scope ids above 2^53 stay exact', async () => {
+    const bundle = JSON.parse((await provider.getScopeConfiguration(
+      { scopeType: 'site-collection', scopeId: '68797217769316352', name: 'Prod Sites' }
+    )).text);
+    // The rounded neighbour (…350) maps an ntp object that must not leak in.
+    expect(Object.keys(bundle.objects)).toEqual(['layer2-vlan']);
+    expect(bundle.assignments).toHaveLength(1);
+    expect(bundle.library).toBeUndefined();
+  });
+
+  test('secrets are replaced by a keyed fingerprint', async () => {
+    const text = (await provider.getScopeConfiguration({ scopeType: 'site', scopeId: '66470128290', name: 'HQ' })).text;
+    expect(text).not.toContain('not-a-real-secret');
+    const server = JSON.parse(text).objects['auth-servers']['auth-server'][0];
+    expect(server['shared-secret-config']['secret-type']).toBe('PLAIN_TEXT');
+    expect(server['shared-secret-config']['plaintext-value']).toMatch(/^\[REDACTED hmac:[0-9a-f]{16}\]$/);
+  });
+
+  test('the bundle is stable across runs', async () => {
+    const first = await provider.getScopeConfiguration(GLOBAL);
+    const second = await provider.getScopeConfiguration(GLOBAL);
+    expect(second.text).toBe(first.text);
+  });
+
+  test('an error other than 400/404 fails the scope', async () => {
+    axios.mockImplementation((config) => (config.url.endsWith('/wlan-ssids')
+      ? Promise.reject(Object.assign(new Error('forbidden'), { response: { status: 403, data: {} } }))
+      : serve(config)));
+    await expect(provider.getScopeConfiguration(GLOBAL)).rejects.toMatchObject({ statusCode: 403 });
   });
 });
