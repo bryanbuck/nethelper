@@ -19,6 +19,8 @@ const logger = debugLog.createLogger(Services.DEVICE);
 
 // Per-platform command profiles. `paging` runs first to disable the pager so
 // `config` returns in one shot. `config`/`version` are the data commands.
+// `configHeader` (optional) matches a banner line the CLI prints before the
+// config, which is dropped so the text can be pasted back.
 const PLATFORM_PROFILES = {
   'aos-s': {
     paging: 'no page',
@@ -29,6 +31,8 @@ const PLATFORM_PROFILES = {
     paging: 'no page',
     config: 'show running-config',
     version: 'show version',
+    // Printed before the config; not config, and not pasteable.
+    configHeader: /^Current configuration:\s*$/,
   },
   // Junos (Juniper EX/SRX/MX). `| display set` yields flat, diffable
   // set-statements rather than the nested brace format.
@@ -51,8 +55,114 @@ const PLATFORM_PROFILES = {
   },
 };
 
-// Prompt at end of a command's output: hostname followed by '#', '>', or '$'.
-const PROMPT_REGEX = /[\r\n][^\r\n]*[#>$]\s?$/;
+// A prompt: the last line of output, ending in '#', '>' or '$' (hostname#,
+// user@host>, ...). Only used to recognise the device's FIRST prompt; after
+// that we wait for that exact prompt text.
+const PROMPT_LINE_REGEX = /(?:^|[\r\n])([^\r\n]*[#>$])[ \t]*$/;
+// AOS-S (and some others) hold the login banner until a key is pressed.
+const PRESS_ANY_KEY_REGEX = /press any key/i;
+// ANSI escape sequences some CLIs emit around prompts.
+// eslint-disable-next-line no-control-regex
+const ANSI_REGEX = /\x1b\[[0-9;?]*[A-Za-z]/g;
+
+/**
+ * Run commands over an open interactive shell, one at a time.
+ *
+ * Nothing is typed until the device shows its first prompt, and each command
+ * is complete only when the output ends in that same prompt. Typing earlier
+ * is what broke AOS-CX: its shell takes several seconds to present a prompt,
+ * the pty echoes early input straight away, and the late login prompt was
+ * then mistaken for the end of the paging command, so every output shifted
+ * by one (the "config" came back as the `no page` echo).
+ *
+ * @param {Object} stream - shell stream (EventEmitter with write())
+ * @param {Array<{label:string, command:string}>} queue
+ * @param {Function} done - (err, outputs) called once, after the last prompt
+ *   or when the stream closes
+ * @param {Object} [timing] - settleMs: quiet time before the first prompt is
+ *   trusted (a banner line of '#'s can look like one); nudgeMs: send one
+ *   newline if no prompt has appeared by then
+ */
+function driveShell(stream, queue, done, { settleMs = 300, nudgeMs = 8000 } = {}) {
+  const outputs = {};
+  let buffer = '';
+  let prompt = null; // learned from the first prompt, without trailing space
+  let index = -1;
+  let finished = false;
+  let keyPressed = false;
+  let settleTimer = null;
+  const nudgeTimer = setTimeout(() => {
+    if (prompt === null && !finished) stream.write('\n');
+  }, nudgeMs);
+
+  const finish = (err) => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(settleTimer);
+    clearTimeout(nudgeTimer);
+    done(err, outputs);
+  };
+
+  const sendNext = () => {
+    index++;
+    buffer = '';
+    if (index >= queue.length) return finish(null);
+    stream.write(queue[index].command + '\n');
+  };
+
+  const endsWithPrompt = (text) => {
+    const clean = text.replace(ANSI_REGEX, '').replace(/\s+$/, '');
+    return clean.endsWith(prompt) &&
+      /[\r\n]/.test(clean.slice(0, clean.length - prompt.length));
+  };
+
+  stream.on('data', (data) => {
+    if (finished) return;
+    buffer += data.toString('utf8');
+
+    if (prompt === null) {
+      clearTimeout(settleTimer);
+      const clean = buffer.replace(ANSI_REGEX, '');
+      if (!keyPressed && PRESS_ANY_KEY_REGEX.test(clean)) {
+        keyPressed = true;
+        buffer = '';
+        stream.write('\n');
+        return;
+      }
+      const match = clean.match(PROMPT_LINE_REGEX);
+      if (!match) return;
+      settleTimer = setTimeout(() => {
+        if (finished) return;
+        prompt = match[1].trim();
+        clearTimeout(nudgeTimer);
+        sendNext();
+      }, settleMs);
+      return;
+    }
+
+    if (endsWithPrompt(buffer)) {
+      const current = queue[index];
+      outputs[current.label] = stripEcho(buffer.replace(ANSI_REGEX, ''), current.command, prompt);
+      sendNext();
+    }
+  });
+
+  stream.on('close', () => finish(null));
+}
+
+/**
+ * Remove the echoed command line and the trailing prompt line from raw
+ * shell output, leaving just the command result.
+ */
+function stripEcho(raw, command, prompt = null) {
+  const lines = raw.replace(/\r\n/g, '\n').replace(/\r/g, '').split('\n');
+  // Drop the first line if it echoes the command we sent.
+  if (lines.length && lines[0].includes(command)) lines.shift();
+  // Drop the trailing prompt line.
+  const last = lines.length ? lines[lines.length - 1].trim() : '';
+  if (prompt ? last === prompt : /[#>$]$/.test(last)) lines.pop();
+  return lines.join('\n').trim();
+}
 
 class SshDeviceService {
   constructor() {
@@ -114,53 +224,21 @@ class SshDeviceService {
           }
 
           const profile = this.resolveProfile(device);
-          // Queue: disable paging first, then each requested command.
+          // Disable paging first, then each requested command.
           const queue = [
             { label: '_paging', command: profile.paging },
             ...commands,
           ];
-          const outputs = {};
-          let buffer = '';
-          let index = -1;
-          let waitingForPrompt = false;
 
-          const sendNext = () => {
-            index++;
-            if (index >= queue.length) {
-              clearTimeout(overallTimer);
-              // Strip internal paging step before returning
-              delete outputs._paging;
-              return finish(null, outputs);
-            }
-            buffer = '';
-            waitingForPrompt = true;
-            stream.write(queue[index].command + '\n');
-          };
-
-          stream.on('data', (data) => {
-            buffer += data.toString('utf8');
-            if (waitingForPrompt && PROMPT_REGEX.test(buffer)) {
-              waitingForPrompt = false;
-              const current = queue[index];
-              outputs[current.label] = this.stripEcho(buffer, current.command);
-              sendNext();
-            }
-          });
-
-          stream.on('close', () => {
+          driveShell(stream, queue, (shellErr, outputs) => {
             clearTimeout(overallTimer);
-            if (!settled) {
-              delete outputs._paging;
-              finish(null, outputs);
-            }
+            delete outputs._paging;
+            finish(shellErr, outputs);
           });
 
           stream.stderr.on('data', (data) => {
             logger.debug(`SSH stderr from ${device.name}: ${data.toString('utf8').trim()}`);
           });
-
-          // Kick off once the initial banner/prompt settles.
-          setTimeout(sendNext, 600);
         });
       });
 
@@ -193,27 +271,18 @@ class SshDeviceService {
   }
 
   /**
-   * Remove the echoed command line and the trailing prompt line from raw
-   * shell output, leaving just the command result.
-   */
-  stripEcho(raw, command) {
-    const text = raw.replace(/\r\n/g, '\n');
-    const lines = text.split('\n');
-    // Drop the first line if it echoes the command we sent.
-    if (lines.length && lines[0].includes(command)) lines.shift();
-    // Drop the trailing prompt line.
-    if (lines.length && /[#>$]\s*$/.test(lines[lines.length - 1])) lines.pop();
-    return lines.join('\n').trim();
-  }
-
-  /**
    * Pull the running configuration as text.
    */
   async getRunningConfig(device, credentials) {
+    const profile = this.resolveProfile(device);
     const outputs = await this.runCommands(device, credentials, [
-      { label: 'config', command: this.resolveProfile(device).config },
+      { label: 'config', command: profile.config },
     ]);
-    const config = outputs.config;
+    let config = outputs.config;
+    if (config && profile.configHeader) {
+      const lines = config.split('\n');
+      if (profile.configHeader.test(lines[0])) config = lines.slice(1).join('\n').trim();
+    }
     if (!config || config.length === 0) {
       throw new Error('SSH returned an empty running configuration');
     }
@@ -259,3 +328,5 @@ class SshDeviceService {
 }
 
 module.exports = new SshDeviceService();
+module.exports.driveShell = driveShell;
+module.exports.stripEcho = stripEcho;
