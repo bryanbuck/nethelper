@@ -14,16 +14,44 @@ const logger = debugLog.createLogger(Services.ARUBA_CENTRAL);
 // called them carried an unset-baseURL bug since inception) and 404 on New
 // Central tenants. See docs/CENTRAL_ENDPOINT_TRIAGE.md before resurrecting.
 
+// Token endpoints (developer.arubanetworks.com "Generating and managing access
+// tokens"). A Central-scoped API client gets its token from HPE SSO; a
+// GreenLake-platform-scoped client from its workspace's token URL. Both are
+// client_credentials grants and both tokens work against New Central only.
+const CENTRAL_TOKEN_URL = 'https://sso.common.cloud.hpe.com/as/token.oauth2';
+const glpTokenUrl = (workspaceId) =>
+  `https://global.api.greenlake.hpe.com/authorization/v2/oauth2/${encodeURIComponent(workspaceId)}/token`;
+
+/**
+ * Aruba switch firmware strings carry the OS major version after a two-letter
+ * family code: AOS-CX is 10 (ML.10.16.1010), AOS-S is 15/16 (WC.16.11.0012).
+ */
+function platformFromFirmware(version) {
+  if (/^[A-Z]{2}\.10\./i.test(version || '')) return 'aos-cx';
+  if (/^[A-Z]{2}\.1[56]\./i.test(version || '')) return 'aos-s';
+  return null;
+}
+
+/** Classic Central's API gateway (apigw-*): a different API, unreachable with GreenLake tokens. */
+function isClassicGateway(baseUrl) {
+  try {
+    return new URL(baseUrl).hostname.toLowerCase().startsWith('apigw-');
+  } catch {
+    return false;
+  }
+}
+
 class ArubaCentralProvider extends BaseCloudProvider {
   /**
    * @param {Object} integration - { id, provider, name, baseUrl,
-   *   credentials: { clientId, clientSecret (decrypted), customerId } }
+   *   credentials: { clientId, clientSecret (decrypted), workspaceId? } }
+   *   A legacy customerId may still be stored; New Central ignores it.
    */
   constructor(integration) {
     super(integration);
-    const { clientId, clientSecret, customerId } = integration.credentials;
-    if (!clientId || !clientSecret || !customerId) {
-      throw new Error(`Aruba Central integration "${integration.name}" is missing clientId, clientSecret, or customerId`);
+    const { clientId, clientSecret } = integration.credentials;
+    if (!clientId || !clientSecret) {
+      throw new Error(`Aruba Central integration "${integration.name}" is missing clientId or clientSecret`);
     }
   }
 
@@ -36,6 +64,11 @@ class ArubaCentralProvider extends BaseCloudProvider {
 
   tokenCacheKey() {
     return `cloud:${this.integration.id}:access_token`;
+  }
+
+  tokenUrl() {
+    const { workspaceId } = this.integration.credentials;
+    return workspaceId ? glpTokenUrl(workspaceId) : CENTRAL_TOKEN_URL;
   }
 
   /** Drop the cached OAuth token (call after credential changes). */
@@ -55,13 +88,14 @@ class ArubaCentralProvider extends BaseCloudProvider {
         return cached;
       }
 
-      const { baseUrl } = this.integration;
-      const { clientId, clientSecret } = this.integration.credentials;
+      const { clientId, clientSecret, workspaceId } = this.integration.credentials;
+      const url = this.tokenUrl();
 
       logger.progress('Requesting new access token', {
         integration: this.integration.name,
-        url: `${baseUrl}/oauth2/token`,
+        url,
         clientId,
+        scope: workspaceId ? 'greenlake-workspace' : 'central',
         grantType: 'client_credentials',
       });
 
@@ -70,7 +104,7 @@ class ArubaCentralProvider extends BaseCloudProvider {
       params.append('client_id', clientId);
       params.append('client_secret', clientSecret);
 
-      const response = await axios.post(`${baseUrl}/oauth2/token`, params, {
+      const response = await axios.post(url, params, {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       });
 
@@ -94,10 +128,7 @@ class ArubaCentralProvider extends BaseCloudProvider {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        params: {
-          customer_id: this.integration.credentials.customerId,
-          ...params,
-        },
+        params,
         ...(data ? { data } : {}),
       });
       return response.data;
@@ -106,18 +137,38 @@ class ArubaCentralProvider extends BaseCloudProvider {
     }
   }
 
+  /**
+   * Authenticate, then make one real API call against the configured base
+   * URL: a token alone proves the client, not the cluster.
+   */
   async testConnection() {
+    const { baseUrl } = this.integration;
+    if (isClassicGateway(baseUrl)) {
+      return {
+        success: false,
+        message: 'The base URL points at a Classic Central API gateway',
+        details: {
+          endpoint: baseUrl,
+          explanation: 'apigw-* hosts serve Classic Central, which does not accept GreenLake API client tokens. NetHelper uses the New Central API.',
+          actions: ['Edit the integration and pick your cluster (e.g. US-West-4 → us4.api.central.arubanetworks.com)'],
+        },
+      };
+    }
     try {
       await this.clearTokenCache(); // force a real credential check
       const startTime = Date.now();
       await this.getAccessToken();
+      await this.makeRequest('GET', '/network-monitoring/v1alpha1/devices', {
+        params: { limit: 1 },
+        context: 'device_list',
+      });
       return {
         success: true,
         message: 'Successfully authenticated with Aruba Central',
         details: { responseTime: `${Date.now() - startTime}ms` },
       };
     } catch (error) {
-      return { success: false, message: error.message };
+      return this.testFailure(error);
     }
   }
 
@@ -148,7 +199,7 @@ class ArubaCentralProvider extends BaseCloudProvider {
   async getDeviceStatus(serial) {
     // The unified endpoint supports OData filters; one-device lookup.
     const page = await this.makeRequest('GET', '/network-monitoring/v1alpha1/devices', {
-      params: { filter: `serial eq '${serial}'`, limit: 1 },
+      params: { filter: `serialNumber eq '${serial}'`, limit: 1 },
       context: 'device_status',
     });
     const item = (page.items || [])[0];
@@ -157,38 +208,48 @@ class ArubaCentralProvider extends BaseCloudProvider {
     return { status: normalized.status, lastSeen: normalized.lastSeen, raw: item };
   }
 
-  /** Map a unified-endpoint item to the NormalizedCloudDevice contract. */
+  /**
+   * Map a unified-endpoint item to the NormalizedCloudDevice contract. Field
+   * names follow a live New Central response (2026-10-16), which differs from
+   * the spec the provider was first written against: serialNumber, status
+   * ONLINE/OFFLINE, lastSeenAt (ISO, null while online), uptimeInMillis.
+   */
   normalizeDevice(item) {
     const type = this.mapDeviceType(item.deviceType);
+    const serial = item.serialNumber || item.serial || null;
+    const status = this.mapDeviceStatus(item.status);
     const normalized = {
-      serial: item.serial,
-      name: item.deviceName || item.serial,
+      serial,
+      name: item.deviceName || serial,
       model: item.model || '',
       macAddress: item.macAddress || null,
       ipAddress: item.ipv4 || item.ipv6 || null,
       type,
       vendor: 'aruba',
       platform: null,
-      status: this.mapDeviceStatus(item.status),
-      firmwareVersion: item.firmwareVersion || null,
-      site: item.siteId || null,
-      lastSeen: item.lastSeen ? new Date(item.lastSeen * 1000) : null,
+      status,
+      firmwareVersion: item.firmwareVersion || item.softwareVersion || null,
+      site: item.siteName || item.siteId || null,
+      // Central leaves lastSeenAt empty while a device is up: seen now.
+      lastSeen: this.parseTimestamp(item.lastSeenAt ?? item.lastSeen) || (status === 'online' ? new Date() : null),
       metadata: {
         siteId: item.siteId,
+        siteName: item.siteName,
         deployment: item.deployment,
-        health: item.health,
-        uptime: item.upTime,
-        stackId: item.stackId,
-        switchRole: item.switchRole,
-        firmwareBackupVersion: item.firmwareBackupVersion,
-        firmwareStatus: item.firmwareStatus,
-        firmwareRecommendedVersion: item.firmwareRecommendedVersion,
+        uptimeMs: item.uptimeInMillis,
+        partNumber: item.partNumber,
+        configStatus: item.configStatus,
+        persona: item.persona,
+        role: item.role,
       },
     };
-    // Classify switches into aos-cx / aos-s from the model string (write-once;
-    // the platform column is authoritative after sync persists it).
+    // Classify switches into aos-cx / aos-s (write-once; the platform column
+    // is authoritative after sync persists it). The firmware version names
+    // the OS outright; the model regex is the fallback (Central reports some
+    // CX switches as a bare "6200").
     if (type === 'switch') {
-      const platform = detectPlatform({ type, model: normalized.model, vendor: 'aruba' });
+      const platform = platformFromFirmware(normalized.firmwareVersion)
+        || detectPlatform({ type, model: normalized.model, vendor: 'aruba' });
       normalized.platform = platform === 'unknown' ? null : platform;
     }
     return normalized;
@@ -227,14 +288,21 @@ class ArubaCentralProvider extends BaseCloudProvider {
 
   mapDeviceStatus(centralStatus) {
     const statusMap = {
-      Up: 'online',
-      Down: 'offline',
-      Warning: 'warning',
-      Maintenance: 'maintenance',
-      UP: 'online',
-      DOWN: 'offline',
+      online: 'online',
+      up: 'online',
+      offline: 'offline',
+      down: 'offline',
+      warning: 'warning',
+      maintenance: 'maintenance',
     };
-    return statusMap[centralStatus] || 'offline';
+    return statusMap[String(centralStatus || '').toLowerCase()] || 'offline';
+  }
+
+  /** ISO string or epoch seconds → Date; anything else → null. */
+  parseTimestamp(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const date = typeof value === 'number' ? new Date(value * 1000) : new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
   // -----------------------------------------------------------------------
@@ -278,6 +346,7 @@ class ArubaCentralProvider extends BaseCloudProvider {
     userError.isArubaError = enhanced.isArubaError;
     userError.statusCode = enhanced.details?.statusCode;
     userError.originalError = error;
+    userError.details = ArubaErrorHandler.diagnostics(enhanced);
     return userError;
   }
 }

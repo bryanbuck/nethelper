@@ -8,7 +8,7 @@ This is a **private, in-house beta**. Install it from [`deploy/README.md`](../de
 
 | Platform | How NetHelper reaches it | Inventory | Status | Config backup | Connection test |
 |---|---|---|---|---|---|
-| Aruba Central (cloud) | Central API (OAuth), per integration | ✅ | ✅ | ⛔ see below | ✅ |
+| Aruba Central (cloud) | New Central API (GreenLake API client), per integration | ✅ | ✅ | ⛔ see below | ✅ |
 | Juniper Mist (cloud) | Mist API token, per org/region | ✅ | ✅ | ✅ switches/gateways (JSON snapshot); ⛔ APs | ✅ |
 | AOS-CX switch (direct) | Device REST API | manual/discovery | ping | ✅ | ✅ |
 | AOS-S switch (direct) | SSH CLI | manual/discovery | ping | ✅ | ✅ |
@@ -16,6 +16,7 @@ This is a **private, in-house beta**. Install it from [`deploy/README.md`](../de
 
 Notes:
 
+- **New Central only.** Create the API client in HPE GreenLake and pick your cluster (e.g. US-West-4 → `us4.api.central.arubanetworks.com`). Classic Central API gateway apps (`apigw-*` hosts) don't work. Integrations saved before 2026-10-16 need their base URL re-picked and a GreenLake client ID/secret; the old Customer ID field is gone.
 - **Central config backup is not supported.** Central's classic configuration endpoints don't work on New Central tenants, so NetHelper reports "not supported" instead of faking it. An AOS-CX switch managed by Central is still backed up directly over its REST API, when it has an IP address and linked credentials.
 - **Mist is intent-based.** Its "backup" is the device's configuration object, stored as sorted JSON so diffs are meaningful. It isn't a CLI running-config. Mist configures APs through templates, so there's no per-AP config to back up, and NetHelper says so.
 - **Junos NETCONF is off by default.** To use it, enable it with `set system services netconf ssh`. If you don't, NetHelper uses the SSH CLI automatically.
@@ -27,7 +28,7 @@ Notes:
 | Area | Evidence so far |
 |---|---|
 | AOS-CX REST (backup, Central-management detection, live state) | Run against a Central-managed 6200F on ML.10.16 (2026-10-15), including PoE and link changes. Backups over REST needed a fix found there: the switch refuses HTTP Basic auth. |
-| Central inventory sync | Built against the live New Central API; two tenants tested side by side |
+| Central inventory sync | Inventory read verified against a live New Central tenant (2026-10-16, 14 devices). That first contact found the field mapping wrong (serial, status, last-seen) and it was fixed; a full sync writing to the database has not yet been run live |
 | Mist | Only against a mock built from Mist's API documentation |
 | Junos NETCONF / SSH | Only against a mock SSH/NETCONF server |
 | AOS-S SSH | No recorded hardware run |

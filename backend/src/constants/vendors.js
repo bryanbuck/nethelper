@@ -63,19 +63,49 @@ const MIST_REGIONS = [
   { id: 'apac03', label: 'APAC 03 (api.gc7.mist.com)', baseUrl: 'https://api.gc7.mist.com' },
 ];
 
+// New Central (HPE GreenLake) API gateways, per cluster (developer.arubanetworks.com
+// "Getting Started with REST APIs"). Classic Central's apigw-* hosts are a
+// different API that GreenLake tokens do not work against.
+const CENTRAL_CLUSTERS = [
+  { id: 'us1', label: 'US-1 (us1.api.central.arubanetworks.com)', baseUrl: 'https://us1.api.central.arubanetworks.com' },
+  { id: 'us2', label: 'US-2 (us2.api.central.arubanetworks.com)', baseUrl: 'https://us2.api.central.arubanetworks.com' },
+  { id: 'us4', label: 'US-West-4 (us4.api.central.arubanetworks.com)', baseUrl: 'https://us4.api.central.arubanetworks.com' },
+  { id: 'us5', label: 'US-West-5 (us5.api.central.arubanetworks.com)', baseUrl: 'https://us5.api.central.arubanetworks.com' },
+  { id: 'us6', label: 'US-East-1 (us6.api.central.arubanetworks.com)', baseUrl: 'https://us6.api.central.arubanetworks.com' },
+  { id: 'ca1', label: 'Canada-1 (ca1.api.central.arubanetworks.com)', baseUrl: 'https://ca1.api.central.arubanetworks.com' },
+  { id: 'de1', label: 'EU-1 (de1.api.central.arubanetworks.com)', baseUrl: 'https://de1.api.central.arubanetworks.com' },
+  { id: 'de2', label: 'EU-Central-2 (de2.api.central.arubanetworks.com)', baseUrl: 'https://de2.api.central.arubanetworks.com' },
+  { id: 'de3', label: 'EU-Central-3 (de3.api.central.arubanetworks.com)', baseUrl: 'https://de3.api.central.arubanetworks.com' },
+  { id: 'gb1', label: 'UK (gb1.api.central.arubanetworks.com)', baseUrl: 'https://gb1.api.central.arubanetworks.com' },
+  { id: 'in1', label: 'APAC-1 (in1.api.central.arubanetworks.com)', baseUrl: 'https://in1.api.central.arubanetworks.com' },
+  { id: 'jp1', label: 'APAC-East-1 (jp1.api.central.arubanetworks.com)', baseUrl: 'https://jp1.api.central.arubanetworks.com' },
+  { id: 'au1', label: 'APAC-South-1 (au1.api.central.arubanetworks.com)', baseUrl: 'https://au1.api.central.arubanetworks.com' },
+  { id: 'ae1', label: 'UAE (ae1.api.central.arubanetworks.com)', baseUrl: 'https://ae1.api.central.arubanetworks.com' },
+  { id: 'cn1', label: 'China (cn1.api.central.arubanetworks.com.cn)', baseUrl: 'https://cn1.api.central.arubanetworks.com.cn' },
+];
+
 const CLOUD_PROVIDERS = {
   aruba_central: {
     id: 'aruba_central',
     label: 'Aruba Central',
     vendor: 'aruba',
-    defaultBaseUrl: 'https://apigw-prod2.central.arubanetworks.com',
+    defaultBaseUrl: 'https://us1.api.central.arubanetworks.com',
     // Field definitions drive the settings form and credential validation.
-    // secret: true fields are encrypted at rest inside CloudIntegration.credentials.
+    // secret: true fields are encrypted at rest inside CloudIntegration.credentials;
+    // optional: true fields may be left blank.
     credentialFields: [
       { key: 'clientId', label: 'Client ID', secret: false },
       { key: 'clientSecret', label: 'Client Secret', secret: true },
-      { key: 'customerId', label: 'Customer ID', secret: false },
+      {
+        key: 'workspaceId',
+        label: 'GreenLake Workspace ID',
+        secret: false,
+        optional: true,
+        hint: 'Only for a GreenLake-platform API client. Leave blank for a Central API client.',
+      },
     ],
+    regions: CENTRAL_CLUSTERS,
+    regionHint: 'The cluster your Central account lives on (Central: Menu → API Gateway → REST API shows the base URL). The wrong cluster fails to authenticate.',
     implemented: true,
   },
   juniper_mist: {
@@ -90,6 +120,7 @@ const CLOUD_PROVIDERS = {
     // A Mist org lives in exactly one regional cloud; the wrong host 401s, so
     // the base URL is part of the integration config and the UI offers a picker.
     regions: MIST_REGIONS,
+    regionHint: 'Your org lives in exactly one region — using the wrong one fails to authenticate. Check the address bar of your Mist portal.',
     implemented: true,
   },
   cisco_meraki: {

@@ -232,8 +232,11 @@ Support devices managed directly on the local network rather than through Aruba 
 **Priority**: High
 **Status**: 🔨 Core implemented (2026-07-08) — switch-side probe, schema fields, backup
 routing, and UI shipped and verified against live hardware. Remaining: Central-side
-group/monitor-only enrichment (blocked on tenant API credentials — OAuth 401, see
-`docs/archive/CENTRAL_ENDPOINT_TRIAGE.md`) and restore guardrails (restore itself still deferred).
+group/monitor-only enrichment and restore guardrails (restore itself still deferred). The
+OAuth blocker (`docs/archive/CENTRAL_ENDPOINT_TRIAGE.md`) was the token request itself: it
+posted `client_credentials` to the API gateway instead of HPE GreenLake SSO. Fixed 2026-10-16
+(GreenLake API clients, cluster picker) and verified live the same day; first contact also
+fixed the inventory field mapping (serial/status/last-seen). A full live sync is still to run.
 
 `Device.managementMode` records record provenance, not the switch's own view of config
 ownership. A CX switch connected to Central in **managed** mode rejects local config writes

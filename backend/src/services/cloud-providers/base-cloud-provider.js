@@ -79,6 +79,19 @@ class BaseCloudProvider {
     return false;
   }
 
+  /**
+   * Helper for subclasses: a failed testConnection() result that keeps the
+   * diagnostics (endpoint, status, provider error, suggested actions) the
+   * error carries in `details`, so the settings UI can show more than a toast.
+   */
+  testFailure(error) {
+    return {
+      success: false,
+      message: error.message,
+      ...(error.details && { details: error.details }),
+    };
+  }
+
   /** Helper for subclasses: throw a typed unsupported-capability error. */
   unsupported(capability, detail) {
     throw new CapabilityError(

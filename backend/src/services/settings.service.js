@@ -404,12 +404,15 @@ class SettingsService {
     for (const field of spec.credentialFields) {
       const value = credentials[field.key];
       if (value === undefined || value === null || value === '') {
+        // An optional, non-secret field sent as '' is being cleared.
+        if (field.optional && !field.secret && value === '') continue;
         // Preserve the existing value (secrets are never echoed back to the
         // client, so a blank secret on update means "unchanged").
         if (existing[field.key] !== undefined) {
           stored[field.key] = existing[field.key];
           continue;
         }
+        if (field.optional) continue;
         throw new Error(`Missing required field "${field.key}" for ${spec.label}`);
       }
       stored[field.key] = field.secret ? encryption.encrypt(String(value)) : String(value);
@@ -604,8 +607,8 @@ class SettingsService {
   /** @deprecated Use createCloudIntegration()/updateCloudIntegration(). */
   async saveArubaCentralConfig(userId, configData) {
     const prisma = getPrisma();
-    if (!configData.baseUrl || !configData.clientId || !configData.clientSecret || !configData.customerId) {
-      throw new Error('Missing required fields: baseUrl, clientId, clientSecret, and customerId are required');
+    if (!configData.baseUrl || !configData.clientId || !configData.clientSecret) {
+      throw new Error('Missing required fields: baseUrl, clientId, and clientSecret are required');
     }
 
     const credentials = {

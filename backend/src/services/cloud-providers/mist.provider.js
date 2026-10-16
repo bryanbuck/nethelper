@@ -117,7 +117,7 @@ class MistProvider extends BaseCloudProvider {
         details: { email: self.email, orgId: this.orgId },
       };
     } catch (error) {
-      return { success: false, message: error.message };
+      return this.testFailure(error);
     }
   }
 
@@ -303,6 +303,14 @@ class MistProvider extends BaseCloudProvider {
     wrapped.statusCode = status;
     wrapped.context = context;
     wrapped.originalError = error;
+    wrapped.details = {
+      context,
+      ...(error.config?.method && { method: error.config.method.toUpperCase() }),
+      ...(error.config?.url && { endpoint: error.config.url }),
+      ...(status && { statusCode: status }),
+      ...(detail && { providerMessage: String(detail) }),
+      ...(!status && error.code && { providerError: error.code }),
+    };
     return wrapped;
   }
 }

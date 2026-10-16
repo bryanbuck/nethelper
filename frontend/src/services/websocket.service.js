@@ -14,14 +14,24 @@ import { Device, Execution, ExecutionStatus } from '@/models'
 
 class WebSocketService {
   constructor() {
+    // Exactly one socket at a time. Connection state is read from it, never
+    // cached: a cached flag outlived replaced sockets and left `connected`
+    // true with no socket.
     this.socket = null
-    this.connected = false
-    this.connecting = false
     this.reconnectAttempts = 0
     this.maxReconnectAttempts = 5
     this.reconnectDelay = 1000
     this.eventHandlers = new Map()
     this.stores = {}
+  }
+
+  get connected() {
+    return Boolean(this.socket?.connected)
+  }
+
+  /** A socket exists and is trying to (re)connect. */
+  get connecting() {
+    return Boolean(this.socket && !this.socket.connected && this.socket.active)
   }
 
   /**
@@ -46,9 +56,10 @@ class WebSocketService {
    * @param {Object} options - Connection options
    */
   async connect(url, options = {}) {
-    if (this.connecting || this.connected) return
-
-    this.connecting = true
+    // A live socket (connected, or reconnecting on its own) is reused.
+    // Socket.io's built-in reconnection is the only retry path.
+    if (this.socket?.active) return
+    this.closeSocket()
     this.initializeStores()
 
     // Same origin by default: nginx (prod) or the Vite proxy (dev) forwards /socket.io
@@ -70,7 +81,7 @@ class WebSocketService {
       this.setupEventHandlers()
       
     } catch (error) {
-      this.connecting = false
+      this.closeSocket()
       console.error('WebSocket connection setup failed:', error)
       throw error
     }
@@ -80,9 +91,9 @@ class WebSocketService {
    * Setup connection event handlers
    */
   setupConnectionHandlers() {
-    this.socket.on('connect', () => {
-      this.connected = true
-      this.connecting = false
+    const socket = this.socket
+
+    socket.on('connect', () => {
       this.reconnectAttempts = 0
       console.log('WebSocket connected')
       
@@ -94,9 +105,7 @@ class WebSocketService {
       })
     })
 
-    this.socket.on('disconnect', (reason) => {
-      this.connected = false
-      this.connecting = false
+    socket.on('disconnect', (reason) => {
       console.log('WebSocket disconnected:', reason)
       
       this.stores.notifications.addNotification({
@@ -106,29 +115,20 @@ class WebSocketService {
         persistent: true
       })
       
-      // Handle reconnection
-      if (reason === 'io server disconnect') {
-        this.scheduleReconnect()
-      }
+      // The one case Socket.io doesn't retry by itself.
+      if (reason === 'io server disconnect') socket.connect()
     })
 
-    this.socket.on('connect_error', (error) => {
-      this.connected = false
-      this.connecting = false
+    // Built-in reconnection gave up (reconnectionAttempts exhausted).
+    socket.io.on('reconnect_failed', () => this.notifyConnectionFailed())
+
+    socket.on('connect_error', (error) => {
       this.reconnectAttempts++
-      
       console.error('WebSocket connection error:', error)
-      
-      if (this.reconnectAttempts <= this.maxReconnectAttempts) {
-        this.scheduleReconnect()
-      } else {
-        this.stores.notifications.addNotification({
-          type: 'error',
-          title: 'Connection Failed',
-          message: 'Unable to establish real-time connection. Please refresh the page.',
-          persistent: true
-        })
-      }
+
+      // socket.active is false when the server refused the handshake (e.g. a
+      // bad token); the next connect() starts a new socket.
+      if (!socket.active) this.notifyConnectionFailed()
     })
   }
 
@@ -628,16 +628,13 @@ class WebSocketService {
     }
   }
 
-  /**
-   * Schedule reconnection attempt
-   */
-  scheduleReconnect() {
-    setTimeout(() => {
-      if (!this.connected && this.reconnectAttempts <= this.maxReconnectAttempts) {
-        console.log(`Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`)
-        this.connect()
-      }
-    }, this.reconnectDelay * this.reconnectAttempts)
+  notifyConnectionFailed() {
+    this.stores.notifications.addNotification({
+      type: 'error',
+      title: 'Connection Failed',
+      message: 'Unable to establish real-time connection. Please refresh the page.',
+      persistent: true
+    })
   }
 
   /**
@@ -699,12 +696,16 @@ class WebSocketService {
    * Disconnect WebSocket
    */
   disconnect() {
-    if (this.socket) {
-      this.socket.disconnect()
-      this.socket = null
-    }
-    this.connected = false
-    this.connecting = false
+    this.closeSocket()
+  }
+
+  /** Close the current socket for good: no listeners left behind, no retries. */
+  closeSocket() {
+    if (!this.socket) return
+    this.socket.io.removeAllListeners()
+    this.socket.removeAllListeners()
+    this.socket.disconnect()
+    this.socket = null
   }
 
   /**

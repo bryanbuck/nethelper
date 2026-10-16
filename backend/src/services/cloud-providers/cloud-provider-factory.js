@@ -159,7 +159,7 @@ class CloudProviderFactory {
         _plaintext: true,
         clientId: process.env.ARUBA_CENTRAL_CLIENT_ID,
         clientSecret: process.env.ARUBA_CENTRAL_CLIENT_SECRET,
-        customerId: process.env.ARUBA_CENTRAL_CUSTOMER_ID,
+        workspaceId: process.env.ARUBA_CENTRAL_WORKSPACE_ID,
       },
     };
   }

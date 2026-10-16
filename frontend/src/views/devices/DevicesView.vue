@@ -223,9 +223,10 @@
                   label="Device Credential"
                   variant="outlined"
                   clearable
-                  hint="Required for direct (REST/SSH) access"
+                  :hint="newDevice.managementMode === 'cloud'
+                    ? 'Optional: enables read-only local access (AOS-CX config backup, live state)'
+                    : 'Required for direct (REST/SSH) access'"
                   persistent-hint
-                  :disabled="newDevice.managementMode === 'cloud'"
                 />
               </v-col>
             </v-row>
@@ -400,7 +401,9 @@
                   prepend-inner-icon="mdi-key-variant"
                   clearable
                   :loading="loadingCredentials"
-                  hint="Select the API credentials to use for this device"
+                  :hint="editingDevice.managementMode === 'cloud'
+                    ? 'Optional: enables read-only local access (AOS-CX config backup, live state)'
+                    : 'Select the API credentials to use for this device'"
                   persistent-hint
                 >
                   <template #item="{ props, item }">
@@ -454,7 +457,9 @@
                   density="compact"
                   class="mt-2"
                 >
-                  No credential assigned. Direct device polling will not be available.
+                  {{ editingDevice.managementMode === 'cloud'
+                    ? 'No credential assigned. Local config backup and live state will not be available.'
+                    : 'No credential assigned. Direct device polling will not be available.' }}
                 </v-alert>
               </v-col>
             </v-row>
@@ -670,7 +675,9 @@ const saveDevice = async () => {
       model: newDevice.value.model || '',
       managementMode: newDevice.value.managementMode || 'direct',
       cloudIntegrationId: isCloud ? (newDevice.value.cloudIntegrationId || null) : null,
-      apiCredentialId: isCloud ? null : (newDevice.value.apiCredentialId || null)
+      // Kept for cloud devices too: read-only local access (AOS-CX config
+      // backup, live state) uses it. Writes still go through the provider.
+      apiCredentialId: newDevice.value.apiCredentialId || null
     }
 
     // Create device via API
@@ -775,7 +782,9 @@ const updateDevice = async () => {
       model: editingDevice.value.model || '',
       managementMode: editingDevice.value.managementMode || 'direct',
       cloudIntegrationId: isCloud ? (editingDevice.value.cloudIntegrationId || null) : null,
-      apiCredentialId: isCloud ? null : (editingDevice.value.apiCredentialId || null)
+      // Kept for cloud devices too: read-only local access (AOS-CX config
+      // backup, live state) uses it. Writes still go through the provider.
+      apiCredentialId: editingDevice.value.apiCredentialId || null
     }
 
     // Update device via API

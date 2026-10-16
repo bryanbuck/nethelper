@@ -279,6 +279,10 @@ class DeviceService {
 
   /** Upsert one NormalizedCloudDevice, stamping its owning integration. */
   async upsertCloudDevice(normalized, cloudIntegrationId) {
+    if (!normalized.serial) {
+      // Cloud devices are matched by serial; without one there is nothing to key on.
+      throw new Error(`Cloud device "${normalized.name || 'unnamed'}" has no serial; skipped`);
+    }
     const prisma = getPrisma();
     const existingDevice = await prisma.device.findUnique({
       where: { serial: normalized.serial },
@@ -297,7 +301,8 @@ class DeviceService {
       managementMode: 'cloud',
       cloudIntegrationId,
       firmwareVersion: normalized.firmwareVersion,
-      lastSeen: normalized.lastSeen,
+      // Never clear a lastSeen that ping or the live monitor recorded.
+      ...(normalized.lastSeen && { lastSeen: normalized.lastSeen }),
       metadata: normalized.metadata || {},
     };
 

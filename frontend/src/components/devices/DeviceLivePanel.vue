@@ -36,7 +36,7 @@
         density="compact"
         class="mx-4 mb-4"
       >
-        Live state isn't available for {{ platformLabel }} devices yet. AOS-CX switches are supported today.
+        {{ unavailableReason }}
       </v-alert>
       <v-alert
         v-else-if="live.state === 'error'"
@@ -212,6 +212,18 @@ const platformLabel = computed(() => PlatformInfo[props.device.platform]?.label 
 const mode = computed(() => liveStateMode(props.device.platform))
 const liveCapable = computed(() => Boolean(mode.value) && Boolean(props.device.ipAddress))
 
+// Why live state is off for this device: missing data the user can fix
+// comes before "this platform isn't supported".
+const unavailableReason = computed(() => {
+  if (!props.device.platform) {
+    return 'This device has no platform set. Edit it and choose its platform (live state supports AOS-CX switches today).'
+  }
+  if (!mode.value) {
+    return `Live state isn't available for ${platformLabel.value} devices yet. AOS-CX switches are supported today.`
+  }
+  return 'This device has no IP address. Edit it and add one: live state reads the switch directly.'
+})
+
 const deliveryNote = computed(() => {
   if (mode.value === 'push') return 'The switch pushes link and PoE changes as they happen (about a second).'
   if (mode.value === 'poll') return 'Link and PoE state is re-read every minute.'
@@ -329,6 +341,8 @@ function start() {
 }
 
 watch(() => props.device.id, () => start())
+// Platform or IP fixed while the tab is open: start (or stop) without a reload.
+watch(liveCapable, (capable) => (capable ? start() : live.unwatch()))
 
 onMounted(() => {
   start()

@@ -28,9 +28,9 @@ export function useWebSocket() {
       const wsUrl = import.meta.env.VITE_WS_URL || undefined // service defaults to same origin
       
       await webSocketService.connect(wsUrl, {
-        auth: {
-          token: authStore.token
-        }
+        // A function, so every reconnect sends the current (possibly
+        // refreshed) token rather than the one from the first connect.
+        auth: (cb) => cb({ token: authStore.token })
       })
       
       // Update reactive refs based on service status

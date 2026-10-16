@@ -33,13 +33,90 @@ describe('ArubaCentralProvider', () => {
     provider: 'aruba_central',
     name: 'Central',
     baseUrl: 'https://central.example.com',
-    credentials: { clientId: 'id', clientSecret: 'secret', customerId: 'cust' },
+    credentials: { clientId: 'id', clientSecret: 'secret' },
   });
 
   test('refuses an integration with missing credentials', () => {
     expect(() => new ArubaCentralProvider({
       name: 'Bad', baseUrl: 'https://x', credentials: { clientId: 'id' },
-    })).toThrow(/missing clientId, clientSecret, or customerId/);
+    })).toThrow(/missing clientId or clientSecret/);
+  });
+
+  describe('authentication', () => {
+    const { getRedis } = require('../../src/config/redis');
+    const redis = { get: jest.fn(), setEx: jest.fn(), del: jest.fn() };
+
+    beforeEach(() => {
+      jest.resetAllMocks();
+      getRedis.mockReturnValue(redis);
+      redis.get.mockResolvedValue(null);
+      redis.setEx.mockResolvedValue('OK');
+      redis.del.mockResolvedValue(1);
+    });
+
+    const centralAt = (baseUrl, extra = {}) => new ArubaCentralProvider({
+      id: 'int-2', provider: 'aruba_central', name: 'Home', baseUrl,
+      credentials: { clientId: 'id', clientSecret: 'secret', ...extra },
+    });
+
+    test('a Central API client gets its token from HPE SSO', async () => {
+      axios.post.mockResolvedValue({ data: { access_token: 'tok', expires_in: 7199 } });
+      await centralAt('https://us4.api.central.arubanetworks.com').getAccessToken();
+      const [url, body] = axios.post.mock.calls[0];
+      expect(url).toBe('https://sso.common.cloud.hpe.com/as/token.oauth2');
+      expect(body.get('grant_type')).toBe('client_credentials');
+    });
+
+    test('a GreenLake-platform client uses its workspace token URL', async () => {
+      axios.post.mockResolvedValue({ data: { access_token: 'tok', expires_in: 899 } });
+      await centralAt('https://us4.api.central.arubanetworks.com', { workspaceId: 'ws-1' }).getAccessToken();
+      expect(axios.post.mock.calls[0][0])
+        .toBe('https://global.api.greenlake.hpe.com/authorization/v2/oauth2/ws-1/token');
+    });
+
+    test('a Classic apigw-* base URL fails the test without calling out', async () => {
+      const result = await centralAt('https://apigw-uswest4.central.arubanetworks.com').testConnection();
+      expect(result.success).toBe(false);
+      expect(result.message).toMatch(/Classic Central/);
+      expect(result.details.actions.length).toBeGreaterThan(0);
+      expect(axios.post).not.toHaveBeenCalled();
+    });
+
+    test('a failed test returns the provider error, not just a summary', async () => {
+      axios.post.mockRejectedValue({
+        message: 'Request failed with status code 400',
+        config: { url: 'https://sso.common.cloud.hpe.com/as/token.oauth2', method: 'post' },
+        response: {
+          status: 400,
+          data: { error: 'invalid_client', error_description: 'Invalid client authentication' },
+          headers: {},
+        },
+      });
+      const result = await centralAt('https://us4.api.central.arubanetworks.com').testConnection();
+      expect(result).toMatchObject({
+        success: false,
+        message: 'Invalid client credentials',
+        details: {
+          method: 'POST',
+          endpoint: 'https://sso.common.cloud.hpe.com/as/token.oauth2',
+          statusCode: 400,
+          providerError: 'invalid_client',
+          providerMessage: 'Invalid client authentication',
+        },
+      });
+      expect(result.details).not.toHaveProperty('headers');
+    });
+
+    test('a passing test also calls the API on the configured cluster', async () => {
+      axios.post.mockResolvedValue({ data: { access_token: 'tok', expires_in: 7199 } });
+      axios.mockResolvedValue({ data: { items: [] } });
+      const result = await centralAt('https://us4.api.central.arubanetworks.com').testConnection();
+      expect(result.success).toBe(true);
+      expect(axios.mock.calls[0][0]).toMatchObject({
+        url: 'https://us4.api.central.arubanetworks.com/network-monitoring/v1alpha1/devices',
+        headers: { Authorization: 'Bearer tok' },
+      });
+    });
   });
 
   test('does not claim config-backup (endpoints are quarantined)', async () => {
@@ -62,12 +139,41 @@ describe('ArubaCentralProvider', () => {
     const [cx, aoss, ap, gw] = devices;
     expect(cx).toMatchObject({
       serial: 'SG30KW0001', type: 'switch', vendor: 'aruba', platform: 'aos-cx', status: 'online',
-      ipAddress: '10.0.0.2', site: 'site-1', lastSeen: new Date(1758800000 * 1000),
+      ipAddress: '10.0.0.2', site: 'HQ', firmwareVersion: 'FL.10.16.1010',
     });
-    expect(aoss).toMatchObject({ platform: 'aos-s', status: 'offline' });
+    // Central leaves lastSeenAt empty for a device that is up.
+    expect(cx.lastSeen).toBeInstanceOf(Date);
+    expect(cx.metadata).toMatchObject({ siteId: '100001', uptimeMs: 14791955848, configStatus: 'Synchronized' });
+    expect(aoss).toMatchObject({ platform: 'aos-s', status: 'offline', lastSeen: new Date('2026-10-01T12:00:00Z') });
     // APs don't get a platform; a missing name falls back to the serial.
     expect(ap).toMatchObject({ name: 'CNKL0003', type: 'access_point', platform: null, status: 'online', ipAddress: 'fd00::3' });
-    expect(gw).toMatchObject({ type: 'gateway', status: 'maintenance', lastSeen: null, macAddress: null });
+    expect(gw).toMatchObject({ type: 'gateway', status: 'offline', lastSeen: null, macAddress: null, site: null });
+  });
+
+  test('switch platform comes from the firmware when the model is bare', () => {
+    const bare = provider.normalizeDevice({
+      serialNumber: 'VN0001', deviceType: 'SWITCH', model: '6200', firmwareVersion: 'ML.10.16.1006', status: 'ONLINE',
+    });
+    expect(bare.platform).toBe('aos-cx');
+    const aoss = provider.normalizeDevice({
+      serialNumber: 'TW0001', deviceType: 'SWITCH', model: '2930F', firmwareVersion: 'WC.16.11.0012', status: 'OFFLINE',
+    });
+    expect(aoss.platform).toBe('aos-s');
+  });
+
+  test('status mapping covers the live ONLINE/OFFLINE values and older spellings', () => {
+    expect(provider.mapDeviceStatus('ONLINE')).toBe('online');
+    expect(provider.mapDeviceStatus('OFFLINE')).toBe('offline');
+    expect(provider.mapDeviceStatus('Up')).toBe('online');
+    expect(provider.mapDeviceStatus('Maintenance')).toBe('maintenance');
+  });
+
+  test('getDeviceStatus filters on serialNumber (Central rejects "serial")', async () => {
+    const makeRequest = jest.spyOn(provider, 'makeRequest')
+      .mockResolvedValueOnce({ items: [centralFixture.page1.items[0]] });
+    const result = await provider.getDeviceStatus('SG30KW0001');
+    expect(makeRequest.mock.calls[0][2].params.filter).toBe("serialNumber eq 'SG30KW0001'");
+    expect(result.status).toBe('online');
   });
 
   test('unknown status maps to offline, not online', () => {
