@@ -202,21 +202,24 @@ CloudProviderFactory.activeProviders()     // all isActive integrations, instant
 - `determineDeviceAPIType(device)` becomes **vendor-field driven**: `(vendor, platform, type)` → api type via the capability matrix in `constants/vendors.js`. The Aruba model regexes survive only in the Phase 0 backfill script and as a last-ditch fallback for `vendor: aruba, platform: null`.
 - The switch grows over phases: `cx_switch` → `junos` (Phase 2, only if a structured client is built) → `catalyst_restconf` (Phase 4, optional).
 - `getSupportedDeviceTypes()` is generated from `constants/vendors.js` — this also fixes the frontend's hardcoded type lists.
-- Cloud-managed devices normally don't reach the factory; the router sends them to their CloudProvider. **Exception: read-only local reads of AOS-CX** (config backup, live state in §8c), which keep working under Central management and are ranked ahead of the cloud plane when the device has an IP and a linked credential.
+- Cloud-managed devices normally don't reach the factory; the router sends them to their CloudProvider. **Exception: read-only local reads of AOS-CX** (config backup, live state in §8c, LLDP topology in §8d), which keep working under Central management and are ranked ahead of the cloud plane when the device has an IP and a linked credential.
 
 ### Transport router (`utils/transport-router.js`)
 
 Generalizes `pullConfig()`'s three-way branch and `useSshTransport()` into one declarative matrix:
 
 ```js
-// resolveTransport(device, operation) → ordered transports: 'cloud' | 'device-rest' | 'ssh' | 'unsupported'
+// resolveTransport(device, operation) → ordered transports: 'cloud' | 'device-rest' | 'ssh'
+// (an empty list means unsupported). As built, in constants/vendors.js (2026-10-16):
 const TRANSPORT_MATRIX = {
-  'aruba/aos-cx':  { config: ['device-rest', 'ssh'], status: ['device-rest'], test: ['device-rest', 'ssh'] },
-  'aruba/aos-s':   { config: ['ssh'],                status: ['ssh'],         test: ['ssh'] },
-  'juniper/junos': { config: ['ssh'],                status: ['ssh'],         test: ['ssh'] },  // Phase 2
-  'cisco/ios-xe':  { config: ['ssh'],                status: ['ssh'],         test: ['ssh'] },  // Phase 4 (+ device-rest if RESTCONF)
+  'aruba/aos-cx':  { config: ['device-rest'], test: ['device-rest'], poll: ['device-rest'], live: ['device-rest'], topology: ['device-rest'] },
+  'aruba/aos-s':   { config: ['ssh'], test: ['ssh'], poll: ['ssh'], live: [], topology: ['ssh'] },
+  'juniper/junos': { config: ['device-rest', 'ssh'], test: ['device-rest', 'ssh'], poll: ['device-rest', 'ssh'], live: [], topology: ['device-rest', 'ssh'] },  // device-rest = NETCONF
+  'cisco/ios-xe':  { config: ['ssh'], test: ['ssh'], poll: ['ssh'], live: [], topology: ['ssh'] },
+  'cisco/meraki':  { config: [], test: [], poll: [], live: [], topology: [] },
 };
-// managementMode === 'cloud' overrides everything → ['cloud'], gated by provider.supports(capability)
+// managementMode === 'cloud': device-rest (when listed) then 'cloud', never ssh.
+// live: device-rest only, and only with an IP. topology: device-rest with an IP, then 'cloud'.
 ```
 
 `device-platform.js` is rewritten **field-first**: `detectPlatform()` returns `device.platform` when set, falling back to today's regexes only for legacy/unclassified rows. `isCxRestCapable()` / `useSshTransport()` keep their signatures (so `config-backup`, `device-poller`, and `device-api-test.controller` don't all change at once) but delegate to the router. `pullConfig()` becomes an ordered-fallback loop over `resolveTransport(device, 'config')`.
@@ -410,6 +413,58 @@ sessions per user.
 **Known limits:** single backend instance (replicas would each watch every
 device and record duplicate events; a Redis leader lock is a roadmap item);
 `LIVE_MAX_CONNECTIONS` caps watched devices per process.
+
+## 8d. Network topology / Network Map (2026-10-16)
+
+A `/map` page that draws the managed network from each device's own LLDP/CDP
+neighbor table, plus Discovery hosts. No switch-side setup: LLDP (and CDP on
+Cisco) is on by default, and the reads use the access NetHelper already has.
+
+**Collection** (`services/topology/topology.service.js`), via
+`resolveTransport(device, 'topology')`, read-only:
+
+| Platform | Transport | Read |
+|---|---|---|
+| AOS-CX | device REST (also under Central) | `GET system/interfaces/*/lldp_neighbors?depth=2`, identity from `GET system?attributes=hostname,system_mac` |
+| Junos | NETCONF, SSH fallback | `<get-lldp-neighbors-information/>` + `<get-lldp-local-info/>`; CLI `show lldp neighbors` |
+| AOS-S | SSH | `show lldp info remote-device detail`, `show lldp info local-device` |
+| IOS-XE | SSH | `show cdp neighbors detail` + `show lldp neighbors detail` |
+| Cloud | provider `getNeighbors()` | `CapabilityError` on every provider for now (see below) |
+
+Every collector returns the normalized neighbor in `services/topology/neighbor.js`.
+Parsers live in `services/topology/parsers/`. Only the AOS-CX parser is checked
+against hardware (6200F ML.10.16, `tests/fixtures/aos-cx-live/lldp-neighbors.json`).
+The Junos, AOS-S and IOS parsers are spec-derived. A scheduled Bull job
+(`TOPOLOGY_INTERVAL`, default 6 h) and an on-demand "Refresh topology" both run
+`collectAll`, which reads at most `TOPOLOGY_CONCURRENCY` devices at once and
+opens one session per device.
+
+**Storage:**
+- `DeviceLink`: one row per local port and remote chassis/port.
+- `DeviceTopologyState`: status `ok | skipped | unsupported | failed`, with a
+  reason and the device's own chassis id/sysName.
+- `TopologyChange`: `link.added | removed | changed`.
+- `MapLayout`: shared node positions per `all` / `site:<location>`.
+
+`link-diff.js` reconciles a fresh table against the stored rows:
+- A failed or skipped read never deactivates links.
+- A device's first collection records no changes.
+- A removal plus an addition on the same port is one `link.changed`.
+
+**Resolution happens when the graph is built (`graph.js`), not when links are
+stored.** A far end matches a Device by MAC (its own advertised chassis id
+first, then `Device.macAddress`), then by management IP, then by an unambiguous
+name. Anything left over is a ghost node, matched to a `DiscoveredDevice` by
+MAC or IP so the map can import it. AOS-CX endpoints such as phones may
+advertise an IP as their chassis id; their MAC then comes from `mac_addr`.
+Links reported from both ends merge into one edge. Edges are oriented
+gateway → switch → AP → endpoint for layered layout.
+
+**Cloud planes:** `getNeighbors` is defined on `BaseCloudProvider` but not
+implemented anywhere. Mist's device stats probably carry an AP's uplink
+`lldp_stat`, and New Central may expose neighbors. Both need a live check
+before building parsers. Until then, cloud APs still appear wherever a switch
+NetHelper reads sees them over LLDP.
 
 ## 9. Risks & open questions
 

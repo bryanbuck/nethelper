@@ -318,6 +318,39 @@ const validateUUID = (paramName) => [
   handleValidationErrors,
 ];
 
+// Network Map (services/topology/)
+const validateTopology = {
+  graph: [
+    query('site').optional().isString().isLength({ min: 1, max: 200 }),
+    query('includeDiscovered').optional().isBoolean().toBoolean(),
+    handleValidationErrors,
+  ],
+
+  changes: [
+    query('since').optional().isISO8601().withMessage('since must be an ISO timestamp'),
+    query('deviceId').optional().isUUID(),
+    query('limit').optional().isInt({ min: 1, max: 500 }).toInt(),
+    handleValidationErrors,
+  ],
+
+  collect: [
+    body('deviceIds').optional().isArray({ max: 1000 }).withMessage('deviceIds must be an array'),
+    body('deviceIds.*').optional().isUUID().withMessage('deviceIds must be device IDs'),
+    handleValidationErrors,
+  ],
+
+  layoutScope: [
+    param('scope').matches(/^(all|site:.{1,200})$/).withMessage('scope must be "all" or "site:<location>"'),
+    handleValidationErrors,
+  ],
+
+  saveLayout: [
+    param('scope').matches(/^(all|site:.{1,200})$/).withMessage('scope must be "all" or "site:<location>"'),
+    body('positions').isObject().withMessage('positions must be an object of { x, y } by node id'),
+    handleValidationErrors,
+  ],
+};
+
 const validateOptionalUUID = (paramName) => [
   param(paramName).optional().isUUID().withMessage(`Invalid ${paramName}`),
   handleValidationErrors,
@@ -332,6 +365,7 @@ module.exports = {
   validateApiCredential,
   validateDiscovery,
   validateBackup,
+  validateTopology,
   validateQuery,
   validateUUID,
   validateOptionalUUID,

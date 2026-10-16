@@ -18,11 +18,11 @@
 const { TRANSPORT_MATRIX, TRANSPORT_FALLBACKS } = require('../constants/vendors');
 const { detectPlatform, detectVendor } = require('./device-platform');
 
-const OPERATIONS = ['config', 'test', 'poll', 'live'];
+const OPERATIONS = ['config', 'test', 'poll', 'live', 'topology'];
 
 /**
  * @param {Object} device - Device row (managementMode, vendor, platform, type, ...)
- * @param {string} operation - 'config' | 'test' | 'poll' | 'live'
+ * @param {string} operation - 'config' | 'test' | 'poll' | 'live' | 'topology'
  * @returns {string[]} Ordered transports to attempt (may be empty = unsupported)
  */
 function resolveTransport(device, operation) {
@@ -51,6 +51,13 @@ function resolveTransport(device, operation) {
       return device.ipAddress ? transports.filter((t) => t === 'device-rest') : [];
     }
     return [...transports];
+  }
+
+  // Topology is a read-only neighbor read: local REST when the device has an
+  // IP, then the cloud plane (a provider capability, which may be unsupported).
+  if (operation === 'topology' && device?.managementMode === 'cloud') {
+    const direct = device.ipAddress ? transports.filter((t) => t === 'device-rest') : [];
+    return [...direct, 'cloud'];
   }
 
   if (device?.managementMode === 'cloud') {

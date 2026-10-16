@@ -158,6 +158,26 @@ Enhanced visualization for device performance metrics:
 
 ---
 
+### 3a. Network Map (topology from LLDP/CDP)
+**Priority**: Medium
+**Status**: 🔨 Built 2026-10-16 (branch `worktree-network-map`; design: `MULTI_VENDOR_ROADMAP.md` §8d)
+
+A `/map` page to explore the managed network visually, built from each device's neighbor table plus Discovery hosts.
+- ✅ Neighbor collection over existing transports: AOS-CX REST (validated on the 6200F test switch, including under Central management), Junos NETCONF/CLI, AOS-S and IOS-XE SSH (spec-derived parsers, not yet run on hardware). Scheduled (`TOPOLOGY_INTERVAL`, default 6 h) and on demand.
+- ✅ Models `DeviceLink`, `DeviceTopologyState`, `TopologyChange`, `MapLayout`; `DiscoveredDevice.subnet` (Discovery now records the swept subnet).
+- ✅ Map (vue-flow + dagre): layered auto-layout; nodes draggable by operators, with positions saved per site and shared. Status colors update from `device:status:update`. Neighbors not in inventory are dashed "ghost" nodes, importable when Discovery saw them. Discovery hosts not on the map are grouped by subnet. There is a link-change history drawer.
+- ✅ Device page **Neighbors** tab (`GET /devices/:id/neighbors`, "Read now").
+- ✅ API: `GET /topology/graph`, `GET /topology/changes`, `POST /topology/collect` (operator+), `GET`/`PUT /topology/layouts/:scope` (PUT operator+). Socket: `topology:progress`, `topology:updated`.
+
+Deferred:
+- ⏳ Cloud neighbor sources: Mist (AP `lldp_stat` in device stats) and New Central. Each needs a read-only live check of its response fields before a parser is written.
+- ⏳ Run the Junos, AOS-S and IOS-XE parsers against real output and replace the spec-derived test strings with captures.
+- ⏳ Endpoint attachment from switch MAC tables (AOS-CX `system/vlans/*/macs`), so Discovery hosts hang off their switch port, plus a "where is this MAC/IP?" search.
+- ⏳ Live link-state edges (color an edge from `device:event` port changes for live-monitored devices).
+- ⏳ Manual links and annotations for things LLDP can't see (ISP handoff, unmanaged switches).
+
+---
+
 ### 4. Automated Device Discovery
 **Priority**: Medium
 **Status**: ✅ Completed (2026-07-06)

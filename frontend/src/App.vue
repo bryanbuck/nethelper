@@ -51,6 +51,11 @@ const allNavigationItems = [
     to: '/devices'
   },
   {
+    title: 'Network Map',
+    icon: 'mdi-graph-outline',
+    to: '/map'
+  },
+  {
     title: 'Discovery',
     icon: 'mdi-radar',
     to: '/devices/discovery'

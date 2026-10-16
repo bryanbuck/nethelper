@@ -5,6 +5,7 @@ const { getPrisma } = require('../config/database');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const { getIO } = require('../websocket/socket.handler');
 const logger = require('../utils/logger');
+const { normalizeMac } = require('../utils/mac');
 
 const execFileAsync = promisify(execFile);
 
@@ -84,10 +85,7 @@ class DiscoveryService {
   }
 
   normalizeMac(mac) {
-    if (!mac) return null;
-    const hex = mac.toLowerCase().replace(/[^0-9a-f]/g, '');
-    if (hex.length !== 12) return null;
-    return hex.match(/.{2}/g).join(':');
+    return normalizeMac(mac);
   }
 
   lookupVendor(mac) {
@@ -159,7 +157,7 @@ class DiscoveryService {
         const subnet = subnets[i];
         this.emitProgress(scanId, 5 + Math.round((i / subnets.length) * 45), 'sweep', `Sweeping ${subnet}`);
         const swept = await this.sweepSubnet(subnet);
-        for (const host of swept) hosts.set(host.ipAddress, host);
+        for (const host of swept) hosts.set(host.ipAddress, { ...host, subnet });
         const progress = 5 + Math.round(((i + 1) / subnets.length) * 45);
         await prisma.discoveryScan.update({ where: { id: scanId }, data: { progress } });
       }
@@ -218,6 +216,7 @@ class DiscoveryService {
         records.push({
           scanId,
           ipAddress: host.ipAddress,
+          subnet: host.subnet || null,
           macAddress: mac,
           vendor: central ? 'Aruba Networks (HPE)' : host.vendor,
           hostname: host.hostname || null,

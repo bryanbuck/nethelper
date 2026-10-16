@@ -10,6 +10,7 @@ import { useNotificationsStore } from '@/stores/notifications'
 import { useAutomationsStore } from '@/stores/automations'
 import { useDiscoveryStore } from '@/stores/discovery'
 import { useBackupsStore } from '@/stores/backups'
+import { useTopologyStore } from '@/stores/topology'
 import { Device, Execution, ExecutionStatus } from '@/models'
 
 class WebSocketService {
@@ -45,7 +46,8 @@ class WebSocketService {
         notifications: useNotificationsStore(),
         automations: useAutomationsStore(),
         discovery: useDiscoveryStore(),
-        backups: useBackupsStore()
+        backups: useBackupsStore(),
+        topology: useTopologyStore()
       }
     }
   }
@@ -156,6 +158,10 @@ class WebSocketService {
     this.socket.on('backup:failed', (data) => this.handleBackupFailed(data))
     this.socket.on('backup:run:completed', (data) => this.handleBackupRunCompleted(data))
 
+    // Network Map neighbor collection
+    this.socket.on('topology:progress', (data) => this.stores.topology?.handleProgress(data))
+    this.socket.on('topology:updated', (data) => this.stores.topology?.handleUpdated(data))
+
     // Alert events
     this.socket.on('alert:new', (data) => this.handleNewAlert(data))
 
@@ -224,6 +230,7 @@ class WebSocketService {
         pingResponseTime,
         pingLastChecked
       })
+      this.stores.topology?.applyDeviceStatus(deviceId, { pingStatus: pingStatus || status })
 
       // Optionally show notification for offline status
       if (status === 'offline' || pingStatus === 'offline') {

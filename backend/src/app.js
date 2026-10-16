@@ -17,6 +17,7 @@ const deviceApiTestRoutes = require('./routes/device-api-test.routes');
 const discoveryRoutes = require('./routes/discovery.routes');
 const backupRoutes = require('./routes/backup.routes');
 const userRoutes = require('./routes/users.routes');
+const topologyRoutes = require('./routes/topology.routes');
 
 // Import middleware
 // This section imports custom middleware functions that will be applied to requests.
@@ -183,6 +184,7 @@ app.use(`${apiPrefix}/device-api`, deviceApiTestRoutes);
 app.use(`${apiPrefix}/discovery`, discoveryRoutes);
 app.use(`${apiPrefix}/backups`, backupRoutes);
 app.use(`${apiPrefix}/users`, userRoutes);
+app.use(`${apiPrefix}/topology`, topologyRoutes);
 
 // 404 handler
 // Catch-all middleware that handles requests to undefined routes by returning a standardized

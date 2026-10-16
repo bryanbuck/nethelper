@@ -91,8 +91,19 @@ class BaseCloudProvider {
   }
 
   /**
+   * LLDP neighbors the cloud plane knows for one device (e.g. a Mist AP's
+   * uplink switch and port), normalized as in services/topology/neighbor.js.
+   * Not implemented by any provider yet: the response fields need checking
+   * against a live tenant first (docs/ROADMAP_AND_TODO.md, Network Map).
+   * @returns {Promise<{neighbors: Object[], identity: {chassisId, sysName}}>}
+   */
+  async getNeighbors(device) { // eslint-disable-line no-unused-vars
+    this.unsupported('topology');
+  }
+
+  /**
    * Capability probe used by transport routing and the UI.
-   * @param {string} capability - 'inventory' | 'status' | 'config-backup' | 'scope-backup' | 'test'
+   * @param {string} capability - 'inventory' | 'status' | 'config-backup' | 'scope-backup' | 'topology' | 'test'
    * @returns {boolean}
    */
   supports(capability) { // eslint-disable-line no-unused-vars

@@ -3,6 +3,7 @@ const https = require('https');
 const WebSocket = require('ws');
 const BaseDeviceAPI = require('./base-device-api');
 const cxLive = require('./cx-live');
+const cxTopology = require('../topology/parsers/aos-cx');
 const logger = require('../../utils/logger');
 
 // One REST version for every call (login, requests, logout, notifications).
@@ -457,6 +458,28 @@ class CXSwitchAPI extends BaseDeviceAPI {
       '/system/interfaces?depth=2&attributes=name,type,statistics'
     );
     return cxLive.normalizeCounters(interfaces);
+  }
+
+  // ---------------------------------------------------------------------
+  // Topology (services/topology/). Parsing lives in topology/parsers/aos-cx.js.
+  // ---------------------------------------------------------------------
+
+  /** LLDP neighbors on every port, normalized (see topology/neighbor.js). */
+  async getLldpNeighbors() {
+    try {
+      const response = await this.makeAuthenticatedRequest('GET', '/system/interfaces/*/lldp_neighbors?depth=2');
+      return cxTopology.parseLldpNeighbors(response);
+    } catch (error) {
+      // No neighbor resources anywhere: an empty table, not a failure.
+      if (error.status === 404) return [];
+      throw error;
+    }
+  }
+
+  /** This switch's LLDP chassis id (system MAC) and hostname. */
+  async getLldpIdentity() {
+    const system = await this.makeAuthenticatedRequest('GET', '/system?attributes=hostname,system_mac');
+    return cxTopology.parseIdentity(system);
   }
 
   /** CPU and memory percentages from the management module. */

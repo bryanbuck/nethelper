@@ -10,6 +10,7 @@ const DeviceDetailView = () => import('@/views/devices/DeviceDetailView.vue')
 const FirmwareStatusView = () => import('@/views/devices/FirmwareStatusView.vue')
 const DeviceDiscoveryView = () => import('@/views/devices/DeviceDiscoveryView.vue')
 const ConfigBackupsView = () => import('@/views/devices/ConfigBackupsView.vue')
+const NetworkMapView = () => import('@/views/topology/NetworkMapView.vue')
 const AutomationsView = () => import('@/views/automations/AutomationsView.vue')
 const AutomationBuilderView = () => import('@/views/automations/AutomationBuilderView.vue')
 const SettingsView = () => import('@/views/settings/SettingsView.vue')
@@ -53,6 +54,16 @@ const routes = [
       requiresAuth: true,
       title: 'Devices',
       icon: 'mdi-router-wireless'
+    }
+  },
+  {
+    path: '/map',
+    name: 'NetworkMap',
+    component: NetworkMapView,
+    meta: {
+      requiresAuth: true,
+      title: 'Network Map',
+      icon: 'mdi-graph-outline'
     }
   },
   {

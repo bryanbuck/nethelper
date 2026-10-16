@@ -21,6 +21,7 @@ const ROUTERS = {
   discovery: require('../../src/routes/discovery.routes'),
   backups: require('../../src/routes/backup.routes'),
   users: require('../../src/routes/users.routes'),
+  topology: require('../../src/routes/topology.routes'),
 };
 
 // Reads that are still restricted, because the response carries secrets or

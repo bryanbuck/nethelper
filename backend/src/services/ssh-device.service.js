@@ -1,6 +1,10 @@
 const { Client } = require('ssh2');
 const { detectPlatform } = require('../utils/device-platform');
 const { debugLog, Services } = require('../utils/debug-logger');
+const aosSTopology = require('./topology/parsers/aos-s');
+const junosTopology = require('./topology/parsers/junos');
+const iosTopology = require('./topology/parsers/ios');
+const { normalizePortName } = require('./topology/neighbor');
 
 const logger = debugLog.createLogger(Services.DEVICE);
 
@@ -21,11 +25,15 @@ const logger = debugLog.createLogger(Services.DEVICE);
 // `config` returns in one shot. `config`/`version` are the data commands.
 // `configHeader` (optional) matches a banner line the CLI prints before the
 // config, which is dropped so the text can be pasted back.
+// `neighbors` (optional) lists the LLDP/CDP commands and parsers behind
+// getNeighbors(); `identity` reads the device's own LLDP chassis id/name.
 const PLATFORM_PROFILES = {
   'aos-s': {
     paging: 'no page',
     config: 'show running-config',
     version: 'show version',
+    neighbors: [{ command: 'show lldp info remote-device detail', parse: aosSTopology.parseRemoteDetail }],
+    identity: { command: 'show lldp info local-device', parse: aosSTopology.parseLocalDevice },
   },
   'aos-cx': {
     paging: 'no page',
@@ -40,12 +48,19 @@ const PLATFORM_PROFILES = {
     paging: 'set cli screen-length 0',
     config: 'show configuration | display set',
     version: 'show version',
+    neighbors: [{ command: 'show lldp neighbors', parse: junosTopology.parseLldpNeighborsCli }],
+    identity: { command: 'show lldp local-information', parse: junosTopology.parseLocalInfoCli },
   },
-  // Cisco IOS / IOS-XE (Catalyst)
+  // Cisco IOS / IOS-XE (Catalyst). CDP is on by default, LLDP often is not;
+  // read both and keep whichever answers.
   'ios-xe': {
     paging: 'terminal length 0',
     config: 'show running-config',
     version: 'show version',
+    neighbors: [
+      { command: 'show cdp neighbors detail', parse: iosTopology.parseCdpDetail },
+      { command: 'show lldp neighbors detail', parse: iosTopology.parseLldpDetail },
+    ],
   },
   // Generic IOS-like fallback (CLI gear we could not classify)
   generic: {
@@ -287,6 +302,39 @@ class SshDeviceService {
       throw new Error('SSH returned an empty running configuration');
     }
     return config;
+  }
+
+  /**
+   * LLDP/CDP neighbors over the CLI, plus the device's own LLDP identity when
+   * the profile can read it. One SSH session for all of it.
+   * @returns {Promise<{neighbors: Object[], identity: {chassisId, sysName}}>}
+   */
+  async getNeighbors(device, credentials) {
+    const profile = this.resolveProfile(device);
+    if (!profile.neighbors) {
+      throw new Error('No neighbor commands for this CLI platform');
+    }
+    const commands = profile.neighbors.map((n, i) => ({ label: `n${i}`, command: n.command }));
+    if (profile.identity) commands.push({ label: 'identity', command: profile.identity.command });
+    const outputs = await this.runCommands(device, credentials, commands);
+
+    // The same neighbor can appear in both CDP and LLDP: keep the first seen
+    // per local port + remote name (CDP is listed first, and names the far end
+    // the way Cisco does).
+    const seen = new Set();
+    const neighbors = [];
+    profile.neighbors.forEach((n, i) => {
+      for (const neighbor of n.parse(outputs[`n${i}`] || '')) {
+        const key = `${normalizePortName(neighbor.localPort)}|${(neighbor.sysName || neighbor.chassisId).toLowerCase().split('.')[0]}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        neighbors.push(neighbor);
+      }
+    });
+    const identity = profile.identity
+      ? profile.identity.parse(outputs.identity || '')
+      : { chassisId: null, sysName: null };
+    return { neighbors, identity };
   }
 
   /**

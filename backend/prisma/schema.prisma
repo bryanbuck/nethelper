@@ -202,6 +202,9 @@ model Device {
   executions      Execution[]
   deviceGroups    DeviceGroup[]
   events          DeviceEvent[]
+  links           DeviceLink[]
+  topologyState   DeviceTopologyState?
+  topologyChanges TopologyChange[]
 
   @@index([apiCredentialId])
   @@index([cloudIntegrationId])
@@ -225,6 +228,73 @@ model DeviceEvent {
   @@index([deviceId, occurredAt])
   @@index([type])
   @@index([occurredAt])
+}
+
+// A neighbor one device reports on one of its ports (LLDP or CDP), as of the
+// last successful topology collection (services/topology/). The far end is
+// resolved to a Device or DiscoveredDevice when the graph is built, not stored,
+// so a device imported later links up without a recollection.
+model DeviceLink {
+  id                 String   @id @default(uuid())
+  device             Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId           String
+  localPort          String
+  remoteChassisId    String   // as the neighbor advertised it (MAC, IP or name)
+  remotePortId       String
+  remoteSysName      String?
+  remoteSysDesc      String?
+  remotePortDesc     String?
+  remoteMgmtIp       String?
+  remoteMac          String?  // normalized MAC: the chassis id when it is one, else the port MAC
+  remoteCapabilities Json     @default("[]") // normalized: bridge | router | wlan-ap | telephone | station | ...
+  source             String   // lldp | cdp | cloud
+  active             Boolean  @default(true) // false once a successful collection no longer sees it
+  firstSeen          DateTime @default(now())
+  lastSeen           DateTime @default(now())
+
+  @@unique([deviceId, localPort, remoteChassisId, remotePortId])
+  @@index([deviceId, active])
+  @@index([remoteMac])
+}
+
+// Per-device topology collection status, plus the device's own LLDP identity
+// so the far end's view of it can be matched back to this row.
+model DeviceTopologyState {
+  device        Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId      String    @id
+  status        String    // ok | skipped (needs IP/credential) | unsupported (no source for the platform) | failed
+  reason        String?   // why it was skipped, unsupported or failed
+  source        String?   // transport that answered: AOS-CX REST, Junos NETCONF, SSH
+  chassisId     String?   // normalized MAC, when the device advertises one
+  sysName       String?
+  neighborCount Int       @default(0)
+  collectedAt   DateTime  @default(now())
+  lastSuccessAt DateTime?
+}
+
+// A link appearing, disappearing or changing between collections. Pruned after
+// TOPOLOGY_CHANGE_RETENTION_DAYS. Not written for a device's first collection.
+model TopologyChange {
+  id         String   @id @default(uuid())
+  device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId   String
+  type       String   // link.added | link.removed | link.changed
+  localPort  String?
+  data       Json     @default("{}")
+  occurredAt DateTime @default(now())
+
+  @@index([deviceId, occurredAt])
+  @@index([occurredAt])
+}
+
+// Saved node positions for the Network Map, shared by everyone. scope is "all"
+// or "site:<location>". updatedBy is a plain user id (no relation), so
+// deleting a user leaves layouts alone.
+model MapLayout {
+  scope     String   @id
+  positions Json     @default("{}") // { "<nodeKey>": { "x": 0, "y": 0 } }
+  updatedBy String?
+  updatedAt DateTime @updatedAt
 }
 
 model DeviceGroup {
@@ -362,6 +432,7 @@ model DiscoveredDevice {
   scan            DiscoveryScan          @relation(fields: [scanId], references: [id], onDelete: Cascade)
   scanId          String
   ipAddress       String
+  subnet          String?                // CIDR of the sweep that found it (null on older scans)
   macAddress      String?
   vendor          String?                // OUI vendor name
   hostname        String?

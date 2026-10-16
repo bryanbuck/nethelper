@@ -72,6 +72,12 @@ const schema = Joi.object({
   LIVE_VIEW_POLL_INTERVAL: Joi.number().integer().min(5000).default(15000),
   LIVE_MAX_CONNECTIONS: Joi.number().integer().min(1).default(200),
   DEVICE_EVENT_RETENTION_DAYS: Joi.number().integer().min(1).default(30),
+
+  // Network Map neighbor collection (services/topology/). Interval in milliseconds.
+  TOPOLOGY_ENABLED: Joi.string().valid('true', 'false').default('true'),
+  TOPOLOGY_INTERVAL: Joi.number().integer().min(300000).default(21600000),
+  TOPOLOGY_CONCURRENCY: Joi.number().integer().min(1).max(32).default(4),
+  TOPOLOGY_CHANGE_RETENTION_DAYS: Joi.number().integer().min(1).default(90),
 });
 
 function secretProblems(env) {

@@ -101,6 +101,15 @@ Production writes JSON logs to stdout. Values under secret-looking keys (passwor
 | `LIVE_MAX_CONNECTIONS` | `200` | Devices watched at once per backend process. |
 | `DEVICE_EVENT_RETENTION_DAYS` | `30` | Live-state events older than this are deleted daily. |
 
+### Network Map (topology)
+
+| Variable | Default | Notes |
+|---|---|---|
+| `TOPOLOGY_ENABLED` | `true` | Scheduled LLDP/CDP neighbor collection. "Refresh topology" on the map works either way. |
+| `TOPOLOGY_INTERVAL` | `21600000` | Milliseconds between scheduled collections (6 hours; minimum 300000). |
+| `TOPOLOGY_CONCURRENCY` | `4` | Devices read at once. Each holds one session on its device while it is read. |
+| `TOPOLOGY_CHANGE_RETENTION_DAYS` | `90` | Link changes older than this, and links not seen for this long, are deleted after each collection. |
+
 ### Config backups
 
 | Variable | Default | Notes |

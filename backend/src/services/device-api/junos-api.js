@@ -1,5 +1,6 @@
 const BaseDeviceAPI = require('./base-device-api');
 const NetconfClient = require('./netconf-client');
+const junosTopology = require('../topology/parsers/junos');
 const logger = require('../../utils/logger');
 
 /**
@@ -144,6 +145,24 @@ class JunosAPI extends BaseDeviceAPI {
         throw new Error('NETCONF returned an empty configuration');
       }
       return config;
+    });
+  }
+
+  /**
+   * LLDP neighbors plus this device's own LLDP identity, in one session.
+   * @returns {Promise<{neighbors: Object[], identity: {chassisId, sysName}}>}
+   */
+  async getLldpTopology() {
+    return this.withSession(async (client) => {
+      const neighbors = junosTopology.parseLldpNeighborsXml(await client.rpc('<get-lldp-neighbors-information/>'));
+      let identity = { chassisId: null, sysName: null };
+      try {
+        identity = junosTopology.parseLocalInfoXml(await client.rpc('<get-lldp-local-info/>'));
+      } catch (error) {
+        // Identity only improves matching; the neighbor table is what matters.
+        logger.debug(`Junos ${this.device.name}: no LLDP local info (${error.message})`);
+      }
+      return { neighbors, identity };
     });
   }
 

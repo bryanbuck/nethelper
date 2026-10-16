@@ -104,6 +104,10 @@
         <v-icon start icon="mdi-access-point" />
         Live
       </v-tab>
+      <v-tab value="neighbors">
+        <v-icon start icon="mdi-lan" />
+        Neighbors
+      </v-tab>
     </v-tabs>
 
     <!-- Loading State -->
@@ -135,6 +139,9 @@
 
     <!-- Live port/PoE state; subscribes only while this tab is open -->
     <DeviceLivePanel v-else-if="device && tab === 'live'" :device="device" />
+
+    <!-- LLDP/CDP neighbors (Network Map data for this device) -->
+    <DeviceNeighborsPanel v-else-if="device && tab === 'neighbors'" :device="device" />
 
     <!-- Device Content -->
     <template v-else-if="device">
@@ -643,6 +650,7 @@ import { useNotificationsStore } from '@/stores/notifications'
 import { formatDistanceToNow, format, fromUnixTime } from 'date-fns'
 import DeviceConnectionTest from '@/components/devices/DeviceConnectionTest.vue'
 import DeviceLivePanel from '@/components/devices/DeviceLivePanel.vue'
+import DeviceNeighborsPanel from '@/components/devices/DeviceNeighborsPanel.vue'
 import deviceApiService from '@/services/deviceApi.service'
 import { cloudProviderLabel } from '@/models/vendors'
 
@@ -658,9 +666,10 @@ const testingConnection = ref(false)
 const lastTestCentralStatus = ref(null)
 
 // Selected tab, kept in the URL (?tab=live) so a live view can be linked.
+const TABS = ['live', 'neighbors']
 const tab = computed({
-  get: () => (route.query.tab === 'live' ? 'live' : 'overview'),
-  set: (value) => router.replace({ query: { ...route.query, tab: value === 'live' ? 'live' : undefined } }),
+  get: () => (TABS.includes(route.query.tab) ? route.query.tab : 'overview'),
+  set: (value) => router.replace({ query: { ...route.query, tab: TABS.includes(value) ? value : undefined } }),
 })
 
 // Connection test dialog state

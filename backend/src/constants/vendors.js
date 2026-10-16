@@ -152,32 +152,43 @@ const CLOUD_PROVIDERS = {
  * `live` is read-only and never uses the cloud plane: a cloud-managed device
  * is still watched over its local API when it has an IP and a device
  * credential (see transport-router.js).
+ *
+ * `topology` (LLDP/CDP neighbor tables, services/topology/) is read-only too.
+ * A cloud-managed device is read over its local API first when it has an IP,
+ * then through its provider, never over SSH. Unclassified devices get nothing:
+ * guessing a CLI dialect to read a neighbor table is worse than "unsupported".
  */
 const TRANSPORT_MATRIX = {
-  'aruba/aos-cx': { config: ['device-rest'], test: ['device-rest'], poll: ['device-rest'], live: ['device-rest'] },
-  'aruba/aos-s': { config: ['ssh'], test: ['ssh'], poll: ['ssh'], live: [] },
+  'aruba/aos-cx': {
+    config: ['device-rest'], test: ['device-rest'], poll: ['device-rest'], live: ['device-rest'], topology: ['device-rest'],
+  },
+  'aruba/aos-s': { config: ['ssh'], test: ['ssh'], poll: ['ssh'], live: [], topology: ['ssh'] },
   // Junos: NETCONF (the 'device-rest' slot, served by JunosAPI) is preferred —
   // framed, structured, no CLI screen-scraping. It is NOT enabled by default on
   // Junos, so SSH follows as a fallback: a device without
   // `set system services netconf ssh` authenticates and then refuses the
   // subsystem, and the router retries over the CLI rather than failing.
   'juniper/junos': {
-    config: ['device-rest', 'ssh'], test: ['device-rest', 'ssh'], poll: ['device-rest', 'ssh'], live: [],
+    config: ['device-rest', 'ssh'],
+    test: ['device-rest', 'ssh'],
+    poll: ['device-rest', 'ssh'],
+    live: [],
+    topology: ['device-rest', 'ssh'],
   },
   // Cisco Catalyst — Phase 4. Direct SSH uses the ios-xe CLI profile; not yet
-  // validated on hardware.
-  'cisco/ios-xe': { config: ['ssh'], test: ['ssh'], poll: ['ssh'], live: [] },
+  // validated on hardware. Topology reads CDP and LLDP.
+  'cisco/ios-xe': { config: ['ssh'], test: ['ssh'], poll: ['ssh'], live: [], topology: ['ssh'] },
   // Meraki is cloud-only (Phase 3, not implemented). No direct transports, so a
   // Meraki row marked "direct" reports "no transport" instead of trying SSH.
-  'cisco/meraki': { config: [], test: [], poll: [], live: [] },
+  'cisco/meraki': { config: [], test: [], poll: [], live: [], topology: [] },
 };
 
 // Fallback rows for devices without a matrix entry (legacy/unclassified).
 const TRANSPORT_FALLBACKS = {
   // Unclassified switch: REST for tests (legacy CX default), SSH otherwise.
-  'unknown-switch': { config: ['ssh'], test: ['device-rest'], poll: ['ssh'], live: [] },
+  'unknown-switch': { config: ['ssh'], test: ['device-rest'], poll: ['ssh'], live: [], topology: [] },
   // APs, gateways, everything else without a device REST API.
-  default: { config: ['ssh'], test: ['ssh'], poll: ['ssh'], live: [] },
+  default: { config: ['ssh'], test: ['ssh'], poll: ['ssh'], live: [], topology: [] },
 };
 
 module.exports = {

@@ -372,139 +372,12 @@
     </v-dialog>
 
     <!-- Import Device Dialog -->
-    <v-dialog
+    <ImportDiscoveredDialog
       v-model="showImportDialog"
-      max-width="600px"
-      persistent
-    >
-      <v-card>
-        <v-card-title class="text-h5">
-          Import Discovered Device
-        </v-card-title>
-
-        <v-card-text>
-          <v-container>
-            <v-row>
-              <v-col cols="12">
-                <v-alert
-                  v-if="importTarget?.conflictType"
-                  type="warning"
-                  variant="tonal"
-                  density="compact"
-                >
-                  This device conflicts with an existing inventory device
-                  ({{ formatConflict(importTarget.conflictType) }}).
-                  Enable "Update existing device" below to merge the scanned
-                  IP/MAC into the existing record instead of creating a new one.
-                </v-alert>
-
-                <v-alert
-                  v-if="importConflictMessage"
-                  type="warning"
-                  variant="tonal"
-                  density="compact"
-                  class="mt-2"
-                >
-                  {{ importConflictMessage }}
-                </v-alert>
-              </v-col>
-
-              <v-col v-if="importTarget?.conflictType || importConflictMessage" cols="12">
-                <v-checkbox
-                  v-model="importForm.updateExisting"
-                  label="Update existing device (merge scan data)"
-                  color="warning"
-                  hide-details
-                />
-              </v-col>
-
-              <template v-if="!importForm.updateExisting">
-                <v-col cols="12" sm="6">
-                  <v-text-field
-                    v-model="importForm.name"
-                    label="Device Name"
-                    variant="outlined"
-                    :hint="importTarget?.suggestedName ? 'Suggested from scan' : ''"
-                    persistent-hint
-                  />
-                </v-col>
-
-                <v-col cols="12" sm="6">
-                  <v-select
-                    v-model="importForm.type"
-                    label="Device Type"
-                    :items="deviceTypeItems"
-                    item-title="title"
-                    item-value="value"
-                    variant="outlined"
-                    :rules="importTarget?.suggestedType ? [] : [rules.required]"
-                    :hint="importTarget?.suggestedType ? 'Detected from scan' : 'Required (not auto-detected)'"
-                    persistent-hint
-                  />
-                </v-col>
-
-                <v-col cols="12" sm="6">
-                  <v-text-field
-                    v-model="importForm.serial"
-                    label="Serial Number"
-                    variant="outlined"
-                    :hint="serialHint"
-                    persistent-hint
-                  />
-                </v-col>
-
-                <v-col cols="12" sm="6">
-                  <v-text-field
-                    v-model="importForm.model"
-                    label="Model"
-                    variant="outlined"
-                  />
-                </v-col>
-
-                <v-col cols="12">
-                  <v-text-field
-                    v-model="importForm.location"
-                    label="Location"
-                    variant="outlined"
-                  />
-                </v-col>
-              </template>
-
-              <v-col cols="12">
-                <v-list density="compact" class="bg-transparent">
-                  <v-list-item prepend-icon="mdi-ip-network" :title="importTarget?.ipAddress || '—'" subtitle="IP Address" />
-                  <v-list-item prepend-icon="mdi-lan" :title="importTarget?.macAddress || 'Not detected'" subtitle="MAC Address" />
-                  <v-list-item
-                    v-if="importTarget?.centralMatch"
-                    prepend-icon="mdi-cloud-check"
-                    :title="`${importTarget.centralMatch.deviceName || importTarget.centralMatch.serial} (${importTarget.centralMatch.model || 'Unknown model'})`"
-                    subtitle="Aruba Central Match"
-                  />
-                </v-list>
-              </v-col>
-            </v-row>
-          </v-container>
-        </v-card-text>
-
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn
-            variant="text"
-            @click="closeImportDialog"
-          >
-            Cancel
-          </v-btn>
-          <v-btn
-            color="primary"
-            variant="flat"
-            :loading="importing"
-            @click="importDevice"
-          >
-            {{ importForm.updateExisting ? 'Merge Into Existing' : 'Import Device' }}
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+      :target="importTarget"
+      @imported="onImported"
+      @error="(message) => showSnackbar(message, 'error')"
+    />
 
     <!-- Delete Scan Confirmation Dialog -->
     <v-dialog
@@ -566,6 +439,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDiscoveryStore } from '@/stores/discovery'
 import { useWebSocket } from '@/composables/useWebSocket'
+import ImportDiscoveredDialog from '@/components/discovery/ImportDiscoveredDialog.vue'
 
 const authStore = useAuthStore()
 const discoveryStore = useDiscoveryStore()
@@ -579,21 +453,10 @@ const autoDetectSubnets = ref(true)
 const selectedSubnets = ref([])
 const resultsFilter = ref('all')
 const resultsSearch = ref('')
-const importing = ref(false)
 const deleting = ref(false)
 const ignoringId = ref(null)
 const importTarget = ref(null)
-const importConflictMessage = ref('')
 const scanToDelete = ref(null)
-
-const importForm = ref({
-  name: '',
-  type: null,
-  serial: '',
-  model: '',
-  location: '',
-  updateExisting: false
-})
 
 const snackbar = ref({
   show: false,
@@ -605,20 +468,12 @@ const snackbar = ref({
 // Form validation rules
 const cidrPattern = /^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/
 const rules = {
-  required: value => !!value || 'This field is required',
   subnetList: value => {
     if (!value || value.length === 0) return 'Select at least one subnet or enable auto-detect'
     const invalid = value.find(subnet => !cidrPattern.test(subnet))
     return invalid ? `"${invalid}" is not a valid CIDR range (e.g. 192.168.1.0/24)` : true
   }
 }
-
-// Device types (backend values with display labels)
-const deviceTypeItems = [
-  { title: 'Access Point', value: 'access_point' },
-  { title: 'Switch', value: 'switch' },
-  { title: 'Gateway', value: 'gateway' }
-]
 
 // Table headers
 const scanHeaders = [
@@ -674,12 +529,6 @@ const filteredResults = computed(() => {
     return devices.filter(device => device.status === 'new')
   }
   return devices
-})
-
-const serialHint = computed(() => {
-  if (importTarget.value?.centralSerial) return 'Detected from Aruba Central'
-  if (importTarget.value?.macAddress) return 'Defaults to MAC address if left blank'
-  return 'Required (not auto-detected)'
 })
 
 // Formatters
@@ -820,66 +669,17 @@ const deleteScan = async () => {
 
 const openImportDialog = (device) => {
   importTarget.value = device
-  importConflictMessage.value = ''
-  importForm.value = {
-    name: device.suggestedName || device.hostname || device.ipAddress || '',
-    type: device.suggestedType || null,
-    serial: device.centralSerial || '',
-    model: device.centralMatch?.model || '',
-    location: '',
-    updateExisting: false
-  }
   showImportDialog.value = true
 }
 
-const closeImportDialog = () => {
-  showImportDialog.value = false
+const onImported = (response) => {
+  showSnackbar(
+    response.merged
+      ? 'Scan data merged into existing device'
+      : 'Device imported successfully',
+    'success'
+  )
   importTarget.value = null
-  importConflictMessage.value = ''
-  importForm.value = {
-    name: '',
-    type: null,
-    serial: '',
-    model: '',
-    location: '',
-    updateExisting: false
-  }
-}
-
-const importDevice = async () => {
-  if (!importTarget.value) return
-
-  importing.value = true
-  try {
-    const payload = {}
-    if (importForm.value.updateExisting) {
-      payload.updateExisting = true
-    } else {
-      if (importForm.value.name) payload.name = importForm.value.name
-      if (importForm.value.type) payload.type = importForm.value.type
-      if (importForm.value.serial) payload.serial = importForm.value.serial
-      if (importForm.value.model) payload.model = importForm.value.model
-      if (importForm.value.location) payload.location = importForm.value.location
-    }
-
-    const response = await discoveryStore.importDevice(importTarget.value.id, payload)
-    showSnackbar(
-      response.merged
-        ? 'Scan data merged into existing device'
-        : 'Device imported successfully',
-      'success'
-    )
-    closeImportDialog()
-  } catch (error) {
-    if (error.statusCode === 409) {
-      // Conflict - surface the message and offer the merge option
-      importConflictMessage.value = error.userMessage || 'This device conflicts with an existing device.'
-    } else {
-      showSnackbar(error.userMessage || 'Failed to import device', 'error')
-    }
-  } finally {
-    importing.value = false
-  }
 }
 
 const ignoreDevice = async (device) => {

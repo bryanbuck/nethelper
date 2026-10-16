@@ -57,6 +57,7 @@ async function initializeQueues() {
   queues.pingMonitor = createQueue('ping-monitor');
   queues.discovery = createQueue('discovery');
   queues.configBackup = createQueue('config-backup');
+  queues.topology = createQueue('topology');
 
   // Import and initialize job processors
   require('../jobs/automation.job')(queues.automation);
@@ -64,6 +65,7 @@ async function initializeQueues() {
   require('../jobs/ping-monitor.job')(queues.pingMonitor);
   require('../jobs/discovery.job')(queues.discovery);
   require('../jobs/config-backup.job')(queues.configBackup);
+  require('../jobs/topology.job')(queues.topology);
 
   logger.info('All job queues initialized');
 }

@@ -1,0 +1,47 @@
+{
+  "lldp": {
+    "1/1/13": {
+      "14:ab:ec:c2:0e:00,1/1/6": {
+        "chassis_id": "14:ab:ec:c2:0e:00",
+        "mac_addr": "14:ab:ec:c2:0e:24",
+        "port_id": "1/1/6",
+        "neighbor_info": {
+          "chassis_capability_available": "Bridge, Router",
+          "chassis_capability_enabled": "Bridge, Router",
+          "chassis_description": "HPE ANW JL668A  FL.10.16.1006",
+          "chassis_id_subtype": "link_local_addr",
+          "chassis_name": "Sw-CoreB",
+          "chassis_protocol": "LLDP",
+          "mgmt_ip_list": "192.168.255.2",
+          "port_description": "Sw-Studio1",
+          "port_id_subtype": "if_name",
+          "port_pvid": "10",
+          "vlan_id_list": "10,17,18,19,20,21,42,50,51,99"
+        }
+      }
+    },
+    "1/1/4": {
+      "192.168.18.140,042AE270CB4E:P1": {
+        "chassis_id": "192.168.18.140",
+        "mac_addr": "04:2a:e2:70:cb:4e",
+        "port_id": "042AE270CB4E:P1",
+        "neighbor_info": {
+          "chassis_capability_available": "Bridge, Telephone",
+          "chassis_capability_enabled": "Bridge, Telephone",
+          "chassis_description": "Cisco IP Phone 8841, V1, sip88xx.12-8-1-0101-482.loads",
+          "chassis_id_subtype": "addr",
+          "chassis_name": "SEP042AE270CB4E.example.local",
+          "chassis_protocol": "LLDP",
+          "mgmt_ip_list": "192.168.18.140",
+          "port_description": "SW PORT",
+          "port_id_subtype": "local"
+        }
+      }
+    }
+  },
+  "system": {
+    "hostname": "Sw-Studio",
+    "platform_name": "6200",
+    "system_mac": "ec:67:94:d1:a8:00"
+  }
+}

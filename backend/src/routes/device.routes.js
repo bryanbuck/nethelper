@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const deviceController = require('../controllers/device.controller');
+const topologyController = require('../controllers/topology.controller');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
-const { validateDevice, validateDeviceGroup } = require('../middleware/validation.middleware');
+const { validateDevice, validateDeviceGroup, validateUUID } = require('../middleware/validation.middleware');
 
 // All routes require authentication
 router.use(authenticate);
@@ -91,6 +92,9 @@ router.post(
 
 // Live state: recent port/PoE events, and the always-on monitoring toggle
 router.get('/:deviceId/events', deviceController.getDeviceEvents);
+
+// Network Map: this device's LLDP/CDP neighbors
+router.get('/:deviceId/neighbors', validateUUID('deviceId'), topologyController.getDeviceNeighbors);
 
 router.patch(
   '/:deviceId/live-monitoring',
