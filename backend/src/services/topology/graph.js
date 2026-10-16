@@ -12,7 +12,7 @@
  * A→B and B→A become one edge with both port names.
  */
 
-const { normalizeMac } = require('../../utils/mac');
+const { normalizeMac } = require('../../utils/device-key');
 const { normalizePortName } = require('./neighbor');
 
 const TIER = { gateway: 0, switch: 1, access_point: 2 };

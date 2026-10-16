@@ -13,7 +13,7 @@
  *   }
  */
 
-const { normalizeMac } = require('../../utils/mac');
+const { normalizeMac } = require('../../utils/device-key');
 
 const CAPABILITY_WORDS = {
   bridge: 'bridge',

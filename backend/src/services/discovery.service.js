@@ -5,7 +5,7 @@ const { getPrisma } = require('../config/database');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const { getIO } = require('../websocket/socket.handler');
 const logger = require('../utils/logger');
-const { normalizeMac } = require('../utils/mac');
+const { normalizeMac } = require('../utils/device-key');
 
 const execFileAsync = promisify(execFile);
 

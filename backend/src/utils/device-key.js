@@ -17,4 +17,19 @@ function normalizeSerial(serial) {
   return trimmed ? trimmed : null;
 }
 
-module.exports = { deviceStorageKey, normalizeSerial };
+/**
+ * Canonical lower-case colon form (aa:bb:cc:dd:ee:ff), or null if not a MAC.
+ * Accepts the shapes network gear prints: `14:ab:ec:c2:0e:00`, `001a1e-000000`,
+ * `00 1a 1e 00 00 00`, `0011.2233.4455`. Rejects strings that only reach 12 hex
+ * digits once stripped, such as an IPv4 address used as an LLDP chassis id
+ * ("10.100.200.250").
+ */
+function normalizeMac(mac) {
+  if (!mac || typeof mac !== 'string') return null;
+  const hex = mac.toLowerCase().replace(/[^0-9a-f]/g, '');
+  if (hex.length !== 12) return null;
+  if (/[^0-9a-fA-F:.\-\s]/.test(mac) || /\d+\.\d+\.\d+\.\d+/.test(mac)) return null;
+  return hex.match(/.{2}/g).join(':');
+}
+
+module.exports = { deviceStorageKey, normalizeSerial, normalizeMac };

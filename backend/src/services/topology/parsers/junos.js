@@ -7,7 +7,7 @@
  */
 
 const { makeNeighbor } = require('../neighbor');
-const { normalizeMac } = require('../../../utils/mac');
+const { normalizeMac } = require('../../../utils/device-key');
 
 function decode(text) {
   return text

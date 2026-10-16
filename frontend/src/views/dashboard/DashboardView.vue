@@ -173,7 +173,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
 import { useWebSocket } from '@/composables/useWebSocket'
@@ -284,7 +284,8 @@ const quickActions = ref([
 const syncAllDevices = async () => {
   try {
     await devicesStore.syncDevices()
-    showSnackbar('Devices synced successfully', 'success')
+    showSnackbar('Device sync started', 'success')
+    // Results arrive as device:sync:completed (see the watch on lastSyncResult).
   } catch (error) {
     showSnackbar('Failed to sync devices', 'error')
   }
@@ -333,6 +334,11 @@ const startAutoRefresh = () => {
     }
   }, 30000)
 }
+
+// A cloud sync job finished: show its additions now rather than at the next tick.
+watch(() => devicesStore.lastSyncResult, () => {
+  devicesStore.fetchDevices().catch(() => {})
+})
 
 const stopAutoRefresh = () => {
   if (refreshInterval.value) {

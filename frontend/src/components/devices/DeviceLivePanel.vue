@@ -185,7 +185,6 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { format } from 'date-fns'
 import { useLiveStore } from '@/stores/live'
 import { useAuthStore } from '@/stores/auth'
-import { useDevicesStore } from '@/stores/devices'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useWebSocket } from '@/composables/useWebSocket'
 import deviceService from '@/services/device.service'
@@ -195,10 +194,10 @@ import LiveSparkline from '@/components/devices/LiveSparkline.vue'
 const props = defineProps({
   device: { type: Object, required: true },
 })
+const emit = defineEmits(['update'])
 
 const live = useLiveStore()
 const authStore = useAuthStore()
-const devicesStore = useDevicesStore()
 const notifications = useNotificationsStore()
 // Holds the shared socket open while the Live tab is visible.
 useWebSocket()
@@ -324,8 +323,9 @@ function formatTime(at) {
 async function toggleMonitoring(enabled) {
   toggling.value = true
   try {
-    await deviceService.setLiveMonitoring(props.device.id, enabled)
-    devicesStore.updateDeviceLocally(props.device.id, { liveMonitoring: enabled })
+    const response = await deviceService.setLiveMonitoring(props.device.id, enabled)
+    // The parent owns the device object (it may not be the store's copy).
+    emit('update', { liveMonitoring: response?.data?.liveMonitoring ?? enabled })
     notifications.showSuccess(enabled
       ? `Always monitoring ${props.device.name}`
       : `Stopped always-on monitoring of ${props.device.name}`)

@@ -142,6 +142,8 @@ class WebSocketService {
     this.socket.on('device:update', (data) => this.handleDeviceUpdate(data))
     this.socket.on('device:status:update', (data) => this.handleDeviceStatusUpdate(data))
     this.socket.on('device:api:status', (data) => this.handleDeviceApiStatus(data))
+    this.socket.on('device:sync:completed', (data) => this.handleDeviceSyncCompleted(data))
+    this.socket.on('device:sync:failed', (data) => this.handleDeviceSyncFailed(data))
 
     // Automation lifecycle events
     this.socket.on('automation:started', (data) => this.handleAutomationStarted(data))
@@ -239,6 +241,34 @@ class WebSocketService {
 
     } catch (error) {
       console.error('Error handling device status update:', error)
+    }
+  }
+
+  /**
+   * Handle cloud inventory sync completion (the sync runs as a queued job)
+   * @param {Object} data - { created, updated, adopted, total, possibleDuplicates, integrations }
+   */
+  handleDeviceSyncCompleted(data) {
+    try {
+      this.stores.devices.applySyncResult(data)
+      const parts = [`${data.total ?? 0} device(s)`, `${data.created ?? 0} new`]
+      if (data.adopted) parts.push(`${data.adopted} matched to existing devices by MAC`)
+      const failed = (data.integrations || []).filter((i) => i.error)
+      const message = `Cloud sync finished: ${parts.join(', ')}.`
+        + (data.possibleDuplicates ? ` ${data.possibleDuplicates} possible duplicate(s) to review on the Devices page.` : '')
+        + (failed.length ? ` Failed: ${failed.map((i) => i.name).join(', ')}.` : '')
+      if (data.possibleDuplicates || failed.length) this.stores.notifications.showWarning(message, 'Device Sync')
+      else this.stores.notifications.showSuccess(message, 'Device Sync')
+    } catch (error) {
+      console.error('Error handling device sync completed:', error)
+    }
+  }
+
+  handleDeviceSyncFailed(data) {
+    try {
+      this.stores.notifications.showError(`Cloud sync failed: ${data.error || 'Unknown error'}`, 'Device Sync')
+    } catch (error) {
+      console.error('Error handling device sync failed:', error)
     }
   }
 

@@ -25,6 +25,40 @@ class DeviceService {
     }
   }
 
+  /** Groups of devices that look like the same hardware: [{ key, reason, devices }]. */
+  async getDuplicates() {
+    try {
+      const response = await api.get('/devices/duplicates')
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'checking for duplicate devices')
+    }
+  }
+
+  /**
+   * The real serial/MAC for these devices, as the cloud or the device reports
+   * it: { identity: { serial, macAddress, source, label } | null, serialConflict, needsChoice }.
+   * Changes nothing, but contacts the cloud and possibly the device.
+   */
+  async previewMerge(targetId, sourceIds) {
+    try {
+      const response = await api.post('/devices/merge/preview', { targetId, sourceIds })
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'checking the device identity')
+    }
+  }
+
+  /** Fold sourceIds into targetId; the sources are deleted. Returns the merged device. */
+  async mergeDevices(targetId, sourceIds, identityFrom = null) {
+    try {
+      const response = await api.post('/devices/merge', { targetId, sourceIds, identityFrom })
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'merging devices')
+    }
+  }
+
   async getDevices(params = {}) {
     try {
       const response = await api.get('/devices', { params })

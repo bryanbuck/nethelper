@@ -81,8 +81,41 @@
         </v-col>
       </v-row>
       
+      <!-- Likely duplicates (e.g. a device added by hand, then synced from the cloud) -->
+      <v-alert
+        v-if="currentDuplicate"
+        type="warning"
+        variant="tonal"
+        icon="mdi-content-duplicate"
+        class="mb-4"
+      >
+        <div class="font-weight-medium">
+          {{ visibleDuplicates.length === 1 ? 'Possible duplicate device' : `${visibleDuplicates.length} possible duplicate devices` }}
+        </div>
+        <div class="text-body-2">
+          {{ currentDuplicate.devices.map((d) => `"${d.name}"`).join(' and ') }} share
+          {{ currentDuplicate.reason === 'mac' ? 'a MAC address' : `${currentDuplicate.reason === 'name-ip' ? 'a name and ' : ''}IP ${currentDuplicate.devices[0].ipAddress}` }}
+          and are probably the same device.
+        </div>
+        <template #append>
+          <div class="d-flex flex-wrap ga-2">
+            <v-btn v-if="canEdit" variant="tonal" color="warning" size="small" @click="showMergeDialog = true">
+              Review and merge
+            </v-btn>
+            <v-btn variant="text" size="small" @click="dismissDuplicate(currentDuplicate)">Not duplicates</v-btn>
+          </div>
+        </template>
+      </v-alert>
+
       <!-- Device Table -->
-      <DeviceTable @edit-device="handleEditDevice" />
+      <DeviceTable ref="deviceTable" @edit-device="handleEditDevice" />
+
+      <DeviceMergeDialog
+        v-if="currentDuplicate"
+        v-model="showMergeDialog"
+        :devices="currentDuplicate.devices"
+        @merged="onDuplicateMerged"
+      />
     </v-container>
     
     <!-- Add Device Dialog -->
@@ -508,6 +541,8 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+import DeviceMergeDialog from '@/components/devices/DeviceMergeDialog.vue'
 import { useRoute } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
 import { useSettingsStore } from '@/stores/settings'
@@ -519,6 +554,40 @@ const route = useRoute()
 const devicesStore = useDevicesStore()
 const settingsStore = useSettingsStore()
 const { connected, connecting } = useWebSocket()
+const authStore = useAuthStore()
+const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole))
+
+// Possible duplicates, one group at a time. "Not duplicates" is remembered per
+// browser (a convenience; the server re-reports the group elsewhere).
+const DISMISSED_KEY = 'nethelper.dismissedDuplicates'
+const readDismissed = () => {
+  try {
+    return JSON.parse(localStorage.getItem(DISMISSED_KEY) || '[]')
+  } catch {
+    return []
+  }
+}
+const dismissedDuplicates = ref(readDismissed())
+const visibleDuplicates = computed(() =>
+  (devicesStore.duplicateGroups || []).filter((g) => !dismissedDuplicates.value.includes(g.key))
+)
+const currentDuplicate = computed(() => visibleDuplicates.value[0] || null)
+const showMergeDialog = ref(false)
+const deviceTable = ref(null)
+
+const dismissDuplicate = (group) => {
+  dismissedDuplicates.value = [...dismissedDuplicates.value, group.key]
+  try {
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify(dismissedDuplicates.value))
+  } catch {
+    // Storage unavailable: dismissed for this visit only.
+  }
+}
+
+const onDuplicateMerged = () => {
+  showMergeDialog.value = false
+  deviceTable.value?.refreshTable?.()
+}
 
 // Credentials state
 const loadingCredentials = ref(false)
@@ -813,6 +882,7 @@ const handleQueryParams = () => {
 // Initialize
 onMounted(() => {
   handleQueryParams()
+  devicesStore.fetchDuplicates().catch(() => {})
   // Needed by the cloud-integration selector in the add/edit dialogs.
   settingsStore.fetchCloudIntegrations().catch((error) => {
     console.error('Failed to load cloud integrations:', error)

@@ -231,12 +231,14 @@ class CXSwitchAPI extends BaseDeviceAPI {
   async getDeviceInfo() {
     try {
       const response = await this.makeAuthenticatedRequest('GET', '/system');
+      // /system carries no serial number; it lives on the chassis subsystem.
+      const identity = await this.getIdentity().catch(() => null);
 
       return {
         hostname: response.hostname,
         model: response.platform_name,
         version: response.software_version,
-        serialNumber: response.serial_number,
+        serialNumber: identity?.serial || null,
         macAddress: response.system_mac,
         uptime: response.boot_time,
         timezone: response.timezone,
@@ -249,6 +251,19 @@ class CXSwitchAPI extends BaseDeviceAPI {
       });
       throw error;
     }
+  }
+
+  /**
+   * Serial and base MAC from the chassis subsystem's product_info (verified on
+   * a 6200F, ML.10.16: /system has system_mac but no serial). Needs a session.
+   */
+  async getIdentity() {
+    const chassis = await this.makeAuthenticatedRequest('GET', '/system/subsystems/chassis,1?attributes=product_info');
+    const info = chassis?.product_info || {};
+    return {
+      serial: info.serial_number || null,
+      macAddress: info.base_mac_address || null,
+    };
   }
 
   /**

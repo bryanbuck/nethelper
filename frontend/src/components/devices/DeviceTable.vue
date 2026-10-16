@@ -473,6 +473,16 @@
                 </v-list>
               </v-menu>
               <v-btn
+                v-if="canEdit && selectedItems.length >= 2"
+                variant="outlined"
+                size="small"
+                prepend-icon="mdi-call-merge"
+                :loading="mergeLoading"
+                @click="openMerge"
+              >
+                Merge
+              </v-btn>
+              <v-btn
                 variant="outlined"
                 size="small"
                 prepend-icon="mdi-restart"
@@ -500,11 +510,17 @@
         </v-card-actions>
       </v-slide-y-transition>
     </v-card>
+
+    <DeviceMergeDialog
+      v-model="mergeDialog"
+      :devices="mergeCandidates"
+      @merged="onMerged"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
 import { useAuthStore } from '@/stores/auth'
@@ -514,6 +530,7 @@ import { useWebSocket } from '@/composables/useWebSocket'
 import { formatDistanceToNow } from 'date-fns'
 import { debounce } from 'lodash-es'
 import ConnectionStatusBadge from './ConnectionStatusBadge.vue'
+import DeviceMergeDialog from './DeviceMergeDialog.vue'
 import { cloudProviderLabel } from '@/models/vendors'
 
 const router = useRouter()
@@ -756,6 +773,34 @@ const bulkLiveMonitoring = async (enabled) => {
   }
 }
 
+// Merge: the selection can span table pages, so fetch rows not on this one.
+const mergeDialog = ref(false)
+const mergeCandidates = ref([])
+const mergeLoading = ref(false)
+
+const openMerge = async () => {
+  mergeLoading.value = true
+  try {
+    mergeCandidates.value = await Promise.all(selectedItems.value.map(async (id) =>
+      devicesStore.devices.find((d) => d.id === id) || (await deviceService.getDevice(id)).data
+    ))
+    mergeDialog.value = true
+  } catch (err) {
+    notifications.showError(err.userMessage || err.message || 'Could not load the selected devices')
+  } finally {
+    mergeLoading.value = false
+  }
+}
+
+const onMerged = () => {
+  mergeDialog.value = false
+  selectedItems.value = []
+  refreshTable()
+}
+
+// A cloud sync job finished (device:sync:completed): show what it changed.
+watch(() => devicesStore.lastSyncResult, () => refreshTable())
+
 const bulkReboot = () => {
   console.log('Bulk rebooting devices:', selectedItems.value)
 }
@@ -916,6 +961,9 @@ onMounted(() => {
     sortBy: []
   })
 })
+
+// DevicesView refreshes the table after merging from its duplicate prompt.
+defineExpose({ refreshTable })
 </script>
 
 <style scoped>

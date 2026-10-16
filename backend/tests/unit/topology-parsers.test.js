@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { normalizeMac } = require('../../src/utils/mac');
+const { normalizeMac } = require('../../src/utils/device-key');
 const { normalizeCapabilities, normalizePortName } = require('../../src/services/topology/neighbor');
 const cx = require('../../src/services/topology/parsers/aos-cx');
 const junos = require('../../src/services/topology/parsers/junos');

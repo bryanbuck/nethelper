@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
           select: {
             id: true,
             name: true,
-            type: true,
+            category: true,
             active: true,
           },
         },
@@ -129,7 +129,7 @@ router.post('/', authorize('admin', 'operator'), [
           select: {
             id: true,
             name: true,
-            type: true,
+            category: true,
             active: true,
           },
         },
@@ -207,7 +207,7 @@ router.put('/:id', authorize('admin', 'operator'), [
           select: {
             id: true,
             name: true,
-            type: true,
+            category: true,
             active: true,
           },
         },
@@ -280,7 +280,7 @@ router.get('/automation/:automationId', async (req, res) => {
           select: {
             id: true,
             name: true,
-            type: true,
+            category: true,
             active: true,
           },
         },
