@@ -136,7 +136,6 @@ const validationSchema = yup.object({
   password: yup
     .string()
     .required('Password is required')
-    .min(6, 'Password must be at least 6 characters')
 })
 
 // Focus password field when Enter is pressed in email field
