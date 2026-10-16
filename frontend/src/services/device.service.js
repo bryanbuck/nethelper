@@ -2,6 +2,29 @@ import api from './api'
 import { handleApiError } from '@/utils/apiError'
 
 class DeviceService {
+  /**
+   * Recent live-state events for a device, newest first.
+   * @param {Object} params - { limit, before, type }
+   */
+  async getDeviceEvents(id, params = {}) {
+    try {
+      const response = await api.get(`/devices/${id}/events`, { params })
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'fetching device events')
+    }
+  }
+
+  /** Turn always-on live state monitoring on or off. */
+  async setLiveMonitoring(id, enabled) {
+    try {
+      const response = await api.patch(`/devices/${id}/live-monitoring`, { enabled })
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'changing live monitoring')
+    }
+  }
+
   async getDevices(params = {}) {
     try {
       const response = await api.get('/devices', { params })

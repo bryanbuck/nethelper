@@ -656,6 +656,22 @@ class WebSocketService {
   }
 
   /**
+   * Emit and wait for the server's acknowledgement.
+   * @returns {Promise<*>} the ack payload; rejects when not connected or on timeout
+   */
+  request(event, data, timeoutMs = 15000) {
+    if (!this.socket || !this.connected) {
+      return Promise.reject(new Error('Real-time connection is not available'))
+    }
+    return new Promise((resolve, reject) => {
+      this.socket.timeout(timeoutMs).emit(event, data, (err, response) => {
+        if (err) reject(new Error('The server did not respond in time'))
+        else resolve(response)
+      })
+    })
+  }
+
+  /**
    * Add custom event handler
    * @param {string} event - Event name
    * @param {Function} handler - Event handler function

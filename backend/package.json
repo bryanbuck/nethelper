@@ -40,7 +40,8 @@
     "redis": "^4.6.11",
     "socket.io": "^4.6.2",
     "ssh2": "^1.17.0",
-    "winston": "^3.11.0"
+    "winston": "^3.11.0",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "eslint": "^8.55.0",

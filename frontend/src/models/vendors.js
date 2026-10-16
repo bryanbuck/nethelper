@@ -24,13 +24,17 @@ export const VendorInfo = {
   [Vendor.OTHER]: { label: 'Other', icon: 'mdi-help-box', color: 'grey' },
 }
 
-/** Platform (OS family) options, grouped by vendor. */
+/**
+ * Platform (OS family) options, grouped by vendor. liveState says how port/PoE
+ * changes reach NetHelper: 'push' (device notifies on change), 'poll'
+ * (re-read on an interval), or null (no live state yet).
+ */
 export const PlatformInfo = {
-  'aos-cx': { label: 'AOS-CX', vendor: Vendor.ARUBA },
-  'aos-s': { label: 'AOS-S (AOS-Switch)', vendor: Vendor.ARUBA },
-  junos: { label: 'Junos', vendor: Vendor.JUNIPER },
-  'ios-xe': { label: 'IOS / IOS-XE', vendor: Vendor.CISCO },
-  meraki: { label: 'Meraki (cloud-managed)', vendor: Vendor.CISCO },
+  'aos-cx': { label: 'AOS-CX', vendor: Vendor.ARUBA, liveState: 'push' },
+  'aos-s': { label: 'AOS-S (AOS-Switch)', vendor: Vendor.ARUBA, liveState: null },
+  junos: { label: 'Junos', vendor: Vendor.JUNIPER, liveState: null },
+  'ios-xe': { label: 'IOS / IOS-XE', vendor: Vendor.CISCO, liveState: null },
+  meraki: { label: 'Meraki (cloud-managed)', vendor: Vendor.CISCO, liveState: null },
 }
 
 export const CloudProvider = {
@@ -56,6 +60,11 @@ export function platformOptions(vendor = null) {
   return Object.entries(PlatformInfo)
     .filter(([, info]) => !vendor || info.vendor === vendor)
     .map(([value, info]) => ({ value, title: info.label }))
+}
+
+/** Live-state delivery for a platform id: 'push' | 'poll' | null. */
+export function liveStateMode(platform) {
+  return PlatformInfo[platform]?.liveState ?? null
 }
 
 /** Human label for a device's cloud plane, e.g. "Central" / "Mist". */

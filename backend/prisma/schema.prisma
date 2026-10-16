@@ -186,6 +186,11 @@ model Device {
   cloudManagedSource    String?   // switch-rest | central-group | manual (probe source, vocabulary unchanged from 5b)
   cloudManagedCheckedAt DateTime?
 
+  // Always-on live state watch (services/live/state-monitor.service.js):
+  // port link/PoE changes become DeviceEvent rows. Read-only, so it is allowed
+  // on cloud-managed devices too when they have an IP and a device credential.
+  liveMonitoring Boolean       @default(false)
+
   firmwareVersion String?
   lastSeen      DateTime?      // Last seen timestamp (updated by both ping monitoring and Aruba Central sync)
   metadata      Json?
@@ -196,11 +201,30 @@ model Device {
   apiCredential   ApiCredential? @relation("DeviceCredential", fields: [apiCredentialId], references: [id], onDelete: SetNull)
   executions      Execution[]
   deviceGroups    DeviceGroup[]
+  events          DeviceEvent[]
 
   @@index([apiCredentialId])
   @@index([cloudIntegrationId])
   @@index([pingStatus])
   @@index([pingLastChecked])
+}
+
+// A change observed on a device by the live state monitor: port.link.up|down,
+// port.admin.up|down, port.poe.up|down|fault, monitor.connected|disconnected.
+// Raw transitions, not debounced. Pruned after DEVICE_EVENT_RETENTION_DAYS.
+model DeviceEvent {
+  id         String   @id @default(uuid())
+  device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId   String
+  type       String
+  port       String?
+  data       Json     @default("{}")
+  source     String   // push | poll | resync
+  occurredAt DateTime @default(now())
+
+  @@index([deviceId, occurredAt])
+  @@index([type])
+  @@index([occurredAt])
 }
 
 model DeviceGroup {

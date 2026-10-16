@@ -20,12 +20,13 @@ Notes:
 - **Mist is intent-based.** Its "backup" is the device's configuration object, stored as sorted JSON so diffs are meaningful. It isn't a CLI running-config. Mist configures APs through templates, so there's no per-AP config to back up, and NetHelper says so.
 - **Junos NETCONF is off by default.** To use it, enable it with `set system services netconf ssh`. If you don't, NetHelper uses the SSH CLI automatically.
 - **Status** for directly managed devices comes from ICMP ping. For cloud devices it comes from the provider.
+- **Live port/PoE state (AOS-CX only).** The device page's **Live** tab shows each port's link, speed, PoE status and draw, throughput, and CPU/memory while it's open. Turn on **Always monitor** to record link and PoE changes as events even when nobody is watching. The switch pushes changes, so nothing needs configuring on it, and it works on Central-managed switches too (read-only, using the device's linked credentials and IP). Other platforms show "not available yet". Use a dedicated switch account for NetHelper: AOS-CX allows 6 REST sessions per user, and each monitored switch keeps one open.
 
 ### How much has been tested on real equipment
 
 | Area | Evidence so far |
 |---|---|
-| AOS-CX REST (backup, Central-management detection) | Run against live hardware during development |
+| AOS-CX REST (backup, Central-management detection, live state) | Run against a Central-managed 6200F on ML.10.16 (2026-10-15), including PoE and link changes. Backups over REST needed a fix found there: the switch refuses HTTP Basic auth. |
 | Central inventory sync | Built against the live New Central API; two tenants tested side by side |
 | Mist | Only against a mock built from Mist's API documentation |
 | Junos NETCONF / SSH | Only against a mock SSH/NETCONF server |

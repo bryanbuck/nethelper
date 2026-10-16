@@ -89,6 +89,15 @@ class BaseDeviceAPI {
    * @param {string} command - Command to execute
    * @returns {Promise<Object>} Command result
    */
+  /**
+   * Normalized port/PoE state for the live monitor (services/live/).
+   * @returns {Promise<Array>} see services/live/port-state.js for the shape
+   */
+  async getPortState() {
+    const { CapabilityError } = require('../cloud-providers/errors');
+    throw new CapabilityError(`Live port state is not available for ${this.deviceType} devices yet`, { capability: 'live' });
+  }
+
   async executeCommand(_command) {
     throw new Error('executeCommand() is not implemented for this device type');
   }

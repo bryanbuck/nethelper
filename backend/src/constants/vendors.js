@@ -35,12 +35,16 @@ const VENDORS = {
   },
 };
 
+// liveState: how port/PoE state changes reach NetHelper (services/live/).
+//   'push' - the device notifies us on change (AOS-CX REST WebSocket notifications)
+//   'poll' - we re-read state every LIVE_STATE_POLL_INTERVAL and diff
+//   null   - no live state for this platform yet
 const PLATFORMS = {
-  'aos-cx': { id: 'aos-cx', vendor: 'aruba', label: 'AOS-CX', deviceApiType: 'cx_switch', sshProfile: 'aos-cx' },
-  'aos-s': { id: 'aos-s', vendor: 'aruba', label: 'AOS-S (AOS-Switch)', deviceApiType: null, sshProfile: 'aos-s' },
-  junos: { id: 'junos', vendor: 'juniper', label: 'Junos', deviceApiType: 'junos', sshProfile: 'junos' },
-  'ios-xe': { id: 'ios-xe', vendor: 'cisco', label: 'IOS / IOS-XE', deviceApiType: null, sshProfile: 'ios-xe' },
-  meraki: { id: 'meraki', vendor: 'cisco', label: 'Meraki (cloud-managed)', deviceApiType: null, sshProfile: null },
+  'aos-cx': { id: 'aos-cx', vendor: 'aruba', label: 'AOS-CX', deviceApiType: 'cx_switch', sshProfile: 'aos-cx', liveState: 'push' },
+  'aos-s': { id: 'aos-s', vendor: 'aruba', label: 'AOS-S (AOS-Switch)', deviceApiType: null, sshProfile: 'aos-s', liveState: null },
+  junos: { id: 'junos', vendor: 'juniper', label: 'Junos', deviceApiType: 'junos', sshProfile: 'junos', liveState: null },
+  'ios-xe': { id: 'ios-xe', vendor: 'cisco', label: 'IOS / IOS-XE', deviceApiType: null, sshProfile: 'ios-xe', liveState: null },
+  meraki: { id: 'meraki', vendor: 'cisco', label: 'Meraki (cloud-managed)', deviceApiType: null, sshProfile: null, liveState: null },
 };
 
 // Juniper Mist regional clouds (juniper.net "API Endpoints and Global Regions").
@@ -112,31 +116,37 @@ const CLOUD_PROVIDERS = {
  * (handled in transport-router.js), subject to the provider's capabilities.
  *
  * Operations: config (backup pull), test (connection test), poll (firmware /
- * system pollers).
+ * system pollers), live (port/PoE state + live counters, services/live/).
+ *
+ * `live` is read-only and never uses the cloud plane: a cloud-managed device
+ * is still watched over its local API when it has an IP and a device
+ * credential (see transport-router.js).
  */
 const TRANSPORT_MATRIX = {
-  'aruba/aos-cx': { config: ['device-rest'], test: ['device-rest'], poll: ['device-rest'] },
-  'aruba/aos-s': { config: ['ssh'], test: ['ssh'], poll: ['ssh'] },
+  'aruba/aos-cx': { config: ['device-rest'], test: ['device-rest'], poll: ['device-rest'], live: ['device-rest'] },
+  'aruba/aos-s': { config: ['ssh'], test: ['ssh'], poll: ['ssh'], live: [] },
   // Junos: NETCONF (the 'device-rest' slot, served by JunosAPI) is preferred —
   // framed, structured, no CLI screen-scraping. It is NOT enabled by default on
   // Junos, so SSH follows as a fallback: a device without
   // `set system services netconf ssh` authenticates and then refuses the
   // subsystem, and the router retries over the CLI rather than failing.
-  'juniper/junos': { config: ['device-rest', 'ssh'], test: ['device-rest', 'ssh'], poll: ['device-rest', 'ssh'] },
+  'juniper/junos': {
+    config: ['device-rest', 'ssh'], test: ['device-rest', 'ssh'], poll: ['device-rest', 'ssh'], live: [],
+  },
   // Cisco Catalyst — Phase 4. Direct SSH uses the ios-xe CLI profile; not yet
   // validated on hardware.
-  'cisco/ios-xe': { config: ['ssh'], test: ['ssh'], poll: ['ssh'] },
+  'cisco/ios-xe': { config: ['ssh'], test: ['ssh'], poll: ['ssh'], live: [] },
   // Meraki is cloud-only (Phase 3, not implemented). No direct transports, so a
   // Meraki row marked "direct" reports "no transport" instead of trying SSH.
-  'cisco/meraki': { config: [], test: [], poll: [] },
+  'cisco/meraki': { config: [], test: [], poll: [], live: [] },
 };
 
 // Fallback rows for devices without a matrix entry (legacy/unclassified).
 const TRANSPORT_FALLBACKS = {
   // Unclassified switch: REST for tests (legacy CX default), SSH otherwise.
-  'unknown-switch': { config: ['ssh'], test: ['device-rest'], poll: ['ssh'] },
+  'unknown-switch': { config: ['ssh'], test: ['device-rest'], poll: ['ssh'], live: [] },
   // APs, gateways, everything else without a device REST API.
-  default: { config: ['ssh'], test: ['ssh'], poll: ['ssh'] },
+  default: { config: ['ssh'], test: ['ssh'], poll: ['ssh'], live: [] },
 };
 
 module.exports = {

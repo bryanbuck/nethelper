@@ -59,6 +59,19 @@ const schema = Joi.object({
   // Where config backups live. Defaults are under backend/storage/.
   BACKUP_STORAGE_PATH: Joi.string().optional(),
   BACKUP_GIT_REPO_PATH: Joi.string().optional(),
+
+  // Live port/PoE state (services/live/). Intervals in milliseconds.
+  LIVE_MONITOR_ENABLED: Joi.string().valid('true', 'false').default('true'),
+  LIVE_STATE_POLL_INTERVAL: Joi.number().integer().min(10000).default(60000),
+  // Full re-read for push devices. Also keeps the device's REST session from
+  // idling out (an open AOS-CX notification socket does not), so keep it
+  // below the switch's session idle timeout.
+  LIVE_RESYNC_INTERVAL: Joi.number().integer().min(60000).default(600000),
+  // Planned session + stream recycle (AOS-CX has a 480-minute absolute session limit).
+  LIVE_SESSION_MAX_AGE: Joi.number().integer().min(600000).default(21600000),
+  LIVE_VIEW_POLL_INTERVAL: Joi.number().integer().min(5000).default(15000),
+  LIVE_MAX_CONNECTIONS: Joi.number().integer().min(1).default(200),
+  DEVICE_EVENT_RETENTION_DAYS: Joi.number().integer().min(1).default(30),
 });
 
 function secretProblems(env) {

@@ -2,6 +2,14 @@ import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import webSocketService from '@/services/websocket.service'
 
+// The socket is shared app-wide. Each mounted consumer holds it open; it is
+// disconnected only when the last one unmounts, after a grace period so that
+// navigating between two pages that both use it doesn't drop the connection
+// (the old page can unmount before the new one mounts).
+const RELEASE_GRACE_MS = 3000
+let consumers = 0
+let releaseTimer = null
+
 export function useWebSocket() {
   const connected = ref(false)
   const connecting = ref(false)
@@ -60,6 +68,8 @@ export function useWebSocket() {
   }
 
   onMounted(async () => {
+    consumers += 1
+    clearTimeout(releaseTimer)
     await nextTick()
 
     connect()
@@ -73,7 +83,13 @@ export function useWebSocket() {
   })
 
   onUnmounted(() => {
-    disconnect()
+    consumers = Math.max(0, consumers - 1)
+    if (consumers === 0) {
+      clearTimeout(releaseTimer)
+      releaseTimer = setTimeout(() => {
+        if (consumers === 0) disconnect()
+      }, RELEASE_GRACE_MS)
+    }
   })
 
   return {

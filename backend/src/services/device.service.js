@@ -173,6 +173,9 @@ class DeviceService {
 
       const data = { ...updateData };
       if ('serial' in data) data.serial = normalizeSerial(data.serial);
+      // Toggled only via PATCH /devices/:id/live-monitoring, which checks the
+      // device can actually be watched and starts/stops the monitor.
+      delete data.liveMonitoring;
 
       const device = await prisma.device.update({
         where: { id: deviceId },
@@ -183,6 +186,10 @@ class DeviceService {
       });
 
       logger.success('Device updated', { deviceId, changes: Object.keys(updateData) });
+      // A watched device may have a new IP, platform, or credential.
+      require('./live/state-monitor.service').refresh(device).catch((error) => {
+        logger.warn('Live monitor refresh failed', { deviceId, error: error.message });
+      });
       return device;
     } catch (error) {
       logger.error('Update device error', { error: error.message, stack: error.stack });
@@ -194,6 +201,7 @@ class DeviceService {
     try {
       const prisma = getPrisma();
 
+      await require('./live/state-monitor.service').forget(deviceId);
       await prisma.device.delete({
         where: { id: deviceId },
       });

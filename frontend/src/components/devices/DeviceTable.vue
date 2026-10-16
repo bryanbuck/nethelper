@@ -223,7 +223,15 @@
               <v-icon :icon="getDeviceIcon(item.type)" color="white" size="small"></v-icon>
             </v-avatar>
             <div>
-              <div class="font-weight-medium">{{ item.name }}</div>
+              <div class="font-weight-medium">
+                {{ item.name }}
+                <v-tooltip v-if="item.liveMonitoring" location="top">
+                  <template #activator="{ props }">
+                    <v-icon v-bind="props" icon="mdi-access-point" size="x-small" color="primary" class="ml-1" />
+                  </template>
+                  Live monitoring: link and PoE changes are recorded
+                </v-tooltip>
+              </div>
               <div class="text-caption text-medium-emphasis">{{ item.model }}</div>
             </div>
           </div>
@@ -447,6 +455,23 @@
             </div>
             
             <div class="d-flex align-center ga-2">
+              <v-menu v-if="canEdit">
+                <template #activator="{ props }">
+                  <v-btn
+                    v-bind="props"
+                    variant="outlined"
+                    size="small"
+                    prepend-icon="mdi-access-point"
+                    :loading="bulkLiveBusy"
+                  >
+                    Live Monitoring
+                  </v-btn>
+                </template>
+                <v-list density="compact">
+                  <v-list-item prepend-icon="mdi-access-point" title="Turn on" @click="bulkLiveMonitoring(true)" />
+                  <v-list-item prepend-icon="mdi-access-point-off" title="Turn off" @click="bulkLiveMonitoring(false)" />
+                </v-list>
+              </v-menu>
               <v-btn
                 variant="outlined"
                 size="small"
@@ -482,6 +507,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
+import { useAuthStore } from '@/stores/auth'
+import { useNotificationsStore } from '@/stores/notifications'
+import deviceService from '@/services/device.service'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { formatDistanceToNow } from 'date-fns'
 import { debounce } from 'lodash-es'
@@ -699,6 +727,35 @@ const showDeviceInfo = (device) => {
 }
 
 // Bulk actions
+const authStore = useAuthStore()
+const notifications = useNotificationsStore()
+const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole))
+const bulkLiveBusy = ref(false)
+
+// Each device is checked server-side (platform, IP, credential); report the
+// ones that couldn't be changed by name and reason instead of failing silently.
+const bulkLiveMonitoring = async (enabled) => {
+  bulkLiveBusy.value = true
+  const failures = []
+  let changed = 0
+  for (const id of selectedItems.value) {
+    const device = devicesStore.devices.find((d) => d.id === id)
+    try {
+      await deviceService.setLiveMonitoring(id, enabled)
+      devicesStore.updateDeviceLocally(id, { liveMonitoring: enabled })
+      changed += 1
+    } catch (err) {
+      failures.push(`${device?.name || id}: ${err.userMessage || err.message}`)
+    }
+  }
+  bulkLiveBusy.value = false
+  const verb = enabled ? 'on' : 'off'
+  if (changed) notifications.showSuccess(`Live monitoring turned ${verb} for ${changed} device(s)`)
+  if (failures.length) {
+    notifications.showWarning(failures.join('\n'), `${failures.length} device(s) not changed`)
+  }
+}
+
 const bulkReboot = () => {
   console.log('Bulk rebooting devices:', selectedItems.value)
 }

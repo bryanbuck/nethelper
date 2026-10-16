@@ -12,6 +12,7 @@ These files are **point-in-time artifacts** kept for historical reference: task 
 
 | File | What it was | Superseded by |
 |---|---|---|
+| `LIVE_STATE_CX_PROTOCOL_CHECK_2026-10-15.md` | AOS-CX REST/notification behavior observed on hardware before building live state | `services/live/`; `MULTI_VENDOR_ROADMAP.md` §8c |
 | `BACKEND_PROMPT_API_STATUS_TRACKING.md` | Task prompt: API-communication status tracking | Implemented; see device status columns in schema |
 | `BACKEND_PROMPT_ICMP_MONITORING.md` | Task prompt: ICMP ping monitoring | Implemented as `ping-monitor.service.js` |
 | `CENTRAL_ENDPOINT_TRIAGE.md` | Triage of broken Aruba Central endpoints | `aruba-central.provider.js` + `CapabilityError` (roadmap Phase 0) |

@@ -134,9 +134,21 @@ Create a flexible alerting system that can trigger notifications based on:
 
 ---
 
-### 3. Device Performance Dashboards
-**Priority**: Low
-**Status**: Not Started
+### 3. Live Device State & Performance Dashboards
+**Priority**: Medium
+**Status**: 🔨 Started 2026-10-15 (branch `feat/live-state`): live port/PoE state for AOS-CX
+
+Shipped on the branch (design: `MULTI_VENDOR_ROADMAP.md` §8c):
+- ✅ Always-on, opt-in event monitoring (`Device.liveMonitoring`, `DeviceEvent` table, `device:event`), pushed by AOS-CX REST notifications. Works on Central-managed switches (read-only local access). Validated on a 6200F (ML.10.16.1010), including a PoE cut pushed from Central.
+- ✅ Device page **Live** tab: port grid (link, speed, PoE status and draw), per-port throughput from counter deltas, CPU/memory, recent events. Polled only while open.
+- ✅ Fixed on the way (found on hardware): AOS-CX config backups and firmware/system polls over local REST used HTTP Basic auth, which AOS-CX refuses; they now use cookie sessions.
+
+Deferred:
+- ⏳ Automation event triggers consuming `DeviceEvent` (with a settle time: PoE devices bounce their link while booting).
+- ⏳ Live state for Junos (NETCONF), AOS-S and IOS-XE (SSH), via the existing poll mode; needs hardware to validate parsers.
+- ⏳ Optional syslog receiver as a push source for non-CX switches (one line of switch config; needs an inbound UDP port).
+- ⏳ Multi-instance leader lock (Redis) so several backend replicas don't watch the same devices.
+- ⏳ Metric history storage (time-series), for the items below.
 
 Enhanced visualization for device performance metrics:
 - Historical ping response times (graphs/charts)

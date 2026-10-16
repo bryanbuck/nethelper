@@ -202,7 +202,7 @@ CloudProviderFactory.activeProviders()     // all isActive integrations, instant
 - `determineDeviceAPIType(device)` becomes **vendor-field driven**: `(vendor, platform, type)` → api type via the capability matrix in `constants/vendors.js`. The Aruba model regexes survive only in the Phase 0 backfill script and as a last-ditch fallback for `vendor: aruba, platform: null`.
 - The switch grows over phases: `cx_switch` → `junos` (Phase 2, only if a structured client is built) → `catalyst_restconf` (Phase 4, optional).
 - `getSupportedDeviceTypes()` is generated from `constants/vendors.js` — this also fixes the frontend's hardcoded type lists.
-- Cloud-managed devices never reach the factory; the router short-circuits them to their CloudProvider.
+- Cloud-managed devices normally don't reach the factory; the router sends them to their CloudProvider. **Exception: read-only local reads of AOS-CX** (config backup, live state in §8c), which keep working under Central management and are ranked ahead of the cloud plane when the device has an IP and a linked credential.
 
 ### Transport router (`utils/transport-router.js`)
 
@@ -329,6 +329,62 @@ Two consequences matter for the vendor work:
 - **Retention and history are deliberately asymmetric.** `pruneRetention()` drops rows and flat files; Git history is never rewritten (that would require a force-push that breaks clones). The repo is the long-term archive beneath a bounded working index.
 
 The mirror is additive and best-effort throughout: a commit or push failure is logged and the backup still succeeds, because the authoritative bytes are already on disk. A `CapabilityError` still produces no commit at all — an honest "not supported" must not leave a phantom version in history.
+
+## 8c. Live port/PoE state (2026-10-15)
+
+Near-real-time switch state, for people watching a device and as the event
+source for future automation triggers (e.g. "PoE device came online"). The
+hardware findings behind these choices are in
+`archive/LIVE_STATE_CX_PROTOCOL_CHECK_2026-10-15.md`.
+
+**Why not streaming telemetry.** gNMI / Junos JTI / IOS-XE model-driven
+telemetry were considered and rejected for now: each needs per-switch setup
+(enable the service, TLS certificates, sometimes an extra package, and for
+dial-out an inbound listener). NetHelper should work with the access it
+already has. Change-driven state over the existing REST session needs nothing
+configured on the switch.
+
+**Two layers, sized differently:**
+
+1. **Event layer** — `services/live/state-monitor.service.js`. Always on for
+   devices with `Device.liveMonitoring` (opt-in, `PATCH
+   /devices/:id/live-monitoring`), and on demand while someone has the Live
+   tab open. Each port change becomes a `DeviceEvent` row
+   (`port.link.up|down`, `port.admin.up|down`, `port.poe.up|down|fault`,
+   `monitor.connected|disconnected`) and a global `device:event`. Cost per
+   device is one idle socket; traffic only on change. Events are raw
+   transitions, not debounced; consumers apply their own settle time.
+2. **Live view** — `services/live/live-view.service.js`. While at least one
+   browser watches a device, poll counters every `LIVE_VIEW_POLL_INTERVAL`
+   and emit rates, PoE draw, and CPU/memory to `device:live:<id>`. Nothing is
+   stored; there is no metrics history yet.
+
+**Delivery per platform** (`PLATFORMS[*].liveState`, mirrored in the
+frontend; matrix operation `live`):
+
+| Platform | liveState | How |
+|---|---|---|
+| AOS-CX | `push` | REST notification WebSocket, one topic per physical port + PoE wildcard |
+| Junos, AOS-S, IOS-XE, Meraki | `null` | Not yet. The monitor already supports `poll` (re-read + diff every `LIVE_STATE_POLL_INTERVAL`); a platform needs only a `getPortState()` reader. |
+
+`live` is read-only and never uses the cloud plane: a cloud-managed device is
+watched over its local API when it has an IP and a device credential
+(`resolveTransport(device, 'live')`).
+
+**Correctness rules:** every (re)connect takes a full snapshot and diffs it
+against the last, so changes made while disconnected still become events
+(`source: resync`); a skipped per-topic sequence number forces the same
+resync; a periodic resync (`LIVE_RESYNC_INTERVAL`) is the backstop and also
+keeps the REST session from idling out, which an open notification socket
+does not do. Sessions and streams are recycled every `LIVE_SESSION_MAX_AGE`
+(AOS-CX ends sessions after 480 minutes) and immediately when a resync had to
+log in again. One `CXSwitchAPI` instance (one REST session) per device is
+shared by the stream, resyncs, and live-view counter polls; AOS-CX allows 6
+sessions per user.
+
+**Known limits:** single backend instance (replicas would each watch every
+device and record duplicate events; a Redis leader lock is a roadmap item);
+`LIVE_MAX_CONNECTIONS` caps watched devices per process.
 
 ## 9. Risks & open questions
 

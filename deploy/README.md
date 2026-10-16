@@ -224,6 +224,20 @@ The backup rows store absolute file paths. Restore the files to the same locatio
 
 ---
 
+## Device accounts and live monitoring
+
+Give NetHelper its own account on each switch rather than reusing an admin's.
+Live monitoring (the **Always monitor** switch on a device's Live tab) keeps
+one REST session open per monitored switch, and AOS-CX allows only 6 REST
+sessions per user by default; backups and polls open short-lived sessions on
+top of that. Monitoring and backups only read from the switch, so a read-only
+account should be enough; so far it has been tested with a read-write one.
+
+Run **one** backend instance. Each backend process watches every device with
+live monitoring turned on, so two replicas would open duplicate sessions and
+record every event twice. Live-monitoring settings are in
+[`docs/CONFIGURATION.md`](../docs/CONFIGURATION.md#live-portpoe-state).
+
 ## Upgrading
 
 Migrations run automatically on start in both setups. Take a database backup first: migrations are forward-only.

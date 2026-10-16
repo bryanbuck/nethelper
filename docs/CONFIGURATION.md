@@ -89,6 +89,18 @@ Production writes JSON logs to stdout. Values under secret-looking keys (passwor
 | `SSH_CONNECT_TIMEOUT` | `15000` | Milliseconds; SSH and NETCONF. |
 | `SSH_COMMAND_TIMEOUT` | `45000` | Milliseconds; SSH and NETCONF. |
 
+### Live port/PoE state
+
+| Variable | Default | Notes |
+|---|---|---|
+| `LIVE_MONITOR_ENABLED` | `true` | Always-on monitoring of devices with live monitoring turned on. The Live tab works either way. |
+| `LIVE_STATE_POLL_INTERVAL` | `60000` | Milliseconds between state reads for platforms without push. |
+| `LIVE_RESYNC_INTERVAL` | `600000` | Milliseconds between full re-reads of push devices. Also keeps the switch's REST session alive; keep it below the switch's session idle timeout (AOS-CX default 20 minutes). |
+| `LIVE_SESSION_MAX_AGE` | `21600000` | Milliseconds before a device's session and stream are replaced. AOS-CX ends sessions after 480 minutes. |
+| `LIVE_VIEW_POLL_INTERVAL` | `15000` | Milliseconds between counter samples while a Live tab is open (minimum 5000). |
+| `LIVE_MAX_CONNECTIONS` | `200` | Devices watched at once per backend process. |
+| `DEVICE_EVENT_RETENTION_DAYS` | `30` | Live-state events older than this are deleted daily. |
+
 ### Config backups
 
 | Variable | Default | Notes |

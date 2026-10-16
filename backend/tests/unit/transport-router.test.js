@@ -97,3 +97,24 @@ describe('utils/device-platform', () => {
     expect(useSshTransport({ type: 'access_point', vendor: 'aruba' })).toBe(true);
   });
 });
+
+describe('resolveTransport live', () => {
+  const cx = { type: 'switch', vendor: 'aruba', platform: 'aos-cx', ipAddress: '10.0.0.2' };
+
+  test('AOS-CX reads live state over device REST, direct or cloud-managed', () => {
+    expect(resolveTransport({ ...cx, managementMode: 'direct' }, 'live')).toEqual(['device-rest']);
+    // Read-only local watch: the cloud plane is never a live source.
+    expect(resolveTransport({ ...cx, managementMode: 'cloud' }, 'live')).toEqual(['device-rest']);
+  });
+
+  test('a cloud-managed device without an IP has no live transport', () => {
+    expect(resolveTransport({ ...cx, managementMode: 'cloud', ipAddress: null }, 'live')).toEqual([]);
+  });
+
+  test('platforms without live state yet resolve to nothing', () => {
+    for (const platform of ['aos-s', 'ios-xe']) {
+      expect(resolveTransport({ type: 'switch', platform, ipAddress: '10.0.0.3' }, 'live')).toEqual([]);
+    }
+    expect(resolveTransport({ type: 'switch', vendor: 'juniper', platform: 'junos', ipAddress: '10.0.0.4' }, 'live')).toEqual([]);
+  });
+});

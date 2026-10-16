@@ -20,10 +20,10 @@ describe('models/vendors mirrors backend constants/vendors', () => {
     }
   })
 
-  test('platform ids, labels, and vendors', () => {
+  test('platform ids, labels, vendors, and live-state mode', () => {
     expect(sorted(Object.keys(PlatformInfo))).toEqual(sorted(Object.keys(backend.PLATFORMS)))
     for (const [id, info] of Object.entries(backend.PLATFORMS)) {
-      expect(PlatformInfo[id]).toEqual({ label: info.label, vendor: info.vendor })
+      expect(PlatformInfo[id]).toEqual({ label: info.label, vendor: info.vendor, liveState: info.liveState })
     }
   })
 

@@ -20,6 +20,8 @@ const { connectDatabase, disconnectDatabase } = require('./src/config/database')
 const { connectRedis, disconnectRedis } = require('./src/config/redis');
 const { initializeQueues, closeQueues } = require('./src/config/bull');
 const pingMonitorService = require('./src/services/ping-monitor.service');
+const stateMonitorService = require('./src/services/live/state-monitor.service');
+const liveViewService = require('./src/services/live/live-view.service');
 const { version } = require('./package.json');
 
 const PORT = process.env.PORT || 3000;
@@ -56,6 +58,12 @@ async function startServer() {
     pingMonitorService.startMonitoring();
     logger.info('Ping monitoring service started');
 
+    // Live port/PoE state for devices with liveMonitoring on. Connects are
+    // staggered in the background; a slow switch doesn't delay startup.
+    stateMonitorService.start().catch((error) => {
+      logger.error(`Live state monitoring failed to start: ${error.message}`);
+    });
+
     // Start server
     server.listen(PORT, BIND_ADDRESS, () => {
       logger.info(`NetHelper ${version} listening on ${BIND_ADDRESS}:${PORT} in ${process.env.NODE_ENV} mode`);
@@ -77,6 +85,8 @@ async function startServer() {
       }, SHUTDOWN_TIMEOUT_MS).unref();
 
       pingMonitorService.stopMonitoring();
+      await liveViewService.stop();
+      await stateMonitorService.stop(); // logs out of device sessions
       // io.close() disconnects WebSocket clients and closes the HTTP server;
       // plain server.close() would wait on those long-lived connections.
       await new Promise((resolve) => io.close(() => resolve()));

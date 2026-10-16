@@ -1,0 +1,382 @@
+[
+  {
+    "atSeconds": 0.3,
+    "frame": {
+      "type": "success",
+      "data": [
+        {
+          "topicname": "/rest/v10.16/system/interfaces?attributes=link_state,admin_state,link_speed&depth=1",
+          "resources": [
+            {
+              "operation": "",
+              "uri": "/rest/v10.16/system/interfaces/1%2F1%2F2",
+              "values": {}
+            },
+            {
+              "operation": "",
+              "uri": "/rest/v10.16/system/interfaces/1%2F1%2F13",
+              "values": {}
+            }
+          ],
+          "subscription_id": "14418904900675240508",
+          "sequence_number": 1
+        },
+        {
+          "topicname": "/rest/v10.16/system/interfaces/*/poe_interface?attributes=status,pd_type&depth=1",
+          "resources": [
+            {
+              "operation": "",
+              "uri": "/rest/v10.16/system/interfaces/1%2F1%2F4/poe_interface",
+              "values": {
+                "pd_type": "Type1",
+                "status": {
+                  "pair-a": {
+                    "powering_status": "searching"
+                  },
+                  "pair-b": {
+                    "powering_status": "searching"
+                  },
+                  "port": {
+                    "powering_status": "delivering"
+                  }
+                }
+              }
+            },
+            {
+              "operation": "",
+              "uri": "/rest/v10.16/system/interfaces/1%2F1%2F8/poe_interface",
+              "values": {
+                "pd_type": null,
+                "status": {
+                  "pair-a": {
+                    "powering_status": "searching"
+                  },
+                  "pair-b": {
+                    "powering_status": "searching"
+                  },
+                  "port": {
+                    "powering_status": "searching"
+                  }
+                }
+              }
+            }
+          ],
+          "subscription_id": "14418904900675240508",
+          "sequence_number": 1
+        },
+        {
+          "topicname": "/rest/v10.16/system/interfaces/1%2F1%2F4?attributes=link_state,admin_state,link_speed",
+          "resources": [
+            {
+              "operation": "",
+              "uri": "/rest/v10.16/system/interfaces/1%2F1%2F4",
+              "values": {
+                "admin_state": "up",
+                "link_speed": 1000000000,
+                "link_state": "up",
+                "name": "1/1/4"
+              }
+            }
+          ],
+          "subscription_id": "14418904900675240508",
+          "sequence_number": 1
+        }
+      ],
+      "subscriber_name": "6il5thr0xccl",
+      "code": 201
+    }
+  },
+  {
+    "atSeconds": 222.9,
+    "frame": {
+      "type": "notification",
+      "data": [
+        {
+          "topicname": "/rest/v10.16/system/interfaces/*/poe_interface?attributes=status,pd_type&depth=1",
+          "resources": [
+            {
+              "operation": "modified",
+              "uri": "/rest/v10.16/system/interfaces/1%2F1%2F4/poe_interface",
+              "values": {
+                "pd_type": null
+              }
+            }
+          ],
+          "subscription_id": "14418904900675240508",
+          "sequence_number": 2
+        }
+      ],
+      "code": 200
+    }
+  },
+  {
+    "atSeconds": 222.9,
+    "frame": {
+      "type": "notification",
+      "data": [
+        {
+          "topicname": "/rest/v10.16/system/interfaces/*/poe_interface?attributes=status,pd_type&depth=1",
+          "resources": [
+            {
+              "operation": "modified",
+              "uri": "/rest/v10.16/system/interfaces/1%2F1%2F4/poe_interface",
+              "values": {
+                "status": {
+                  "pair-a": {
+                    "powering_status": "disabled"
+                  },
+                  "pair-b": {
+                    "powering_status": "disabled"
+                  },
+                  "port": {
+                    "powering_status": "disabled"
+                  }
+                }
+              }
+            }
+          ],
+          "subscription_id": "14418904900675240508",
+          "sequence_number": 3
+        }
+      ],
+      "code": 200
+    }
+  },
+  {
+    "atSeconds": 223.7,
+    "frame": {
+      "type": "notification",
+      "data": [
+        {
+          "topicname": "/rest/v10.16/system/interfaces?attributes=link_state,admin_state,link_speed&depth=1",
+          "resources": [
+            {
+              "operation": "modified",
+              "uri": "/rest/v10.16/system/interfaces/1%2F1%2F4",
+              "values": {}
+            }
+          ],
+          "subscription_id": "14418904900675240508",
+          "sequence_number": 2
+        },
+        {
+          "topicname": "/rest/v10.16/system/interfaces/1%2F1%2F4?attributes=link_state,admin_state,link_speed",
+          "resources": [
+            {
+              "operation": "modified",
+              "uri": "/rest/v10.16/system/interfaces/1%2F1%2F4",
+              "values": {
+                "admin_state": "down",
+                "link_speed": 0,
+                "link_state": "down"
+              }
+            }
+          ],
+          "subscription_id": "14418904900675240508",
+          "sequence_number": 2
+        }
+      ],
+      "code": 200
+    }
+  },
+  {
+    "atSeconds": 318.3,
+    "frame": {
+      "type": "notification",
+      "data": [
+        {
+          "topicname": "/rest/v10.16/system/interfaces/*/poe_interface?attributes=status,pd_type&depth=1",
+          "resources": [
+            {
+              "operation": "modified",
+              "uri": "/rest/v10.16/system/interfaces/1%2F1%2F4/poe_interface",
+              "values": {
+                "status": {
+                  "pair-a": {
+                    "powering_status": "searching"
+                  },
+                  "pair-b": {
+                    "powering_status": "searching"
+                  },
+                  "port": {
+                    "powering_status": "searching"
+                  }
+                }
+              }
+            }
+          ],
+          "subscription_id": "14418904900675240508",
+          "sequence_number": 4
+        }
+      ],
+      "code": 200
+    }
+  },
+  {
+    "atSeconds": 318.8,
+    "frame": {
+      "type": "notification",
+      "data": [
+        {
+          "topicname": "/rest/v10.16/system/interfaces/*/poe_interface?attributes=status,pd_type&depth=1",
+          "resources": [
+            {
+              "operation": "modified",
+              "uri": "/rest/v10.16/system/interfaces/1%2F1%2F4/poe_interface",
+              "values": {
+                "pd_type": "Type1"
+              }
+            }
+          ],
+          "subscription_id": "14418904900675240508",
+          "sequence_number": 5
+        }
+      ],
+      "code": 200
+    }
+  },
+  {
+    "atSeconds": 318.8,
+    "frame": {
+      "type": "notification",
+      "data": [
+        {
+          "topicname": "/rest/v10.16/system/interfaces/*/poe_interface?attributes=status,pd_type&depth=1",
+          "resources": [
+            {
+              "operation": "modified",
+              "uri": "/rest/v10.16/system/interfaces/1%2F1%2F4/poe_interface",
+              "values": {
+                "status": {
+                  "pair-a": {
+                    "powering_status": "disabled"
+                  },
+                  "pair-b": {
+                    "powering_status": "disabled"
+                  },
+                  "port": {
+                    "powering_status": "delivering"
+                  }
+                }
+              }
+            }
+          ],
+          "subscription_id": "14418904900675240508",
+          "sequence_number": 6
+        }
+      ],
+      "code": 200
+    }
+  },
+  {
+    "atSeconds": 326.4,
+    "frame": {
+      "type": "notification",
+      "data": [
+        {
+          "topicname": "/rest/v10.16/system/interfaces?attributes=link_state,admin_state,link_speed&depth=1",
+          "resources": [
+            {
+              "operation": "modified",
+              "uri": "/rest/v10.16/system/interfaces/1%2F1%2F4",
+              "values": {}
+            }
+          ],
+          "subscription_id": "14418904900675240508",
+          "sequence_number": 3
+        },
+        {
+          "topicname": "/rest/v10.16/system/interfaces/1%2F1%2F4?attributes=link_state,admin_state,link_speed",
+          "resources": [
+            {
+              "operation": "modified",
+              "uri": "/rest/v10.16/system/interfaces/1%2F1%2F4",
+              "values": {
+                "admin_state": "up",
+                "link_speed": 1000000000,
+                "link_state": "up"
+              }
+            }
+          ],
+          "subscription_id": "14418904900675240508",
+          "sequence_number": 3
+        }
+      ],
+      "code": 200
+    }
+  },
+  {
+    "atSeconds": 347.8,
+    "frame": {
+      "type": "notification",
+      "data": [
+        {
+          "topicname": "/rest/v10.16/system/interfaces?attributes=link_state,admin_state,link_speed&depth=1",
+          "resources": [
+            {
+              "operation": "modified",
+              "uri": "/rest/v10.16/system/interfaces/1%2F1%2F4",
+              "values": {}
+            }
+          ],
+          "subscription_id": "14418904900675240508",
+          "sequence_number": 4
+        },
+        {
+          "topicname": "/rest/v10.16/system/interfaces/1%2F1%2F4?attributes=link_state,admin_state,link_speed",
+          "resources": [
+            {
+              "operation": "modified",
+              "uri": "/rest/v10.16/system/interfaces/1%2F1%2F4",
+              "values": {
+                "admin_state": "down",
+                "link_speed": 0,
+                "link_state": "down"
+              }
+            }
+          ],
+          "subscription_id": "14418904900675240508",
+          "sequence_number": 4
+        }
+      ],
+      "code": 200
+    }
+  },
+  {
+    "atSeconds": 350.9,
+    "frame": {
+      "type": "notification",
+      "data": [
+        {
+          "topicname": "/rest/v10.16/system/interfaces?attributes=link_state,admin_state,link_speed&depth=1",
+          "resources": [
+            {
+              "operation": "modified",
+              "uri": "/rest/v10.16/system/interfaces/1%2F1%2F4",
+              "values": {}
+            }
+          ],
+          "subscription_id": "14418904900675240508",
+          "sequence_number": 5
+        },
+        {
+          "topicname": "/rest/v10.16/system/interfaces/1%2F1%2F4?attributes=link_state,admin_state,link_speed",
+          "resources": [
+            {
+              "operation": "modified",
+              "uri": "/rest/v10.16/system/interfaces/1%2F1%2F4",
+              "values": {
+                "admin_state": "up",
+                "link_speed": 1000000000,
+                "link_state": "up"
+              }
+            }
+          ],
+          "subscription_id": "14418904900675240508",
+          "sequence_number": 5
+        }
+      ],
+      "code": 200
+    }
+  }
+]

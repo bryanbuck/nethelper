@@ -94,6 +94,18 @@
       </v-col>
     </v-row>
 
+    <!-- Overview / Live -->
+    <v-tabs v-if="device" v-model="tab" color="primary" class="mb-4">
+      <v-tab value="overview">
+        <v-icon start icon="mdi-information-outline" />
+        Overview
+      </v-tab>
+      <v-tab value="live">
+        <v-icon start icon="mdi-access-point" />
+        Live
+      </v-tab>
+    </v-tabs>
+
     <!-- Loading State -->
     <v-row v-if="loading && !device">
       <v-col cols="12" class="text-center py-12">
@@ -120,6 +132,9 @@
         </v-alert>
       </v-col>
     </v-row>
+
+    <!-- Live port/PoE state; subscribes only while this tab is open -->
+    <DeviceLivePanel v-else-if="device && tab === 'live'" :device="device" />
 
     <!-- Device Content -->
     <template v-else-if="device">
@@ -622,15 +637,17 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
 import { useNotificationsStore } from '@/stores/notifications'
 import { formatDistanceToNow, format, fromUnixTime } from 'date-fns'
 import DeviceConnectionTest from '@/components/devices/DeviceConnectionTest.vue'
+import DeviceLivePanel from '@/components/devices/DeviceLivePanel.vue'
 import deviceApiService from '@/services/deviceApi.service'
 import { cloudProviderLabel } from '@/models/vendors'
 
 const route = useRoute()
+const router = useRouter()
 const devicesStore = useDevicesStore()
 const notificationStore = useNotificationsStore()
 
@@ -639,6 +656,12 @@ const loading = ref(false)
 const error = ref(null)
 const testingConnection = ref(false)
 const lastTestCentralStatus = ref(null)
+
+// Selected tab, kept in the URL (?tab=live) so a live view can be linked.
+const tab = computed({
+  get: () => (route.query.tab === 'live' ? 'live' : 'overview'),
+  set: (value) => router.replace({ query: { ...route.query, tab: value === 'live' ? 'live' : undefined } }),
+})
 
 // Connection test dialog state
 const showConnectionTestDialog = ref(false)

@@ -1,0 +1,297 @@
+{
+  "1/1/1": {
+    "": {
+      "measurements": {
+        "average_power": 0,
+        "current": 0,
+        "peak_power": 0,
+        "power_drawn": 0,
+        "voltage": 0
+      },
+      "pd_type": null,
+      "power_mgmt": {},
+      "status": {
+        "pair-a": {
+          "powering_status": "disabled"
+        },
+        "pair-b": {
+          "powering_status": "disabled"
+        },
+        "port": {
+          "powering_status": "disabled"
+        }
+      }
+    }
+  },
+  "1/1/10": {
+    "": {
+      "measurements": {
+        "average_power": 0,
+        "current": 0,
+        "peak_power": 0,
+        "power_drawn": 0,
+        "voltage": 0
+      },
+      "pd_type": null,
+      "power_mgmt": {},
+      "status": {
+        "pair-a": {
+          "powering_status": "searching"
+        },
+        "pair-b": {
+          "powering_status": "searching"
+        },
+        "port": {
+          "powering_status": "searching"
+        }
+      }
+    }
+  },
+  "1/1/11": {
+    "": {
+      "measurements": {
+        "average_power": 0,
+        "current": 0,
+        "peak_power": 0,
+        "power_drawn": 0,
+        "voltage": 0
+      },
+      "pd_type": null,
+      "power_mgmt": {},
+      "status": {
+        "pair-a": {
+          "powering_status": "searching"
+        },
+        "pair-b": {
+          "powering_status": "searching"
+        },
+        "port": {
+          "powering_status": "searching"
+        }
+      }
+    }
+  },
+  "1/1/12": {
+    "": {
+      "measurements": {
+        "average_power": 0,
+        "current": 0,
+        "peak_power": 0,
+        "power_drawn": 0,
+        "voltage": 0
+      },
+      "pd_type": null,
+      "power_mgmt": {},
+      "status": {
+        "pair-a": {
+          "powering_status": "searching"
+        },
+        "pair-b": {
+          "powering_status": "searching"
+        },
+        "port": {
+          "powering_status": "searching"
+        }
+      }
+    }
+  },
+  "1/1/2": {
+    "": {
+      "measurements": {
+        "average_power": 0,
+        "current": 0,
+        "peak_power": 0,
+        "power_drawn": 0,
+        "voltage": 0
+      },
+      "pd_type": null,
+      "power_mgmt": {},
+      "status": {
+        "pair-a": {
+          "powering_status": "searching"
+        },
+        "pair-b": {
+          "powering_status": "searching"
+        },
+        "port": {
+          "powering_status": "searching"
+        }
+      }
+    }
+  },
+  "1/1/3": {
+    "": {
+      "measurements": {
+        "average_power": 0,
+        "current": 0,
+        "peak_power": 0,
+        "power_drawn": 0,
+        "voltage": 0
+      },
+      "pd_type": null,
+      "power_mgmt": {},
+      "status": {
+        "pair-a": {
+          "powering_status": "searching"
+        },
+        "pair-b": {
+          "powering_status": "searching"
+        },
+        "port": {
+          "powering_status": "searching"
+        }
+      }
+    }
+  },
+  "1/1/4": {
+    "": {
+      "measurements": {
+        "average_power": 4.051934,
+        "current": 0.064,
+        "peak_power": 4.56178,
+        "power_drawn": 3.434752,
+        "voltage": 53.668
+      },
+      "pd_type": "Type1",
+      "power_mgmt": {
+        "port": {
+          "cutoff_power": 6.1,
+          "pse_allocated_power": 6.1,
+          "pse_assigned_class": "Class2",
+          "reserved_power": 3.5
+        }
+      },
+      "status": {
+        "pair-a": {
+          "powering_status": "disabled"
+        },
+        "pair-b": {
+          "powering_status": "disabled"
+        },
+        "port": {
+          "powering_status": "delivering"
+        }
+      }
+    }
+  },
+  "1/1/5": {
+    "": {
+      "measurements": {
+        "average_power": 0,
+        "current": 0,
+        "peak_power": 0,
+        "power_drawn": 0,
+        "voltage": 0
+      },
+      "pd_type": null,
+      "power_mgmt": {},
+      "status": {
+        "pair-a": {
+          "powering_status": "searching"
+        },
+        "pair-b": {
+          "powering_status": "searching"
+        },
+        "port": {
+          "powering_status": "searching"
+        }
+      }
+    }
+  },
+  "1/1/6": {
+    "": {
+      "measurements": {
+        "average_power": 0,
+        "current": 0,
+        "peak_power": 0,
+        "power_drawn": 0,
+        "voltage": 0
+      },
+      "pd_type": null,
+      "power_mgmt": {},
+      "status": {
+        "pair-a": {
+          "powering_status": "searching"
+        },
+        "pair-b": {
+          "powering_status": "searching"
+        },
+        "port": {
+          "powering_status": "searching"
+        }
+      }
+    }
+  },
+  "1/1/7": {
+    "": {
+      "measurements": {
+        "average_power": 0,
+        "current": 0,
+        "peak_power": 0,
+        "power_drawn": 0,
+        "voltage": 0
+      },
+      "pd_type": null,
+      "power_mgmt": {},
+      "status": {
+        "pair-a": {
+          "powering_status": "searching"
+        },
+        "pair-b": {
+          "powering_status": "searching"
+        },
+        "port": {
+          "powering_status": "searching"
+        }
+      }
+    }
+  },
+  "1/1/8": {
+    "": {
+      "measurements": {
+        "average_power": 0,
+        "current": 0,
+        "peak_power": 0,
+        "power_drawn": 0,
+        "voltage": 0
+      },
+      "pd_type": null,
+      "power_mgmt": {},
+      "status": {
+        "pair-a": {
+          "powering_status": "searching"
+        },
+        "pair-b": {
+          "powering_status": "searching"
+        },
+        "port": {
+          "powering_status": "searching"
+        }
+      }
+    }
+  },
+  "1/1/9": {
+    "": {
+      "measurements": {
+        "average_power": 0,
+        "current": 0,
+        "peak_power": 0,
+        "power_drawn": 0,
+        "voltage": 0
+      },
+      "pd_type": null,
+      "power_mgmt": {},
+      "status": {
+        "pair-a": {
+          "powering_status": "searching"
+        },
+        "pair-b": {
+          "powering_status": "searching"
+        },
+        "port": {
+          "powering_status": "searching"
+        }
+      }
+    }
+  }
+}

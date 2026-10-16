@@ -89,6 +89,15 @@ router.post(
   deviceController.executeCommand
 );
 
+// Live state: recent port/PoE events, and the always-on monitoring toggle
+router.get('/:deviceId/events', deviceController.getDeviceEvents);
+
+router.patch(
+  '/:deviceId/live-monitoring',
+  authorize('admin', 'operator'),
+  deviceController.setLiveMonitoring
+);
+
 // Manually trigger ping check for specific device
 router.post(
   '/:deviceId/ping',

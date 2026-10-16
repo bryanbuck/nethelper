@@ -49,6 +49,33 @@ function initializeSocket(server) {
       logger.debug(`User ${socket.userId} unsubscribed from device ${deviceId}`);
     });
 
+    // Live tab: port/PoE state + counters for one device (services/live/).
+    // The ack carries the current snapshot, or { ok: false, error } when the
+    // device can't be watched (no IP, no credential, unsupported platform).
+    socket.on('subscribe:device-live', async (deviceId, ack) => {
+      const reply = typeof ack === 'function' ? ack : () => {};
+      if (typeof deviceId !== 'string' || !deviceId) return reply({ ok: false, error: 'deviceId required' });
+      const liveView = require('../services/live/live-view.service');
+      const room = `device:live:${deviceId}`;
+      socket.join(room);
+      try {
+        const snapshot = await liveView.watch(deviceId, socket.id);
+        reply({ ok: true, snapshot });
+      } catch (error) {
+        socket.leave(room);
+        reply({ ok: false, error: error.message });
+      }
+    });
+
+    socket.on('unsubscribe:device-live', async (deviceId) => {
+      if (typeof deviceId !== 'string') return;
+      socket.leave(`device:live:${deviceId}`);
+      const liveView = require('../services/live/live-view.service');
+      await liveView.unwatch(deviceId, socket.id).catch((error) => {
+        logger.warn(`Live unwatch failed for ${deviceId}: ${error.message}`);
+      });
+    });
+
     socket.on('subscribe:automation', (automationId) => {
       socket.join(`automation:${automationId}`);
       logger.debug(`User ${socket.userId} subscribed to automation ${automationId}`);
@@ -56,6 +83,10 @@ function initializeSocket(server) {
 
     socket.on('disconnect', () => {
       logger.info(`User ${socket.userId} disconnected`);
+      const liveView = require('../services/live/live-view.service');
+      liveView.unwatchAll(socket.id).catch((error) => {
+        logger.warn(`Live cleanup failed for socket ${socket.id}: ${error.message}`);
+      });
     });
   });
 

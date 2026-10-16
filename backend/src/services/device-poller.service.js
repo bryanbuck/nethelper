@@ -1,5 +1,4 @@
-const axios = require('axios');
-const https = require('https');
+const CXSwitchAPI = require('./device-api/cx-switch-api');
 const settingsService = require('./settings.service');
 const sshDeviceService = require('./ssh-device.service');
 const { isCxRestCapable } = require('../utils/device-platform');
@@ -135,58 +134,20 @@ class DevicePollerService {
   }
 
   /**
-   * Make an authenticated API request to a device
-   * @param {string} baseUrl - Device base URL
-   * @param {string} path - API path
-   * @param {Object} credentials - Device credentials
-   * @param {Object} options - Additional axios options
-   * @returns {Promise<Object>} API response data
+   * Run fn(api) inside one AOS-CX REST session, then log out. AOS-CX REST
+   * only accepts cookie sessions (HTTP Basic is refused with 401 on 10.16),
+   * and sessions per user are few, so every call logs out when done.
+   * @param {Object} device - Device row
+   * @param {Object} credentials - Decrypted credentials
+   * @param {Function} fn - async (api: CXSwitchAPI) => result
    */
-  async makeDeviceRequest(baseUrl, path, credentials, options = {}) {
+  async withCxSession(device, credentials, fn) {
+    const api = new CXSwitchAPI(device, credentials);
     try {
-      const url = `${baseUrl}${path}`;
-
-      // Create axios config with authentication
-      const config = {
-        method: options.method || 'GET',
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
-        timeout: options.timeout || 15000,
-        // Accept self-signed certificates (common with network devices)
-        httpsAgent: new https.Agent({
-          rejectUnauthorized: false,
-        }),
-      };
-
-      // Add authentication
-      if (credentials.username && credentials.password) {
-        config.auth = {
-          username: credentials.username,
-          password: credentials.password,
-        };
-      } else if (credentials.apiKey) {
-        config.headers['Authorization'] = `Bearer ${credentials.apiKey}`;
-      }
-
-      // Add request body if provided
-      if (options.data) {
-        config.data = options.data;
-      }
-
-      const response = await axios(config);
-
-      return response.data;
-    } catch (error) {
-      if (error.response) {
-        throw new Error(`Device API error (${error.response.status}): ${error.response.data?.message || error.message}`);
-      } else if (error.request) {
-        throw new Error(`Device unreachable: ${error.message}`);
-      } else {
-        throw new Error(`Request error: ${error.message}`);
-      }
+      await api.login();
+      return await fn(api);
+    } finally {
+      await api.logout().catch(() => {});
     }
   }
 
@@ -212,12 +173,8 @@ class DevicePollerService {
         };
       }
 
-      // AOS-CX switch - use REST API v10.15
-      const baseUrl = `https://${device.ipAddress}/rest/v10.15`;
-      const apiPath = '/firmware';
-
-      // Make API request
-      const firmwareData = await this.makeDeviceRequest(baseUrl, apiPath, credentials);
+      const firmwareData = await this.withCxSession(device, credentials,
+        (api) => api.makeAuthenticatedRequest('GET', '/firmware'));
 
       // Extract relevant fields
       const result = {
@@ -263,14 +220,8 @@ class DevicePollerService {
         };
       }
 
-      // AOS-CX switch - use REST API v10.15
-      const baseUrl = `https://${device.ipAddress}/rest/v10.15`;
-      const apiPath = '/system';
-
-      // Make API request with depth=1 to get basic system info
-      const systemData = await this.makeDeviceRequest(baseUrl, apiPath, credentials, {
-        headers: { 'Depth': '1' }
-      });
+      const systemData = await this.withCxSession(device, credentials,
+        (api) => api.makeAuthenticatedRequest('GET', '/system?depth=1'));
 
       // Extract relevant fields (common fields returned by /system endpoint)
       const result = {
@@ -311,15 +262,8 @@ class DevicePollerService {
     try {
       logger.progress(`Polling configuration backup from ${device.name} (${device.ipAddress})`);
 
-      // Determine base URL based on device type
-      let baseUrl, runningConfigPath, startupConfigPath;
-
       switch (device.type) {
         case 'switch':
-          // AOS-CX switch - use REST API v10.15
-          baseUrl = `https://${device.ipAddress}/rest/v10.15`;
-          runningConfigPath = '/fullconfigs/running-config';
-          startupConfigPath = '/fullconfigs/startup-config';
           break;
 
         case 'ap':
@@ -332,10 +276,10 @@ class DevicePollerService {
 
       // Get both running and startup configurations
       // Note: These can be large, so we're being careful with parallel requests
-      const [runningConfig, startupConfig] = await Promise.all([
-        this.makeDeviceRequest(baseUrl, runningConfigPath, credentials, { timeout: 30000 }),
-        this.makeDeviceRequest(baseUrl, startupConfigPath, credentials, { timeout: 30000 })
-      ]);
+      const [runningConfig, startupConfig] = await this.withCxSession(device, credentials, (api) => Promise.all([
+        api.makeAuthenticatedRequest('GET', '/fullconfigs/running-config'),
+        api.makeAuthenticatedRequest('GET', '/fullconfigs/startup-config'),
+      ]));
 
       const result = {
         running_config: runningConfig,
@@ -366,16 +310,8 @@ class DevicePollerService {
     try {
       logger.progress(`Polling login sessions from ${device.name} (${device.ipAddress})`);
 
-      // Determine base URL based on device type
-      let baseUrl, apiPath;
-
       switch (device.type) {
         case 'switch':
-          // AOS-CX switch - use REST API v10.15
-          baseUrl = `https://${device.ipAddress}/rest/v10.15`;
-          // Get system resource which contains session information
-          // Note: Direct /login-sessions may not exist, using /system/users or similar
-          apiPath = '/system/users';
           break;
 
         case 'ap':
@@ -388,9 +324,8 @@ class DevicePollerService {
 
       try {
         // Try to get login sessions - the exact endpoint may vary by firmware version
-        const sessionsData = await this.makeDeviceRequest(baseUrl, apiPath, credentials, {
-          headers: { 'Depth': '2' }
-        });
+        const sessionsData = await this.withCxSession(device, credentials,
+          (api) => api.makeAuthenticatedRequest('GET', '/system/users?depth=2'));
 
         const result = {
           users: sessionsData,
@@ -432,29 +367,8 @@ class DevicePollerService {
     }
 
     logger.progress(`Polling Aruba Central status from ${device.name} (${device.ipAddress})`);
-    const baseUrl = `https://${device.ipAddress}/rest/v10.15`;
-
-    let raw;
-    try {
-      try {
-        raw = await this.makeDeviceRequest(baseUrl, '/system/aruba_central', credentials);
-      } catch (error) {
-        if (!error.message.includes('404')) throw error;
-        // Legacy resource missing: try the 10.15+ naming before giving up.
-        raw = await this.makeDeviceRequest(baseUrl, '/system/hpe_anw_central', credentials);
-      }
-    } catch (error) {
-      // Some firmware only accepts session (cookie) auth for REST, not basic
-      // auth - fall back to the cookie-login CX API client.
-      if (!error.message.includes('401')) throw error;
-      const CXSwitchAPI = require('./device-api/cx-switch-api');
-      const api = new CXSwitchAPI(device, credentials);
-      try {
-        raw = await api.getCentralStatus();
-      } finally {
-        await api.logout().catch(() => {});
-      }
-    }
+    // getCentralStatus() tries aruba_central, then the 10.15+ hpe_anw_central.
+    const raw = await this.withCxSession(device, credentials, (api) => api.getCentralStatus());
 
     const result = this.normalizeCentralStatus(raw);
     logger.success(`Central status retrieved from ${device.name}`, {
