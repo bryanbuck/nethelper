@@ -1,5 +1,6 @@
 const deviceService = require('../services/device.service');
 const deviceMerge = require('../services/device-merge.service');
+const deviceCredentials = require('../services/device-credential.service');
 const CloudProviderFactory = require('../services/cloud-providers/cloud-provider-factory');
 const { getPrisma } = require('../config/database');
 const devicePollerService = require('../services/device-poller.service');
@@ -8,8 +9,8 @@ const ArubaErrorHandler = require('../utils/aruba-error-handler');
 class DeviceController {
   async getDevices(req, res, next) {
     try {
-      const { type, status, location, search } = req.query;
-      const filters = { type, status, location, search };
+      const { type, status, location, search, platform, credential } = req.query;
+      const filters = { type, status, location, search, platform, credential };
       
       const devices = await deviceService.getDevices(filters);
       
@@ -109,6 +110,34 @@ class DeviceController {
     } catch (error) {
       if (error instanceof deviceMerge.MergeError) {
         return res.status(error.statusCode).json({ success: false, error: error.message, code: error.code });
+      }
+      next(error);
+    }
+  }
+
+  /** What linking a credential to these devices would do; changes nothing. */
+  async previewCredentialAssignment(req, res, next) {
+    try {
+      const { deviceIds, apiCredentialId } = req.body;
+      const plan = await deviceCredentials.plan(deviceIds, apiCredentialId || null);
+      res.json({ success: true, data: plan });
+    } catch (error) {
+      if (error instanceof deviceCredentials.CredentialAssignError) {
+        return res.status(error.statusCode).json({ success: false, error: error.message });
+      }
+      next(error);
+    }
+  }
+
+  /** Link apiCredentialId to deviceIds (null unlinks); skipped devices are reported. */
+  async assignCredential(req, res, next) {
+    try {
+      const { deviceIds, apiCredentialId } = req.body;
+      const result = await deviceCredentials.assign(deviceIds, apiCredentialId || null, { userId: req.user.id });
+      res.json({ success: true, data: result });
+    } catch (error) {
+      if (error instanceof deviceCredentials.CredentialAssignError) {
+        return res.status(error.statusCode).json({ success: false, error: error.message });
       }
       next(error);
     }

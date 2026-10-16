@@ -20,6 +20,11 @@ router.get('/duplicates', deviceController.getDuplicates);
 router.post('/merge/preview', authorize('admin', 'operator'), validateDevice.merge, deviceController.previewMerge);
 router.post('/merge', authorize('admin', 'operator'), validateDevice.merge, deviceController.mergeDevices);
 
+// Link one device credential to many devices (null unlinks). The preview
+// changes nothing.
+router.post('/credential/preview', authorize('admin', 'operator'), validateDevice.assignCredential, deviceController.previewCredentialAssignment);
+router.post('/credential', authorize('admin', 'operator'), validateDevice.assignCredential, deviceController.assignCredential);
+
 // Sync devices from Aruba Central
 router.post('/sync', authorize('admin', 'operator'), deviceController.syncDevices);
 

@@ -11,11 +11,16 @@ class DeviceService {
   async getDevices(filters = {}) {
     try {
       const prisma = getPrisma();
-      const { type, status, location, search } = filters;
+      const { type, status, location, search, platform, credential } = filters;
 
       const where = {};
 
       if (type) where.type = type;
+      if (platform) where.platform = platform;
+      // credential: 'none' | 'any' | an ApiCredential id
+      if (credential === 'none') where.apiCredentialId = null;
+      else if (credential === 'any') where.apiCredentialId = { not: null };
+      else if (credential) where.apiCredentialId = credential;
       // Filter by pingStatus as primary status, fallback to cloudStatus
       if (status) {
         where.OR = [

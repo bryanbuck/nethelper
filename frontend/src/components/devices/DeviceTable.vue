@@ -172,7 +172,7 @@
               </v-col>
               
               <v-col cols="12" sm="6" md="3">
-                <v-select
+                <v-combobox
                   v-model="filters.location"
                   label="Location"
                   :items="locationOptions"
@@ -183,6 +183,30 @@
                 />
               </v-col>
               
+              <v-col cols="12" sm="6" md="3">
+                <v-select
+                  v-model="filters.platform"
+                  label="Platform"
+                  :items="platformFilterOptions"
+                  variant="outlined"
+                  density="compact"
+                  clearable
+                  @update:model-value="applyFilters"
+                />
+              </v-col>
+
+              <v-col cols="12" sm="6" md="3">
+                <v-select
+                  v-model="filters.credential"
+                  label="Credential"
+                  :items="credentialFilterOptions"
+                  variant="outlined"
+                  density="compact"
+                  clearable
+                  @update:model-value="applyFilters"
+                />
+              </v-col>
+
               <v-col cols="12" sm="6" md="3" class="d-flex align-center">
                 <v-btn
                   variant="outlined"
@@ -277,7 +301,7 @@
               size="small"
               class="mr-2"
             ></v-icon>
-            {{ item.type }}
+            {{ getDeviceTypeLabel(item.type) }}
           </div>
         </template>
 
@@ -473,6 +497,15 @@
                 </v-list>
               </v-menu>
               <v-btn
+                v-if="canEdit"
+                variant="outlined"
+                size="small"
+                prepend-icon="mdi-key-variant"
+                @click="credentialDialog = true"
+              >
+                Credential
+              </v-btn>
+              <v-btn
                 v-if="canEdit && selectedItems.length >= 2"
                 variant="outlined"
                 size="small"
@@ -516,6 +549,12 @@
       :devices="mergeCandidates"
       @merged="onMerged"
     />
+
+    <DeviceCredentialDialog
+      v-model="credentialDialog"
+      :device-ids="selectedItems"
+      @assigned="refreshTable"
+    />
   </div>
 </template>
 
@@ -531,7 +570,9 @@ import { formatDistanceToNow } from 'date-fns'
 import { debounce } from 'lodash-es'
 import ConnectionStatusBadge from './ConnectionStatusBadge.vue'
 import DeviceMergeDialog from './DeviceMergeDialog.vue'
-import { cloudProviderLabel } from '@/models/vendors'
+import DeviceCredentialDialog from './DeviceCredentialDialog.vue'
+import { cloudProviderLabel, platformOptions } from '@/models/vendors'
+import { useSettingsStore } from '@/stores/settings'
 
 const router = useRouter()
 const devicesStore = useDevicesStore()
@@ -549,7 +590,9 @@ const searchInput = ref('')
 const filters = ref({
   status: null,
   type: null,
-  location: null
+  location: null,
+  platform: null,
+  credential: null
 })
 
 // Table options
@@ -641,21 +684,35 @@ const statusOptions = [
   { title: 'Maintenance', value: 'maintenance' }
 ]
 
-const typeOptions = [
-  { title: 'Access Point', value: 'Access Point' },
-  { title: 'Switch', value: 'Switch' },
-  { title: 'Gateway', value: 'Gateway' }
-]
+// Keyed by the backend DeviceType enum values.
+const deviceTypeInfo = {
+  access_point: { label: 'Access Point', icon: 'mdi-wifi', color: 'blue' },
+  switch: { label: 'Switch', icon: 'mdi-switch', color: 'green' },
+  gateway: { label: 'Gateway', icon: 'mdi-router-wireless', color: 'orange' },
+  controller: { label: 'Controller', icon: 'mdi-server', color: 'purple' },
+  other: { label: 'Other', icon: 'mdi-help-circle', color: 'grey' }
+}
 
-const locationOptions = [
-  { title: 'Main Office', value: 'Main Office' },
-  { title: 'Server Room', value: 'Server Room' },
-  { title: 'Conference Room A', value: 'Conference Room A' },
-  { title: 'Conference Room B', value: 'Conference Room B' },
-  { title: 'Floor 1 IDF', value: 'Floor 1 IDF' },
-  { title: 'Floor 2 IDF', value: 'Floor 2 IDF' },
-  { title: 'Floor 3 IDF', value: 'Floor 3 IDF' }
-]
+const typeOptions = Object.entries(deviceTypeInfo).map(([value, info]) => ({ title: info.label, value }))
+
+const platformFilterOptions = platformOptions()
+
+// Credential filter: 'none' / 'any' or a specific credential. "No credential"
+// plus a platform, then select-all, is the quick way to link a fleet.
+const settingsStore = useSettingsStore()
+const credentialFilterOptions = computed(() => [
+  { title: 'No credential', value: 'none' },
+  { title: 'Any credential', value: 'any' },
+  ...(settingsStore.apiCredentials || []).map((c) => ({ title: c.name, value: c.id }))
+])
+
+// Locations seen on loaded rows (the backend matches "contains", so a typed
+// value works too). Remembered across loads so filtering doesn't shrink the list.
+const knownLocations = ref(new Set())
+watch(() => devicesStore.devices, (rows) => {
+  for (const d of rows || []) if (d.location) knownLocations.value.add(d.location)
+}, { immediate: true })
+const locationOptions = computed(() => [...knownLocations.value].sort((a, b) => a.localeCompare(b)))
 
 // Computed properties
 const activeFiltersCount = computed(() => {
@@ -693,7 +750,9 @@ const clearFilters = () => {
   filters.value = {
     status: null,
     type: null,
-    location: null
+    location: null,
+    platform: null,
+    credential: null
   }
   searchInput.value = ''
   loadItems({
@@ -774,6 +833,7 @@ const bulkLiveMonitoring = async (enabled) => {
 }
 
 // Merge: the selection can span table pages, so fetch rows not on this one.
+const credentialDialog = ref(false)
 const mergeDialog = ref(false)
 const mergeCandidates = ref([])
 const mergeLoading = ref(false)
@@ -834,15 +894,9 @@ const getStatusIcon = (status) => {
   return icons[status] || 'mdi-help-circle'
 }
 
-const getDeviceIcon = (type) => {
-  const icons = {
-    'Access Point': 'mdi-wifi',
-    'Switch': 'mdi-switch',
-    'Gateway': 'mdi-router-wireless',
-    'Controller': 'mdi-server'
-  }
-  return icons[type] || 'mdi-help-circle'
-}
+const getDeviceIcon = (type) => deviceTypeInfo[type]?.icon || 'mdi-help-circle'
+
+const getDeviceTypeLabel = (type) => deviceTypeInfo[type]?.label || type || 'Unknown'
 
 // Name of the cloud plane managing a device ("Central", "Mist", ...), for
 // labels and tooltips. Falls back to the generic "Cloud" when unknown.
@@ -880,15 +934,7 @@ const getManagementMismatch = (item) => {
   return null
 }
 
-const getDeviceTypeColor = (type) => {
-  const colors = {
-    'Access Point': 'blue',
-    'Switch': 'green',
-    'Gateway': 'orange',
-    'Controller': 'purple'
-  }
-  return colors[type] || 'grey'
-}
+const getDeviceTypeColor = (type) => deviceTypeInfo[type]?.color || 'grey'
 
 const formatLastSeen = (lastSeen) => {
   if (!lastSeen) return 'Unknown'
@@ -955,6 +1001,9 @@ const retryLoad = () => {
 
 // Initialize table
 onMounted(() => {
+  if (canEdit.value && !settingsStore.apiCredentials?.length) {
+    settingsStore.fetchApiCredentials().catch(() => {})
+  }
   loadItems({
     page: 1,
     itemsPerPage: 10,
