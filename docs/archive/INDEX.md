@@ -30,3 +30,4 @@ These files are **point-in-time artifacts** kept for historical reference: task 
 | `FRONTEND_SETTINGS_TROUBLESHOOTING.md` | Settings error-handling notes | Historical |
 | `BACKEND_LOGGING.txt` / `FRONTEND_DEBUG.txt` | Debug-logging feature notes | Historical dev notes |
 | `FRONTEND_TODO_Login.txt` / `FRONTEND_UI_URLs.txt` | Login-flow notes / UI URL test cases | Historical dev notes |
+| `BETA_OUTSTANDING_TASKS_2026-10-07.md` | Snapshot of open beta work when it paused after phase 6 (phase 7 inputs, release steps, unverified items, deferred work). Copy of a claude.ai doc. | `../ROADMAP_AND_TODO.md` "Beta Release Readiness" once phase 7 runs |
