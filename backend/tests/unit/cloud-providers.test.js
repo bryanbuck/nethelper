@@ -11,6 +11,7 @@ const MistProvider = require('../../src/services/cloud-providers/mist.provider')
 const centralFixture = require('../fixtures/central-devices.json');
 const mistInventory = require('../fixtures/mist-inventory.json');
 const mistStats = require('../fixtures/mist-stats.json');
+const mistScope = require('../fixtures/mist-scope.json');
 
 const CONTRACT_KEYS = [
   'serial', 'name', 'model', 'macAddress', 'ipAddress', 'type', 'vendor', 'platform',
@@ -281,5 +282,92 @@ describe('MistProvider', () => {
 
     expect(config.format).toBe('mist-config-json');
     expect(config.text).toBe(JSON.stringify({ alpha: { a: 1, b: 2 }, zeta: 1 }, null, 2));
+  });
+
+  describe('scope backups', () => {
+    const notFound = () => {
+      throw Object.assign(new Error('404'), { response: { status: 404 } });
+    };
+    const orgRoutes = {
+      '/api/v1/orgs/org-1/setting': () => mistScope.orgSetting,
+      '/api/v1/orgs/org-1/wlans': () => mistScope.orgWlans,
+      '/api/v1/orgs/org-1/templates': () => mistScope.templates,
+      '/api/v1/orgs/org-1/rftemplates': () => mistScope.rftemplates,
+      '/api/v1/orgs/org-1/deviceprofiles': () => mistScope.deviceprofiles,
+      '/api/v1/orgs/org-1/networktemplates': () => [],
+      '/api/v1/orgs/org-1/sitetemplates': () => [],
+      '/api/v1/orgs/org-1/gatewaytemplates': notFound,
+    };
+
+    test('supports scope-backup', () => {
+      expect(provider.supports('scope-backup')).toBe(true);
+    });
+
+    test('lists the org, then its sites by name', async () => {
+      routeAxios({
+        '/api/v1/orgs/org-1': () => mistScope.org,
+        '/api/v1/orgs/org-1/sites': () => mistScope.sites,
+      });
+
+      expect(await provider.listConfigScopes()).toEqual([
+        { scopeType: 'org', scopeId: 'org-1', name: 'Acme Networks' },
+        { scopeType: 'site', scopeId: 'site-a', name: 'HQ' },
+        { scopeType: 'site', scopeId: 'site-b', name: 'Warehouse' },
+      ]);
+    });
+
+    test('org scope bundles the inherited objects; an unavailable section is null', async () => {
+      routeAxios(orgRoutes);
+
+      const config = await provider.getScopeConfiguration({ scopeType: 'org', scopeId: 'org-1', name: 'Acme Networks' });
+      const bundle = JSON.parse(config.text);
+
+      expect(config.format).toBe('mist-scope-json');
+      expect(bundle.scope).toEqual({ type: 'org', id: 'org-1', name: 'Acme Networks' });
+      expect(bundle.wlans.map((w) => w.id)).toEqual(['w-1', 'w-2']); // sorted by id
+      expect(bundle.rfTemplates[0].name).toBe('Office RF');
+      expect(bundle.deviceProfiles[0].type).toBe('ap');
+      expect(bundle.gatewayTemplates).toBeNull();
+    });
+
+    test('the bundle is stable across response ordering', async () => {
+      routeAxios(orgRoutes);
+      const scope = { scopeType: 'org', scopeId: 'org-1', name: 'Acme Networks' };
+      const first = await provider.getScopeConfiguration(scope);
+      routeAxios({ ...orgRoutes, '/api/v1/orgs/org-1/wlans': () => [...mistScope.orgWlans].reverse() });
+      const second = await provider.getScopeConfiguration(scope);
+
+      expect(second.text).toBe(first.text);
+    });
+
+    test('site scope holds the site record, its settings and its WLANs', async () => {
+      routeAxios({
+        '/api/v1/sites/site-a': () => mistScope.siteA,
+        '/api/v1/sites/site-a/setting': () => mistScope.siteSetting,
+        '/api/v1/sites/site-a/wlans': () => mistScope.siteWlans,
+      });
+
+      const bundle = JSON.parse((await provider.getScopeConfiguration({ scopeType: 'site', scopeId: 'site-a', name: 'HQ' })).text);
+
+      expect(Object.keys(bundle)).toEqual(['scope', 'setting', 'site', 'wlans']);
+      expect(bundle.site.rftemplate_id).toBe('rf-1');
+    });
+
+    test('an error other than 404 fails the scope', async () => {
+      routeAxios({ ...orgRoutes, '/api/v1/orgs/org-1/wlans': () => { throw Object.assign(new Error('403'), { response: { status: 403 } }); } });
+
+      await expect(provider.getScopeConfiguration({ scopeType: 'org', scopeId: 'org-1', name: 'x' })).rejects.toThrow(/403/);
+    });
+  });
+});
+
+describe('scope backups on other providers', () => {
+  test('Central is an honest CapabilityError until its config endpoints are verified', async () => {
+    const central = new ArubaCentralProvider({
+      id: 'int-1', provider: 'aruba_central', name: 'Central', baseUrl: 'https://example.invalid',
+      credentials: { clientId: 'c', clientSecret: 's', customerId: 'cust' },
+    });
+    expect(central.supports('scope-backup')).toBe(false);
+    await expect(central.listConfigScopes()).rejects.toMatchObject({ name: 'CapabilityError' });
   });
 });

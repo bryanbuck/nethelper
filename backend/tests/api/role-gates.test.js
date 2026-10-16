@@ -29,6 +29,9 @@ const RESTRICTED_READS = [
   'GET /backups/:backupId/content',
   'GET /backups/:backupId/download',
   'GET /backups/:backupId/diff/:otherId',
+  'GET /backups/scopes/:scopeBackupId/content',
+  'GET /backups/scopes/:scopeBackupId/download',
+  'GET /backups/scopes/:scopeBackupId/diff/:otherId',
   'GET /settings/git-backup',
   'GET /users/',
 ];
@@ -51,6 +54,7 @@ const ADMIN_ONLY = [
   'DELETE /discovery/scans/:scanId',
   'DELETE /backups/:backupId',
   'DELETE /backups/schedules/:scheduleId',
+  'DELETE /backups/scopes/:scopeBackupId',
   'GET /users/',
   'PUT /users/:id',
   'POST /users/:id/reset-password',

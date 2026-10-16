@@ -5,6 +5,12 @@ const { getPrisma } = require('../config/database');
 const encryption = require('../utils/encryption');
 const logger = require('../utils/logger');
 const { deviceStorageKey } = require('../utils/device-key');
+const { describeFormat, GIT_CONFIG_NAMES } = require('../utils/config-format');
+
+// Cloud-scope configs (Mist org/site, Central group) live under this directory,
+// apart from the per-device ones. The leading underscore keeps it from
+// colliding with a device serial.
+const SCOPES_DIR = '_scopes';
 
 // Secret values inside GitBackupConfig.credentials. Drives encryption on write
 // and masking on read, the same way CLOUD_PROVIDERS[x].credentialFields does
@@ -76,8 +82,11 @@ const README = `# NetHelper configuration backups
 Machine-generated. Every commit is one device configuration captured by
 NetHelper; do not hand-edit — changes here are overwritten on the next backup.
 
-Layout: one directory per device serial, containing the configuration file and
-a meta.json describing the device and the transport the config came from.
+Layout: one directory per device serial, containing the configuration file(s)
+and a meta.json describing the device and the transport the config came from.
+AOS-CX switches have two: running-config.cfg (CLI) and settings.json (the REST
+config database). Cloud-scope configs (a Mist org or site, ...) live under
+_scopes/<integration>/<scope>/.
 
 History is never rewritten. Backup retention prunes NetHelper's own database
 rows and flat files, but leaves this repository's history intact.
@@ -275,16 +284,19 @@ class GitBackupService {
 
   /** Config filename for a captured format. */
   configFileName(format) {
-    switch (format) {
-      case 'junos-set':
-        return 'running-config.set';
-      case 'aoscx-json':
-      case 'mist-config-json':
-      case 'meraki-settings-json':
-        return 'settings.json';
-      default:
-        return 'running-config.cfg';
-    }
+    return describeFormat(format).gitName;
+  }
+
+  /**
+   * Repo-relative directory for a cloud scope (Mist org/site, Central group).
+   * Lives under `_scopes/`, apart from the per-device directories.
+   */
+  scopeDirName({ integrationId, scopeType, scopeId }) {
+    return path.posix.join(
+      SCOPES_DIR,
+      this.deviceDirName(integrationId),
+      `${this.deviceDirName(scopeType)}-${this.deviceDirName(scopeId)}`
+    );
   }
 
   // ---------------------------------------------------------------------
@@ -292,72 +304,123 @@ class GitBackupService {
   // ---------------------------------------------------------------------
 
   /**
-   * Write a device's config + metadata into the repo and commit it.
+   * Write a device's config artifacts + metadata into the repo and commit them.
    *
-   * Returns { changed, commitSha }. `changed: false` means the config was
+   * Returns { changed, commitSha }. `changed: false` means every artifact was
    * byte-identical to what is already committed, so nothing was recorded —
    * this is the dedup that the flat-file store cannot do.
    *
    * @param {Object} params
-   * @param {Object} params.device   - full device row (serial, name, vendor, platform, managementMode)
-   * @param {string} params.text     - the captured configuration
-   * @param {string} params.format   - 'cli-text' | 'junos-set' | 'aoscx-json' | ...
-   * @param {string} params.source   - transport label, e.g. 'AOS-CX REST'
-   * @param {string} params.backupId - ConfigBackup row id
-   * @param {string} params.trigger  - 'manual' | 'scheduled'
+   * @param {Object} params.device    - full device row (serial, name, vendor, platform, managementMode)
+   * @param {Array}  params.artifacts - [{ format, text }]; AOS-CX has CLI + JSON
+   * @param {string} params.source    - transport label, e.g. 'AOS-CX REST'
+   * @param {string} params.backupId  - ConfigBackup row id
+   * @param {string} params.trigger   - 'manual' | 'scheduled'
    */
-  async commitDeviceConfig({ device, text, format, source, backupId, trigger }) {
+  async commitDeviceConfig({ device, artifacts, source, backupId, trigger }) {
+    const dirName = this.deviceDirName(deviceStorageKey(device));
+    return this.commitConfigDir({
+      dirName,
+      artifacts,
+      meta: {
+        deviceName: device.name,
+        formats: artifacts.map((a) => a.format),
+        managementMode: device.managementMode || null,
+        platform: device.platform || null,
+        serial: device.serial || null,
+        source: source || null,
+        vendor: device.vendor || null,
+      },
+      message: this.commitMessage({ device, source, backupId, trigger, dirName }),
+      logName: device.name,
+    });
+  }
+
+  /**
+   * Commit a cloud scope's configuration (see scope-backup.service).
+   * @param {Object} params.scope - { integrationId, integrationName, provider, scopeType, scopeId, scopeName }
+   */
+  async commitScopeConfig({ scope, artifacts, source, backupId, trigger }) {
+    const dirName = this.scopeDirName(scope);
+    return this.commitConfigDir({
+      dirName,
+      artifacts,
+      meta: {
+        formats: artifacts.map((a) => a.format),
+        integrationId: scope.integrationId,
+        integrationName: scope.integrationName,
+        provider: scope.provider,
+        scopeId: scope.scopeId,
+        scopeName: scope.scopeName,
+        scopeType: scope.scopeType,
+        source: source || null,
+      },
+      message: [
+        `backup(${dirName}): configuration changed`,
+        '',
+        `Scope:       ${scope.scopeType} ${scope.scopeName}`,
+        `Integration: ${scope.integrationName} (${scope.provider})`,
+        `Source:      ${source || 'unknown'}`,
+        `Backup:      ${backupId}`,
+        `Trigger:     ${trigger || 'manual'}`,
+      ].join('\n'),
+      logName: `${scope.scopeType} ${scope.scopeName}`,
+    });
+  }
+
+  /**
+   * Shared commit path: write each artifact under its format's filename plus a
+   * meta.json, drop config files no longer captured, and commit only when a
+   * config file (not just meta.json) changed.
+   */
+  async commitConfigDir({ dirName, artifacts, meta, message, logName }) {
     const config = await this.getActiveConfig();
     if (!config) return { changed: false, skipped: true };
 
     return this.serialize(async () => {
       await this.ensureRepo(config);
 
-      const dirName = this.deviceDirName(deviceStorageKey(device));
-      const deviceDir = this.resolveInRepo(config.repoPath, dirName);
-      await fs.mkdir(deviceDir, { recursive: true });
+      const dir = this.resolveInRepo(config.repoPath, dirName);
+      await fs.mkdir(dir, { recursive: true });
 
-      const configName = this.configFileName(format);
-      const configPath = this.resolveInRepo(config.repoPath, dirName, configName);
-      const metaPath = this.resolveInRepo(config.repoPath, dirName, 'meta.json');
-
-      // A device that changes transport (e.g. NETCONF -> SSH fallback) changes
-      // filename too; drop the stale one so the tree shows one config per device.
-      for (const stale of ['running-config.cfg', 'running-config.set', 'settings.json']) {
-        if (stale === configName) continue;
-        const stalePath = this.resolveInRepo(config.repoPath, dirName, stale);
-        await fs.rm(stalePath, { force: true }).catch(() => {});
+      const names = new Set();
+      for (const artifact of artifacts) {
+        const name = this.configFileName(artifact.format);
+        names.add(name);
+        const body = artifact.text.endsWith('\n') ? artifact.text : `${artifact.text}\n`;
+        await fs.writeFile(this.resolveInRepo(config.repoPath, dirName, name), body, 'utf8');
       }
 
-      const body = text.endsWith('\n') ? text : `${text}\n`;
-      await fs.writeFile(configPath, body, 'utf8');
+      // A device that changes transport (e.g. NETCONF -> SSH fallback) changes
+      // filename too; drop the stale one so the tree matches what was captured.
+      for (const stale of GIT_CONFIG_NAMES) {
+        if (names.has(stale)) continue;
+        await fs.rm(this.resolveInRepo(config.repoPath, dirName, stale), { force: true }).catch(() => {});
+      }
 
       // Sorted keys + trailing newline keeps meta diffs minimal and stable.
-      const meta = {
-        deviceName: device.name,
-        format: format || 'cli-text',
-        lastBackupAt: new Date().toISOString(),
-        managementMode: device.managementMode || null,
-        platform: device.platform || null,
-        serial: device.serial || null,
-        source: source || null,
-        vendor: device.vendor || null,
-      };
-      await fs.writeFile(metaPath, `${JSON.stringify(meta, Object.keys(meta).sort(), 2)}\n`, 'utf8');
+      const fullMeta = { ...meta, lastBackupAt: new Date().toISOString() };
+      await fs.writeFile(
+        this.resolveInRepo(config.repoPath, dirName, 'meta.json'),
+        `${JSON.stringify(fullMeta, Object.keys(fullMeta).sort(), 2)}\n`,
+        'utf8'
+      );
 
       await this.exec(['add', '--all', '--', dirName], { cwd: config.repoPath, config });
 
       // meta.json always changes (lastBackupAt), so staging is never empty.
-      // Ask specifically whether the *config* differs, and drop the whole
-      // commit when it does not — otherwise every run makes a noise commit.
-      const configChanged = await this.pathHasStagedChanges(config, path.posix.join(dirName, configName));
+      // Ask specifically whether a *config* file differs, and drop the whole
+      // commit when none does — otherwise every run makes a noise commit.
+      const configChanged = await this.pathHasStagedChanges(
+        config,
+        [dirName, `:(exclude)${path.posix.join(dirName, 'meta.json')}`]
+      );
       if (!configChanged) {
         await this.exec(['restore', '--staged', '--worktree', '--', dirName], { cwd: config.repoPath, config })
           .catch(() => {});
         return { changed: false, commitSha: null };
       }
 
-      const message = this.commitMessage({ device, source, backupId, trigger, dirName });
       await this.exec([...this.identityArgs(config), 'commit', '-m', message], {
         cwd: config.repoPath,
         config,
@@ -365,15 +428,15 @@ class GitBackupService {
       const { stdout } = await this.exec(['rev-parse', 'HEAD'], { cwd: config.repoPath, config });
       const commitSha = stdout.trim();
 
-      logger.info(`Committed config for ${device.name} as ${commitSha.slice(0, 8)}`);
+      logger.info(`Committed config for ${logName} as ${commitSha.slice(0, 8)}`);
       return { changed: true, commitSha };
     });
   }
 
-  /** True when the given repo-relative path has staged changes. */
-  async pathHasStagedChanges(config, relPath) {
+  /** True when the given repo-relative pathspecs have staged changes. */
+  async pathHasStagedChanges(config, pathspecs) {
     try {
-      await this.exec(['diff', '--cached', '--quiet', '--', relPath], { cwd: config.repoPath, config });
+      await this.exec(['diff', '--cached', '--quiet', '--', ...[].concat(pathspecs)], { cwd: config.repoPath, config });
       return false;
     } catch (error) {
       // git diff --quiet exits 1 when there *are* differences; anything else is real.

@@ -15,6 +15,11 @@ const logger = require('../../utils/logger');
  *   GET /api/v1/orgs/:org_id/inventory        - inventory (paginated)
  *   GET /api/v1/orgs/:org_id/stats/devices    - live stats (ip, version, uptime)
  *   GET /api/v1/sites/:site_id/devices/:id    - a device's Mist config object
+ *   Scope backups (org and site config, where AP config lives):
+ *   GET /api/v1/orgs/:org_id, /orgs/:org_id/sites
+ *   GET /api/v1/orgs/:org_id/{setting,wlans,templates,rftemplates,
+ *       deviceprofiles,networktemplates,sitetemplates,gatewaytemplates}
+ *   GET /api/v1/sites/:site_id, /sites/:site_id/{setting,wlans}
  *
  * Config-backup semantics: Mist is intent-based, so a "config" is the device's
  * Mist configuration object, not a running-config. (The `config_cmd` endpoint
@@ -47,7 +52,7 @@ class MistProvider extends BaseCloudProvider {
   }
 
   supports(capability) {
-    return ['inventory', 'status', 'test', 'config-backup'].includes(capability);
+    return ['inventory', 'status', 'test', 'config-backup', 'scope-backup'].includes(capability);
   }
 
   get orgId() {
@@ -209,6 +214,79 @@ class MistProvider extends BaseCloudProvider {
       format: 'mist-config-json',
       source: this.label,
     };
+  }
+
+  /** The org, then every site in it. */
+  async listConfigScopes() {
+    const org = await this.request('GET', `/api/v1/orgs/${this.orgId}`, { context: 'scope_list' });
+    const sites = await this.requestAllPages(`/api/v1/orgs/${this.orgId}/sites`, { context: 'scope_list' });
+    return [
+      { scopeType: 'org', scopeId: this.orgId, name: org?.name || this.orgId },
+      ...sites
+        .map((site) => ({ scopeType: 'site', scopeId: site.id, name: site.name || site.id }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    ];
+  }
+
+  /**
+   * Snapshot an org's or a site's configuration as one canonical-JSON bundle.
+   *
+   * Org: org settings plus the org-level objects sites and devices inherit:
+   * WLANs, WLAN templates, RF templates, device profiles (AP profiles among
+   * them), switch/site/gateway templates. Site: the site record (which names
+   * the templates it uses), its settings, and its own WLANs. Together they are
+   * what Mist pushes to the APs, which have no per-device config of their own.
+   *
+   * A section the org has no access to (404, e.g. an unlicensed feature) is
+   * recorded as null rather than failing the scope; anything else fails it.
+   */
+  async getScopeConfiguration(scope) {
+    let sections;
+    if (scope.scopeType === 'org') {
+      const base = `/api/v1/orgs/${this.orgId}`;
+      sections = {
+        setting: () => this.request('GET', `${base}/setting`, { context: 'scope_config' }),
+        wlans: () => this.requestAllPages(`${base}/wlans`, { context: 'scope_config' }),
+        wlanTemplates: () => this.requestAllPages(`${base}/templates`, { context: 'scope_config' }),
+        rfTemplates: () => this.requestAllPages(`${base}/rftemplates`, { context: 'scope_config' }),
+        deviceProfiles: () => this.requestAllPages(`${base}/deviceprofiles`, { context: 'scope_config' }),
+        networkTemplates: () => this.requestAllPages(`${base}/networktemplates`, { context: 'scope_config' }),
+        siteTemplates: () => this.requestAllPages(`${base}/sitetemplates`, { context: 'scope_config' }),
+        gatewayTemplates: () => this.requestAllPages(`${base}/gatewaytemplates`, { context: 'scope_config' }),
+      };
+    } else if (scope.scopeType === 'site') {
+      const base = `/api/v1/sites/${scope.scopeId}`;
+      sections = {
+        site: () => this.request('GET', base, { context: 'scope_config' }),
+        setting: () => this.request('GET', `${base}/setting`, { context: 'scope_config' }),
+        wlans: () => this.requestAllPages(`${base}/wlans`, { context: 'scope_config' }),
+      };
+    } else {
+      this.unsupported('scope-backup', `Mist has no "${scope.scopeType}" scope`);
+    }
+
+    // Sequential, to stay gentle on the 5,000 requests/hour org budget.
+    const bundle = { scope: { type: scope.scopeType, id: scope.scopeId, name: scope.name } };
+    for (const [key, fetch] of Object.entries(sections)) {
+      try {
+        bundle[key] = this.sortById(await fetch());
+      } catch (error) {
+        if (error.statusCode !== 404) throw error;
+        bundle[key] = null;
+      }
+    }
+
+    return {
+      text: this.canonicalJson(bundle),
+      format: 'mist-scope-json',
+      source: this.label,
+    };
+  }
+
+  /** Lists come back in no promised order; sort by id so diffs stay quiet. */
+  sortById(value) {
+    if (!Array.isArray(value)) return value;
+    return [...value].sort((a, b) => String(a?.id ?? '').localeCompare(String(b?.id ?? '')));
   }
 
   /** Stable JSON: sorted keys, so diffs show real changes, not key reordering. */

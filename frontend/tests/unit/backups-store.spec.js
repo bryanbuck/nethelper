@@ -7,7 +7,10 @@ vi.mock('@/services/backup.service', () => ({
     getSchedules: vi.fn(),
     deleteBackup: vi.fn(),
     createSchedule: vi.fn(),
-    diffBackups: vi.fn()
+    diffBackups: vi.fn(),
+    getBackupContent: vi.fn(),
+    getScopeBackups: vi.fn(),
+    deleteScopeBackup: vi.fn()
   }
 }))
 
@@ -63,6 +66,42 @@ describe('backups store', () => {
 
     await expect(store.diffBackups('a', 'b')).rejects.toBe(failure)
     expect(store.error).toBe(failure)
+  })
+
+  test('content and diff pass the artifact kind through', async () => {
+    backupService.getBackupContent.mockResolvedValue({ data: { content: '{}', artifact: { kind: 'structured' } } })
+    backupService.diffBackups.mockResolvedValue({ data: { kind: 'structured' } })
+    const store = useBackupsStore()
+
+    expect((await store.fetchBackupContent('b1', 'structured')).artifact.kind).toBe('structured')
+    await store.diffBackups('a', 'b', 'structured')
+
+    expect(backupService.getBackupContent).toHaveBeenCalledWith('b1', 'structured')
+    expect(backupService.diffBackups).toHaveBeenCalledWith('a', 'b', 'structured')
+  })
+
+  test('scope events update scope rows, not device rows', async () => {
+    backupService.getBackups.mockResolvedValue({ data: [{ id: 'x', status: 'running' }], total: 1 })
+    backupService.getScopeBackups.mockResolvedValue({ data: [{ id: 'x', status: 'running' }], total: 1 })
+    const store = useBackupsStore()
+    await Promise.all([store.fetchBackups(), store.fetchScopeBackups()])
+
+    store.applyBackupEvent({ scope: true, scopeBackupId: 'x', hasChanges: true })
+
+    expect(store.scopeBackups[0]).toMatchObject({ status: 'success', hasChanges: true })
+    expect(store.backups[0].status).toBe('running')
+  })
+
+  test('deleteScopeBackup removes the row', async () => {
+    backupService.getScopeBackups.mockResolvedValue({ data: [{ id: 's1' }, { id: 's2' }], total: 2 })
+    backupService.deleteScopeBackup.mockResolvedValue({})
+    const store = useBackupsStore()
+    await store.fetchScopeBackups()
+
+    await store.deleteScopeBackup('s1')
+
+    expect(store.scopeBackups.map((b) => b.id)).toEqual(['s2'])
+    expect(store.scopeTotal).toBe(1)
   })
 
   test('activeSchedules filters on active', async () => {

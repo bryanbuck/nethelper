@@ -187,6 +187,8 @@ Scheduled configuration backups with:
 - ✅ Automated backup on cron schedule (Bull repeatable jobs per schedule, timezone-aware; device selection by all/type/specific)
 - ✅ Configuration diff detection (SHA-256 change detection per device; unified-diff comparison between any two versions)
 - ✅ Rollback capability — first iteration is **view / diff / download** (browse versions, compare, download to apply manually). Automated push-to-device restore is intentionally deferred (see note below).
+- ✅ Pasteable backups (2026-10-16) — AOS-CX backups now hold the **CLI text** (`GET /configs/running-config`, `Accept: text/plain`, verified on the 6200F) next to the REST JSON, as `ConfigBackupArtifact` rows (kind `cli`/`structured`). The UI shows a tab per artifact with Copy/Download and a hint for applying it by hand (SSH, Central, Junos `load set terminal`). The Compare dialog toggles between kinds. The migration backfilled one artifact per existing backup.
+- ✅ Cloud-scope backups (2026-10-16) — `ScopeBackup` + `scope-backup.service.js`: read-only backups of a cloud's org/site configuration, which is where AP config lives. **Mist implemented** (fixture-validated only; no live tenant yet). Central returns `CapabilityError`. "Cloud Scopes" tab on the backups page; `POST /api/v1/backups/scopes/run`; schedules opt in with `includeScopes`.
 - ✅ Backup retention policies (per-schedule retentionDays + retentionMaxCount, 0 = unlimited; pruned after each run)
 - ✅ Export to external storage — **Git mirror shipped 2026-09-14** (opt-in; commits every captured config, optional `git push` to a remote for off-box replication). S3/NFS export still deferred.
 
@@ -198,7 +200,10 @@ Scheduled configuration backups with:
 - Real-time: WebSocket events `backup:completed` / `backup:failed` / `backup:run:completed`
 
 **Deferred follow-ups (next iteration):**
-- Automated restore/rollback (push a selected version back via Central API or SSH — riskier, needs per-platform apply logic)
+- Automated restore/rollback. Direction set 2026-10-16 (`MULTI_VENDOR_ROADMAP.md` §8b): a `restore` transport operation, **only** where the apply is atomic with rollback (Junos NETCONF `commit confirmed`; direct AOS-CX REST `PUT /fullconfigs/running-config` from the JSON artifact after a checkpoint). Hard refusal for `managementMode === 'cloud'` or `cloudManaged`. No SSH-paste restore. Admin-only, with a preview diff, an audit entry, and a pre-restore backup.
+- Cloud configuration writes (edit Central profiles / Mist templates through the API). A separate feature from device restore, not started.
+- Central scope backups: the New Central config reads were verified live on 2026-10-16 (`/network-config/v1alpha1/{config-assignments, scope-maps, sites, site-collections, wlan-ssids}`, and per-profile-type libraries at `/network-config/v1alpha1/<profile-type>`). Implement `listConfigScopes`/`getScopeConfiguration` on the Central provider from those (details in `MULTI_VENDOR_ROADMAP.md` §8b).
+- AOS-CX over SSH: on the 6200F (2026-10-16), `sshDeviceService.getRunningConfig` with the `aos-cx` profile returned only the echoed `no page` line, not the config. CX backups don't use SSH (the matrix routes CX to REST), but the profile is broken against real hardware and should be fixed before anything relies on it.
 - S3-compatible and NFS export targets
 - Git mirror follow-ups: browse/restore from a commit in the UI (`GET /api/v1/backups/:backupId/history` already returns the device's commit log), and `git gc`/shallow-clone tuning if a large fleet makes the repo unwieldy
 - ✅ ~~SSH-based config pull for non-cloud-managed devices~~ — completed (2026-07-06), see below
@@ -222,7 +227,7 @@ Support devices managed directly on the local network rather than through Aruba 
 - Backend: `src/services/ssh-device.service.js`; routing in `config-backup.service.js` (`pullConfig`/`isCxSwitch`), `device-poller.service.js` (`isCxRestCapable` + SSH fallbacks), `device-api-test.controller.js` (`useSshTransport`); `managementMode` on Device schema + validation + discovery import
 - Frontend: `DeviceTable.vue` (Managed column), `DeviceDetailView.vue` (chip + test action), `DevicesView.vue` (add/edit selectors)
 - Dependency: `ssh2`. Env: `SSH_PORT`, `SSH_CONNECT_TIMEOUT`, `SSH_COMMAND_TIMEOUT`
-- Note: AOS-CX config pull returns the device's JSON running-config (REST); AOS-S/CLI devices return raw CLI text. Both are checksummed and diffed the same way.
+- Note: AOS-CX config pull returns both the CLI text and the JSON running-config over REST (since 2026-10-16; JSON-only before). AOS-S/CLI devices return raw CLI text. Every artifact is checksummed and diffed the same way.
 
 **Deferred:** SSH enable/privileged-mode escalation prompts, SSH key auth (currently password auth), and richer `show version` parsing into structured fields.
 

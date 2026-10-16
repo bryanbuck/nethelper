@@ -22,6 +22,7 @@
 
       <v-tabs v-model="activeTab" color="primary" class="mb-4">
         <v-tab value="backups" prepend-icon="mdi-history">Backups</v-tab>
+        <v-tab value="scopes" prepend-icon="mdi-cloud-outline">Cloud Scopes</v-tab>
         <v-tab value="schedules" prepend-icon="mdi-calendar-clock">Schedules</v-tab>
       </v-tabs>
 
@@ -70,6 +71,42 @@
                 <v-chip :color="statusColor(item.status)" size="small" variant="tonal">
                   {{ item.status }}
                 </v-chip>
+                <div
+                  v-if="item.status === 'failed' && item.error"
+                  class="text-caption text-medium-emphasis backup-error"
+                  :title="item.error"
+                >
+                  {{ item.error }}
+                </div>
+                <!-- APs have no per-device config: point at where it lives -->
+                <v-btn
+                  v-if="item.status === 'failed' && isApConfigError(item.error)"
+                  size="x-small"
+                  variant="text"
+                  color="primary"
+                  prepend-icon="mdi-cloud-outline"
+                  class="px-0"
+                  @click="activeTab = 'scopes'"
+                >
+                  See cloud scopes
+                </v-btn>
+              </template>
+
+              <template #[`item.formats`]="{ item }">
+                <template v-if="item.status === 'success'">
+                  <v-chip
+                    v-for="artifact in artifactsOf(item)"
+                    :key="artifact.kind"
+                    size="x-small"
+                    variant="tonal"
+                    class="mr-1"
+                    :color="artifact.kind === 'cli' ? 'primary' : 'default'"
+                    :title="formatLabel(artifact.format)"
+                  >
+                    {{ kindLabel(artifact.kind) }}
+                  </v-chip>
+                </template>
+                <span v-else>—</span>
               </template>
 
               <template #[`item.trigger`]="{ item }">
@@ -172,6 +209,146 @@
           </v-card>
         </v-window-item>
 
+        <!-- ============ CLOUD SCOPES TAB ============ -->
+        <v-window-item value="scopes">
+          <v-card>
+            <v-card-title class="d-flex align-center flex-wrap ga-2">
+              <span>Cloud Scope Backups</span>
+              <v-spacer />
+              <v-btn
+                v-if="canManage"
+                color="primary"
+                prepend-icon="mdi-cloud-download-outline"
+                :loading="backupsStore.running"
+                @click="runScopeBackup"
+              >
+                Back Up Cloud Scopes
+              </v-btn>
+            </v-card-title>
+            <v-card-subtitle class="text-wrap pb-2">
+              Configuration a cloud holds above the device: a Juniper Mist org and its sites
+              (WLANs, RF templates, device profiles, switch templates). Access points are configured
+              here, not per device. Aruba Central scopes are not supported yet.
+            </v-card-subtitle>
+
+            <v-data-table-server
+              v-model:page="scopePage"
+              v-model:items-per-page="scopeItemsPerPage"
+              :headers="scopeHeaders"
+              :items="backupsStore.scopeBackups"
+              :items-length="backupsStore.scopeTotal"
+              :loading="backupsStore.scopeLoading"
+              @update:options="onScopeTableOptions"
+            >
+              <template #[`item.scopeName`]="{ item }">
+                <div class="font-weight-medium">{{ item.scopeName }}</div>
+                <div class="text-caption text-medium-emphasis">
+                  {{ scopeTypeLabel(item.scopeType) }} · {{ item.integrationName }}
+                </div>
+              </template>
+
+              <template #[`item.status`]="{ item }">
+                <v-chip :color="statusColor(item.status)" size="small" variant="tonal">
+                  {{ item.status }}
+                </v-chip>
+                <div
+                  v-if="item.status === 'failed' && item.error"
+                  class="text-caption text-medium-emphasis backup-error"
+                  :title="item.error"
+                >
+                  {{ item.error }}
+                </div>
+              </template>
+
+              <template #[`item.hasChanges`]="{ item }">
+                <template v-if="item.status === 'success'">
+                  <v-chip :color="item.hasChanges ? 'warning' : 'default'" size="x-small" variant="tonal">
+                    {{ item.hasChanges ? 'Changed' : 'No change' }}
+                  </v-chip>
+                  <v-chip
+                    v-if="item.commitSha"
+                    class="ml-1"
+                    size="x-small"
+                    variant="tonal"
+                    color="info"
+                    prepend-icon="mdi-source-commit"
+                    :title="`Committed to the backup repository as ${item.commitSha}`"
+                  >
+                    {{ item.commitSha.slice(0, 7) }}
+                  </v-chip>
+                </template>
+                <span v-else>—</span>
+              </template>
+
+              <template #[`item.sizeBytes`]="{ item }">
+                {{ item.sizeBytes ? formatBytes(item.sizeBytes) : '—' }}
+              </template>
+
+              <template #[`item.createdAt`]="{ item }">
+                {{ formatDate(item.createdAt) }}
+              </template>
+
+              <template #[`item.actions`]="{ item }">
+                <v-tooltip v-if="canManage" text="View" location="top">
+                  <template #activator="{ props }">
+                    <v-btn
+                      v-bind="props"
+                      icon="mdi-eye"
+                      size="small"
+                      variant="text"
+                      :disabled="item.status !== 'success'"
+                      @click="viewScopeBackup(item)"
+                    />
+                  </template>
+                </v-tooltip>
+                <v-tooltip v-if="canManage" text="Download" location="top">
+                  <template #activator="{ props }">
+                    <v-btn
+                      v-bind="props"
+                      icon="mdi-download"
+                      size="small"
+                      variant="text"
+                      :disabled="item.status !== 'success'"
+                      @click="downloadScope(item)"
+                    />
+                  </template>
+                </v-tooltip>
+                <v-tooltip v-if="canManage" text="Compare" location="top">
+                  <template #activator="{ props }">
+                    <v-btn
+                      v-bind="props"
+                      icon="mdi-file-compare"
+                      size="small"
+                      variant="text"
+                      :disabled="item.status !== 'success'"
+                      @click="openScopeCompareDialog(item)"
+                    />
+                  </template>
+                </v-tooltip>
+                <v-tooltip v-if="isAdmin" text="Delete" location="top">
+                  <template #activator="{ props }">
+                    <v-btn
+                      v-bind="props"
+                      icon="mdi-delete"
+                      size="small"
+                      variant="text"
+                      color="error"
+                      @click="confirmDeleteScopeBackup(item)"
+                    />
+                  </template>
+                </v-tooltip>
+              </template>
+
+              <template #no-data>
+                <div class="text-center pa-6 text-medium-emphasis">
+                  No cloud scope backups yet. Back up cloud scopes now, or turn on
+                  "Also back up cloud scopes" in a schedule.
+                </div>
+              </template>
+            </v-data-table-server>
+          </v-card>
+        </v-window-item>
+
         <!-- ============ SCHEDULES TAB ============ -->
         <v-window-item value="schedules">
           <v-card>
@@ -196,7 +373,7 @@
               <template #[`item.name`]="{ item }">
                 <div class="font-weight-medium">{{ item.name }}</div>
                 <div class="text-caption text-medium-emphasis">
-                  {{ deviceSelectionSummary(item.deviceSelection) }}
+                  {{ deviceSelectionSummary(item.deviceSelection) }}{{ item.includeScopes ? ' + cloud scopes' : '' }}
                 </div>
               </template>
 
@@ -320,15 +497,52 @@
       </v-card>
     </v-dialog>
 
-    <!-- View backup content dialog -->
+    <!-- View backup content dialog (one tab per artifact: CLI / JSON) -->
     <v-dialog v-model="showViewDialog" max-width="900" scrollable>
       <v-card>
         <v-card-title class="d-flex align-center">
-          <span class="text-truncate">{{ viewTarget?.deviceName }} — {{ formatDate(viewTarget?.createdAt) }}</span>
+          <span class="text-truncate">{{ viewTarget?.title }} — {{ formatDate(viewTarget?.createdAt) }}</span>
           <v-spacer />
           <v-btn icon="mdi-close" variant="text" @click="showViewDialog = false" />
         </v-card-title>
+        <div class="d-flex align-center flex-wrap px-4 ga-2">
+          <v-tabs
+            v-if="viewTarget?.artifacts.length > 1"
+            v-model="viewKind"
+            density="compact"
+            color="primary"
+            @update:model-value="loadViewContent"
+          >
+            <v-tab v-for="artifact in viewTarget.artifacts" :key="artifact.kind" :value="artifact.kind">
+              {{ kindLabel(artifact.kind) }}
+            </v-tab>
+          </v-tabs>
+          <v-chip v-else-if="viewArtifact" size="small" variant="tonal">{{ formatLabel(viewArtifact.format) }}</v-chip>
+          <v-spacer />
+          <v-btn
+            size="small"
+            variant="text"
+            prepend-icon="mdi-content-copy"
+            :disabled="loadingContent || !viewContent"
+            @click="copyContent"
+          >
+            Copy
+          </v-btn>
+          <v-btn size="small" variant="text" prepend-icon="mdi-download" @click="downloadViewed">
+            Download
+          </v-btn>
+        </div>
         <v-card-text>
+          <v-alert
+            v-if="viewHint"
+            type="info"
+            variant="tonal"
+            density="compact"
+            class="mb-3"
+          >
+            {{ viewHint }}
+            <div class="text-caption mt-1">NetHelper does not push configurations to devices yet.</div>
+          </v-alert>
           <v-progress-linear v-if="loadingContent" indeterminate color="primary" />
           <pre v-else class="config-content">{{ viewContent }}</pre>
         </v-card-text>
@@ -360,6 +574,21 @@
               />
             </v-col>
           </v-row>
+
+          <div v-if="diffResult?.kinds?.length > 1" class="d-flex align-center mb-3">
+            <span class="text-body-2 text-medium-emphasis mr-3">Compare</span>
+            <v-btn-toggle
+              v-model="compareKind"
+              density="compact"
+              variant="outlined"
+              mandatory
+              @update:model-value="loadDiff"
+            >
+              <v-btn v-for="kind in diffResult.kinds" :key="kind" :value="kind" size="small">
+                {{ kindLabel(kind) }}
+              </v-btn>
+            </v-btn-toggle>
+          </div>
 
           <v-progress-linear v-if="loadingDiff" indeterminate color="primary" class="mb-3" />
           <ConfigDiffViewer
@@ -471,6 +700,14 @@
             </v-row>
 
             <v-switch
+              v-model="scheduleForm.includeScopes"
+              label="Also back up cloud scopes"
+              hint="Mist org and site configuration, which is where access point configuration lives"
+              persistent-hint
+              color="primary"
+              class="mb-2"
+            />
+            <v-switch
               v-model="scheduleForm.active"
               label="Active"
               color="success"
@@ -542,9 +779,19 @@ const backupHeaders = [
   { title: 'Device', key: 'deviceName' },
   { title: 'Status', key: 'status' },
   { title: 'Trigger', key: 'trigger' },
+  { title: 'Formats', key: 'formats', sortable: false },
   { title: 'Changes', key: 'hasChanges' },
   { title: 'Size', key: 'sizeBytes' },
   { title: 'Date', key: 'createdAt' },
+  { title: 'Actions', key: 'actions', sortable: false, align: 'end' }
+]
+
+const scopeHeaders = [
+  { title: 'Scope', key: 'scopeName', sortable: false },
+  { title: 'Status', key: 'status', sortable: false },
+  { title: 'Changes', key: 'hasChanges', sortable: false },
+  { title: 'Size', key: 'sizeBytes', sortable: false },
+  { title: 'Date', key: 'createdAt', sortable: false },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' }
 ]
 
@@ -611,6 +858,76 @@ function typeLabel(type) {
   return deviceTypeItems.find(t => t.value === type)?.title || type
 }
 
+// ---- Artifacts: a backup holds a CLI text, a JSON document, or both (AOS-CX) ----
+const KIND_LABELS = { cli: 'CLI', structured: 'JSON' }
+const FORMAT_LABELS = {
+  'cli-text': 'CLI running-config',
+  'junos-set': 'Junos set commands',
+  'aoscx-json': 'AOS-CX REST config (JSON)',
+  'mist-config-json': 'Mist device config (JSON)',
+  'mist-scope-json': 'Mist org/site config (JSON)',
+  'meraki-settings-json': 'Meraki settings (JSON)'
+}
+const KIND_ORDER = ['cli', 'structured']
+
+function kindLabel(kind) {
+  return KIND_LABELS[kind] || kind
+}
+
+function formatLabel(format) {
+  return FORMAT_LABELS[format] || format || 'Configuration'
+}
+
+function kindOfFormat(format) {
+  return /json$/.test(format || '') ? 'structured' : 'cli'
+}
+
+// Rows from before artifacts existed carry only `format`.
+function artifactsOf(backup) {
+  const artifacts = backup.artifacts?.length
+    ? backup.artifacts
+    : (backup.format || backup.status === 'success' ? [{ kind: kindOfFormat(backup.format), format: backup.format || 'cli-text' }] : [])
+  return [...artifacts].sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind))
+}
+
+function isApConfigError(error) {
+  return /access point/i.test(error || '')
+}
+
+function scopeTypeLabel(type) {
+  return { org: 'Organization', site: 'Site', group: 'Group' }[type] || type
+}
+
+/**
+ * How a person would apply this artifact by hand. NetHelper itself never
+ * writes config; this only says where the text can go.
+ */
+function applyHint(artifact, device, isScope) {
+  if (!artifact) return null
+  if (isScope) {
+    return 'Configuration held by the cloud for this org or site. Changes are applied through the cloud dashboard or API, not on a device.'
+  }
+  const cloudManaged = device && (device.managementMode === 'cloud' || device.cloudManaged === true)
+  if (artifact.kind === 'cli') {
+    if (artifact.format === 'junos-set') {
+      return cloudManaged
+        ? 'Set commands for this Junos device. It is cloud-managed, so apply changes through Mist rather than the local CLI.'
+        : 'Junos: enter configuration mode, run "load set terminal", paste, then "commit confirmed 5" and confirm with "commit".'
+    }
+    if (cloudManaged) {
+      return 'This device is cloud-managed and refuses local configuration changes. Apply changes through its cloud, e.g. Aruba Central MultiEdit for AOS-CX switches in UI groups.'
+    }
+    return 'Paste over SSH in configuration mode ("configure terminal"). Pasting merges into the running config; it does not remove lines that are absent from this text.'
+  }
+  if (artifact.format === 'aoscx-json') {
+    return 'The switch\'s REST configuration database. Not for pasting into the CLI; it is the format the AOS-CX REST API restores from.'
+  }
+  if (artifact.format === 'mist-config-json') {
+    return 'The Mist configuration object for this device (intent, not a running-config). Applied through Mist, not the device CLI.'
+  }
+  return null
+}
+
 async function reloadBackups() {
   try {
     await backupsStore.fetchBackups({
@@ -631,17 +948,60 @@ function onTableOptions(options) {
 
 // View content
 const showViewDialog = ref(false)
+// { id, title, createdAt, artifacts, isScope, device }
 const viewTarget = ref(null)
+const viewKind = ref(null)
 const viewContent = ref('')
 const loadingContent = ref(false)
 
+const viewArtifact = computed(() =>
+  viewTarget.value?.artifacts.find(a => a.kind === viewKind.value) || viewTarget.value?.artifacts[0] || null
+)
+const viewHint = computed(() =>
+  viewTarget.value ? applyHint(viewArtifact.value, viewTarget.value.device, viewTarget.value.isScope) : null
+)
+
 async function viewBackup(item) {
-  viewTarget.value = item
+  if (devicesStore.devices.length === 0) {
+    try { await devicesStore.fetchDevices() } catch { /* hint falls back to the generic one */ }
+  }
+  const artifacts = artifactsOf(item)
+  viewTarget.value = {
+    id: item.id,
+    title: item.deviceName,
+    createdAt: item.createdAt,
+    artifacts,
+    isScope: false,
+    device: devicesStore.devices.find(d => d.id === item.deviceId) || null
+  }
+  viewKind.value = artifacts[0]?.kind || null
+  showViewDialog.value = true
+  await loadViewContent()
+}
+
+function viewScopeBackup(item) {
+  viewTarget.value = {
+    id: item.id,
+    title: `${scopeTypeLabel(item.scopeType)} ${item.scopeName}`,
+    createdAt: item.createdAt,
+    artifacts: [{ kind: 'structured', format: item.format }],
+    isScope: true,
+    device: null
+  }
+  viewKind.value = 'structured'
+  showViewDialog.value = true
+  loadViewContent()
+}
+
+async function loadViewContent() {
+  const target = viewTarget.value
+  if (!target) return
   viewContent.value = ''
   loadingContent.value = true
-  showViewDialog.value = true
   try {
-    const data = await backupsStore.fetchBackupContent(item.id)
+    const data = target.isScope
+      ? await backupsStore.fetchScopeBackupContent(target.id)
+      : await backupsStore.fetchBackupContent(target.id, viewKind.value)
     viewContent.value = data.content
   } catch (error) {
     notify(error.userMessage || error.message || 'Failed to load configuration', 'error')
@@ -651,32 +1011,73 @@ async function viewBackup(item) {
   }
 }
 
-async function download(item) {
+async function copyContent() {
   try {
-    await backupsStore.downloadBackup(item.id)
+    await navigator.clipboard.writeText(viewContent.value)
+    notify('Configuration copied to the clipboard')
+  } catch {
+    notify('Copy failed: the browser blocked clipboard access', 'error')
+  }
+}
+
+function downloadViewed() {
+  const target = viewTarget.value
+  if (!target) return
+  if (target.isScope) downloadScope({ id: target.id })
+  else download({ id: target.id }, viewKind.value)
+}
+
+async function download(item, kind) {
+  try {
+    await backupsStore.downloadBackup(item.id, kind)
   } catch (error) {
     notify(error.userMessage || error.message || 'Download failed', 'error')
   }
 }
 
-// Compare / diff
+async function downloadScope(item) {
+  try {
+    await backupsStore.downloadScopeBackup(item.id)
+  } catch (error) {
+    notify(error.userMessage || error.message || 'Download failed', 'error')
+  }
+}
+
+// Compare / diff (device backups, or cloud-scope backups)
 const showCompareDialog = ref(false)
-const compareDeviceId = ref(null)
+const compareMode = ref('device')
+const compareKey = ref(null)
 const compareFromId = ref(null)
 const compareToId = ref(null)
+const compareKind = ref(null)
 const diffResult = ref(null)
 const loadingDiff = ref(false)
 
-const compareCandidates = computed(() =>
-  backupsStore.backups
-    .filter(b => b.status === 'success' && b.deviceId === compareDeviceId.value)
-    .map(b => ({ title: formatDate(b.createdAt), value: b.id }))
-)
+const scopeKey = b => `${b.integrationId}|${b.scopeType}|${b.scopeId}`
+
+const compareCandidates = computed(() => {
+  const rows = compareMode.value === 'scope'
+    ? backupsStore.scopeBackups.filter(b => b.status === 'success' && scopeKey(b) === compareKey.value)
+    : backupsStore.backups.filter(b => b.status === 'success' && b.deviceId === compareKey.value)
+  return rows.map(b => ({ title: formatDate(b.createdAt), value: b.id }))
+})
 
 function openCompareDialog(item) {
-  compareDeviceId.value = item.deviceId
+  compareMode.value = 'device'
+  compareKey.value = item.deviceId
+  startCompare(item)
+}
+
+function openScopeCompareDialog(item) {
+  compareMode.value = 'scope'
+  compareKey.value = scopeKey(item)
+  startCompare(item)
+}
+
+function startCompare(item) {
   compareToId.value = item.id
   compareFromId.value = null
+  compareKind.value = null
   diffResult.value = null
   showCompareDialog.value = true
 }
@@ -688,12 +1089,52 @@ async function loadDiff() {
   }
   loadingDiff.value = true
   try {
-    diffResult.value = await backupsStore.diffBackups(compareFromId.value, compareToId.value)
+    diffResult.value = compareMode.value === 'scope'
+      ? await backupsStore.diffScopeBackups(compareFromId.value, compareToId.value)
+      : await backupsStore.diffBackups(compareFromId.value, compareToId.value, compareKind.value || undefined)
+    if (diffResult.value.kind) compareKind.value = diffResult.value.kind
   } catch (error) {
     notify(error.userMessage || error.message || 'Failed to compute diff', 'error')
   } finally {
     loadingDiff.value = false
   }
+}
+
+// Cloud scopes
+const scopePage = ref(1)
+const scopeItemsPerPage = ref(25)
+
+async function reloadScopeBackups() {
+  try {
+    await backupsStore.fetchScopeBackups({
+      limit: scopeItemsPerPage.value,
+      offset: (scopePage.value - 1) * scopeItemsPerPage.value
+    })
+  } catch (error) {
+    notify(error.userMessage || error.message || 'Failed to load cloud scope backups', 'error')
+  }
+}
+
+function onScopeTableOptions(options) {
+  scopePage.value = options.page
+  scopeItemsPerPage.value = options.itemsPerPage
+  reloadScopeBackups()
+}
+
+async function runScopeBackup() {
+  try {
+    await backupsStore.runScopeBackup()
+    notify('Cloud scope backup queued')
+    setTimeout(reloadScopeBackups, 1500)
+  } catch (error) {
+    notify(error.userMessage || error.message || 'Failed to queue cloud scope backup', 'error')
+  }
+}
+
+function confirmDeleteScopeBackup(item) {
+  deleteMessage.value = `Delete the backup of ${scopeTypeLabel(item.scopeType).toLowerCase()} "${item.scopeName}" from ${formatDate(item.createdAt)}?`
+  deleteAction.value = () => backupsStore.deleteScopeBackup(item.id)
+  showDeleteDialog.value = true
 }
 
 // Run backup now
@@ -744,7 +1185,8 @@ const emptyScheduleForm = () => ({
   active: true,
   deviceSelection: { mode: 'all', types: [], deviceIds: [] },
   retentionDays: 90,
-  retentionMaxCount: 30
+  retentionMaxCount: 30,
+  includeScopes: false
 })
 const scheduleForm = ref(emptyScheduleForm())
 
@@ -782,7 +1224,8 @@ async function openScheduleDialog(item = null) {
         deviceIds: item.deviceSelection?.deviceIds || []
       },
       retentionDays: item.retentionDays,
-      retentionMaxCount: item.retentionMaxCount
+      retentionMaxCount: item.retentionMaxCount,
+      includeScopes: item.includeScopes === true
     }
   } else {
     scheduleForm.value = emptyScheduleForm()
@@ -877,5 +1320,12 @@ onMounted(() => {
   word-break: break-word;
   max-height: 65vh;
   overflow-y: auto;
+}
+
+.backup-error {
+  max-width: 280px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

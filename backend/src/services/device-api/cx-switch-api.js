@@ -335,11 +335,13 @@ class CXSwitchAPI extends BaseDeviceAPI {
   /**
    * Make an authenticated request to the CX switch API
    * @param {string} method - HTTP method (GET, POST, PUT, DELETE)
+   *   (options.accept: Accept header; 'text/plain' on /configs/running-config
+   *   returns the CLI form of the config — verified on ML.10.16)
    * @param {string} endpoint - API endpoint (without /rest/vX.XX prefix)
    * @param {Object} data - Request body data (optional)
    * @returns {Promise<Object>} Response data
    */
-  async makeAuthenticatedRequest(method, endpoint, data = null, { retried = false } = {}) {
+  async makeAuthenticatedRequest(method, endpoint, data = null, { retried = false, accept = 'application/json' } = {}) {
     try {
       // Ensure we have a valid session
       if (!this.hasValidSession()) {
@@ -355,7 +357,7 @@ class CXSwitchAPI extends BaseDeviceAPI {
         headers: {
           'Cookie': this.sessionCookie,
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
+          'Accept': accept,
         },
         httpsAgent: this.httpsAgent,
         validateStatus: (status) => status < 500,
@@ -383,7 +385,7 @@ class CXSwitchAPI extends BaseDeviceAPI {
       if (response.status === 401 && !retried) {
         logger.warn('CX session expired, re-authenticating', { device: this.device.name });
         this.clearSession();
-        return this.makeAuthenticatedRequest(method, endpoint, data, { retried: true });
+        return this.makeAuthenticatedRequest(method, endpoint, data, { retried: true, accept });
       }
 
       if (response.status >= 400) {

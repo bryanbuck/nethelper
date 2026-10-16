@@ -316,7 +316,7 @@ The deciding argument was correctness, not elegance. Screen-scraping an interact
 
 ### Post-MVP (explicitly out of scope above)
 
-Per-vendor pollers (generalize `device-poller.service.js`), automation actions for new vendors, Juniper/Cisco discovery OUI tables, Mist WebSocket streaming, NETCONF, restore/rollback.
+Per-vendor pollers (generalize `device-poller.service.js`), automation actions for new vendors, Juniper/Cisco discovery OUI tables, Mist WebSocket streaming, NETCONF, restore/rollback (direction in §8b: a future `restore` transport operation, direct and atomic platforms only; cloud writes are a separate feature).
 
 ## 8b. Config-backup storage (2026-09-14)
 
@@ -327,10 +327,32 @@ Backups are stored twice, on purpose:
 
 Two consequences matter for the vendor work:
 
-- **`format` is now persisted, not discarded.** `pullConfig()` returns `{ text, source, format }` and the value lands on `ConfigBackup.format`. This closes the gap flagged in §9.1: an intent-based settings snapshot (Mist today, Meraki later) is recorded as `mist-config-json` / `meraki-settings-json` and committed as `settings.json`, while a real running-config is `cli-text` → `running-config.cfg` and Junos set-format is `junos-set` → `running-config.set`. The repo is self-describing, so "settings snapshot ≠ running-config" is visible on disk rather than only in the UI.
+- **`format` is now persisted, not discarded.** `pullConfig()` returns `{ artifacts: [{ kind, format, text }], source }` (artifacts since 2026-10-16, below) and each format lands on a `ConfigBackupArtifact` row (the primary's also on `ConfigBackup.format`). This closes the gap flagged in §9.1: an intent-based settings snapshot (Mist today, Meraki later) is recorded as `mist-config-json` / `meraki-settings-json` and committed as `settings.json`, while a real running-config is `cli-text` → `running-config.cfg` and Junos set-format is `junos-set` → `running-config.set`. The repo is self-describing, so "settings snapshot ≠ running-config" is visible on disk rather than only in the UI.
 - **Retention and history are deliberately asymmetric.** `pruneRetention()` drops rows and flat files; Git history is never rewritten (that would require a force-push that breaks clones). The repo is the long-term archive beneath a bounded working index.
 
 The mirror is additive and best-effort throughout: a commit or push failure is logged and the backup still succeeds, because the authoritative bytes are already on disk. A `CapabilityError` still produces no commit at all — an honest "not supported" must not leave a phantom version in history.
+
+### Artifacts: pasteable text and structured config (2026-10-16)
+
+A backup can hold more than one representation, one `ConfigBackupArtifact` per **kind** (`utils/config-format.js`):
+
+- `cli`: text a person can paste back (`cli-text`, `junos-set`).
+- `structured`: a JSON document (`aoscx-json`, `mist-config-json`, ...). Machine-readable, not pasteable.
+
+AOS-CX yields both from one REST session: `GET /configs/running-config` with `Accept: text/plain` returns the CLI rendering (what `show running-config` prints; verified on a 6200F, ML.10.16), and `/fullconfigs/running-config` the REST config database. The CLI read is best-effort, so a backup still succeeds JSON-only. `ConfigBackup.filePath/format/checksum` mirror the **primary** artifact (CLI when present), so pre-artifact readers keep working; the migration backfilled one artifact per existing backup. Change detection compares each kind with the same kind last time. Content, download and diff take `?kind=cli|structured`; diff defaults to a kind both backups hold, CLI first. The Git mirror writes `running-config.cfg` and `settings.json` side by side.
+
+### Cloud scopes (2026-10-16)
+
+Cloud planes configure APs (and much else) **above the device**: Mist org/site objects (WLANs, RF templates, device profiles, switch templates), Central scopes and library profiles. There is no per-AP config to back up, so `ScopeBackup` captures the scope instead. It's read-only.
+
+- Provider contract (`BaseCloudProvider`): `listConfigScopes()` → `[{ scopeType: 'org'|'site'|'group', scopeId, name }]` and `getScopeConfiguration(scope)` → `{ text, format, source }`, behind `supports('scope-backup')`. The defaults throw `CapabilityError`.
+- **Mist**: implemented (`mist-scope-json`; canonical JSON, lists sorted by id; a 404 section is recorded as null). Validated against spec-derived fixtures only; there's no live Mist tenant yet.
+- **Central**: `CapabilityError` until implemented. Live triage of the New Central config API on 2026-10-16 (read-only GETs): `/network-config/v1alpha1/{config-assignments, scope-maps, sites, site-collections, wlan-ssids}` all return 200. `config-assignments` lists `{scope-id, scope-name, scope-type, device-function, profile-type, profile-instance}`, and a profile library is read at `/network-config/v1alpha1/<profile-type>` (an unknown type returns 400 "Invalid module name/configuration root element"). That is enough to build a Central scope backup: assignments + scope-maps + one library read per assigned profile type, with sites as scopes.
+- `services/scope-backup.service.js` mirrors the device path: flat files under `BACKUP_STORAGE_PATH/_scopes/` are authoritative, and the Git mirror commits to `_scopes/<integration>/<type>-<id>/`. `integrationId` is a plain column with denormalized names, so history outlives the integration. Runs are manual (`POST /backups/scopes/run`) or ride along on a schedule with `includeScopes`.
+
+### Restore (not built; direction)
+
+Nothing writes config today. When it comes, it is a `restore` operation in the transport matrix, **only** where the apply is atomic with rollback: Junos NETCONF (`load-configuration` + `commit confirmed`), and direct-managed AOS-CX REST (`PUT /fullconfigs/running-config` from the `structured` artifact, after a checkpoint). It is refused outright for `managementMode === 'cloud'` or `cloudManaged === true`. SSH paste stays a human action (not atomic; a half-applied config can lock us out). Cloud writes are a separate feature that edits provider profiles/templates, not "restore a device backup".
 
 ## 8c. Live port/PoE state (2026-10-15)
 

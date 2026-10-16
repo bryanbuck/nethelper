@@ -21,8 +21,10 @@ const poller = require('../../src/services/device-poller.service');
 const device = { id: 'd1', name: 'sw1', type: 'switch', vendor: 'aruba', platform: 'aos-cx', ipAddress: '10.0.0.2' };
 const credentials = { username: 'u', password: 'p' };
 
-test('backupPoller reads both configs in one session and logs out', async () => {
-  mockApi.makeAuthenticatedRequest.mockImplementation(async (_m, endpoint) => ({ endpoint }));
+test('backupPoller reads the JSON configs and the CLI text in one session and logs out', async () => {
+  mockApi.makeAuthenticatedRequest.mockImplementation(async (_m, endpoint, _d, opts) => (
+    opts?.accept === 'text/plain' ? 'hostname sw1\n' : { endpoint }
+  ));
   const result = await poller.backupPoller(device, credentials);
 
   expect(CXSwitchAPI).toHaveBeenCalledWith(device, credentials);
@@ -30,9 +32,24 @@ test('backupPoller reads both configs in one session and logs out', async () => 
   expect(mockApi.makeAuthenticatedRequest.mock.calls.map((c) => c[1])).toEqual([
     '/fullconfigs/running-config',
     '/fullconfigs/startup-config',
+    '/configs/running-config',
   ]);
+  expect(mockApi.makeAuthenticatedRequest.mock.calls[2][3]).toEqual({ accept: 'text/plain' });
   expect(result.running_config).toEqual({ endpoint: '/fullconfigs/running-config' });
+  expect(result.running_config_cli).toBe('hostname sw1\n');
   expect(mockApi.logout).toHaveBeenCalledTimes(1);
+});
+
+test('a failed CLI read keeps the JSON backup', async () => {
+  mockApi.makeAuthenticatedRequest.mockImplementation(async (_m, endpoint, _d, opts) => {
+    if (opts?.accept === 'text/plain') throw new Error('API request failed with status 404: Not Found');
+    return { endpoint };
+  });
+  const result = await poller.backupPoller(device, credentials);
+
+  expect(result.running_config).toEqual({ endpoint: '/fullconfigs/running-config' });
+  expect(result.running_config_cli).toBeNull();
+  expect(result.running_config_cli_error).toMatch(/404/);
 });
 
 test('the session is logged out even when a request fails', async () => {

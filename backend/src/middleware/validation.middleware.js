@@ -237,14 +237,50 @@ const validateBackup = {
     handleValidationErrors,
   ],
 
+  // content / download: optional artifact kind (default: the primary)
+  content: [
+    param('backupId').isUUID().withMessage('Invalid backup ID'),
+    query('kind').optional().isIn(['cli', 'structured']).withMessage('kind must be cli or structured'),
+    handleValidationErrors,
+  ],
+
   diff: [
     param('backupId').isUUID().withMessage('Invalid backup ID'),
     param('otherId').isUUID().withMessage('Invalid backup ID'),
+    query('kind').optional().isIn(['cli', 'structured']).withMessage('kind must be cli or structured'),
     handleValidationErrors,
   ],
 
   scheduleId: [
     param('scheduleId').isUUID().withMessage('Invalid schedule ID'),
+    handleValidationErrors,
+  ],
+
+  // Cloud-scope backups. integrationId is not always a UUID (the env-backed
+  // Central integration is "env:aruba_central").
+  scopeList: [
+    query('integrationId').optional().isString().isLength({ min: 1, max: 100 }),
+    query('scopeType').optional().isIn(['org', 'site', 'group']),
+    query('scopeId').optional().isString().isLength({ min: 1, max: 200 }),
+    query('status').optional().isIn(['pending', 'running', 'success', 'failed']),
+    query('limit').optional().isInt({ min: 1, max: 200 }).toInt(),
+    query('offset').optional().isInt({ min: 0 }).toInt(),
+    handleValidationErrors,
+  ],
+
+  scopeRun: [
+    body('integrationId').optional({ values: 'null' }).isString().isLength({ min: 1, max: 100 }),
+    handleValidationErrors,
+  ],
+
+  scopeBackupId: [
+    param('scopeBackupId').isUUID().withMessage('Invalid scope backup ID'),
+    handleValidationErrors,
+  ],
+
+  scopeDiff: [
+    param('scopeBackupId').isUUID().withMessage('Invalid scope backup ID'),
+    param('otherId').isUUID().withMessage('Invalid scope backup ID'),
     handleValidationErrors,
   ],
 
@@ -257,6 +293,7 @@ const validateBackup = {
     body('deviceSelection.mode').optional().isIn(['all', 'types', 'devices']),
     body('retentionDays').optional().isInt({ min: 0, max: 3650 }).toInt(),
     body('retentionMaxCount').optional().isInt({ min: 0, max: 1000 }).toInt(),
+    body('includeScopes').optional().isBoolean().toBoolean(),
     handleValidationErrors,
   ],
 
@@ -270,6 +307,7 @@ const validateBackup = {
     body('deviceSelection.mode').optional().isIn(['all', 'types', 'devices']),
     body('retentionDays').optional().isInt({ min: 0, max: 3650 }).toInt(),
     body('retentionMaxCount').optional().isInt({ min: 0, max: 1000 }).toInt(),
+    body('includeScopes').optional().isBoolean().toBoolean(),
     handleValidationErrors,
   ],
 };

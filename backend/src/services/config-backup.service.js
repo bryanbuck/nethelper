@@ -1,7 +1,6 @@
 const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
-const Diff = require('diff');
 const { CronExpressionParser } = require('cron-parser');
 const { getPrisma } = require('../config/database');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
@@ -13,12 +12,23 @@ const JunosAPI = require('./device-api/junos-api');
 const NetconfClient = require('./device-api/netconf-client');
 const { isCxRestCapable, detectPlatform } = require('../utils/device-platform');
 const { resolveTransport } = require('../utils/transport-router');
+const { ARTIFACT_KINDS, describeFormat, kindForFormat } = require('../utils/config-format');
+const { unifiedDiff } = require('../utils/config-diff');
 const gitBackupService = require('./git-backup.service');
+const scopeBackupService = require('./scope-backup.service');
 const { getQueue } = require('../config/bull');
 const { getIO } = require('../websocket/socket.handler');
 const logger = require('../utils/logger');
 
 const SCHEDULED_JOB_NAME = 'runScheduled';
+
+const artifact = (format, text) => ({ kind: kindForFormat(format), format, text });
+
+function badRequest(message) {
+  const error = new Error(message);
+  error.statusCode = 400;
+  return error;
+}
 
 class ConfigBackupService {
   constructor() {
@@ -91,7 +101,8 @@ class ConfigBackupService {
       });
     }
 
-    if (devices.length === 0) {
+    const includeScopes = Boolean(schedule?.includeScopes);
+    if (devices.length === 0 && !includeScopes) {
       logger.warn('Backup run matched no devices', { scheduleId, deviceIds });
       return { total: 0, succeeded: 0, failed: 0 };
     }
@@ -101,6 +112,17 @@ class ConfigBackupService {
       const ok = await this.backupDevice(device, { scheduleId, trigger, triggeredBy });
       if (ok) results.succeeded++;
       else results.failed++;
+    }
+
+    // Cloud scopes (Mist org/sites: where AP config lives) ride along on
+    // schedules that ask for them. The one push below covers both.
+    let scopes = null;
+    if (includeScopes) {
+      scopes = await scopeBackupService.runScopeBackups({ trigger, triggeredBy, schedule, push: false })
+        .catch((error) => {
+          logger.error(`Scope backups failed: ${error.message}`);
+          return { total: 0, succeeded: 0, failed: 0, unsupported: [], error: error.message };
+        });
     }
 
     if (schedule) {
@@ -124,10 +146,11 @@ class ConfigBackupService {
     this.emit('backup:run:completed', {
       scheduleId: scheduleId || null,
       ...results,
+      ...(scopes && { scopes }),
       gitPushed: push.pushed === true,
     });
-    logger.info('Config backup run completed', { scheduleId, ...results });
-    return { ...results, gitPushed: push.pushed === true };
+    logger.info('Config backup run completed', { scheduleId, ...results, ...(scopes && { scopes }) });
+    return { ...results, ...(scopes && { scopes }), gitPushed: push.pushed === true };
   }
 
   /**
@@ -149,37 +172,51 @@ class ConfigBackupService {
     });
 
     try {
-      const { text, source, format, device: fullDevice } = await this.pullConfig(device);
-      if (!text || text.trim().length === 0) {
+      const { artifacts, source, device: fullDevice } = await this.pullConfig(device);
+      // CLI first: it becomes the primary (ConfigBackup.filePath/format).
+      const captured = artifacts
+        .filter((a) => a.text && a.text.trim().length > 0)
+        .sort((a, b) => ARTIFACT_KINDS.indexOf(a.kind) - ARTIFACT_KINDS.indexOf(b.kind))
+        .map((a) => ({
+          ...a,
+          checksum: crypto.createHash('sha256').update(a.text).digest('hex'),
+          sizeBytes: Buffer.byteLength(a.text, 'utf8'),
+        }));
+      if (captured.length === 0) {
         throw new Error(`${source} returned an empty configuration`);
       }
 
-      const checksum = crypto.createHash('sha256').update(text).digest('hex');
+      // Changed when any artifact differs from the same kind last time (a kind
+      // captured for the first time counts as a change).
       const previous = await prisma.configBackup.findFirst({
         where: { deviceId: device.id, status: 'success', id: { not: record.id } },
         orderBy: { createdAt: 'desc' },
-        select: { checksum: true },
+        include: { artifacts: true },
       });
-      const hasChanges = !previous || previous.checksum !== checksum;
+      const previousByKind = Object.fromEntries(
+        (previous ? this.artifactsOf(previous) : []).map((a) => [a.kind, a.checksum])
+      );
+      const hasChanges = !previous || captured.some((a) => previousByKind[a.kind] !== a.checksum);
 
       const safeKey = deviceStorageKey(device).replace(/[^A-Za-z0-9_-]/g, '_');
       const deviceDir = path.join(this.storageDir, safeKey);
       await fs.mkdir(deviceDir, { recursive: true });
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filePath = path.join(deviceDir, `${timestamp}_${record.id}.cfg`);
-      await fs.writeFile(filePath, text, 'utf8');
+      for (const artifact of captured) {
+        artifact.filePath = path.join(deviceDir, `${timestamp}_${record.id}.${describeFormat(artifact.format).ext}`);
+        await fs.writeFile(artifact.filePath, artifact.text, 'utf8');
+      }
 
-      logger.info(`Config backup for ${device.name} pulled via ${source}`);
+      logger.info(`Config backup for ${device.name} pulled via ${source} (${captured.map((a) => a.format).join(', ')})`);
 
-      // Mirror into Git when enabled. Best-effort by design: the flat file above
-      // is authoritative and already written, so a git failure must not fail the
-      // backup — it is logged and the run continues.
+      // Mirror into Git when enabled. Best-effort by design: the flat files
+      // above are authoritative and already written, so a git failure must not
+      // fail the backup — it is logged and the run continues.
       let commitSha = null;
       try {
         const result = await gitBackupService.commitDeviceConfig({
           device: fullDevice || device,
-          text,
-          format,
+          artifacts: captured.map(({ format, text }) => ({ format, text })),
           source,
           backupId: record.id,
           trigger,
@@ -189,16 +226,22 @@ class ConfigBackupService {
         logger.warn(`Git mirror failed for ${device.name}: ${gitError.message}`);
       }
 
+      const primary = captured[0];
       const updated = await prisma.configBackup.update({
         where: { id: record.id },
         data: {
           status: 'success',
-          filePath,
-          checksum,
-          sizeBytes: Buffer.byteLength(text, 'utf8'),
+          filePath: primary.filePath,
+          checksum: primary.checksum,
+          sizeBytes: primary.sizeBytes,
           hasChanges,
-          format,
+          format: primary.format,
           commitSha,
+          artifacts: {
+            create: captured.map(({ kind, format, filePath, checksum, sizeBytes }) => ({
+              kind, format, filePath, checksum, sizeBytes,
+            })),
+          },
         },
       });
 
@@ -207,6 +250,7 @@ class ConfigBackupService {
         deviceId: device.id,
         deviceName: device.name,
         hasChanges,
+        kinds: captured.map((a) => a.kind),
       });
       return true;
     } catch (error) {
@@ -252,12 +296,14 @@ class ConfigBackupService {
    * docs/MULTI_VENDOR_ROADMAP.md section 5.
    *
    * @param {Object} deviceStub - at least { id, serial, name }
-   * @returns {Promise<{ text: string, source: string, format: string, device: Object }>}
-   *   `format` records what kind of artefact this is ('cli-text', 'junos-set',
-   *   'aoscx-json', 'mist-config-json', ...). It is persisted on the backup row
-   *   and picks the filename in the Git mirror, so an intent-based JSON
-   *   snapshot is never mislabelled as a CLI running-config. `device` is the
-   *   full row loaded here, so callers need not re-query for vendor/platform.
+   * @returns {Promise<{ artifacts: Array<{kind, format, text}>, source: string, device: Object }>}
+   *   One artifact per representation captured. Most transports yield one;
+   *   AOS-CX yields the CLI text and the REST JSON. `format` records what each
+   *   artifact is ('cli-text', 'junos-set', 'aoscx-json', 'mist-config-json',
+   *   ...) and `kind` groups it as 'cli' (pasteable) or 'structured' (JSON),
+   *   see utils/config-format.js. It picks the filename in the Git mirror, so
+   *   an intent-based JSON snapshot is never mislabelled as a running-config.
+   *   `device` is the full row loaded here, so callers need not re-query.
    */
   async pullConfig(deviceStub) {
     const prisma = getPrisma();
@@ -280,17 +326,24 @@ class ConfigBackupService {
         if (isCxRestCapable(device)) {
           await devicePollerService.refreshCentralStatus(device, credentials);
           const result = await devicePollerService.backupPoller(device, credentials);
+          const artifacts = [];
+          if (result.running_config_cli) {
+            artifacts.push(artifact('cli-text', result.running_config_cli));
+          }
           const running = result.running_config;
-          const isText = typeof running === 'string';
-          const text = isText ? running : JSON.stringify(running, null, 2);
-          return { text, source: 'AOS-CX REST', format: isText ? 'cli-text' : 'aoscx-json', device };
+          if (typeof running === 'string') {
+            if (!result.running_config_cli) artifacts.push(artifact('cli-text', running));
+          } else if (running) {
+            artifacts.push(artifact('aoscx-json', JSON.stringify(running, null, 2)));
+          }
+          return { artifacts, source: 'AOS-CX REST', device };
         }
 
         if (detectPlatform(device) === 'junos') {
           const api = new JunosAPI(device, credentials);
           try {
             const text = await api.getConfiguration();
-            return { text, source: 'Junos NETCONF', format: 'junos-set', device };
+            return { artifacts: [artifact('junos-set', text)], source: 'Junos NETCONF', device };
           } catch (error) {
             // NETCONF is not enabled by default on Junos. If the device refused
             // the subsystem, that is not a failure — fall through to the SSH CLI
@@ -318,7 +371,7 @@ class ConfigBackupService {
         // which, so the UI can label the backup honestly.
         const text = typeof config === 'string' ? config : config.text;
         const format = (typeof config === 'object' && config.format) || 'cli-text';
-        return { text, source: config.source || provider.label, format, device };
+        return { artifacts: [artifact(format, text)], source: config.source || provider.label, device };
       }
 
       if (transport === 'ssh') {
@@ -326,12 +379,8 @@ class ConfigBackupService {
           throw new Error(`No credentials linked to device "${device.name}" for direct backup`);
         }
         const text = await sshDeviceService.getRunningConfig(device, credentials);
-        return {
-          text,
-          source: 'SSH',
-          format: detectPlatform(device) === 'junos' ? 'junos-set' : 'cli-text',
-          device,
-        };
+        const format = detectPlatform(device) === 'junos' ? 'junos-set' : 'cli-text';
+        return { artifacts: [artifact(format, text)], source: 'SSH', device };
       }
     }
 
@@ -360,7 +409,7 @@ class ConfigBackupService {
       const backups = await prisma.configBackup.findMany({
         where: { deviceId, status: 'success' },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, filePath: true, createdAt: true },
+        select: { id: true, filePath: true, createdAt: true, artifacts: { select: { filePath: true } } },
       });
 
       const cutoff = retentionDays
@@ -373,9 +422,7 @@ class ConfigBackupService {
       });
 
       for (const backup of toDelete) {
-        if (backup.filePath) {
-          await fs.unlink(backup.filePath).catch(() => {});
-        }
+        await this.unlinkFiles(backup);
         await prisma.configBackup.delete({ where: { id: backup.id } });
       }
       if (toDelete.length > 0) {
@@ -402,7 +449,10 @@ class ConfigBackupService {
         orderBy: { createdAt: 'desc' },
         take: Math.min(Number(limit), 200),
         skip: Number(offset),
-        include: { schedule: { select: { id: true, name: true } } },
+        include: {
+          schedule: { select: { id: true, name: true } },
+          artifacts: { select: { kind: true, format: true, sizeBytes: true } },
+        },
       }),
       prisma.configBackup.count({ where }),
     ]);
@@ -413,7 +463,10 @@ class ConfigBackupService {
     const prisma = getPrisma();
     const backup = await prisma.configBackup.findUnique({
       where: { id: backupId },
-      include: { schedule: { select: { id: true, name: true } } },
+      include: {
+        schedule: { select: { id: true, name: true } },
+        artifacts: { select: { kind: true, format: true, sizeBytes: true, checksum: true, filePath: true } },
+      },
     });
     if (!backup) {
       const error = new Error('Backup not found');
@@ -423,44 +476,80 @@ class ConfigBackupService {
     return backup;
   }
 
-  async getBackupContent(backupId) {
-    const backup = await this.getBackup(backupId);
-    if (backup.status !== 'success' || !backup.filePath) {
-      const error = new Error('Backup has no stored configuration');
-      error.statusCode = 400;
-      throw error;
-    }
-    const content = await fs.readFile(backup.filePath, 'utf8');
-    return { backup, content };
+  /**
+   * The artifacts a backup holds, CLI first. Rows from before artifacts
+   * existed have none, so their single file stands in as one artifact.
+   */
+  artifactsOf(backup) {
+    const rows = backup.artifacts && backup.artifacts.length
+      ? backup.artifacts
+      : (backup.filePath && backup.checksum
+        ? [{
+          kind: kindForFormat(backup.format),
+          format: backup.format || 'cli-text',
+          filePath: backup.filePath,
+          checksum: backup.checksum,
+          sizeBytes: backup.sizeBytes,
+        }]
+        : []);
+    return [...rows].sort((a, b) => ARTIFACT_KINDS.indexOf(a.kind) - ARTIFACT_KINDS.indexOf(b.kind));
   }
 
   /**
-   * Unified diff between two backups (typically of the same device).
+   * One artifact's content. `kind` is 'cli' | 'structured'; omitted, the
+   * primary (ConfigBackup.filePath, CLI when there is one).
    */
-  async diffBackups(fromId, toId) {
-    const [from, to] = await Promise.all([
-      this.getBackupContent(fromId),
-      this.getBackupContent(toId),
-    ]);
+  async getBackupContent(backupId, kind) {
+    const backup = await this.getBackup(backupId);
+    const artifacts = backup.status === 'success' ? this.artifactsOf(backup) : [];
+    if (artifacts.length === 0) {
+      throw badRequest('Backup has no stored configuration');
+    }
+    const chosen = kind
+      ? artifacts.find((a) => a.kind === kind)
+      : (artifacts.find((a) => a.filePath === backup.filePath) || artifacts[0]);
+    if (!chosen) {
+      throw badRequest(`Backup has no ${kind === 'cli' ? 'CLI' : 'structured (JSON)'} configuration`);
+    }
+    const content = await fs.readFile(chosen.filePath, 'utf8');
+    return { backup, content, artifact: { kind: chosen.kind, format: chosen.format } };
+  }
 
-    const patch = Diff.createTwoFilesPatch(
+  /**
+   * Unified diff between two backups (typically of the same device), of one
+   * artifact kind both hold. Omitted, CLI is preferred when both have it, so
+   * an old JSON-only AOS-CX backup still diffs against a new one by JSON.
+   */
+  async diffBackups(fromId, toId, kind) {
+    const [fromBackup, toBackup] = await Promise.all([this.getBackup(fromId), this.getBackup(toId)]);
+    const kindsOf = (b) => (b.status === 'success' ? this.artifactsOf(b).map((a) => a.kind) : []);
+    const fromKinds = kindsOf(fromBackup);
+    const toKinds = kindsOf(toBackup);
+    const common = ARTIFACT_KINDS.filter((k) => fromKinds.includes(k) && toKinds.includes(k));
+    const chosen = kind || common[0];
+    if (!chosen || !common.includes(chosen)) {
+      throw badRequest(kind
+        ? `Both backups need a ${kind === 'cli' ? 'CLI' : 'structured (JSON)'} configuration to compare`
+        : 'These backups have no configuration format in common to compare');
+    }
+
+    const [from, to] = await Promise.all([
+      this.getBackupContent(fromId, chosen),
+      this.getBackupContent(toId, chosen),
+    ]);
+    const { patch, additions, deletions } = unifiedDiff(
       `${from.backup.deviceName} @ ${from.backup.createdAt.toISOString()}`,
       `${to.backup.deviceName} @ ${to.backup.createdAt.toISOString()}`,
       from.content,
       to.content
     );
 
-    let additions = 0;
-    let deletions = 0;
-    for (const line of patch.split('\n')) {
-      if (line.startsWith('+') && !line.startsWith('+++')) additions++;
-      else if (line.startsWith('-') && !line.startsWith('---')) deletions++;
-    }
-
     return {
       from: { id: from.backup.id, createdAt: from.backup.createdAt, deviceName: from.backup.deviceName },
       to: { id: to.backup.id, createdAt: to.backup.createdAt, deviceName: to.backup.deviceName },
-      identical: from.backup.checksum === to.backup.checksum,
+      kind: chosen,
+      kinds: common,
+      identical: from.content === to.content,
       additions,
       deletions,
       patch,
@@ -480,10 +569,16 @@ class ConfigBackupService {
   async deleteBackup(backupId) {
     const prisma = getPrisma();
     const backup = await this.getBackup(backupId);
-    if (backup.filePath) {
-      await fs.unlink(backup.filePath).catch(() => {});
-    }
+    await this.unlinkFiles(backup);
     await prisma.configBackup.delete({ where: { id: backupId } });
+  }
+
+  /** Remove every flat file a backup row points at (artifacts cascade in the DB). */
+  async unlinkFiles(backup) {
+    const paths = new Set([backup.filePath, ...(backup.artifacts || []).map((a) => a.filePath)]);
+    for (const filePath of paths) {
+      if (filePath) await fs.unlink(filePath).catch(() => {});
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -511,6 +606,7 @@ class ConfigBackupService {
         deviceSelection: data.deviceSelection || { mode: 'all' },
         retentionDays: data.retentionDays ?? 90,
         retentionMaxCount: data.retentionMaxCount ?? 30,
+        includeScopes: data.includeScopes === true,
         nextRun: interval.next().toDate(),
         createdBy: userId || null,
       },
@@ -547,6 +643,7 @@ class ConfigBackupService {
         deviceSelection: data.deviceSelection ?? undefined,
         retentionDays: data.retentionDays ?? undefined,
         retentionMaxCount: data.retentionMaxCount ?? undefined,
+        includeScopes: data.includeScopes ?? undefined,
         nextRun: interval.next().toDate(),
       },
     });

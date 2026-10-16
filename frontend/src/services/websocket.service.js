@@ -322,20 +322,25 @@ class WebSocketService {
     }
   }
 
+  /** What a backup event is about: a device, or a cloud scope (Mist org/site). */
+  backupSubject(data) {
+    return data.scope ? `${data.scopeType} "${data.scopeName}"` : `"${data.deviceName}"`
+  }
+
   /**
-   * Handle config backup completed events (per device)
+   * Handle config backup completed events (per device or cloud scope)
    * @param {Object} data - { backupId, deviceId, deviceName, hasChanges }
    */
   handleBackupCompleted(data) {
     console.log('Backup completed:', data)
 
     try {
-      const { deviceName, hasChanges } = data
+      const { hasChanges } = data
 
       this.stores.backups.applyBackupEvent(data)
 
       this.stores.notifications.showSuccess(
-        `Configuration backup for "${deviceName}" completed${hasChanges ? ' (configuration changed)' : ''}`,
+        `Configuration backup for ${this.backupSubject(data)} completed${hasChanges ? ' (configuration changed)' : ''}`,
         'Backup Complete'
       )
     } catch (error) {
@@ -351,12 +356,12 @@ class WebSocketService {
     console.log('Backup failed:', data)
 
     try {
-      const { deviceName, error: errorMessage } = data
+      const { error: errorMessage } = data
 
       this.stores.backups.applyBackupEvent(data)
 
       this.stores.notifications.showError(
-        `Configuration backup for "${deviceName}" failed: ${errorMessage || 'Unknown error'}`,
+        `Configuration backup for ${this.backupSubject(data)} failed: ${errorMessage || 'Unknown error'}`,
         'Backup Failed'
       )
     } catch (error) {
@@ -383,7 +388,7 @@ class WebSocketService {
         )
       } else {
         this.stores.notifications.showSuccess(
-          `Backup run finished: ${succeeded}/${total} device(s) backed up`,
+          `Backup run finished: ${succeeded}/${total} ${data.scope ? 'cloud scope(s)' : 'device(s)'} backed up`,
           'Backup Run Complete'
         )
       }

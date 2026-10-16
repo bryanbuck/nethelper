@@ -71,8 +71,27 @@ class BaseCloudProvider {
   }
 
   /**
+   * Configuration scopes above the device that this plane holds config for
+   * (a Mist org and its sites, a Central group). Access points are configured
+   * here rather than per device, so this is where their config is backed up.
+   * @returns {Promise<Array<{ scopeType: 'org'|'site'|'group', scopeId: string, name: string }>>}
+   */
+  async listConfigScopes() {
+    this.unsupported('scope-backup');
+  }
+
+  /**
+   * Snapshot one scope's configuration (see listConfigScopes).
+   * @param {{ scopeType, scopeId, name }} scope
+   * @returns {Promise<{text, format, source}>}
+   */
+  async getScopeConfiguration(scope) { // eslint-disable-line no-unused-vars
+    this.unsupported('scope-backup');
+  }
+
+  /**
    * Capability probe used by transport routing and the UI.
-   * @param {string} capability - 'inventory' | 'status' | 'config-backup' | 'test'
+   * @param {string} capability - 'inventory' | 'status' | 'config-backup' | 'scope-backup' | 'test'
    * @returns {boolean}
    */
   supports(capability) { // eslint-disable-line no-unused-vars

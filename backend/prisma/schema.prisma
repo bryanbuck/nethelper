@@ -391,6 +391,7 @@ model BackupSchedule {
   deviceSelection Json      // { mode: 'all' | 'types' | 'devices', types?: [], deviceIds?: [] }
   retentionDays   Int       @default(90)   // Prune backups older than this (0 = keep forever)
   retentionMaxCount Int     @default(30)   // Max backups kept per device (0 = unlimited)
+  includeScopes   Boolean   @default(false) // Also back up cloud scopes (Mist org/sites, ...)
   lastRun         DateTime?
   nextRun         DateTime?
   createdBy       String?   // User id
@@ -422,10 +423,61 @@ model ConfigBackup {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
+  // One row per captured representation. filePath/checksum/format/sizeBytes
+  // above mirror the primary artifact (CLI when there is one), so older
+  // readers and pre-artifact rows keep working.
+  artifacts     ConfigBackupArtifact[]
+
   @@index([deviceId, createdAt])
   @@index([deviceSerial])
   @@index([status])
   @@index([scheduleId])
+}
+
+// One representation of a backup's configuration. AOS-CX yields two: the CLI
+// text a person can paste back, and the REST JSON config database.
+model ConfigBackupArtifact {
+  id        String       @id @default(uuid())
+  backup    ConfigBackup @relation(fields: [backupId], references: [id], onDelete: Cascade)
+  backupId  String
+  kind      String       // 'cli' | 'structured'
+  format    String       // 'cli-text' | 'junos-set' | 'aoscx-json' | 'mist-config-json' | ...
+  filePath  String
+  checksum  String       // SHA-256 of this artifact's content
+  sizeBytes Int
+  createdAt DateTime     @default(now())
+
+  @@unique([backupId, kind])
+}
+
+// Configuration held by a cloud plane above the device: a Mist org or site,
+// a Central group. This is where AP configuration lives. integrationId is a
+// plain column (no FK) and the names are denormalized, so history survives
+// deleting the integration, the same way ConfigBackup outlives its device.
+model ScopeBackup {
+  id              String            @id @default(uuid())
+  integrationId   String
+  integrationName String
+  provider        CloudProviderType
+  scopeType       String            // 'org' | 'site' | 'group'
+  scopeId         String
+  scopeName       String
+  status          BackupStatus      @default(pending)
+  trigger         BackupTrigger     @default(manual)
+  scheduleId      String?
+  filePath        String?
+  checksum        String?
+  sizeBytes       Int?
+  hasChanges      Boolean?
+  format          String?           // 'mist-scope-json' | ...
+  commitSha       String?
+  error           String?
+  triggeredBy     String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([integrationId, scopeType, scopeId, createdAt])
+  @@index([status])
 }
 
 // One configured cloud tenant/org (a Central account, a Mist org, a Meraki org).

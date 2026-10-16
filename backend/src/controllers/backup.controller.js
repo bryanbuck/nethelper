@@ -1,4 +1,6 @@
 const configBackupService = require('../services/config-backup.service');
+const scopeBackupService = require('../services/scope-backup.service');
+const { describeFormat } = require('../utils/config-format');
 const { getQueue } = require('../config/bull');
 
 class BackupController {
@@ -47,8 +49,11 @@ class BackupController {
 
   async getBackupContent(req, res, next) {
     try {
-      const { backup, content } = await configBackupService.getBackupContent(req.params.backupId);
-      res.json({ success: true, data: { ...backup, content } });
+      const { backup, content, artifact } = await configBackupService.getBackupContent(
+        req.params.backupId,
+        req.query.kind
+      );
+      res.json({ success: true, data: { ...backup, content, artifact } });
     } catch (error) {
       next(error);
     }
@@ -56,12 +61,16 @@ class BackupController {
 
   async downloadBackup(req, res, next) {
     try {
-      const { backup, content } = await configBackupService.getBackupContent(req.params.backupId);
+      const { backup, content, artifact } = await configBackupService.getBackupContent(
+        req.params.backupId,
+        req.query.kind
+      );
       const timestamp = backup.createdAt.toISOString().replace(/[:.]/g, '-');
-      res.setHeader('Content-Type', 'text/plain');
+      const { ext } = describeFormat(artifact.format);
+      res.setHeader('Content-Type', ext === 'json' ? 'application/json' : 'text/plain');
       res.setHeader(
         'Content-Disposition',
-        `attachment; filename="${backup.deviceSerial}_${timestamp}.cfg"`
+        `attachment; filename="${backup.deviceSerial}_${timestamp}.${ext}"`
       );
       res.send(content);
     } catch (error) {
@@ -71,7 +80,7 @@ class BackupController {
 
   async diffBackups(req, res, next) {
     try {
-      const diff = await configBackupService.diffBackups(req.params.backupId, req.params.otherId);
+      const diff = await configBackupService.diffBackups(req.params.backupId, req.params.otherId, req.query.kind);
       res.json({ success: true, data: diff });
     } catch (error) {
       next(error);
@@ -91,6 +100,83 @@ class BackupController {
     try {
       await configBackupService.deleteBackup(req.params.backupId);
       res.json({ success: true, message: 'Backup deleted' });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // --- Cloud scopes (Mist org/sites, ...) ---
+
+  async getScopeBackups(req, res, next) {
+    try {
+      const { integrationId, scopeType, scopeId, status, limit, offset } = req.query;
+      const { backups, total } = await scopeBackupService.getScopeBackups({
+        integrationId, scopeType, scopeId, status, limit, offset,
+      });
+      res.json({ success: true, data: backups, total });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async runScopeBackup(req, res, next) {
+    try {
+      const integrationId = req.body?.integrationId || null;
+      const job = await getQueue('configBackup').add(
+        'runScopeBackup',
+        { integrationId, triggeredBy: req.user.id },
+        { attempts: 1 }
+      );
+      res.status(202).json({ success: true, message: 'Cloud scope backup queued', jobId: job.id });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getScopeBackup(req, res, next) {
+    try {
+      const backup = await scopeBackupService.getScopeBackup(req.params.scopeBackupId);
+      res.json({ success: true, data: backup });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getScopeBackupContent(req, res, next) {
+    try {
+      const { backup, content } = await scopeBackupService.getScopeBackupContent(req.params.scopeBackupId);
+      res.json({ success: true, data: { ...backup, content } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async downloadScopeBackup(req, res, next) {
+    try {
+      const { backup, content } = await scopeBackupService.getScopeBackupContent(req.params.scopeBackupId);
+      const timestamp = backup.createdAt.toISOString().replace(/[:.]/g, '-');
+      const name = `${backup.scopeType}-${backup.scopeName}`.replace(/[^A-Za-z0-9_-]/g, '_');
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="${name}_${timestamp}.${describeFormat(backup.format).ext}"`);
+      res.send(content);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async diffScopeBackups(req, res, next) {
+    try {
+      const diff = await scopeBackupService.diffScopeBackups(req.params.scopeBackupId, req.params.otherId);
+      res.json({ success: true, data: diff });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async deleteScopeBackup(req, res, next) {
+    try {
+      await scopeBackupService.deleteScopeBackup(req.params.scopeBackupId);
+      res.json({ success: true, message: 'Scope backup deleted' });
     } catch (error) {
       next(error);
     }

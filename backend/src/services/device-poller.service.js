@@ -274,21 +274,43 @@ class DevicePollerService {
           throw new Error(`Unsupported device type: ${device.type}`);
       }
 
-      // Get both running and startup configurations
-      // Note: These can be large, so we're being careful with parallel requests
-      const [runningConfig, startupConfig] = await this.withCxSession(device, credentials, (api) => Promise.all([
+      // The REST config database (running + startup JSON), and the running
+      // config as CLI text: /configs/running-config with Accept: text/plain
+      // returns exactly what `show running-config` prints (verified on
+      // ML.10.16). The CLI form is what a person can paste back; the JSON is
+      // what REST can restore. The CLI read is best-effort so a firmware that
+      // lacks it still yields the JSON backup.
+      const [runningConfig, startupConfig, cli] = await this.withCxSession(device, credentials, (api) => Promise.all([
         api.makeAuthenticatedRequest('GET', '/fullconfigs/running-config'),
         api.makeAuthenticatedRequest('GET', '/fullconfigs/startup-config'),
+        api.makeAuthenticatedRequest('GET', '/configs/running-config', null, { accept: 'text/plain' })
+          .then((text) => ({ text }), (error) => ({ error })),
       ]));
+
+      let runningConfigCli = null;
+      let runningConfigCliError = null;
+      if (cli.error) {
+        runningConfigCliError = cli.error.message;
+      } else if (typeof cli.text === 'string' && cli.text.trim()) {
+        runningConfigCli = cli.text;
+      } else {
+        runningConfigCliError = 'the switch did not return CLI text';
+      }
+      if (runningConfigCliError) {
+        logger.warn(`CLI running-config unavailable from ${device.name}: ${runningConfigCliError}`);
+      }
 
       const result = {
         running_config: runningConfig,
+        running_config_cli: runningConfigCli,
+        running_config_cli_error: runningConfigCliError,
         startup_config: startupConfig,
         backed_up_at: new Date().toISOString(),
       };
 
       logger.success(`Configuration backup retrieved from ${device.name}`, {
         running_config_size: JSON.stringify(runningConfig).length,
+        running_config_cli_size: runningConfigCli ? runningConfigCli.length : 0,
         startup_config_size: JSON.stringify(startupConfig).length,
       });
 
