@@ -41,6 +41,9 @@ const nodeLabel = computed(() => {
   if (!props.data?.actionType) return 'Action'
   
   const actionTypes = {
+    'raise-alert': 'Raise Alert',
+    'clear-alert': 'Clear Alert',
+    'acknowledge-alert': 'Acknowledge Alert',
     'device-reboot': 'Reboot Device',
     'device-config': 'Configure Device',
     'send-command': 'Send Command',
@@ -68,8 +71,14 @@ const nodeSubtitle = computed(() => {
       return props.data.config.command || 'Enter command'
     case 'update-firmware':
       return props.data.config.firmwareVersion || 'Select version'
+    case 'raise-alert':
+      return props.data.config.key ? `Key: ${props.data.config.key}` : 'Set alert key'
+    case 'clear-alert':
+      return props.data.config.key ? `Key: ${props.data.config.key}` : 'Set alert key'
+    case 'acknowledge-alert':
+      return 'Triggering alert'
     case 'create-backup':
-      return props.data.config.backupType || 'Select backup type'
+      return 'The run\'s device'
     case 'generate-report':
       return props.data.config.reportType || 'Select report type'
     case 'run-script':
@@ -93,8 +102,14 @@ const nodeDescription = computed(() => {
       return `Execute: ${props.data.config.command}`
     case 'update-firmware':
       return `Update to version ${props.data.config.firmwareVersion}`
+    case 'raise-alert':
+      return props.data.config.title || ''
+    case 'clear-alert':
+      return 'Resolve the alert raised with this key'
+    case 'acknowledge-alert':
+      return 'Acknowledge the alert that started the run'
     case 'create-backup':
-      return `Create ${props.data.config.backupType} backup`
+      return 'Back up the device\'s configuration'
     case 'generate-report':
       return `Generate ${props.data.config.reportType} report`
     case 'run-script':
@@ -110,6 +125,9 @@ const nodeIcon = computed(() => {
   if (!props.data?.actionType) return 'mdi-cog'
   
   const actionIcons = {
+    'raise-alert': 'mdi-bell-plus',
+    'clear-alert': 'mdi-bell-check',
+    'acknowledge-alert': 'mdi-bell-ring',
     'device-reboot': 'mdi-restart',
     'device-config': 'mdi-cog',
     'send-command': 'mdi-console',

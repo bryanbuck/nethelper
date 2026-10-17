@@ -3,6 +3,24 @@ const { body, validationResult } = require('express-validator');
 const { getPrisma } = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
 const logger = require('../utils/logger');
+const engine = require('../services/automation/engine');
+const automationTriggers = require('../services/automation/trigger.service');
+const automationSchedules = require('../services/automation/schedule.service');
+const { resolveTargets } = require('../services/automation/targets');
+const { queueRuns } = require('../services/automation/runs');
+
+/** After an automation changes: alert triggers re-read, its cron schedule re-derived. */
+async function automationChanged(id) {
+  automationTriggers.invalidate();
+  await automationSchedules.sync(id).catch((error) => {
+    logger.warn(`Automation ${id} schedule sync failed: ${error.message}`);
+  });
+}
+
+/** 400 body when an automation is switched on but its workflow can't run. */
+function cantRun(errors) {
+  return { error: `This workflow can't be run or activated: ${errors.join('; ')}`, details: errors.map((msg) => ({ msg })) };
+}
 
 const router = express.Router();
 
@@ -125,6 +143,11 @@ router.post('/', authorize('admin', 'operator'), [
     } = req.body;
     const prisma = getPrisma();
 
+    if (active) {
+      const { errors: graphErrors } = engine.validate(elements);
+      if (graphErrors.length) return res.status(400).json(cantRun(graphErrors));
+    }
+
     const automation = await prisma.automation.create({
       data: {
         name,
@@ -148,6 +171,7 @@ router.post('/', authorize('admin', 'operator'), [
       },
     });
 
+    await automationChanged(automation.id);
     logger.info('Automation created', { automationId: automation.id, userId: req.user.id });
 
     res.status(201).json({
@@ -207,6 +231,12 @@ router.put('/:id', authorize('admin', 'operator'), [
       });
     }
 
+    // An active automation must be able to run (alert triggers start it unattended).
+    if (active ?? existingAutomation.active) {
+      const { errors: graphErrors } = engine.validate(elements ?? existingAutomation.elements);
+      if (graphErrors.length) return res.status(400).json(cantRun(graphErrors));
+    }
+
     // Update automation
     const updateData = {};
     if (name !== undefined) updateData.name = name;
@@ -235,6 +265,7 @@ router.put('/:id', authorize('admin', 'operator'), [
       },
     });
 
+    await automationChanged(id);
     logger.info('Automation updated', { automationId: id, userId: req.user.id });
 
     res.json({
@@ -266,11 +297,13 @@ router.delete('/:id', authorize('admin', 'operator'), async (req, res) => {
       });
     }
 
-    // Delete automation (cascades to schedules and executions)
+    // Delete automation (cascades to schedules and executions; their cron jobs go first)
+    await automationSchedules.remove(id);
     await prisma.automation.delete({
       where: { id },
     });
 
+    automationTriggers.invalidate();
     logger.info('Automation deleted', { automationId: id, userId: req.user.id });
 
     res.json({
@@ -287,24 +320,16 @@ router.delete('/:id', authorize('admin', 'operator'), async (req, res) => {
   }
 });
 
-// Execute automation
+// Run now: one run per target device (the request's devices, else the
+// trigger's devices/groups, else the automation's device groups), or one run
+// with no device when no step needs one. Manual and Schedule triggers only.
 router.post('/:id/execute', authorize('admin', 'operator'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { deviceIds = [] } = req.body;
+    const deviceIds = req.body.deviceIds || (req.body.deviceId ? [req.body.deviceId] : []);
     const prisma = getPrisma();
 
-    // Check if automation exists and is enabled
-    const automation = await prisma.automation.findUnique({
-      where: { id },
-      include: {
-        deviceGroups: {
-          include: {
-            devices: true,
-          },
-        },
-      },
-    });
+    const automation = await prisma.automation.findUnique({ where: { id } });
 
     if (!automation) {
       return res.status(404).json({
@@ -318,64 +343,37 @@ router.post('/:id/execute', authorize('admin', 'operator'), async (req, res) => 
       });
     }
 
-    // Determine target devices
-    let targetDevices = [];
-    if (deviceIds.length > 0) {
-      // Use specified device IDs
-      const devices = await prisma.device.findMany({
-        where: { id: { in: deviceIds } },
-      });
-      targetDevices = devices;
-    } else {
-      // Use devices from associated device groups
-      targetDevices = automation.deviceGroups.flatMap(group => group.devices);
-    }
-
-    if (targetDevices.length === 0) {
+    const { graph, errors: graphErrors, triggerType, needsDevice } = engine.validate(automation.elements);
+    if (graphErrors.length) return res.status(400).json(cantRun(graphErrors));
+    if (!['manual', 'schedule'].includes(triggerType)) {
       return res.status(400).json({
-        error: 'No target devices specified',
+        error: 'This automation starts on alerts; only Manual and Schedule triggers can be run by hand',
       });
     }
 
-    // Update lastRun timestamp
-    await prisma.automation.update({
-      where: { id },
-      data: { lastRun: new Date() },
-    });
+    const devices = await resolveTargets(automation, graph.trigger.data.config || {}, deviceIds);
+    if (devices.length === 0 && needsDevice) {
+      return res.status(400).json({
+        error: 'No target devices: pick devices or groups on the trigger',
+      });
+    }
 
-    // Create execution records
-    const executions = await Promise.all(
-      targetDevices.map(device =>
-        prisma.execution.create({
-          data: {
-            automationId: id,
-            deviceId: device.id,
-            userId: req.user.id,
-            status: 'pending',
-          },
-          include: {
-            device: {
-              select: { id: true, name: true, serial: true },
-            },
-          },
-        })
-      )
-    );
+    const executions = await queueRuns({ automationId: id, devices, trigger: 'manual', userId: req.user.id });
 
-    logger.info('Automation execution started', {
+    logger.info('Automation execution queued', {
       automationId: id,
-      deviceCount: targetDevices.length,
+      runs: executions.length,
       userId: req.user.id,
     });
 
     res.json({
       data: {
         executions,
-        message: `Automation queued for ${targetDevices.length} device(s)`,
+        message: devices.length
+          ? `Automation queued for ${devices.length} device(s)`
+          : 'Automation queued',
       },
     });
-
-    // TODO: Add to job queue for background processing
   } catch (error) {
     logger.error('Execute automation error:', error);
     res.status(500).json({
@@ -402,6 +400,11 @@ router.patch('/:id/toggle', authorize('admin', 'operator'), async (req, res) => 
       });
     }
 
+    if (!existingAutomation.active) {
+      const { errors: graphErrors } = engine.validate(existingAutomation.elements);
+      if (graphErrors.length) return res.status(400).json(cantRun(graphErrors));
+    }
+
     // Toggle active status
     const automation = await prisma.automation.update({
       where: { id },
@@ -414,6 +417,7 @@ router.patch('/:id/toggle', authorize('admin', 'operator'), async (req, res) => 
       },
     });
 
+    await automationChanged(id);
     logger.info('Automation active status toggled', { 
       automationId: id, 
       newStatus: automation.active,

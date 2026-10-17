@@ -114,6 +114,8 @@ describe('port-state diff', () => {
     expect(diffPort(port, { ...port, adminUp: false }).map((e) => e.type)).toEqual(['port.admin.down']);
     expect(diffPort(port, { ...port, poe: { status: 'fault' } }).map((e) => e.type)).toEqual(['port.poe.fault']);
     expect(diffPort(port, { ...port, poe: { status: 'disabled' } })).toEqual([]);
+    const faulted = { ...port, poe: { status: 'fault' } };
+    expect(diffPort(faulted, { ...port, poe: { status: 'searching' } }).map((e) => e.type)).toEqual(['port.poe.down']);
   });
 
   test('snapshot diff ignores ports that appear or disappear', () => {

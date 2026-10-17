@@ -22,6 +22,7 @@ const ROUTERS = {
   backups: require('../../src/routes/backup.routes'),
   users: require('../../src/routes/users.routes'),
   topology: require('../../src/routes/topology.routes'),
+  alerts: require('../../src/routes/alert.routes'),
 };
 
 // Reads that are still restricted, because the response carries secrets or
@@ -50,6 +51,7 @@ const ADMIN_ONLY = [
   'POST /settings/aruba-central/test',
   'DELETE /settings/aruba-central/:id',
   'PUT /settings/git-backup',
+  'PATCH /alerts/rules/:key',
   'POST /settings/git-backup/test',
   'DELETE /settings/git-backup',
   'DELETE /discovery/scans/:scanId',

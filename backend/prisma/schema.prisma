@@ -48,8 +48,8 @@ enum DeviceStatus {
 }
 
 enum ManagementMode {
-  cloud   // Managed via a cloud platform (see Device.cloudIntegration for which one)
-  direct  // Managed directly on the local network (REST or SSH to the device)
+  cloud // Managed via a cloud platform (see Device.cloudIntegration for which one)
+  direct // Managed directly on the local network (REST or SSH to the device)
 }
 
 enum AutomationType {
@@ -120,56 +120,58 @@ enum BackupStatus {
 enum BackupTrigger {
   manual
   scheduled
+  automation
 }
 
 model User {
-  id            String       @id @default(uuid())
-  email         String       @unique
-  password      String
-  name          String
-  role          UserRole     @default(viewer)
-  refreshToken  String?
-  lastLogin     DateTime?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id           String    @id @default(uuid())
+  email        String    @unique
+  password     String
+  name         String
+  role         UserRole  @default(viewer)
+  refreshToken String?
+  lastLogin    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  automations           Automation[]
-  executions            Execution[]
-  apiCredentials        ApiCredential[]
-  arubaCentralConfigs   ArubaCentralConfig[]
-  cloudIntegrations     CloudIntegration[]
-  gitBackupConfigs      GitBackupConfig[]
+  automations         Automation[]
+  executions          Execution[]
+  apiCredentials      ApiCredential[]
+  arubaCentralConfigs ArubaCentralConfig[]
+  cloudIntegrations   CloudIntegration[]
+  gitBackupConfigs    GitBackupConfig[]
+  acknowledgedAlerts  Alert[]
 }
 
 model Device {
-  id            String         @id @default(uuid())
-  serial        String?        @unique // optional: direct devices may have none (see utils/device-key.js)
-  name          String
-  type          DeviceType
-  vendor        Vendor         @default(aruba)
+  id         String     @id @default(uuid())
+  serial     String?    @unique // optional: direct devices may have none (see utils/device-key.js)
+  name       String
+  type       DeviceType
+  vendor     Vendor     @default(aruba)
   // OS/platform family: 'aos-cx' | 'aos-s' | 'junos' | 'ios-xe' | 'meraki'.
   // null = unknown/never classified (legacy rows keep pre-vendor default behavior).
   // Valid values per vendor are defined in src/constants/vendors.js.
-  platform      String?
-  model         String
-  ipAddress     String?
-  macAddress    String?
-  location      String?
+  platform   String?
+  model      String
+  ipAddress  String?
+  macAddress String?
+  location   String?
 
   // ICMP Ping Monitoring Fields
-  pingStatus        DeviceStatus?  // Real-time ping-based status (primary status)
-  pingLastChecked   DateTime?      // Last time ping check was performed
-  pingResponseTime  Int?           // Last successful ping response time in ms
-  pingSuccessRate   Float?         // Success rate percentage (0-100)
-  consecutiveFailures Int @default(0) // Count of consecutive ping failures
+  pingStatus          DeviceStatus? // Real-time ping-based status (primary status)
+  pingLastChecked     DateTime? // Last time ping check was performed
+  pingResponseTime    Int? // Last successful ping response time in ms
+  pingSuccessRate     Float? // Success rate percentage (0-100)
+  consecutiveFailures Int           @default(0) // Count of consecutive ping failures
 
   // Status as reported by the device's cloud management plane (Central/Mist/...)
-  cloudStatus       DeviceStatus   @default(offline)
+  cloudStatus DeviceStatus @default(offline)
 
   // How the platform reaches this device for config/polling. Devices synced from
   // a cloud integration are 'cloud'; manually-added and discovery-imported devices
   // default to 'direct' (reached over REST or SSH using linked credentials).
-  managementMode    ManagementMode @default(direct)
+  managementMode ManagementMode @default(direct)
 
   // Which cloud plane manages/inventoried this device. Required in practice for
   // cloud-managed devices (multiple integrations may be active simultaneously,
@@ -182,29 +184,30 @@ model Device {
   // of managementMode, which only records how the record entered our inventory.
   // null = never probed / not determinable. See docs/CENTRAL_MANAGEMENT_MODE_PLAN.md.
   cloudManaged          Boolean?
-  cloudConnectionStatus String?   // connected | not_reachable | connection_failure | disabled | unknown
-  cloudManagedSource    String?   // switch-rest | central-group | manual (probe source, vocabulary unchanged from 5b)
+  cloudConnectionStatus String? // connected | not_reachable | connection_failure | disabled | unknown
+  cloudManagedSource    String? // switch-rest | central-group | manual (probe source, vocabulary unchanged from 5b)
   cloudManagedCheckedAt DateTime?
 
   // Always-on live state watch (services/live/state-monitor.service.js):
   // port link/PoE changes become DeviceEvent rows. Read-only, so it is allowed
   // on cloud-managed devices too when they have an IP and a device credential.
-  liveMonitoring Boolean       @default(false)
+  liveMonitoring Boolean @default(false)
 
   firmwareVersion String?
-  lastSeen      DateTime?      // Last seen timestamp (updated by both ping monitoring and Aruba Central sync)
-  metadata      Json?
+  lastSeen        DateTime? // Last seen timestamp (updated by both ping monitoring and Aruba Central sync)
+  metadata        Json?
   apiCredentialId String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  apiCredential   ApiCredential? @relation("DeviceCredential", fields: [apiCredentialId], references: [id], onDelete: SetNull)
+  apiCredential   ApiCredential?       @relation("DeviceCredential", fields: [apiCredentialId], references: [id], onDelete: SetNull)
   executions      Execution[]
   deviceGroups    DeviceGroup[]
   events          DeviceEvent[]
   links           DeviceLink[]
   topologyState   DeviceTopologyState?
   topologyChanges TopologyChange[]
+  alerts          Alert[]
 
   @@index([apiCredentialId])
   @@index([cloudIntegrationId])
@@ -222,12 +225,56 @@ model DeviceEvent {
   type       String
   port       String?
   data       Json     @default("{}")
-  source     String   // push | poll | resync
+  source     String // push | poll | resync
   occurredAt DateTime @default(now())
 
   @@index([deviceId, occurredAt])
   @@index([type])
   @@index([occurredAt])
+}
+
+// A condition raised by one of the built-in rules (constants/alert-rules.js,
+// services/alert.service.js). dedupKey names the rule and its subject.
+// openKey holds the dedupKey while the alert is unresolved and NULL after, so
+// its unique index allows one unresolved alert per subject and any number of
+// resolved ones. Resolved rows are pruned after ALERT_RETENTION_DAYS.
+model Alert {
+  id                         String      @id @default(uuid())
+  rule                       String
+  severity                   String // info | warning | critical
+  status                     String      @default("open") // open | acknowledged | resolved
+  dedupKey                   String
+  openKey                    String?     @unique
+  device                     Device?     @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId                   String?
+  port                       String?
+  title                      String
+  message                    String
+  data                       Json        @default("{}")
+  occurrences                Int         @default(1)
+  firstSeenAt                DateTime    @default(now())
+  lastSeenAt                 DateTime    @default(now())
+  acknowledgedAt             DateTime?
+  acknowledgedBy             User?       @relation(fields: [acknowledgedById], references: [id], onDelete: SetNull)
+  acknowledgedById           String?
+  acknowledgedByAutomation   Automation? @relation(fields: [acknowledgedByAutomationId], references: [id], onDelete: SetNull)
+  acknowledgedByAutomationId String?
+  resolvedAt                 DateTime?
+  resolvedBy                 String? // auto | user | merge
+
+  @@index([status, severity])
+  @@index([dedupKey])
+  @@index([deviceId])
+  @@index([lastSeenAt])
+}
+
+// Admin overrides for a built-in alert rule; missing rows use the defaults.
+model AlertRule {
+  key           String   @id
+  enabled       Boolean  @default(true)
+  severity      String
+  settleSeconds Int      @default(0)
+  updatedAt     DateTime @updatedAt
 }
 
 // A neighbor one device reports on one of its ports (LLDP or CDP), as of the
@@ -239,15 +286,15 @@ model DeviceLink {
   device             Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
   deviceId           String
   localPort          String
-  remoteChassisId    String   // as the neighbor advertised it (MAC, IP or name)
+  remoteChassisId    String // as the neighbor advertised it (MAC, IP or name)
   remotePortId       String
   remoteSysName      String?
   remoteSysDesc      String?
   remotePortDesc     String?
   remoteMgmtIp       String?
-  remoteMac          String?  // normalized MAC: the chassis id when it is one, else the port MAC
+  remoteMac          String? // normalized MAC: the chassis id when it is one, else the port MAC
   remoteCapabilities Json     @default("[]") // normalized: bridge | router | wlan-ap | telephone | station | ...
-  source             String   // lldp | cdp | cloud
+  source             String // lldp | cdp | cloud
   active             Boolean  @default(true) // false once a successful collection no longer sees it
   firstSeen          DateTime @default(now())
   lastSeen           DateTime @default(now())
@@ -262,10 +309,10 @@ model DeviceLink {
 model DeviceTopologyState {
   device        Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
   deviceId      String    @id
-  status        String    // ok | skipped (needs IP/credential) | unsupported (no source for the platform) | failed
-  reason        String?   // why it was skipped, unsupported or failed
-  source        String?   // transport that answered: AOS-CX REST, Junos NETCONF, SSH
-  chassisId     String?   // normalized MAC, when the device advertises one
+  status        String // ok | skipped (needs IP/credential) | unsupported (no source for the platform) | failed
+  reason        String? // why it was skipped, unsupported or failed
+  source        String? // transport that answered: AOS-CX REST, Junos NETCONF, SSH
+  chassisId     String? // normalized MAC, when the device advertises one
   sysName       String?
   neighborCount Int       @default(0)
   collectedAt   DateTime  @default(now())
@@ -278,7 +325,7 @@ model TopologyChange {
   id         String   @id @default(uuid())
   device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
   deviceId   String
-  type       String   // link.added | link.removed | link.changed
+  type       String // link.added | link.removed | link.changed
   localPort  String?
   data       Json     @default("{}")
   occurredAt DateTime @default(now())
@@ -298,12 +345,12 @@ model MapLayout {
 }
 
 model DeviceGroup {
-  id          String      @id @default(uuid())
-  name        String      @unique
+  id          String   @id @default(uuid())
+  name        String   @unique
   description String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
   devices     Device[]
   automations Automation[]
 }
@@ -316,52 +363,55 @@ model Automation {
   priority    AutomationPriority
   active      Boolean            @default(false)
   enabled     Boolean            @default(true)
-  elements    Json               // Stores Vue Flow nodes and edges (renamed from workflow)
-  metadata    Json?              // Stores additional workflow metadata
-  lastRun     DateTime?          // Timestamp of last execution
+  elements    Json // Stores Vue Flow nodes and edges (renamed from workflow)
+  metadata    Json? // Stores additional workflow metadata
+  lastRun     DateTime? // Timestamp of last execution
   createdBy   User               @relation(fields: [userId], references: [id])
   userId      String
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
-  
-  schedules   Schedule[]
-  executions  Execution[]
-  deviceGroups DeviceGroup[]
+
+  schedules          Schedule[]
+  executions         Execution[]
+  deviceGroups       DeviceGroup[]
+  acknowledgedAlerts Alert[]
 }
 
+// Derived from an automation's Schedule trigger (services/automation/schedule.service.js); one per automation.
 model Schedule {
-  id           String      @id @default(uuid())
-  automation   Automation  @relation(fields: [automationId], references: [id], onDelete: Cascade)
-  automationId String
+  id             String     @id @default(uuid())
+  automation     Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  automationId   String
   cronExpression String
-  timezone     String      @default("UTC")
-  active       Boolean     @default(true)
-  nextRun      DateTime?
-  lastRun      DateTime?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  
+  timezone       String     @default("UTC")
+  active         Boolean    @default(true)
+  nextRun        DateTime?
+  lastRun        DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
   @@index([automationId])
   @@index([nextRun])
 }
 
 model Execution {
   id           String          @id @default(uuid())
-  automation   Automation      @relation(fields: [automationId], references: [id])
+  automation   Automation      @relation(fields: [automationId], references: [id], onDelete: Cascade)
   automationId String
-  device       Device?         @relation(fields: [deviceId], references: [id])
+  device       Device?         @relation(fields: [deviceId], references: [id], onDelete: SetNull)
   deviceId     String?
   status       ExecutionStatus @default(pending)
   startedAt    DateTime?
   completedAt  DateTime?
-  duration     Int?            // Duration in milliseconds
+  duration     Int? // Duration in milliseconds
   output       Json?
   error        String?
-  triggeredBy  User?           @relation(fields: [userId], references: [id])
+  trigger      String? // manual | schedule | alert:opened | alert:resolved
+  triggeredBy  User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
   userId       String?
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
-  
+
   @@index([automationId])
   @@index([deviceId])
   @@index([status])
@@ -385,41 +435,41 @@ model AuditLog {
 }
 
 model ApiCredential {
-  id              String              @id @default(uuid())
-  name            String
-  type            ApiCredentialType
-  username        String?
-  password        String?             // Encrypted
-  apiKey          String?             // Encrypted
-  apiSecret       String?             // Encrypted
-  notes           String?
-  lastTested      DateTime?
-  lastTestStatus  TestStatus?
-  metadata        Json?
-  createdBy       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId          String
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  id             String            @id @default(uuid())
+  name           String
+  type           ApiCredentialType
+  username       String?
+  password       String? // Encrypted
+  apiKey         String? // Encrypted
+  apiSecret      String? // Encrypted
+  notes          String?
+  lastTested     DateTime?
+  lastTestStatus TestStatus?
+  metadata       Json?
+  createdBy      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
-  devices         Device[]            @relation("DeviceCredential")
+  devices Device[] @relation("DeviceCredential")
 
   @@index([type])
   @@index([userId])
 }
 
 model DiscoveryScan {
-  id            String      @id @default(uuid())
-  status        ScanStatus  @default(pending)
-  subnets       Json        // Array of CIDR strings scanned
-  totalHosts    Int         @default(0)  // Hosts that responded to the sweep
-  arubaHosts    Int         @default(0)  // Hosts matching Aruba/HPE OUIs or fingerprint
-  progress      Int         @default(0)  // 0-100
-  error         String?
-  startedAt     DateTime?
-  completedAt   DateTime?
-  triggeredBy   String?     // User id
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  id          String     @id @default(uuid())
+  status      ScanStatus @default(pending)
+  subnets     Json // Array of CIDR strings scanned
+  totalHosts  Int        @default(0) // Hosts that responded to the sweep
+  arubaHosts  Int        @default(0) // Hosts matching Aruba/HPE OUIs or fingerprint
+  progress    Int        @default(0) // 0-100
+  error       String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  triggeredBy String? // User id
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   discoveredDevices DiscoveredDevice[]
 
@@ -428,25 +478,25 @@ model DiscoveryScan {
 }
 
 model DiscoveredDevice {
-  id              String                 @id @default(uuid())
-  scan            DiscoveryScan          @relation(fields: [scanId], references: [id], onDelete: Cascade)
-  scanId          String
-  ipAddress       String
-  subnet          String?                // CIDR of the sweep that found it (null on older scans)
-  macAddress      String?
-  vendor          String?                // OUI vendor name
-  hostname        String?
-  isArubaVendor   Boolean                @default(false)
-  openPorts       Json?                  // Array of open ports found during fingerprinting
-  suggestedType   DeviceType?            // Best-effort type detection
-  suggestedName   String?
-  centralSerial   String?                // Serial if matched in Aruba Central inventory
-  centralMatch    Json?                  // Matched Central device summary (name, model, status)
-  existingDeviceId String?               // Local Device.id if IP/MAC conflicts with inventory
-  conflictType    String?                // ip_conflict | mac_conflict | central_managed | null
-  status          DiscoveredDeviceStatus @default(new)
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
+  id               String                 @id @default(uuid())
+  scan             DiscoveryScan          @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  scanId           String
+  ipAddress        String
+  subnet           String? // CIDR of the sweep that found it (null on older scans)
+  macAddress       String?
+  vendor           String? // OUI vendor name
+  hostname         String?
+  isArubaVendor    Boolean                @default(false)
+  openPorts        Json? // Array of open ports found during fingerprinting
+  suggestedType    DeviceType? // Best-effort type detection
+  suggestedName    String?
+  centralSerial    String? // Serial if matched in Aruba Central inventory
+  centralMatch     Json? // Matched Central device summary (name, model, status)
+  existingDeviceId String? // Local Device.id if IP/MAC conflicts with inventory
+  conflictType     String? // ip_conflict | mac_conflict | central_managed | null
+  status           DiscoveredDeviceStatus @default(new)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
 
   @@index([scanId])
   @@index([status])
@@ -454,50 +504,50 @@ model DiscoveredDevice {
 }
 
 model BackupSchedule {
-  id              String    @id @default(uuid())
-  name            String
-  cronExpression  String
-  timezone        String    @default("UTC")
-  active          Boolean   @default(true)
-  deviceSelection Json      // { mode: 'all' | 'types' | 'devices', types?: [], deviceIds?: [] }
-  retentionDays   Int       @default(90)   // Prune backups older than this (0 = keep forever)
-  retentionMaxCount Int     @default(30)   // Max backups kept per device (0 = unlimited)
-  includeScopes   Boolean   @default(false) // Also back up cloud scopes (Mist org/sites, ...)
-  lastRun         DateTime?
-  nextRun         DateTime?
-  createdBy       String?   // User id
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                String    @id @default(uuid())
+  name              String
+  cronExpression    String
+  timezone          String    @default("UTC")
+  active            Boolean   @default(true)
+  deviceSelection   Json // { mode: 'all' | 'types' | 'devices', types?: [], deviceIds?: [] }
+  retentionDays     Int       @default(90) // Prune backups older than this (0 = keep forever)
+  retentionMaxCount Int       @default(30) // Max backups kept per device (0 = unlimited)
+  includeScopes     Boolean   @default(false) // Also back up cloud scopes (Mist org/sites, ...)
+  lastRun           DateTime?
+  nextRun           DateTime?
+  createdBy         String? // User id
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  backups         ConfigBackup[]
+  backups ConfigBackup[]
 
   @@index([active])
 }
 
 model ConfigBackup {
-  id            String        @id @default(uuid())
-  deviceId      String
-  deviceSerial  String
-  deviceName    String        // Denormalized so history survives device deletion
-  status        BackupStatus  @default(pending)
-  trigger       BackupTrigger @default(manual)
-  schedule      BackupSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
-  scheduleId    String?
-  filePath      String?       // Path on local backup storage
-  checksum      String?       // SHA-256 of config content
-  sizeBytes     Int?
-  hasChanges    Boolean?      // Differs from previous successful backup of this device
-  commitSha     String?       // Git commit holding this config, when the Git mirror is enabled
-  format        String?       // 'cli-text' | 'junos-set' | 'aoscx-json' | 'mist-config-json' | ...
-  error         String?
-  triggeredBy   String?       // User id (manual runs)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id           String          @id @default(uuid())
+  deviceId     String
+  deviceSerial String
+  deviceName   String // Denormalized so history survives device deletion
+  status       BackupStatus    @default(pending)
+  trigger      BackupTrigger   @default(manual)
+  schedule     BackupSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  scheduleId   String?
+  filePath     String? // Path on local backup storage
+  checksum     String? // SHA-256 of config content
+  sizeBytes    Int?
+  hasChanges   Boolean? // Differs from previous successful backup of this device
+  commitSha    String? // Git commit holding this config, when the Git mirror is enabled
+  format       String? // 'cli-text' | 'junos-set' | 'aoscx-json' | 'mist-config-json' | ...
+  error        String?
+  triggeredBy  String? // User id (manual runs)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 
   // One row per captured representation. filePath/checksum/format/sizeBytes
   // above mirror the primary artifact (CLI when there is one), so older
   // readers and pre-artifact rows keep working.
-  artifacts     ConfigBackupArtifact[]
+  artifacts ConfigBackupArtifact[]
 
   @@index([deviceId, createdAt])
   @@index([deviceSerial])
@@ -511,10 +561,10 @@ model ConfigBackupArtifact {
   id        String       @id @default(uuid())
   backup    ConfigBackup @relation(fields: [backupId], references: [id], onDelete: Cascade)
   backupId  String
-  kind      String       // 'cli' | 'structured'
-  format    String       // 'cli-text' | 'junos-set' | 'aoscx-json' | 'mist-config-json' | ...
+  kind      String // 'cli' | 'structured'
+  format    String // 'cli-text' | 'junos-set' | 'aoscx-json' | 'mist-config-json' | ...
   filePath  String
-  checksum  String       // SHA-256 of this artifact's content
+  checksum  String // SHA-256 of this artifact's content
   sizeBytes Int
   createdAt DateTime     @default(now())
 
@@ -530,7 +580,7 @@ model ScopeBackup {
   integrationId   String
   integrationName String
   provider        CloudProviderType
-  scopeType       String            // 'org' | 'site' | 'group'
+  scopeType       String // 'org' | 'site' | 'group'
   scopeId         String
   scopeName       String
   status          BackupStatus      @default(pending)
@@ -540,7 +590,7 @@ model ScopeBackup {
   checksum        String?
   sizeBytes       Int?
   hasChanges      Boolean?
-  format          String?           // 'mist-scope-json' | ...
+  format          String? // 'mist-scope-json' | ...
   commitSha       String?
   error           String?
   triggeredBy     String?
@@ -557,8 +607,8 @@ model ScopeBackup {
 model CloudIntegration {
   id             String            @id @default(uuid())
   provider       CloudProviderType
-  name           String            // User label, e.g. "Prod Central" / "EU Mist Org"
-  baseUrl        String            // API base URL (provider- and region-specific)
+  name           String // User label, e.g. "Prod Central" / "EU Mist Org"
+  baseUrl        String // API base URL (provider- and region-specific)
   // Provider-specific credential blob; secret values are field-encrypted before
   // persist (see settings.service). Shapes:
   //   aruba_central: { clientId, clientSecret*, customerId }
@@ -575,7 +625,7 @@ model CloudIntegration {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
-  devices        Device[]
+  devices Device[]
 
   @@index([provider, isActive])
   @@index([userId])
@@ -589,8 +639,8 @@ model CloudIntegration {
 model GitBackupConfig {
   id             String      @id @default(uuid())
   name           String      @default("Config Backup Repository")
-  repoPath       String      // Local repo dir; defaults to ./storage/config-repo
-  remoteUrl      String?     // Optional push target; no remote = local history only
+  repoPath       String // Local repo dir; defaults to ./storage/config-repo
+  remoteUrl      String? // Optional push target; no remote = local history only
   branch         String      @default("main")
   authorName     String      @default("NetHelper")
   authorEmail    String      @default("nethelper@localhost")
@@ -616,19 +666,19 @@ model GitBackupConfig {
 // copied into CloudIntegration by the multi_vendor_phase0 migration; this table
 // is kept for one release so a rollback path exists, then will be dropped.
 model ArubaCentralConfig {
-  id              String    @id @default(uuid())
-  baseUrl         String    // Aruba Central API base URL
-  clientId        String    // OAuth2 Client ID
-  clientSecret    String    // Encrypted OAuth2 Client Secret
-  customerId      String    // Aruba Central Customer ID
-  isActive        Boolean   @default(true)  // Allow multiple configs, but only one active
-  lastTested      DateTime?
-  lastTestStatus  TestStatus?
-  notes           String?
-  createdBy       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId          String
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String      @id @default(uuid())
+  baseUrl        String // Aruba Central API base URL
+  clientId       String // OAuth2 Client ID
+  clientSecret   String // Encrypted OAuth2 Client Secret
+  customerId     String // Aruba Central Customer ID
+  isActive       Boolean     @default(true) // Allow multiple configs, but only one active
+  lastTested     DateTime?
+  lastTestStatus TestStatus?
+  notes          String?
+  createdBy      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
   @@index([userId])
   @@index([isActive])

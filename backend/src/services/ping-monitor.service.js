@@ -1,6 +1,7 @@
 const ping = require('ping');
 const { getPrisma } = require('../config/database');
 const logger = require('../utils/logger');
+const alertService = require('./alert.service');
 
 class PingMonitorService {
   constructor() {
@@ -202,6 +203,21 @@ class PingMonitorService {
 
         // Emit WebSocket event for real-time UI updates
         this.emitStatusUpdate(deviceId, deviceName, newStatus, responseTime);
+
+        if (newStatus === 'online') alertService.clear('device.offline', { subjectKey: deviceId, deviceId });
+      }
+
+      // Every offline check, not only the transition, so a device that was
+      // already offline when alerting started still gets an alert. Repeats
+      // of an open one are no-ops.
+      if (newStatus === 'offline') {
+        alertService.raise('device.offline', {
+          subjectKey: deviceId,
+          deviceId,
+          title: `${deviceName} is offline`,
+          message: `Stopped answering ping (${this.config.failureThreshold} or more missed checks in a row).`,
+          data: { consecutiveFailures: newConsecutiveFailures },
+        }, { bump: currentStatus !== 'offline' });
       }
     } catch (error) {
       logger.error(`Error updating device status for ${deviceName}:`, error);

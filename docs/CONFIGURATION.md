@@ -101,6 +101,13 @@ Production writes JSON logs to stdout. Values under secret-looking keys (passwor
 | `LIVE_MAX_CONNECTIONS` | `200` | Devices watched at once per backend process. |
 | `DEVICE_EVENT_RETENTION_DAYS` | `30` | Live-state events older than this are deleted daily. |
 
+### Alerts and automations
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ALERT_RETENTION_DAYS` | `90` | Resolved alerts older than this are deleted daily. |
+| `EXECUTION_RETENTION_DAYS` | `90` | Finished automation runs (Run History) older than this are deleted daily. |
+
 ### Network Map (topology)
 
 | Variable | Default | Notes |

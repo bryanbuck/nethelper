@@ -5,6 +5,7 @@ import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import NotificationDisplay from '@/components/common/NotificationDisplay.vue'
 import ChangePasswordDialog from '@/components/common/ChangePasswordDialog.vue'
+import AlertBell from '@/components/common/AlertBell.vue'
 import { THEMES, writeThemePreference } from '@/utils/theme-preference'
 import { defaultsForTheme } from '@/plugins/theme-defaults'
 
@@ -54,6 +55,11 @@ const allNavigationItems = [
     title: 'Network Map',
     icon: 'mdi-graph-outline',
     to: '/map'
+  },
+  {
+    title: 'Alerts',
+    icon: 'mdi-bell',
+    to: '/alerts'
   },
   {
     title: 'Discovery',
@@ -118,6 +124,8 @@ onMounted(() => {
           </v-toolbar-title>
 
           <v-spacer />
+
+          <AlertBell :color="onPrimary" />
 
           <v-menu>
             <template #activator="{ props }">

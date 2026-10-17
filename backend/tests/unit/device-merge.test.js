@@ -129,7 +129,7 @@ describe('merge', () => {
     expect(calls[0][1]).toEqual({ where: { id: { in: ['d-cloud'] } }, data: { serial: null } });
     expect(ops).toEqual(expect.arrayContaining([
       'deviceEvent.updateMany', 'execution.updateMany', 'configBackup.updateMany',
-      'discoveredDevice.updateMany', 'topologyChange.updateMany', 'backupSchedule.update',
+      'discoveredDevice.updateMany', 'topologyChange.updateMany', 'backupSchedule.update', 'alert.updateMany',
     ]));
     expect(ops.indexOf('device.deleteMany')).toBeLessThan(ops.indexOf('device.update'));
     expect(calls.find(([op]) => op === 'backupSchedule.update')[1].data.deviceSelection.deviceIds).toEqual(['d-direct']);

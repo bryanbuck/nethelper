@@ -13,6 +13,7 @@ const ConfigBackupsView = () => import('@/views/devices/ConfigBackupsView.vue')
 const NetworkMapView = () => import('@/views/topology/NetworkMapView.vue')
 const AutomationsView = () => import('@/views/automations/AutomationsView.vue')
 const AutomationBuilderView = () => import('@/views/automations/AutomationBuilderView.vue')
+const ExecutionsView = () => import('@/views/automations/ExecutionsView.vue')
 const SettingsView = () => import('@/views/settings/SettingsView.vue')
 const DeviceApiTestingView = () => import('@/views/settings/DeviceApiTestingView.vue')
 
@@ -64,6 +65,16 @@ const routes = [
       requiresAuth: true,
       title: 'Network Map',
       icon: 'mdi-graph-outline'
+    }
+  },
+  {
+    path: '/alerts',
+    name: 'Alerts',
+    component: () => import('@/views/alerts/AlertsView.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Alerts',
+      icon: 'mdi-bell'
     }
   },
   {
@@ -132,7 +143,20 @@ const routes = [
     }
   },
   {
-    path: '/automations/builder',
+    path: '/automations/executions',
+    name: 'AutomationExecutions',
+    component: ExecutionsView,
+    meta: {
+      requiresAuth: true,
+      title: 'Run History',
+      breadcrumb: [
+        { text: 'Automations', to: '/automations' },
+        { text: 'Run History', disabled: true }
+      ]
+    }
+  },
+  {
+    path: '/automations/builder/:id?',
     name: 'AutomationBuilder',
     component: AutomationBuilderView,
     meta: { 
@@ -184,7 +208,7 @@ const routes = [
   // Automation scheduling/execution pages are not built yet (automation is
   // experimental for the beta); send old bookmarks to the automations list.
   { path: '/schedule', redirect: '/automations' },
-  { path: '/executions/:pathMatch(.*)*', redirect: '/automations' },
+  { path: '/executions/:pathMatch(.*)*', redirect: '/automations/executions' },
   {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',

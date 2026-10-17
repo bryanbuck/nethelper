@@ -21,6 +21,7 @@
 
 const { getPrisma } = require('../config/database');
 const deviceIdentity = require('./device-identity.service');
+const alertService = require('./alert.service');
 const { normalizeMac } = require('../utils/device-key');
 const { debugLog, Services } = require('../utils/debug-logger');
 
@@ -286,6 +287,7 @@ class DeviceMergeService {
       // serial is unique: free it on the sources before the target takes it.
       await tx.device.updateMany({ where: { id: { in: ids } }, data: { serial: null } });
       await tx.deviceEvent.updateMany({ where: { deviceId: { in: ids } }, data: { deviceId: targetId } });
+      await alertService.mergeDevices(tx, ids, targetId);
       await tx.execution.updateMany({ where: { deviceId: { in: ids } }, data: { deviceId: targetId } });
       // deviceSerial and file paths stay: they say where each backup's files
       // and Git commits live.
@@ -316,6 +318,8 @@ class DeviceMergeService {
       groups: groupIds.length,
       schedules: scheduleUpdates.length,
     });
+
+    alertService.emitUpdated([]).catch(() => {});
 
     // The target may have gained an IP, credential, or always-on monitoring.
     try {

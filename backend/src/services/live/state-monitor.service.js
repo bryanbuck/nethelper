@@ -30,6 +30,7 @@ const { detectPlatform } = require('../../utils/device-platform');
 const { PLATFORMS } = require('../../constants/vendors');
 const { CapabilityError } = require('../cloud-providers/errors');
 const { mergePort, diffPort, diffSnapshots } = require('./port-state');
+const alertService = require('../alert.service');
 const logger = require('../../utils/logger');
 
 const num = (value, fallback) => (Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback);
@@ -424,7 +425,44 @@ class StateMonitorService {
       occurredAt: row?.occurredAt || new Date(),
     };
     emit('device:event', payload);
+    this.alertOn(device, event);
     return payload;
+  }
+
+  /**
+   * Live alerts, only for devices with Always monitor on: a Live tab's
+   * watch ends when the tab closes, and nothing would clear its alerts.
+   */
+  alertOn(device, event) {
+    if (!this.holders.get(device.id)?.has('always')) return;
+    const subject = { subjectKey: device.id, deviceId: device.id };
+    switch (event.type) {
+      case 'port.poe.fault':
+        alertService.raise('live.poe-fault', {
+          ...subject,
+          port: event.port,
+          title: `PoE fault on ${device.name} ${event.port}`,
+          message: `Port ${event.port} reports PoE status "${event.data?.status || 'fault'}".`,
+          data: event.data || {},
+        });
+        break;
+      case 'port.poe.up':
+      case 'port.poe.down':
+        alertService.clear('live.poe-fault', { ...subject, port: event.port });
+        break;
+      case 'monitor.disconnected':
+        alertService.raise('live.monitor-down', {
+          ...subject,
+          title: `Live monitor lost ${device.name}`,
+          message: event.data?.reason || 'The device session dropped.',
+          data: event.data || {},
+        });
+        break;
+      case 'monitor.connected':
+        alertService.clear('live.monitor-down', subject);
+        break;
+      default:
+    }
   }
 
   emitStatus(monitor) {
@@ -441,6 +479,8 @@ class StateMonitorService {
       if (config().enabled) await this.hold(device, 'always');
     } else {
       await this.release(device.id, 'always');
+      // Nothing watches the device now, so nothing would clear these.
+      await alertService.clearDevice(device.id, ['live.poe-fault', 'live.monitor-down']);
     }
   }
 

@@ -45,6 +45,49 @@
               @update:model-value="onTriggerTypeChange"
             />
             
+            <!-- Alert Trigger -->
+            <div v-if="nodeConfig.triggerType === 'alert'">
+              <v-select
+                v-model="nodeConfig.config.event"
+                label="When"
+                :items="ALERT_TRIGGER_EVENTS"
+                variant="outlined"
+                :rules="[rules.required]"
+              />
+              <v-select
+                v-model="nodeConfig.config.rules"
+                label="Alert rules"
+                :items="alertRuleItems"
+                variant="outlined"
+                multiple
+                chips
+                closable-chips
+                hint="Leave empty for every rule. Alerts raised by automations never start one."
+                persistent-hint
+                class="mb-4"
+              />
+              <v-select
+                v-model="nodeConfig.config.minSeverity"
+                label="Minimum severity"
+                :items="ALERT_SEVERITIES"
+                item-title="title"
+                item-value="value"
+                variant="outlined"
+                clearable
+              />
+              <v-select
+                v-model="nodeConfig.config.deviceGroupId"
+                label="Only devices in group"
+                :items="deviceGroups"
+                item-title="name"
+                item-value="id"
+                variant="outlined"
+                clearable
+                hint="Optional. The run gets the alert's device; alerts without a device never match a group."
+                persistent-hint
+              />
+            </div>
+
             <!-- Device Status Trigger -->
             <div v-if="nodeConfig.triggerType === 'device-status'">
               <v-select
@@ -67,26 +110,69 @@
             
             <!-- Schedule Trigger -->
             <div v-if="nodeConfig.triggerType === 'schedule'">
+              <div class="d-flex flex-wrap ga-2 mb-3">
+                <v-chip
+                  v-for="preset in SCHEDULE_PRESETS"
+                  :key="preset.value"
+                  size="small"
+                  variant="outlined"
+                  @click="nodeConfig.config.schedule = preset.value"
+                >
+                  {{ preset.title }}
+                </v-chip>
+              </div>
               <v-text-field
                 v-model="nodeConfig.config.schedule"
-                label="Cron Expression"
+                label="Cron expression"
                 variant="outlined"
                 required
-                :rules="[rules.required]"
-                placeholder="0 0 * * *"
-                hint="Minute Hour Day Month DayOfWeek"
+                :rules="[rules.required, () => !scheduleError || scheduleError]"
+                placeholder="0 2 * * *"
+                hint="minute hour day-of-month month day-of-week"
                 persistent-hint
+                class="mb-4"
               />
-              <v-select
+              <v-autocomplete
                 v-model="nodeConfig.config.timezone"
                 label="Timezone"
                 :items="timezones"
                 variant="outlined"
-                required
                 :rules="[rules.required]"
               />
+              <div v-if="nextRuns.length" class="text-caption text-medium-emphasis mb-4">
+                Next runs: {{ nextRuns.join(' · ') }}
+              </div>
             </div>
-            
+
+            <!-- Run targets (Manual and Schedule triggers) -->
+            <div v-if="['manual', 'schedule'].includes(nodeConfig.triggerType)">
+              <v-autocomplete
+                v-model="nodeConfig.config.deviceIds"
+                label="Run on devices"
+                :items="targetDevices"
+                item-title="name"
+                item-value="id"
+                variant="outlined"
+                multiple
+                chips
+                closable-chips
+                class="mb-2"
+              />
+              <v-select
+                v-model="nodeConfig.config.deviceGroupIds"
+                label="Run on device groups"
+                :items="deviceGroups"
+                item-title="name"
+                item-value="id"
+                variant="outlined"
+                multiple
+                chips
+                closable-chips
+                hint="One run per device. Leave both empty for a single run with no device (steps that need one can't run then)."
+                persistent-hint
+              />
+            </div>
+
             <!-- Threshold Trigger -->
             <div v-if="nodeConfig.triggerType === 'threshold'">
               <v-select
@@ -133,7 +219,7 @@
               <v-select
                 v-model="nodeConfig.config.property"
                 label="Device Property"
-                :items="deviceProperties"
+                :items="DEVICE_PROPERTY_OPTIONS"
                 variant="outlined"
                 required
                 :rules="[rules.required]"
@@ -141,7 +227,7 @@
               <v-select
                 v-model="nodeConfig.config.operator"
                 label="Operator"
-                :items="operators"
+                :items="DEVICE_PROPERTY_OPERATORS"
                 variant="outlined"
                 required
                 :rules="[rules.required]"
@@ -150,9 +236,32 @@
                 v-model="nodeConfig.config.value"
                 label="Value"
                 variant="outlined"
-                required
+                hint="Compared without regard to case, e.g. offline, aos-cx, switch"
+                persistent-hint
+              />
+            </div>
+
+            <!-- Alert Severity Condition -->
+            <div v-if="nodeConfig.conditionType === 'alert-severity'">
+              <v-select
+                v-model="nodeConfig.config.operator"
+                label="Severity is"
+                :items="ALERT_SEVERITY_OPERATORS"
+                variant="outlined"
                 :rules="[rules.required]"
               />
+              <v-select
+                v-model="nodeConfig.config.severity"
+                label="Severity"
+                :items="ALERT_SEVERITIES"
+                item-title="title"
+                item-value="value"
+                variant="outlined"
+                :rules="[rules.required]"
+              />
+              <p class="text-caption text-medium-emphasis">
+                Connect the green output for a match and the red one for no match.
+              </p>
             </div>
             
             <!-- Time Window Condition -->
@@ -215,6 +324,67 @@
               @update:model-value="onActionTypeChange"
             />
             
+            <!-- Raise Alert Action -->
+            <div v-if="nodeConfig.actionType === 'raise-alert'">
+              <v-text-field
+                v-model="nodeConfig.config.key"
+                label="Alert key"
+                variant="outlined"
+                :rules="[rules.required]"
+                hint="Names this alert. One alert per key and device; a Clear Alert step with the same key (in any automation) resolves it."
+                persistent-hint
+                class="mb-4"
+              />
+              <v-select
+                v-model="nodeConfig.config.severity"
+                label="Severity"
+                :items="ALERT_SEVERITIES"
+                item-title="title"
+                item-value="value"
+                variant="outlined"
+                clearable
+                hint="Empty uses the 'Raised by automation' rule's severity (Settings → Alerts)"
+                persistent-hint
+                class="mb-4"
+              />
+              <v-text-field
+                v-model="nodeConfig.config.title"
+                label="Title"
+                variant="outlined"
+                :rules="[rules.required]"
+                :hint="`Placeholders: ${TEMPLATE_HINT}`"
+                persistent-hint
+                class="mb-4"
+              />
+              <v-textarea
+                v-model="nodeConfig.config.message"
+                label="Message"
+                variant="outlined"
+                rows="2"
+              />
+            </div>
+
+            <!-- Clear Alert Action -->
+            <div v-if="nodeConfig.actionType === 'clear-alert'">
+              <v-combobox
+                v-model="nodeConfig.config.key"
+                label="Alert key"
+                :items="raiseKeys"
+                variant="outlined"
+                :rules="[rules.required]"
+                hint="Resolves the open alert a Raise Alert step opened with this key, for the same device. Built-in alerts can't be cleared by an automation."
+                persistent-hint
+              />
+            </div>
+
+            <!-- Acknowledge Alert Action -->
+            <div v-if="nodeConfig.actionType === 'acknowledge-alert'">
+              <p class="text-body-2 text-medium-emphasis">
+                Acknowledges the alert that started this run (needs an Alert trigger). The alert still resolves
+                on its own when its condition clears.
+              </p>
+            </div>
+
             <!-- Device Reboot Action -->
             <div v-if="nodeConfig.actionType === 'device-reboot'">
               <v-select
@@ -415,16 +585,11 @@
             label="Enable this node"
           />
           
-          <v-text-field
+          <v-checkbox
             v-if="node?.type === 'action'"
-            v-model="nodeConfig.config.retryAttempts"
-            label="Retry Attempts"
-            variant="outlined"
-            type="number"
-            min="0"
-            max="5"
-            hint="Number of times to retry if the action fails"
-            persistent-hint
+            v-model="nodeConfig.config.continueOnError"
+            label="Continue to the next steps if this one fails"
+            hide-details
           />
         </v-form>
       </v-card-text>
@@ -468,6 +633,18 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useDevicesStore } from '@/stores/devices'
+import api from '@/services/api'
+import deviceService from '@/services/device.service'
+import { CronExpressionParser } from 'cron-parser'
+import { ALERT_RULE_LABELS, ALERT_SEVERITIES } from '@/models/alerts'
+import {
+  isRunnable,
+  DEVICE_PROPERTY_OPTIONS,
+  DEVICE_PROPERTY_OPERATORS,
+  ALERT_SEVERITY_OPERATORS,
+  ALERT_TRIGGER_EVENTS,
+  TEMPLATE_HINT
+} from '@/models/automation-nodes'
 
 const props = defineProps({
   modelValue: {
@@ -477,6 +654,11 @@ const props = defineProps({
   node: {
     type: Object,
     default: null
+  },
+  // Every node in the workflow (for the Clear Alert key suggestions)
+  nodes: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -525,23 +707,33 @@ const nodeTypeColor = computed(() => {
 })
 
 // Form data options
-const triggerTypes = [
+// Subtypes the engine can't run yet stay selectable (a draft can be saved) but say so.
+const markRunnable = (kind, items) => items.map((item) => (
+  isRunnable(kind, item.value) ? item : { ...item, title: `${item.title} (not runnable yet)` }
+))
+
+const triggerTypes = markRunnable('trigger', [
+  { title: 'Alert', value: 'alert' },
   { title: 'Device Status Change', value: 'device-status' },
   { title: 'Scheduled Event', value: 'schedule' },
   { title: 'Threshold Alert', value: 'threshold' },
   { title: 'Webhook Trigger', value: 'webhook' },
   { title: 'Manual Trigger', value: 'manual' }
-]
+])
 
-const conditionTypes = [
+const conditionTypes = markRunnable('condition', [
   { title: 'Device Property', value: 'device-property' },
+  { title: 'Alert Severity', value: 'alert-severity' },
   { title: 'Time Window', value: 'time-window' },
   { title: 'User Approval', value: 'user-approval' },
   { title: 'Custom Script', value: 'custom-script' },
   { title: 'Device Count', value: 'device-count' }
-]
+])
 
-const actionTypes = [
+const actionTypes = markRunnable('action', [
+  { title: 'Raise Alert', value: 'raise-alert' },
+  { title: 'Clear Alert', value: 'clear-alert' },
+  { title: 'Acknowledge Alert', value: 'acknowledge-alert' },
   { title: 'Reboot Device', value: 'device-reboot' },
   { title: 'Configure Device', value: 'device-config' },
   { title: 'Send Command', value: 'send-command' },
@@ -550,9 +742,9 @@ const actionTypes = [
   { title: 'Generate Report', value: 'generate-report' },
   { title: 'Run Script', value: 'run-script' },
   { title: 'HTTP Request', value: 'http-request' }
-]
+])
 
-const notificationTypes = [
+const notificationTypes = markRunnable('notification', [
   { title: 'Email', value: 'email' },
   { title: 'Slack', value: 'slack' },
   { title: 'Teams', value: 'teams' },
@@ -560,7 +752,27 @@ const notificationTypes = [
   { title: 'SMS', value: 'sms' },
   { title: 'Dashboard Alert', value: 'dashboard' },
   { title: 'Log Entry', value: 'log' }
-]
+])
+
+// Automations never trigger on their own alerts (no loops).
+const alertRuleItems = Object.entries(ALERT_RULE_LABELS)
+  .filter(([value]) => value !== 'automation.raised')
+  .map(([value, title]) => ({ value, title }))
+
+// Keys this workflow's Raise Alert steps use
+const raiseKeys = computed(() => [...new Set(props.nodes
+  .filter((n) => n.data?.actionType === 'raise-alert' && n.data.config?.key)
+  .map((n) => n.data.config.key))])
+
+const deviceGroups = ref([])
+async function loadDeviceGroups() {
+  try {
+    const response = await api.get('/devices/groups')
+    deviceGroups.value = response.data?.data || []
+  } catch {
+    deviceGroups.value = [] // the group filter is optional
+  }
+}
 
 // Real inventory names for the device pickers (loaded on first open)
 const devicesStore = useDevicesStore()
@@ -569,6 +781,8 @@ onMounted(() => {
   if (devicesStore.devices.length === 0) {
     devicesStore.fetchDevices().catch(() => {}) // store records the error
   }
+  loadDeviceGroups()
+  loadTargetDevices()
 })
 
 const statusConditions = [
@@ -595,14 +809,6 @@ const operators = [
   { title: 'Not Equal', value: '!=' }
 ]
 
-const deviceProperties = [
-  { title: 'Uptime', value: 'uptime' },
-  { title: 'Client Count', value: 'clients' },
-  { title: 'CPU Usage', value: 'cpu' },
-  { title: 'Memory Usage', value: 'memory' },
-  { title: 'Temperature', value: 'temperature' }
-]
-
 const httpMethods = [
   { title: 'GET', value: 'GET' },
   { title: 'POST', value: 'POST' },
@@ -611,15 +817,43 @@ const httpMethods = [
   { title: 'DELETE', value: 'DELETE' }
 ]
 
-const timezones = [
-  { title: 'UTC', value: 'UTC' },
-  { title: 'America/New_York', value: 'America/New_York' },
-  { title: 'America/Chicago', value: 'America/Chicago' },
-  { title: 'America/Denver', value: 'America/Denver' },
-  { title: 'America/Los_Angeles', value: 'America/Los_Angeles' },
-  { title: 'Europe/London', value: 'Europe/London' },
-  { title: 'Europe/Paris', value: 'Europe/Paris' }
+const timezones = ['UTC', ...(Intl.supportedValuesOf?.('timeZone') || []).filter((tz) => tz !== 'UTC')]
+
+const SCHEDULE_PRESETS = [
+  { title: 'Every 15 minutes', value: '*/15 * * * *' },
+  { title: 'Hourly', value: '0 * * * *' },
+  { title: 'Daily 02:00', value: '0 2 * * *' },
+  { title: 'Weekdays 07:00', value: '0 7 * * 1-5' },
+  { title: 'Weekly, Sunday 03:00', value: '0 3 * * 0' }
 ]
+
+// Parsed the way the backend parses it (cron-parser), so what the preview
+// accepts is what activation accepts.
+const scheduleParse = computed(() => {
+  const expression = String(nodeConfig.value.config?.schedule || '').trim()
+  if (nodeConfig.value.triggerType !== 'schedule' || !expression) return { error: null, runs: [] }
+  const tz = nodeConfig.value.config.timezone || 'UTC'
+  try {
+    const interval = CronExpressionParser.parse(expression, { tz })
+    const fmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: tz })
+    return { error: null, runs: interval.take(3).map((d) => fmt.format(d.toDate())) }
+  } catch (error) {
+    return { error: `Invalid cron expression: ${error.message}`, runs: [] }
+  }
+})
+const scheduleError = computed(() => scheduleParse.value.error)
+const nextRuns = computed(() => scheduleParse.value.runs)
+
+// Every device (the devices store holds only one table page)
+const targetDevices = ref([])
+async function loadTargetDevices() {
+  try {
+    const response = await deviceService.getDevices()
+    targetDevices.value = (response.data || []).map((d) => ({ id: d.id, name: d.name }))
+  } catch {
+    targetDevices.value = []
+  }
+}
 
 const daysOfWeek = [
   { title: 'Monday', value: 'monday' },
@@ -672,7 +906,9 @@ const initializeConfig = () => {
 }
 
 const onTriggerTypeChange = () => {
-  nodeConfig.value.config = {}
+  nodeConfig.value.config = nodeConfig.value.triggerType === 'schedule'
+    ? { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' }
+    : {}
 }
 
 const onConditionTypeChange = () => {
@@ -680,9 +916,7 @@ const onConditionTypeChange = () => {
 }
 
 const onActionTypeChange = () => {
-  nodeConfig.value.config = {
-    retryAttempts: 1
-  }
+  nodeConfig.value.config = {}
 }
 
 const onNotificationTypeChange = () => {

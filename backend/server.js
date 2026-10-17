@@ -22,6 +22,9 @@ const { initializeQueues, closeQueues } = require('./src/config/bull');
 const pingMonitorService = require('./src/services/ping-monitor.service');
 const stateMonitorService = require('./src/services/live/state-monitor.service');
 const liveViewService = require('./src/services/live/live-view.service');
+const alertService = require('./src/services/alert.service');
+const automationTriggers = require('./src/services/automation/trigger.service');
+const automationSchedules = require('./src/services/automation/schedule.service');
 const { version } = require('./package.json');
 
 const PORT = process.env.PORT || 3000;
@@ -47,6 +50,11 @@ async function startServer() {
     const configBackupService = require('./src/services/config-backup.service');
     await configBackupService.syncSchedules();
 
+    // Re-derive automation cron schedules from their Schedule triggers
+    await automationSchedules.syncAll().catch((error) => {
+      logger.error(`Automation schedule sync failed: ${error.message}`);
+    });
+
     // Create HTTP server
     const server = http.createServer(app);
 
@@ -63,6 +71,11 @@ async function startServer() {
     stateMonitorService.start().catch((error) => {
       logger.error(`Live state monitoring failed to start: ${error.message}`);
     });
+
+    // Daily prune of old resolved alerts; automations with an Alert trigger
+    alertService.start();
+    automationTriggers.start();
+    automationSchedules.start();
 
     // Start server
     server.listen(PORT, BIND_ADDRESS, () => {
@@ -87,6 +100,9 @@ async function startServer() {
       pingMonitorService.stopMonitoring();
       await liveViewService.stop();
       await stateMonitorService.stop(); // logs out of device sessions
+      automationTriggers.stop();
+      automationSchedules.stop();
+      alertService.stop();
       // io.close() disconnects WebSocket clients and closes the HTTP server;
       // plain server.close() would wait on those long-lived connections.
       await new Promise((resolve) => io.close(() => resolve()));
