@@ -14,14 +14,24 @@
             </p>
           </div>
           
-          <v-btn
-            color="primary"
-            prepend-icon="mdi-plus"
-            size="large"
-            @click="createNewAutomation"
-          >
-            Create Automation
-          </v-btn>
+          <div class="d-flex ga-2">
+            <v-btn
+              variant="outlined"
+              prepend-icon="mdi-history"
+              size="large"
+              to="/automations/executions"
+            >
+              Run History
+            </v-btn>
+            <v-btn
+              color="primary"
+              prepend-icon="mdi-plus"
+              size="large"
+              @click="createNewAutomation"
+            >
+              Create Automation
+            </v-btn>
+          </div>
         </div>
         
         <!-- Stats Cards -->
@@ -244,6 +254,10 @@
                   </div>
                 </div>
                 <span v-else class="text-medium-emphasis">Never</span>
+                <div v-if="item.active && item.schedules?.[0]?.nextRun" class="text-caption text-medium-emphasis">
+                  <v-icon size="x-small">mdi-clock-outline</v-icon>
+                  next {{ formatDate(item.schedules[0].nextRun) }}
+                </div>
               </template>
               
               <!-- Actions column -->
@@ -266,8 +280,17 @@
                     variant="text"
                     color="primary"
                     title="Run Now"
-                    :disabled="!item.active"
                     @click.stop="executeAutomation(item)"
+                  />
+
+                  <!-- Run history -->
+                  <v-btn
+                    icon="mdi-history"
+                    size="small"
+                    variant="text"
+                    title="Run History"
+                    :to="{ path: '/automations/executions', query: { automationId: item.id } }"
+                    @click.stop
                   />
                   
                   <!-- Edit -->
@@ -385,6 +408,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAutomationsStore } from '@/stores/automations'
+import { apiErrorMessage } from '@/utils/apiError'
 import { formatDistanceToNow, format } from 'date-fns'
 
 const router = useRouter()
@@ -502,7 +526,7 @@ const toggleAutomationStatus = async (automation) => {
       'success'
     )
   } catch (error) {
-    showSnackbar('Failed to update automation status', 'error')
+    showSnackbar(apiErrorMessage(error), 'error')
   }
 }
 
@@ -511,7 +535,7 @@ const executeAutomation = async (automation) => {
     await automationsStore.executeAutomation(automation.id)
     showSnackbar(`Automation "${automation.name}" execution started`, 'info')
   } catch (error) {
-    showSnackbar('Failed to execute automation', 'error')
+    showSnackbar(apiErrorMessage(error), 'error')
   }
 }
 

@@ -27,7 +27,9 @@ function poeEvent(before, after) {
   if (was === now) return null;
   if (now === 'delivering') return 'port.poe.up';
   if (now && POE_FAULT.test(now)) return 'port.poe.fault';
-  if (was === 'delivering') return 'port.poe.down';
+  // Leaving a fault counts as down too, so whatever acts on the fault
+  // (alerts) sees it clear even when the port goes back to searching.
+  if (was === 'delivering' || (was && POE_FAULT.test(was))) return 'port.poe.down';
   return null; // e.g. disabled -> searching: not interesting on its own
 }
 

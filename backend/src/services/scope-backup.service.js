@@ -4,12 +4,14 @@ const crypto = require('crypto');
 const { getPrisma } = require('../config/database');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const gitBackupService = require('./git-backup.service');
+const alertService = require('./alert.service');
 const { describeFormat } = require('../utils/config-format');
 const { unifiedDiff } = require('../utils/config-diff');
 const { getIO } = require('../websocket/socket.handler');
 const logger = require('../utils/logger');
 
 const safe = (value) => String(value).replace(/[^A-Za-z0-9_-]/g, '_');
+const scopeSubject = (identity) => `scope:${identity.integrationId}:${identity.scopeType}:${identity.scopeId}`;
 
 function httpError(message, statusCode) {
   const error = new Error(message);
@@ -176,6 +178,7 @@ class ScopeBackupService {
         integrationName: identity.integrationName,
         hasChanges,
       });
+      alertService.clear('backup.failed', { subjectKey: scopeSubject(identity) });
       return true;
     } catch (error) {
       if (error.name === 'CapabilityError') {
@@ -194,6 +197,14 @@ class ScopeBackupService {
         scopeName: scope.name,
         error: error.message,
       });
+      if (error.name !== 'CapabilityError') {
+        alertService.raise('backup.failed', {
+          subjectKey: scopeSubject(identity),
+          title: `Scope backup failed for ${scope.scopeType} ${scope.name}`,
+          message: error.message,
+          data: { scopeBackupId: record.id, integrationId: identity.integrationId, scopeType: scope.scopeType, scopeId: scope.scopeId },
+        });
+      }
       return false;
     }
   }

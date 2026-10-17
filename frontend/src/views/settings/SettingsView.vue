@@ -27,9 +27,9 @@
               <v-icon start>mdi-cog</v-icon>
               General
             </v-tab>
-            <v-tab value="notifications">
+            <v-tab value="alerts">
               <v-icon start>mdi-bell</v-icon>
-              Notifications
+              Alerts
             </v-tab>
             <v-tab value="advanced">
               <v-icon start>mdi-tune</v-icon>
@@ -76,13 +76,12 @@
               </v-card-text>
             </v-window-item>
 
-            <!-- Notifications Tab -->
-            <v-window-item value="notifications">
+            <!-- Alerts Tab -->
+            <v-window-item value="alerts">
               <v-card-text>
-                <div class="text-h6 mb-4">Notification Settings</div>
-                <p class="text-medium-emphasis">
-                  Notification preferences will be available here in future updates.
-                </p>
+                <ErrorBoundary :show-details="isDevelopment">
+                  <AlertRules />
+                </ErrorBoundary>
               </v-card-text>
             </v-window-item>
 
@@ -109,6 +108,7 @@ import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
 import CloudIntegrations from '@/components/settings/CloudIntegrations.vue'
 import GitBackupSettings from '@/components/settings/GitBackupSettings.vue'
 import ApiCredentials from '@/components/settings/ApiCredentials.vue'
+import AlertRules from '@/components/settings/AlertRules.vue'
 import debugLog, { DebugCategory } from '@/utils/debug'
 
 const route = useRoute()

@@ -123,17 +123,23 @@ Integrate with each cloud provider's webhook/event notification system to receiv
 
 ## 📋 Additional Future Items
 
-### 2. Advanced Device Alerting System
-**Priority**: Low
-**Status**: Not Started
+### 2. Device Alerting
+**Priority**: Medium
+**Status**: 🔨 v1 shipped 2026-10-16 (branch `feature/alerts`): stateful, in-app alerts
 
-Create a flexible alerting system that can trigger notifications based on:
-- Device status changes (online → offline transitions)
-- Consecutive ping failures exceeding threshold
-- API communication failures
-- Custom alert rules (e.g., specific devices, locations, times)
+Shipped (`services/alert.service.js`, rules in `constants/alert-rules.js`, page `/alerts`):
+- ✅ Stateful alerts: one unresolved alert per condition and subject (`Alert.openKey` unique), occurrences counted, auto-resolve when the condition clears, acknowledge/resolve by operators. Resolved alerts pruned after `ALERT_RETENTION_DAYS` (90).
+- ✅ Built-in rules: device offline (ping), device offline (cloud, at sync), PoE fault and live monitor lost (Always-monitor devices only), config/scope backup failed, cloud sync failed. Admins toggle each and set severity and settle time (Settings → Alerts). Settle time drops conditions that clear quickly (PoE boot bounce).
+- ✅ UI: Alerts page (status tabs, severity/rule/search filters, bulk actions), app-bar bell with the open critical+warning count, toast on `alert:new`, dashboard "View Alerts" count. Replaced the client-only alert list in `stores/notifications.js`, which nothing on the backend fed.
+- ✅ Fixed on the way: a PoE port leaving a fault for a state other than delivering emitted no event; it now emits `port.poe.down`.
+- ✅ Automations and alerts (2026-10-16): an Alert trigger (opened/resolved, rule filter, minimum severity, optional device group) starts automations; Raise/Clear/Acknowledge Alert steps. Automation alerts use rule `automation.raised` with a key shared across automations (one raises on "opened", another clears on "resolved"); an automation never clears a built-in alert and never triggers on `automation.raised`. See item 3a below for the engine.
 
-**Notification Channels**: Email, SMS, Slack, Microsoft Teams, PagerDuty
+Deferred:
+- ⏳ Notification channels: email (nodemailer is wired in `notification.service.js` but unused), webhooks (Slack/Teams incoming webhooks), later SMS/PagerDuty. Per-user subscription preferences.
+- ⏳ Rule scoping (per device, group, site) and custom thresholds; maintenance windows / snooze.
+- ⏳ Port-flap detection from `port.link.*` events; API/transport failure alerts beyond backups.
+- ⏳ Open-alerts banner on the device page.
+- ⏳ Multi-instance: settle timers are in memory (same single-instance assumption as the live monitor).
 
 ---
 
@@ -147,7 +153,7 @@ Shipped on the branch (design: `MULTI_VENDOR_ROADMAP.md` §8c):
 - ✅ Fixed on the way (found on hardware): AOS-CX config backups and firmware/system polls over local REST used HTTP Basic auth, which AOS-CX refuses; they now use cookie sessions.
 
 Deferred:
-- ⏳ Automation event triggers consuming `DeviceEvent` (with a settle time: PoE devices bounce their link while booting).
+- ✅ Automation event triggers (2026-10-16): done through alerts rather than raw `DeviceEvent`. An Alert trigger fires after the rule's settle time, so a PoE boot bounce never starts a run. A raw `DeviceEvent` trigger is still open if a case needs events no rule covers.
 - ⏳ Live state for Junos (NETCONF), AOS-S and IOS-XE (SSH), via the existing poll mode; needs hardware to validate parsers.
 - ⏳ Optional syslog receiver as a push source for non-CX switches (one line of switch config; needs an inbound UDP port).
 - ⏳ Multi-instance leader lock (Redis) so several backend replicas don't watch the same devices.
@@ -158,6 +164,27 @@ Enhanced visualization for device performance metrics:
 - API communication success rate trends
 - Device uptime percentage (SLA tracking)
 - Comparative performance across device groups
+
+---
+
+### 3b. Automation engine (minimal)
+**Priority**: Medium
+**Status**: 🔨 v1 shipped 2026-10-16: the builder's graph runs for a small set of nodes
+
+Before this, nothing ran a saved automation: Run Now wrote `pending` Execution rows only, and the old step engine (`automation.service.js`, deleted) read a `workflow.steps` field the schema no longer had.
+
+Shipped (`services/automation/`: `graph.js`, `nodes.js` registry, `engine.js`, `trigger.service.js`; job `jobs/automation.job.js`):
+- ✅ Runnable nodes: Manual, Schedule and Alert triggers; Device Property (real fields only) and Alert Severity conditions (true/false outputs); Create Backup, Raise/Clear/Acknowledge Alert actions. Per-step "continue on error"; disabled steps pass through. One Execution per run with per-node results.
+- ✅ Every other palette node is marked "not runnable yet"; the API refuses to run or activate a workflow that uses one (400 with the reasons). The frontend list (`models/automation-nodes.js`) has a parity test against the backend registry.
+- ✅ Fixed on the way: `/automations/builder/:id` had no route (editing a saved automation was broken); Execution rows now cascade with their automation (deleting one with run history failed).
+- ✅ Schedule trigger (2026-10-16): cron expression + timezone on the trigger node (presets and a next-runs preview in the builder). `services/automation/schedule.service.js` derives the automation's single `Schedule` row and one Bull repeatable job from it on every save/toggle, and reconciles at startup; `/schedules` is read-only. Manual and Schedule triggers carry their targets (devices and device groups); a scheduled run with no devices for a device step is recorded as failed, not skipped.
+- ✅ Run History (2026-10-16): `/automations/executions` (filters by automation, status, started-by; per-step results; live via `automation:started`/`completed`). Cancel works: a queued run never starts, a running one stops before its next step. `Execution.trigger` records manual | schedule | alert:opened | alert:resolved. Finished runs pruned after `EXECUTION_RETENTION_DAYS` (90). Unattended runs toast only on failure.
+- ✅ Builder "Run now" (was a placeholder "Test" button) saves and queues a run. Automation jobs run at most once (`attempts: 1`; the queue default of 3 could repeat steps). Fixed the builder counting vue-flow edges as nodes, which broke its own validation.
+
+Deferred:
+- ⏳ Per-device run history on the device page; a run-history retention setting in the UI.
+- ⏳ The remaining actions (reboot, configure, command, firmware, HTTP request) and notification nodes; config writes are out of scope until the restore direction (`MULTI_VENDOR_ROADMAP.md` §8b).
+- ⏳ Alert-trigger runs are capped only by alert dedup; no per-automation rate limit yet.
 
 ---
 

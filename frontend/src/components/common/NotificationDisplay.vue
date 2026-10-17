@@ -25,6 +25,15 @@
 
     <template #actions>
       <v-btn
+        v-for="item in notification.actions"
+        :key="item.label"
+        variant="text"
+        size="small"
+        @click="runAction(notification.id, item)"
+      >
+        {{ item.label }}
+      </v-btn>
+      <v-btn
         icon="mdi-close"
         size="small"
         variant="text"
@@ -71,8 +80,7 @@ const getColor = (type) => {
     success: 'success',
     error: 'error',
     warning: 'warning',
-    info: 'info',
-    alert: 'error'
+    info: 'info'
   }
   return colors[type] || 'info'
 }
@@ -82,10 +90,14 @@ const getIcon = (type) => {
     success: 'mdi-check-circle',
     error: 'mdi-alert-circle',
     warning: 'mdi-alert',
-    info: 'mdi-information',
-    alert: 'mdi-bell-alert'
+    info: 'mdi-information'
   }
   return icons[type] || 'mdi-information'
+}
+
+const runAction = (notificationId, item) => {
+  handleClose(notificationId)
+  item.action?.()
 }
 
 const handleClose = (notificationId) => {

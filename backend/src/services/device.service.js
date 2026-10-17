@@ -2,6 +2,7 @@ const { getPrisma } = require('../config/database');
 const { normalizeSerial, normalizeMac } = require('../utils/device-key');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const { ENV_ARUBA_INTEGRATION_ID } = require('./cloud-providers/cloud-provider-factory');
+const alertService = require('./alert.service');
 const { debugLog, Services } = require('../utils/debug-logger');
 
 // Create service-specific logger
@@ -211,9 +212,12 @@ class DeviceService {
       const prisma = getPrisma();
 
       await require('./live/state-monitor.service').forget(deviceId);
+      alertService.forgetDevice(deviceId);
       await prisma.device.delete({
         where: { id: deviceId },
       });
+      // Its alerts cascaded with it; refresh everyone's counts.
+      alertService.emitUpdated([]).catch(() => {});
 
       logger.success('Device deleted', { deviceId });
     } catch (error) {
@@ -262,9 +266,16 @@ class DeviceService {
           }
         }
         logger.success(`Device sync completed for ${provider.label}`, summary);
+        alertService.clear('sync.failed', { subjectKey: provider.id });
       } catch (error) {
         summary.error = error.message;
         logger.error(`Device sync failed for ${provider.label}`, { error: error.message });
+        alertService.raise('sync.failed', {
+          subjectKey: provider.id,
+          title: `Device sync failed for ${provider.label}`,
+          message: error.message,
+          data: { integrationId: provider.id },
+        });
         // Keep syncing the remaining integrations; report per-integration errors.
       }
       totals.created += summary.created;
@@ -333,19 +344,40 @@ class DeviceService {
 
     if (existingDevice) {
       await this.updateDevice(existingDevice.id, deviceData);
+      this.alertCloudStatus(existingDevice.id, existingDevice.name, normalized);
       return 'updated';
     }
     if (adoptable) {
       // Keep the name the user gave it; everything else comes from the cloud.
       const { name: _cloudName, ...adopted } = deviceData;
       await this.updateDevice(adoptable.id, { serial: normalized.serial, ...adopted });
+      this.alertCloudStatus(adoptable.id, adoptable.name, normalized);
       logger.info('Cloud sync adopted an existing device by MAC', {
         deviceId: adoptable.id, serial: normalized.serial, mac: normalizeMac(normalized.macAddress),
       });
       return 'adopted';
     }
-    await this.createDevice({ serial: normalized.serial, ...deviceData });
+    const created = await this.createDevice({ serial: normalized.serial, ...deviceData });
+    if (created?.id) this.alertCloudStatus(created.id, created.name, normalized);
     return 'created';
+  }
+
+  /**
+   * Open or clear device.cloud-offline from the status sync just saw. Called
+   * on every sync, so a device that stays offline doesn't count again.
+   */
+  alertCloudStatus(deviceId, name, normalized) {
+    const subject = { subjectKey: deviceId, deviceId };
+    if (normalized.status === 'offline') {
+      alertService.raise('device.cloud-offline', {
+        ...subject,
+        title: `${name || normalized.name} is offline in the cloud`,
+        message: 'Its cloud management plane reports the device offline.',
+        data: { serial: normalized.serial },
+      }, { bump: false });
+    } else {
+      alertService.clear('device.cloud-offline', subject);
+    }
   }
 
   /** The single serial-less device with this MAC, or null (none, or ambiguous). */
@@ -354,7 +386,7 @@ class DeviceService {
     if (!mac) return null;
     const candidates = await getPrisma().device.findMany({
       where: { serial: null, macAddress: { not: null } },
-      select: { id: true, macAddress: true },
+      select: { id: true, name: true, macAddress: true },
     });
     const matches = candidates.filter((d) => normalizeMac(d.macAddress) === mac);
     return matches.length === 1 ? matches[0] : null;

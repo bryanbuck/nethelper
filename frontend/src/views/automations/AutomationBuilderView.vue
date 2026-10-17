@@ -37,12 +37,23 @@
             
             <!-- Action Buttons -->
             <v-btn
+              v-if="workflowId"
+              variant="text"
+              prepend-icon="mdi-history"
+              :to="{ path: '/automations/executions', query: { automationId: workflowId } }"
+            >
+              Runs
+            </v-btn>
+
+            <v-btn
               variant="outlined"
               prepend-icon="mdi-play"
               :disabled="!canTestWorkflow"
+              :loading="running"
+              title="Save, then run once now (Manual and Schedule triggers)"
               @click="testWorkflow"
             >
-              Test
+              Run now
             </v-btn>
             
             <v-btn
@@ -271,6 +282,7 @@
     <NodeConfigDialog
       v-model="configDialog"
       :node="selectedNode"
+      :nodes="workflowElements.filter((el) => !(el.source && el.target))"
       @save="onNodeSave"
       @test="onNodeTest"
     />
@@ -460,9 +472,13 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { validateWorkflow, exportWorkflowToJSON, importWorkflowFromJSON } from '@/utils/layoutUtils'
 import { useAutomationsStore } from '@/stores/automations'
+import { apiErrorMessage } from '@/utils/apiError'
 import WorkflowCanvas from '@/components/automations/WorkflowCanvas.vue'
 import NodeToolbar from '@/components/automations/NodeToolbar.vue'
 import NodeConfigDialog from '@/components/automations/NodeConfigDialog.vue'
+
+// vue-flow edges carry a type too ('smoothstep'); an edge is what has source and target.
+const isEdge = (el) => !!(el.source && el.target)
 
 const router = useRouter()
 const route = useRoute()
@@ -539,8 +555,8 @@ const workflowStatusIcon = computed(() => {
 })
 
 const validationResult = computed(() => {
-  const nodes = workflowElements.value.filter(el => el.type)
-  const edges = workflowElements.value.filter(el => !el.type)
+  const nodes = workflowElements.value.filter(el => !isEdge(el))
+  const edges = workflowElements.value.filter(isEdge)
   return validateWorkflow(nodes, edges)
 })
 
@@ -600,8 +616,8 @@ const undo = () => {
     
     // Update the canvas with restored elements
     if (canvas.value) {
-      const nodes = restoredElements.filter(el => el.type)
-      const edges = restoredElements.filter(el => !el.type)
+      const nodes = restoredElements.filter(el => !isEdge(el))
+      const edges = restoredElements.filter(isEdge)
       canvas.value.importWorkflow({ nodes, edges })
     }
     
@@ -623,8 +639,8 @@ const redo = () => {
     
     // Update the canvas with restored elements
     if (canvas.value) {
-      const nodes = restoredElements.filter(el => el.type)
-      const edges = restoredElements.filter(el => !el.type)
+      const nodes = restoredElements.filter(el => !isEdge(el))
+      const edges = restoredElements.filter(isEdge)
       canvas.value.importWorkflow({ nodes, edges })
     }
     
@@ -711,8 +727,8 @@ const saveWorkflow = async () => {
   saving.value = true
   
   try {
-    const nodes = workflowElements.value.filter(el => el.type)
-    const edges = workflowElements.value.filter(el => !el.type)
+    const nodes = workflowElements.value.filter(el => !isEdge(el))
+    const edges = workflowElements.value.filter(isEdge)
     
     const workflowData = {
       name: workflowMetadata.value.name,
@@ -758,10 +774,11 @@ const saveWorkflow = async () => {
     }
     
     showSnackbar('Workflow saved successfully', 'success')
-    
+    return true
   } catch (error) {
     console.error('Failed to save workflow:', error)
-    showSnackbar('Failed to save workflow', 'error')
+    showSnackbar(apiErrorMessage(error), 'error')
+    return false
   } finally {
     saving.value = false
   }
@@ -796,22 +813,32 @@ const deployWorkflow = async () => {
     
   } catch (error) {
     console.error('Failed to deploy workflow:', error)
-    showSnackbar('Failed to deploy workflow', 'error')
+    showSnackbar(apiErrorMessage(error), 'error')
   } finally {
     deploying.value = false
   }
 }
 
-const testWorkflow = () => {
+const running = ref(false)
+
+// Save, then queue one run now; results appear in Run History.
+const testWorkflow = async () => {
   if (!canTestWorkflow.value) return
-  
-  showSnackbar('Starting workflow test...', 'info')
-  // Implement test logic here
+  running.value = true
+  try {
+    if (!(await saveWorkflow())) return // the save failed and said why
+    const result = await automationsStore.executeAutomation(workflowId.value)
+    showSnackbar(`${result?.message || 'Automation queued'}. See Runs for the results.`, 'info')
+  } catch (error) {
+    showSnackbar(apiErrorMessage(error), 'error')
+  } finally {
+    running.value = false
+  }
 }
 
 const exportWorkflow = () => {
-  const nodes = workflowElements.value.filter(el => el.type)
-  const edges = workflowElements.value.filter(el => !el.type)
+  const nodes = workflowElements.value.filter(el => !isEdge(el))
+  const edges = workflowElements.value.filter(isEdge)
   
   const exportData = exportWorkflowToJSON(nodes, edges, workflowMetadata.value)
   
@@ -932,8 +959,8 @@ const loadExistingAutomation = async () => {
         workflowElements.value = automation.elements
         
         if (canvas.value) {
-          const nodes = automation.elements.filter(el => el.type)
-          const edges = automation.elements.filter(el => !el.type)
+          const nodes = automation.elements.filter(el => !isEdge(el))
+          const edges = automation.elements.filter(isEdge)
           
           canvas.value.importWorkflow({ nodes, edges })
         }

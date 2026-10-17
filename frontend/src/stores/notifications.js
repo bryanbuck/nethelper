@@ -6,37 +6,17 @@ export const NotificationType = {
   SUCCESS: 'success',
   ERROR: 'error',
   WARNING: 'warning',
-  INFO: 'info',
-  ALERT: 'alert'
-}
-
-// Alert severity levels
-export const AlertSeverity = {
-  LOW: 'low',
-  MEDIUM: 'medium',
-  HIGH: 'high',
-  CRITICAL: 'critical'
+  INFO: 'info'
 }
 
 export const useNotificationsStore = defineStore('notifications', () => {
   const notifications = ref([])
-  const alerts = ref([])
   const unreadCount = ref(0)
   const maxNotifications = ref(100) // Limit to prevent memory issues
 
   // Computed properties
   const unreadNotifications = computed(() => 
     notifications.value.filter(notification => !notification.read)
-  )
-
-  const criticalAlerts = computed(() => 
-    alerts.value.filter(alert => alert.severity === AlertSeverity.CRITICAL)
-  )
-
-  const recentAlerts = computed(() => 
-    alerts.value
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .slice(0, 10)
   )
 
   // Actions
@@ -73,47 +53,6 @@ export const useNotificationsStore = defineStore('notifications', () => {
     return newNotification.id
   }
 
-  function addAlert(alertData) {
-    const alert = {
-      id: alertData.id || Date.now().toString(),
-      type: alertData.type || 'system',
-      severity: alertData.severity || AlertSeverity.MEDIUM,
-      title: alertData.title || 'System Alert',
-      message: alertData.message || '',
-      source: alertData.source || 'system',
-      deviceId: alertData.deviceId || null,
-      automationId: alertData.automationId || null,
-      acknowledged: false,
-      read: false,
-      metadata: alertData.metadata || {},
-      createdAt: new Date(),
-      ...alertData
-    }
-
-    alerts.value.unshift(alert)
-    
-    // Also add as notification for UI display
-    addNotification({
-      id: `alert_${alert.id}`,
-      type: getNotificationTypeFromSeverity(alert.severity),
-      title: `${alert.severity.toUpperCase()}: ${alert.title}`,
-      message: alert.message,
-      persistent: alert.severity === AlertSeverity.CRITICAL,
-      actions: [
-        {
-          label: 'View Details',
-          action: () => viewAlertDetails(alert.id)
-        },
-        {
-          label: 'Acknowledge',
-          action: () => acknowledgeAlert(alert.id)
-        }
-      ]
-    })
-
-    return alert.id
-  }
-
   function removeNotification(notificationId) {
     const index = notifications.value.findIndex(n => n.id === notificationId)
     if (index > -1) {
@@ -137,23 +76,6 @@ export const useNotificationsStore = defineStore('notifications', () => {
     updateUnreadCount()
   }
 
-  function acknowledgeAlert(alertId) {
-    const alert = alerts.value.find(a => a.id === alertId)
-    if (alert) {
-      alert.acknowledged = true
-      alert.acknowledgedAt = new Date()
-    }
-  }
-
-  function viewAlertDetails(alertId) {
-    const alert = alerts.value.find(a => a.id === alertId)
-    if (alert) {
-      alert.read = true
-      // Emit event or navigate to alert details
-      // This would be handled by the component using this store
-    }
-  }
-
   function clearNotifications() {
     notifications.value = []
     updateUnreadCount()
@@ -166,33 +88,6 @@ export const useNotificationsStore = defineStore('notifications', () => {
 
   function updateUnreadCount() {
     unreadCount.value = unreadNotifications.value.length
-  }
-
-  function getNotificationTypeFromSeverity(severity) {
-    const typeMap = {
-      [AlertSeverity.LOW]: NotificationType.INFO,
-      [AlertSeverity.MEDIUM]: NotificationType.WARNING,
-      [AlertSeverity.HIGH]: NotificationType.WARNING,
-      [AlertSeverity.CRITICAL]: NotificationType.ERROR
-    }
-    return typeMap[severity] || NotificationType.INFO
-  }
-
-  // Device-related notifications
-  function addDeviceAlert(deviceData) {
-    return addAlert({
-      type: 'device',
-      title: 'Device Status Change',
-      message: `Device ${deviceData.name || deviceData.id} is now ${deviceData.status}`,
-      severity: deviceData.status === 'offline' ? AlertSeverity.HIGH : AlertSeverity.MEDIUM,
-      deviceId: deviceData.id,
-      source: 'device_monitor',
-      metadata: {
-        previousStatus: deviceData.previousStatus,
-        deviceType: deviceData.type,
-        location: deviceData.location
-      }
-    })
   }
 
   // Automation-related notifications
@@ -263,27 +158,19 @@ export const useNotificationsStore = defineStore('notifications', () => {
 
   return {
     notifications,
-    alerts,
     unreadCount,
     unreadNotifications,
-    criticalAlerts,
-    recentAlerts,
     addNotification,
-    addAlert,
     removeNotification,
     markAsRead,
     markAllAsRead,
-    acknowledgeAlert,
-    viewAlertDetails,
     clearNotifications,
     clearReadNotifications,
-    addDeviceAlert,
     addAutomationNotification,
     showSuccess,
     showError,
     showWarning,
     showInfo,
-    NotificationType,
-    AlertSeverity
+    NotificationType
   }
 })

@@ -15,6 +15,7 @@ const { resolveTransport } = require('../utils/transport-router');
 const { ARTIFACT_KINDS, describeFormat, kindForFormat } = require('../utils/config-format');
 const { unifiedDiff } = require('../utils/config-diff');
 const gitBackupService = require('./git-backup.service');
+const alertService = require('./alert.service');
 const scopeBackupService = require('./scope-backup.service');
 const { getQueue } = require('../config/bull');
 const { getIO } = require('../websocket/socket.handler');
@@ -252,6 +253,7 @@ class ConfigBackupService {
         hasChanges,
         kinds: captured.map((a) => a.kind),
       });
+      alertService.clear('backup.failed', { subjectKey: `device:${device.id}` });
       return true;
     } catch (error) {
       // A CapabilityError means the device's platform genuinely has nothing to
@@ -274,6 +276,16 @@ class ConfigBackupService {
         deviceName: device.name,
         error: error.message,
       });
+      // Nothing to back up on this platform is expected, not an alert.
+      if (error.name !== 'CapabilityError') {
+        alertService.raise('backup.failed', {
+          subjectKey: `device:${device.id}`,
+          deviceId: device.id,
+          title: `Config backup failed for ${device.name}`,
+          message: error.message,
+          data: { backupId: record.id },
+        });
+      }
       return false;
     }
   }

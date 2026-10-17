@@ -11,7 +11,9 @@ import { useAutomationsStore } from '@/stores/automations'
 import { useDiscoveryStore } from '@/stores/discovery'
 import { useBackupsStore } from '@/stores/backups'
 import { useTopologyStore } from '@/stores/topology'
-import { Device, Execution, ExecutionStatus } from '@/models'
+import { useAlertsStore } from '@/stores/alerts'
+import router from '@/router'
+import { Device } from '@/models'
 
 class WebSocketService {
   constructor() {
@@ -47,7 +49,8 @@ class WebSocketService {
         automations: useAutomationsStore(),
         discovery: useDiscoveryStore(),
         backups: useBackupsStore(),
-        topology: useTopologyStore()
+        topology: useTopologyStore(),
+        alerts: useAlertsStore()
       }
     }
   }
@@ -147,7 +150,6 @@ class WebSocketService {
 
     // Automation lifecycle events
     this.socket.on('automation:started', (data) => this.handleAutomationStarted(data))
-    this.socket.on('automation:progress', (data) => this.handleAutomationProgress(data))
     this.socket.on('automation:completed', (data) => this.handleAutomationCompleted(data))
 
     // Discovery scan events
@@ -166,6 +168,7 @@ class WebSocketService {
 
     // Alert events
     this.socket.on('alert:new', (data) => this.handleNewAlert(data))
+    this.socket.on('alert:updated', (data) => this.handleAlertUpdated(data))
 
     // Additional system events
     this.socket.on('metrics:update', (data) => this.handleMetricsUpdate(data))
@@ -188,18 +191,6 @@ class WebSocketService {
         // Full device update
         const deviceInstance = Device.fromApiResponse(device)
         this.stores.devices.updateDevice(deviceId, deviceInstance.toJSON())
-
-        // Add notification for significant status changes
-        if (changes?.status) {
-          this.stores.notifications.addDeviceAlert({
-            id: deviceId,
-            name: device.name,
-            status: device.status,
-            previousStatus: changes.status.from,
-            type: device.type,
-            location: device.location
-          })
-        }
       } else if (changes) {
         // Partial update
         this.stores.devices.updateDevice(deviceId, changes)
@@ -435,188 +426,83 @@ class WebSocketService {
   }
 
   /**
-   * Handle automation started events
-   * @param {Object} data - Automation start data
+   * An automation run started (backend jobs/automation.job.js).
+   * @param {Object} data - { executionId, automationId, automation, deviceId, trigger }
    */
   handleAutomationStarted(data) {
-    console.log('Automation started:', data)
-    
     try {
-      const { executionId, automationId, automation, execution, deviceId } = data
-      
-      // Add execution to store
-      if (execution) {
-        const executionInstance = Execution.fromApiResponse(execution)
-        this.stores.executions.addExecution(executionInstance)
-      } else {
-        // Create basic execution record
-        const newExecution = new Execution({
-          id: executionId,
-          automationId,
-          deviceId,
-          status: ExecutionStatus.RUNNING,
-          startedAt: new Date()
+      this.stores.executions.handleStarted(data)
+      // Only runs someone started by hand announce themselves; schedules and
+      // alert triggers run unattended and speak up only when they fail.
+      if (data.trigger === 'manual') {
+        this.stores.notifications.addAutomationNotification('started', {
+          id: data.automationId,
+          name: data.automation?.name || 'Automation',
+          executionId: data.executionId
         })
-        this.stores.executions.addExecution(newExecution)
       }
-      
-      // Add notification
-      this.stores.notifications.addAutomationNotification('started', {
-        id: automationId,
-        name: automation?.name || 'Unknown Automation',
-        executionId
-      })
-      
     } catch (error) {
       console.error('Error handling automation started:', error)
     }
   }
 
   /**
-   * Handle automation progress events
-   * @param {Object} data - Automation progress data
-   */
-  handleAutomationProgress(data) {
-    console.log('Automation progress:', data)
-    
-    try {
-      const { 
-        executionId, 
-        automationId, 
-        progress, 
-        currentStep, 
-        totalSteps, 
-        message,
-        automation 
-      } = data
-      
-      // Update execution progress
-      this.stores.executions.updateExecutionProgress(executionId, {
-        progress,
-        currentStep,
-        totalSteps,
-        message
-      })
-      
-      // Add progress notification for significant milestones
-      if (progress && (progress % 25 === 0 || progress === 100)) {
-        this.stores.notifications.addAutomationNotification('progress', {
-          id: automationId,
-          name: automation?.name || 'Unknown Automation',
-          executionId,
-          progress
-        })
-      }
-      
-    } catch (error) {
-      console.error('Error handling automation progress:', error)
-    }
-  }
-
-  /**
-   * Handle automation completed events
-   * @param {Object} data - Automation completion data
+   * An automation run finished: success, failed or cancelled.
+   * @param {Object} data - { executionId, automationId, automation, status, output, error, duration, trigger }
    */
   handleAutomationCompleted(data) {
-    console.log('Automation completed:', data)
-    
     try {
-      const { 
-        executionId, 
-        automationId, 
-        status, 
-        output, 
-        error, 
-        duration,
-        automation 
-      } = data
-      
-      // Update execution status
-      this.stores.executions.updateExecutionStatus(executionId, status, {
-        output,
-        error,
-        duration,
-        completedAt: new Date()
-      })
-      
-      // Add completion notification
-      const notificationType = status === ExecutionStatus.SUCCESS ? 'completed' : 'failed'
-      this.stores.notifications.addAutomationNotification(notificationType, {
-        id: automationId,
-        name: automation?.name || 'Unknown Automation',
-        executionId,
-        status,
-        error
-      })
-      
-      // Add alert for failed automations
-      if (status === ExecutionStatus.FAILED) {
-        this.stores.notifications.addAlert({
-          type: 'automation',
-          severity: 'high',
-          title: 'Automation Failed',
-          message: `Automation "${automation?.name || automationId}" failed: ${error || 'Unknown error'}`,
-          automationId,
-          metadata: {
-            executionId,
-            duration,
-            output
-          }
+      this.stores.executions.handleCompleted(data)
+      if (data.status === 'cancelled') return
+      if (data.status === 'failed' || data.trigger === 'manual') {
+        this.stores.notifications.addAutomationNotification(data.status === 'success' ? 'completed' : 'failed', {
+          id: data.automationId,
+          name: data.automation?.name || 'Automation',
+          executionId: data.executionId,
+          status: data.status,
+          error: data.error
         })
       }
-      
     } catch (error) {
       console.error('Error handling automation completed:', error)
     }
   }
 
   /**
-   * Handle new alert events
-   * @param {Object} data - Alert data
+   * A server-side alert opened (services/alert.service.js on the backend).
+   * @param {Object} data - { alert, summary }
    */
   handleNewAlert(data) {
-    console.log('New alert received:', data)
-    
     try {
-      const { 
-        id,
-        type,
-        severity,
-        title,
-        message,
-        source,
-        deviceId,
-        automationId,
-        metadata 
-      } = data
-      
-      // Add alert to notifications store
-      this.stores.notifications.addAlert({
-        id,
-        type,
-        severity,
-        title,
-        message,
-        source,
-        deviceId,
-        automationId,
-        metadata
+      const { alert } = data
+      this.stores.alerts.handleNew(data)
+      if (!alert) return
+
+      this.stores.notifications.addNotification({
+        id: `alert_${alert.id}`,
+        type: alert.severity === 'critical' ? 'error' : alert.severity === 'warning' ? 'warning' : 'info',
+        title: alert.title,
+        message: alert.message,
+        persistent: alert.severity === 'critical',
+        timeout: 8000,
+        actions: [{ label: 'View', action: () => router.push({ path: '/alerts' }) }]
       })
-      
-      // For critical alerts, also show browser notification if permitted
-      if (severity === 'critical' && 'Notification' in window) {
-        if (Notification.permission === 'granted') {
-          new Notification(title, {
-            body: message,
-            icon: '/favicon.ico',
-            tag: `alert-${id}`
-          })
-        }
+
+      // Critical alerts also raise a browser notification when permitted
+      if (alert.severity === 'critical' && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification(alert.title, { body: alert.message, tag: `alert-${alert.id}` })
       }
-      
     } catch (error) {
       console.error('Error handling new alert:', error)
     }
+  }
+
+  /**
+   * Alerts changed (bumped, acknowledged, resolved, or removed with a device).
+   * @param {Object} data - { alerts, summary }
+   */
+  handleAlertUpdated(data) {
+    this.stores.alerts.handleUpdated(data)
   }
 
   /**

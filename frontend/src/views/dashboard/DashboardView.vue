@@ -176,6 +176,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
+import { useAlertsStore } from '@/stores/alerts'
 import { useWebSocket } from '@/composables/useWebSocket'
 import StatsCard from '@/components/dashboard/StatsCard.vue'
 import DeviceStatusChart from '@/components/dashboard/DeviceStatusChart.vue'
@@ -257,7 +258,9 @@ const warningDevicesTrend = computed(() => {
   return { direction: 'neutral', value: 0 }
 })
 
-const quickActions = ref([
+const alertsStore = useAlertsStore()
+
+const quickActions = computed(() => [
   {
     id: 'sync-devices',
     title: 'Sync All Devices',
@@ -275,8 +278,10 @@ const quickActions = ref([
   {
     id: 'view-alerts',
     title: 'View Alerts',
-    description: 'Check recent network alerts and notifications',
-    icon: 'mdi-bell',
+    description: alertsStore.unresolvedCount
+      ? `${alertsStore.unresolvedCount} unresolved alert${alertsStore.unresolvedCount === 1 ? '' : 's'}`
+      : 'No unresolved alerts',
+    icon: alertsStore.badgeCount ? 'mdi-bell-alert' : 'mdi-bell',
     color: 'warning'
   }
 ])

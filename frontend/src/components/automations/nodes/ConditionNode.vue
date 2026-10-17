@@ -69,6 +69,7 @@ const nodeLabel = computed(() => {
   
   const conditionTypes = {
     'device-property': 'Device Property',
+    'alert-severity': 'Alert Severity',
     'time-window': 'Time Window',
     'user-approval': 'User Approval',
     'custom-script': 'Custom Script',
@@ -84,6 +85,10 @@ const nodeSubtitle = computed(() => {
   switch (props.data.conditionType) {
     case 'device-property':
       return props.data.config.property || 'Select property'
+    case 'alert-severity':
+      return props.data.config.severity
+        ? `Severity ${props.data.config.operator || '>='} ${props.data.config.severity}`
+        : 'Set severity'
     case 'time-window':
       return props.data.config.startTime && props.data.config.endTime
         ? `${props.data.config.startTime} - ${props.data.config.endTime}`
@@ -107,6 +112,8 @@ const nodeDescription = computed(() => {
   switch (props.data.conditionType) {
     case 'device-property':
       return `If ${props.data.config.property} ${props.data.config.operator} ${props.data.config.value}`
+    case 'alert-severity':
+      return 'Checks the triggering alert'
     case 'time-window':
       return `Only between ${props.data.config.startTime} and ${props.data.config.endTime}`
     case 'user-approval':
@@ -124,6 +131,7 @@ const nodeIcon = computed(() => {
   if (!props.data?.conditionType) return 'mdi-help-rhombus'
   
   const conditionIcons = {
+    'alert-severity': 'mdi-alert',
     'device-property': 'mdi-cog',
     'time-window': 'mdi-clock-outline',
     'user-approval': 'mdi-account-check',

@@ -31,6 +31,8 @@ jest.mock('../../src/services/settings.service', () => ({
   getDeviceCredentialsForUse: jest.fn(async () => ({ username: 'u', password: 'p' })),
 }));
 jest.mock('../../src/services/device-api/device-api-factory', () => ({ createDeviceAPI: jest.fn() }));
+const mockAlerts = { raise: jest.fn(), clear: jest.fn(), clearDevice: jest.fn(async () => 0) };
+jest.mock('../../src/services/alert.service', () => mockAlerts);
 
 const DeviceAPIFactory = require('../../src/services/device-api/device-api-factory');
 const settingsService = require('../../src/services/settings.service');
@@ -271,5 +273,41 @@ describe('LiveViewService', () => {
 
   test('unknown device is a 404', async () => {
     await expect(liveView.watch('nope', 'sock1')).rejects.toMatchObject({ statusCode: 404 });
+  });
+});
+
+describe('live alerts', () => {
+  const device = { id: 'd1', name: 'sw1' };
+  let svc;
+  beforeEach(() => {
+    svc = new StateMonitorService();
+    Object.values(mockAlerts).forEach((fn) => fn.mockClear());
+  });
+
+  test('only devices with Always monitor on raise alerts', () => {
+    svc.holders.set('d1', new Set(['view:1']));
+    svc.alertOn(device, { type: 'port.poe.fault', port: '1/1/4', data: { status: 'fault' } });
+    expect(mockAlerts.raise).not.toHaveBeenCalled();
+
+    svc.holders.set('d1', new Set(['always', 'view:1']));
+    svc.alertOn(device, { type: 'port.poe.fault', port: '1/1/4', data: { status: 'fault' } });
+    expect(mockAlerts.raise).toHaveBeenCalledWith('live.poe-fault', expect.objectContaining({ subjectKey: 'd1', port: '1/1/4' }));
+  });
+
+  test('PoE up/down clears the port\'s fault; monitor events open and clear monitor-down', () => {
+    svc.holders.set('d1', new Set(['always']));
+    svc.alertOn(device, { type: 'port.poe.down', port: '1/1/4', data: {} });
+    expect(mockAlerts.clear).toHaveBeenCalledWith('live.poe-fault', { subjectKey: 'd1', deviceId: 'd1', port: '1/1/4' });
+    svc.alertOn(device, { type: 'monitor.disconnected', port: null, data: { reason: 'socket closed' } });
+    expect(mockAlerts.raise).toHaveBeenCalledWith('live.monitor-down', expect.objectContaining({ message: 'socket closed' }));
+    svc.alertOn(device, { type: 'monitor.connected', port: null, data: {} });
+    expect(mockAlerts.clear).toHaveBeenCalledWith('live.monitor-down', { subjectKey: 'd1', deviceId: 'd1' });
+    svc.alertOn(device, { type: 'port.link.down', port: '1/1/4', data: {} });
+    expect(mockAlerts.raise).toHaveBeenCalledTimes(1);
+  });
+
+  test('turning Always monitor off resolves the device\'s live alerts', async () => {
+    await svc.setAlwaysOn(device, false);
+    expect(mockAlerts.clearDevice).toHaveBeenCalledWith('d1', ['live.poe-fault', 'live.monitor-down']);
   });
 });

@@ -1,5 +1,6 @@
 const { body, param, query, validationResult } = require('express-validator');
 const { VENDORS, PLATFORMS } = require('../constants/vendors');
+const { ALERT_RULES, SEVERITIES, MAX_SETTLE_SECONDS } = require('../constants/alert-rules');
 
 const DEVICE_TYPES = ['access_point', 'switch', 'gateway', 'controller', 'other'];
 const VENDOR_IDS = Object.keys(VENDORS);
@@ -366,6 +367,34 @@ const validateTopology = {
   ],
 };
 
+const validateAlerts = {
+  list: [
+    query('status').optional().isIn(['active', 'open', 'acknowledged', 'resolved', 'all']),
+    query('severity').optional().custom((value) => String(value).split(',').every((s) => SEVERITIES.includes(s.trim())))
+      .withMessage(`severity must be one or more of ${SEVERITIES.join(', ')}`),
+    query('rule').optional().isIn(Object.keys(ALERT_RULES)),
+    query('deviceId').optional().isUUID(),
+    query('q').optional().isString().isLength({ max: 200 }),
+    query('page').optional().isInt({ min: 1 }).toInt(),
+    query('limit').optional().isInt({ min: 1, max: 200 }).toInt(),
+    handleValidationErrors,
+  ],
+
+  ids: [
+    body('ids').isArray({ min: 1, max: 1000 }).withMessage('ids must be a non-empty array'),
+    body('ids.*').isUUID().withMessage('ids must be alert IDs'),
+    handleValidationErrors,
+  ],
+
+  updateRule: [
+    param('key').isIn(Object.keys(ALERT_RULES)).withMessage('Unknown alert rule'),
+    body('enabled').optional().isBoolean().toBoolean(),
+    body('severity').optional().isIn(SEVERITIES),
+    body('settleSeconds').optional().isInt({ min: 0, max: MAX_SETTLE_SECONDS }).toInt(),
+    handleValidationErrors,
+  ],
+};
+
 const validateOptionalUUID = (paramName) => [
   param(paramName).optional().isUUID().withMessage(`Invalid ${paramName}`),
   handleValidationErrors,
@@ -381,6 +410,7 @@ module.exports = {
   validateDiscovery,
   validateBackup,
   validateTopology,
+  validateAlerts,
   validateQuery,
   validateUUID,
   validateOptionalUUID,
