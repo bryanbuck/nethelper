@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useTheme } from 'vuetify'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import NotificationDisplay from '@/components/common/NotificationDisplay.vue'
+import StatusBar from '@/components/common/StatusBar.vue'
 import ChangePasswordDialog from '@/components/common/ChangePasswordDialog.vue'
 import AlertBell from '@/components/common/AlertBell.vue'
 import { THEMES, writeThemePreference } from '@/utils/theme-preference'
@@ -244,20 +244,13 @@ onMounted(() => {
         <router-view />
       </v-main>
 
-      <!-- Footer only for authenticated pages -->
-      <v-footer
+      <!-- Status bar (activity log + version) only for authenticated pages -->
+      <StatusBar
         v-if="!isAuthPage && authStore.isAuthenticated"
-        app
-      >
-        <v-spacer />
-        <div class="text-caption text-medium-emphasis">NetHelper {{ appVersion }} · Beta</div>
-        <v-spacer />
-      </v-footer>
+        :version="appVersion"
+      />
 
       <ChangePasswordDialog v-model="changePasswordOpen" />
-
-      <!-- Global Notification Display -->
-      <NotificationDisplay />
     </v-defaults-provider>
   </v-app>
 </template>

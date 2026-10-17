@@ -77,6 +77,35 @@ describe('websocket service', () => {
     expect(sockets).toHaveLength(1)
   })
 
+  test('the status bar logs a lost connection once and replaces it on reconnect', async () => {
+    await service.connect('http://x')
+    const log = service.stores.notifications
+    log.clearHistory()
+    sockets[0].fire('connect')
+    expect(log.connection).toBe('connected')
+    expect(log.entries).toHaveLength(0) // the first connect only lights the dot
+
+    sockets[0].fire('disconnect', 'transport close')
+    expect(log.connection).toBe('reconnecting')
+    expect(log.current.title).toBe('Connection Lost')
+    sockets[0].fire('connect')
+    expect(log.entries).toHaveLength(1)
+    expect(log.entries[0].title).toBe('Connection Restored')
+    expect(log.entries[0].pinned).toBe(false)
+  })
+
+  test('a critical alert pops up with a stored route action', async () => {
+    await service.connect('http://x')
+    const log = service.stores.notifications
+    log.clearHistory()
+    service.handleNewAlert({ alert: { id: 'a1', severity: 'critical', title: 'Switch down', message: 'core-1' } })
+    expect(log.popup.title).toBe('Switch down')
+    expect(log.entries[0].actions).toEqual([{ label: 'View', to: '/alerts' }])
+    service.handleNewAlert({ alert: { id: 'a2', severity: 'warning', title: 'PoE fault', message: 'ap-3' } })
+    expect(log.current.title).toBe('PoE fault')
+    expect(log.popup.title).toBe('Switch down') // warnings stay in the bar
+  })
+
   test('request() rejects when there is no connected socket', async () => {
     await expect(service.request('subscribe:device-live', 'id')).rejects.toThrow('Real-time connection is not available')
   })

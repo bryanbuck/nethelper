@@ -1,6 +1,7 @@
 import axios from 'axios'
 import router from '@/router'
 import { THEME_STORAGE_KEY } from '@/utils/theme-preference'
+import { clearActivityLog } from '@/utils/activity-log-storage'
 
 // Create axios instance with base configuration
 const api = axios.create({
@@ -12,11 +13,13 @@ const api = axios.create({
 })
 
 // On an unrecoverable auth failure, drop everything stored for the session but
-// keep the viewer's theme choice (a display preference, not session data).
+// keep the viewer's theme choice (a display preference, not session data). The
+// status bar's activity log (sessionStorage) belongs to the session too.
 const clearSessionStorage = () => {
   const theme = localStorage.getItem(THEME_STORAGE_KEY)
   localStorage.clear()
   if (theme) localStorage.setItem(THEME_STORAGE_KEY, theme)
+  clearActivityLog()
 }
 
 // Flag to prevent multiple token refresh attempts

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { readActivityLog, writeActivityLog, clearActivityLog } from '@/utils/activity-log-storage'
 
 // Notification types
 export const NotificationType = {
@@ -9,85 +10,115 @@ export const NotificationType = {
   INFO: 'info'
 }
 
-export const useNotificationsStore = defineStore('notifications', () => {
-  const notifications = ref([])
-  const unreadCount = ref(0)
-  const maxNotifications = ref(100) // Limit to prevent memory issues
+export const MAX_ENTRIES = 200
+const DEFAULT_TIMEOUT = 5000
+const PROBLEM_TYPES = [NotificationType.WARNING, NotificationType.ERROR]
 
-  // Computed properties
-  const unreadNotifications = computed(() => 
-    notifications.value.filter(notification => !notification.read)
+let idCounter = 0
+const newId = () => globalThis.crypto?.randomUUID?.() ?? `n${Date.now()}_${++idCounter}`
+
+// The session's activity log, shown by the status bar (components/common/StatusBar.vue).
+// Every message stays in the history; `timeout` is only how long it holds the
+// bar. Persistent messages are pinned: the bar falls back to the newest pinned
+// one until it is dismissed. Only `popup: true` messages overlay the page.
+export const useNotificationsStore = defineStore('notifications', () => {
+  // A pin is about this page load (a lost connection, an unread critical alert);
+  // after a reload the entry is history only.
+  const entries = ref(readActivityLog().map((e) => ({ ...e, pinned: false })))
+  const flashId = ref(null)
+  const popup = ref(null)
+  // Real-time socket state for the status bar: idle | connected | reconnecting | failed
+  const connection = ref('idle')
+
+  let flashTimer = null
+  let popupTimer = null
+
+  const current = computed(() =>
+    entries.value.find((e) => e.id === flashId.value) || entries.value.find((e) => e.pinned) || null
   )
+  const unseenCount = computed(() => entries.value.filter((e) => !e.seen).length)
+  const unseenProblemCount = computed(() =>
+    entries.value.filter((e) => !e.seen && PROBLEM_TYPES.includes(e.type)).length
+  )
+
+  const persist = () => writeActivityLog(entries.value)
 
   // Actions
   function addNotification(notification) {
-    const newNotification = {
-      id: notification.id || Date.now().toString(),
-      type: notification.type || NotificationType.INFO,
-      title: notification.title || '',
-      message: notification.message || '',
-      read: false,
-      persistent: notification.persistent || false,
-      timeout: notification.timeout || 5000,
-      actions: notification.actions || [],
-      createdAt: new Date(),
-      ...notification
+    const { popup: wantsPopup, ...fields } = notification
+    const entry = {
+      type: NotificationType.INFO,
+      title: '',
+      message: '',
+      persistent: false,
+      actions: [],
+      ...fields,
+      id: notification.id || newId(),
+      timeout: notification.timeout || DEFAULT_TIMEOUT,
+      createdAt: new Date().toISOString(),
+      seen: false
+    }
+    entry.pinned = entry.persistent
+
+    // Re-adding an id (an alert, the socket state) replaces the old entry.
+    entries.value = [entry, ...entries.value.filter((e) => e.id !== entry.id)].slice(0, MAX_ENTRIES)
+    persist()
+
+    clearTimeout(flashTimer)
+    flashId.value = entry.id
+    if (!entry.persistent) {
+      flashTimer = setTimeout(() => {
+        if (flashId.value === entry.id) flashId.value = null
+      }, entry.timeout)
     }
 
-    notifications.value.unshift(newNotification)
-    
-    // Limit notifications to prevent memory issues
-    if (notifications.value.length > maxNotifications.value) {
-      notifications.value = notifications.value.slice(0, maxNotifications.value)
-    }
-    
-    updateUnreadCount()
-
-    // Auto-remove non-persistent notifications
-    if (!newNotification.persistent && newNotification.timeout > 0) {
-      setTimeout(() => {
-        removeNotification(newNotification.id)
-      }, newNotification.timeout)
+    if (wantsPopup) {
+      clearTimeout(popupTimer)
+      popup.value = entry
+      popupTimer = setTimeout(() => { popup.value = null }, entry.timeout)
     }
 
-    return newNotification.id
+    return entry.id
   }
 
-  function removeNotification(notificationId) {
-    const index = notifications.value.findIndex(n => n.id === notificationId)
-    if (index > -1) {
-      notifications.value.splice(index, 1)
-      updateUnreadCount()
-    }
+  // Unpin (and stop showing) the message in the bar; it stays in the history.
+  function dismissCurrent() {
+    const entry = current.value
+    if (!entry) return
+    entry.pinned = false
+    entry.seen = true
+    if (flashId.value === entry.id) flashId.value = null
+    persist()
   }
 
-  function markAsRead(notificationId) {
-    const notification = notifications.value.find(n => n.id === notificationId)
-    if (notification && !notification.read) {
-      notification.read = true
-      updateUnreadCount()
-    }
+  function dismissPopup() {
+    clearTimeout(popupTimer)
+    popup.value = null
   }
 
-  function markAllAsRead() {
-    notifications.value.forEach(notification => {
-      notification.read = true
-    })
-    updateUnreadCount()
+  function remove(id) {
+    entries.value = entries.value.filter((e) => e.id !== id)
+    if (flashId.value === id) flashId.value = null
+    persist()
   }
 
-  function clearNotifications() {
-    notifications.value = []
-    updateUnreadCount()
+  function markAllSeen() {
+    if (!unseenCount.value) return
+    entries.value.forEach((e) => { e.seen = true })
+    persist()
   }
 
-  function clearReadNotifications() {
-    notifications.value = notifications.value.filter(n => !n.read)
-    updateUnreadCount()
+  // Sign-out: the next user on this tab starts with an empty log.
+  function clearHistory() {
+    clearTimeout(flashTimer)
+    entries.value = []
+    flashId.value = null
+    dismissPopup()
+    clearActivityLog()
   }
 
-  function updateUnreadCount() {
-    unreadCount.value = unreadNotifications.value.length
+  function setConnection(state) {
+    connection.value = state
   }
 
   // Automation-related notifications
@@ -157,15 +188,19 @@ export const useNotificationsStore = defineStore('notifications', () => {
   }
 
   return {
-    notifications,
-    unreadCount,
-    unreadNotifications,
+    entries,
+    current,
+    popup,
+    connection,
+    unseenCount,
+    unseenProblemCount,
     addNotification,
-    removeNotification,
-    markAsRead,
-    markAllAsRead,
-    clearNotifications,
-    clearReadNotifications,
+    dismissCurrent,
+    dismissPopup,
+    remove,
+    markAllSeen,
+    clearHistory,
+    setConnection,
     addAutomationNotification,
     showSuccess,
     showError,

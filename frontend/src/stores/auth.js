@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import router from '@/router'
 import { authService } from '@/services/auth.service'
+import { useNotificationsStore } from '@/stores/notifications'
 import debugLog, { DebugCategory } from '@/utils/debug'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -44,6 +45,8 @@ export const useAuthStore = defineStore('auth', () => {
       token.value = responseData.accessToken
       refreshToken.value = responseData.refreshToken
       user.value = responseData.user
+      // A fresh sign-in starts a fresh activity log (the status bar's history).
+      useNotificationsStore().clearHistory()
 
       debugLog.progress(DebugCategory.AUTH, 'Storing tokens and user data in state')
       debugLog.progress(DebugCategory.AUTH, 'Token stored:', token.value ? 'yes' : 'no')
@@ -134,6 +137,7 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
     localStorage.removeItem('user')
+    useNotificationsStore().clearHistory()
   }
 
   const initializeAuth = () => {
