@@ -66,7 +66,9 @@ export default defineConfig(({ mode }) => {
     test: {
       globals: true,
       environment: 'jsdom',
-      include: ['tests/unit/**/*.spec.js']
+      include: ['tests/unit/**/*.spec.js'],
+      // Component specs mount Vuetify, whose modules import their own CSS.
+      server: { deps: { inline: ['vuetify'] } }
     }
   }
 })

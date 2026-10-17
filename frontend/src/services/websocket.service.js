@@ -12,8 +12,10 @@ import { useDiscoveryStore } from '@/stores/discovery'
 import { useBackupsStore } from '@/stores/backups'
 import { useTopologyStore } from '@/stores/topology'
 import { useAlertsStore } from '@/stores/alerts'
-import router from '@/router'
 import { Device } from '@/models'
+
+// One activity-log slot for the socket state: lost/restored/failed replace each other.
+const CONNECTION_ENTRY_ID = 'socket-connection'
 
 class WebSocketService {
   constructor() {
@@ -101,19 +103,28 @@ class WebSocketService {
     socket.on('connect', () => {
       this.reconnectAttempts = 0
       console.log('WebSocket connected')
-      
-      this.stores.notifications.addNotification({
-        type: 'success',
-        title: 'Connection Established',
-        message: 'Real-time updates are now active',
-        timeout: 3000
-      })
+
+      // The first connect only lights the status bar; a reconnect replaces the
+      // pinned "Connection Lost" entry (same id) so the log doesn't stack them.
+      const notifications = this.stores.notifications
+      if (notifications.connection !== 'idle' && notifications.connection !== 'connected') {
+        notifications.addNotification({
+          id: CONNECTION_ENTRY_ID,
+          type: 'success',
+          title: 'Connection Restored',
+          message: 'Real-time updates are active again',
+          timeout: 3000
+        })
+      }
+      notifications.setConnection('connected')
     })
 
     socket.on('disconnect', (reason) => {
       console.log('WebSocket disconnected:', reason)
       
+      this.stores.notifications.setConnection('reconnecting')
       this.stores.notifications.addNotification({
+        id: CONNECTION_ENTRY_ID,
         type: 'warning',
         title: 'Connection Lost',
         message: 'Attempting to reconnect...',
@@ -484,8 +495,9 @@ class WebSocketService {
         title: alert.title,
         message: alert.message,
         persistent: alert.severity === 'critical',
+        popup: alert.severity === 'critical',
         timeout: 8000,
-        actions: [{ label: 'View', action: () => router.push({ path: '/alerts' }) }]
+        actions: [{ label: 'View', to: '/alerts' }]
       })
 
       // Critical alerts also raise a browser notification when permitted
@@ -557,7 +569,9 @@ class WebSocketService {
   }
 
   notifyConnectionFailed() {
+    this.stores.notifications.setConnection('failed')
     this.stores.notifications.addNotification({
+      id: CONNECTION_ENTRY_ID,
       type: 'error',
       title: 'Connection Failed',
       message: 'Unable to establish real-time connection. Please refresh the page.',
@@ -634,6 +648,7 @@ class WebSocketService {
     this.socket.removeAllListeners()
     this.socket.disconnect()
     this.socket = null
+    this.stores.notifications?.setConnection('idle')
   }
 
   /**
