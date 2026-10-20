@@ -501,6 +501,33 @@ cloud has no data for, is *skipped*, so its last links stay as they were.
   any two-ended link (e.g. an AOS-CX switch's own LLDP + Central's view of the
   AP on that port).
 
+## 8e. Cloud sync and status refresh (2026-10-19)
+
+Two Bull repeatables on the `device-sync` queue (`jobs/device-sync.job.js`),
+both single-attempt (the next run is the retry):
+- **`syncDevices`** every `CLOUD_SYNC_INTERVAL` (1 h): the full
+  `syncDevicesFromCloud()` that the Sync button runs. It creates, adopts and
+  updates rows, and is skipped when no integration is active. Its socket
+  events carry `trigger: 'scheduled'`, and the UI reports only failures.
+- **`refreshStatuses`** every `CLOUD_STATUS_INTERVAL` (5 min):
+  `cloud-status.service.js` asks each provider for `listStatuses()`. That is a
+  Map by serial of status, last seen, IP, firmware, connection state and
+  config state, and it updates only the cloud rows owned by that integration.
+  It never creates rows, never clears a known IP or firmware, and never
+  overrides a `switch-rest` connection state. It writes only changed columns.
+  An online device's last-seen time alone is not a change, because Central
+  reports "now". It emits `device:status:update` (`status` is
+  `effectiveStatus`, plus `cloudStatus`) and raises or clears
+  `device.cloud-offline` / `device.cloud-config` on a change. Mist overrides
+  the base read (full inventory) with one paged org stats call.
+
+**Config state** (`configInSync` on the NormalizedCloudDevice): Central
+`Synchronized` → true, `Out of sync` → false, null → null; Mist `NO_CHANGE` →
+true, anything else → null (no failure value seen live yet). The
+`device.cloud-config` rule opens only for an online device that is out of sync
+(10-minute settle, since a push briefly reads out of sync) and clears when it
+is back in sync.
+
 ## 9. Risks & open questions
 
 1. **Meraki backup semantics** — biggest product-level risk: settings snapshot ≠ running-config. Needs UI honesty and a decision on which settings objects constitute the snapshot. (Partly addressed 2026-09-14: `format` is now persisted per backup and drives the filename in the Git mirror — see §8b — so the distinction is recorded. The UI labelling decision remains open.)

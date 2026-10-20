@@ -222,41 +222,32 @@ class WebSocketService {
    * @param {Object} data - Ping status data
    */
   handleDeviceStatusUpdate(data) {
-    console.log('Device ping status update:', data)
-
     try {
-      const { deviceId, status, pingStatus, pingResponseTime, pingLastChecked } = data
+      // From the ping monitor (pingStatus, ...) or the cloud status refresh
+      // (cloudStatus, lastSeen). `status` is the displayed one (it accounts
+      // for both). Patch only what the event carries.
+      const { deviceId } = data
+      const fields = ['status', 'pingStatus', 'pingResponseTime', 'pingLastChecked', 'cloudStatus', 'lastSeen']
+      const patch = Object.fromEntries(fields.filter((key) => data[key] !== undefined).map((key) => [key, data[key]]))
+      if (!patch.status && patch.pingStatus) patch.status = patch.pingStatus
 
       // Use local update (no API call) to avoid unnecessary requests.
-      // `status` is the displayed one (it accounts for the cloud's view).
-      this.stores.devices.updateDeviceLocally(deviceId, {
-        status: status || pingStatus,
-        pingStatus,
-        pingResponseTime,
-        pingLastChecked
-      })
-      this.stores.topology?.applyDeviceStatus(deviceId, { pingStatus: pingStatus || status })
-
-      // Optionally show notification for offline status
-      if (status === 'offline' || pingStatus === 'offline') {
-        // Could add a notification here if desired
-      }
-
+      this.stores.devices.updateDeviceLocally(deviceId, patch)
+      const mapPatch = Object.fromEntries(['pingStatus', 'cloudStatus'].filter((key) => key in patch).map((key) => [key, patch[key]]))
+      if (Object.keys(mapPatch).length) this.stores.topology?.applyDeviceStatus(deviceId, mapPatch)
     } catch (error) {
       console.error('Error handling device status update:', error)
     }
   }
 
-  /**
-   * Handle cloud inventory sync completion (the sync runs as a queued job)
-   * @param {Object} data - { created, updated, adopted, total, possibleDuplicates, integrations }
-   */
   handleDeviceSyncCompleted(data) {
     try {
       this.stores.devices.applySyncResult(data)
       const parts = [`${data.total ?? 0} device(s)`, `${data.created ?? 0} new`]
       if (data.adopted) parts.push(`${data.adopted} matched to existing devices by MAC`)
       const failed = (data.integrations || []).filter((i) => i.error)
+      // The hourly sync is unattended: only a failure is worth a status bar entry.
+      if (data.trigger === 'scheduled' && !failed.length) return
       const message = `Cloud sync finished: ${parts.join(', ')}.`
         + (data.possibleDuplicates ? ` ${data.possibleDuplicates} possible duplicate(s) to review on the Devices page.` : '')
         + (failed.length ? ` Failed: ${failed.map((i) => i.name).join(', ')}.` : '')
@@ -269,7 +260,8 @@ class WebSocketService {
 
   handleDeviceSyncFailed(data) {
     try {
-      this.stores.notifications.showError(`Cloud sync failed: ${data.error || 'Unknown error'}`, 'Device Sync')
+      const what = data.trigger === 'scheduled' ? 'Scheduled cloud sync' : 'Cloud sync'
+      this.stores.notifications.showError(`${what} failed: ${data.error || 'Unknown error'}`, 'Device Sync')
     } catch (error) {
       console.error('Error handling device sync failed:', error)
     }

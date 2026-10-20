@@ -75,6 +75,12 @@ const schema = Joi.object({
   ALERT_RETENTION_DAYS: Joi.number().integer().min(1).default(90),
   EXECUTION_RETENTION_DAYS: Joi.number().integer().min(1).default(90),
 
+  // Scheduled cloud sync and the lighter cloud status refresh (jobs/device-sync.job.js). Milliseconds.
+  CLOUD_SYNC_ENABLED: Joi.string().valid('true', 'false').default('true'),
+  CLOUD_SYNC_INTERVAL: Joi.number().integer().min(300000).default(3600000),
+  CLOUD_STATUS_ENABLED: Joi.string().valid('true', 'false').default('true'),
+  CLOUD_STATUS_INTERVAL: Joi.number().integer().min(60000).default(300000),
+
   // Network Map neighbor collection (services/topology/). Interval in milliseconds.
   TOPOLOGY_ENABLED: Joi.string().valid('true', 'false').default('true'),
   TOPOLOGY_INTERVAL: Joi.number().integer().min(300000).default(21600000),

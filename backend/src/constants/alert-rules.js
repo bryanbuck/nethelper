@@ -27,9 +27,16 @@ const ALERT_RULES = {
   },
   'device.cloud-offline': {
     label: 'Device offline (cloud)',
-    description: 'A cloud provider reports a device offline at sync time.',
+    description: 'A cloud provider reports a device offline (at sync, or on the cloud status refresh).',
     severity: 'warning',
     settleSeconds: 0,
+  },
+  'device.cloud-config': {
+    label: 'Config out of sync (cloud)',
+    description: 'A cloud provider reports that an online device is not running the config it intends (Central: "Out of sync").',
+    severity: 'warning',
+    // A config push briefly reads out of sync until the device applies it.
+    settleSeconds: 600,
   },
   'live.poe-fault': {
     label: 'PoE fault',

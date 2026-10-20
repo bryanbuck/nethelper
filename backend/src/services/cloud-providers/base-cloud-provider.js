@@ -26,7 +26,10 @@ const { CapabilityError } = require('./errors');
  *     firmwareVersion, site, lastSeen,   // nullable extras
  *     metadata,        // provider-specific leftovers, merged into Device.metadata
  *     // optional, when the plane knows who owns the device's config:
- *     cloudManaged, cloudManagedSource, cloudConnectionStatus }
+ *     cloudManaged, cloudManagedSource, cloudConnectionStatus,
+ *     // optional: true/false when the device runs the config the cloud
+ *     // intends, null when the cloud's answer means neither
+ *     configInSync }
  */
 class BaseCloudProvider {
   /**
@@ -123,6 +126,33 @@ class BaseCloudProvider {
    */
   async listNeighbors() {
     this.unsupported('topology');
+  }
+
+  /**
+   * Current status of every device, for the cloud status refresh
+   * (services/cloud-status.service.js), which only updates rows sync made.
+   * Defaults to a full inventory read; a provider with a cheaper read
+   * overrides it.
+   * @returns {Promise<Map<string, CloudDeviceStatus>>} by serial, where
+   *   CloudDeviceStatus = { status, lastSeen, ipAddress, firmwareVersion,
+   *   cloudConnectionStatus, configInSync, configStatus }
+   */
+  async listStatuses() {
+    const devices = await this.listInventory();
+    return new Map(devices.filter((d) => d.serial).map((d) => [d.serial, this.statusOf(d)]));
+  }
+
+  /** The status fields of a NormalizedCloudDevice. */
+  statusOf(device) {
+    return {
+      status: device.status,
+      lastSeen: device.lastSeen || null,
+      ipAddress: device.ipAddress || null,
+      firmwareVersion: device.firmwareVersion || null,
+      cloudConnectionStatus: device.cloudConnectionStatus || null,
+      configInSync: typeof device.configInSync === 'boolean' ? device.configInSync : null,
+      configStatus: device.metadata?.configStatus ?? null,
+    };
   }
 
   /**

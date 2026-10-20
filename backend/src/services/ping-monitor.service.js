@@ -13,8 +13,9 @@ class PingMonitorService {
       batchSize: parseInt(process.env.PING_MONITOR_BATCH_SIZE) || 20, // devices to check concurrently
       failureThreshold: parseInt(process.env.PING_MONITOR_FAILURE_THRESHOLD) || 3, // consecutive failures before marking offline
     };
-    this.monitoringInterval = null;
-    this.isMonitoring = false;
+    // Sweeps are scheduled only by the Bull repeatable job (jobs/ping-monitor.job.js).
+    // A second scheduler here once pinged every device twice a minute, with the
+    // two sweeps sharing these stats and both counting consecutive failures.
     this.lastCheckStats = {
       total: 0,
       successful: 0,
@@ -288,69 +289,12 @@ class PingMonitorService {
   }
 
   /**
-   * Start continuous monitoring
-   */
-  startMonitoring() {
-    if (this.isMonitoring) {
-      logger.warn('Ping monitoring is already running');
-      return;
-    }
-
-    const enabled = process.env.PING_MONITOR_ENABLED !== 'false';
-    if (!enabled) {
-      logger.info('Ping monitoring is disabled via PING_MONITOR_ENABLED environment variable');
-      return;
-    }
-
-    logger.info(`Starting ping monitoring (interval: ${this.config.interval}ms, timeout: ${this.config.timeout}s, batch size: ${this.config.batchSize})`);
-
-    this.isMonitoring = true;
-
-    // Run initial check immediately
-    this.checkAllDevices().catch(error => {
-      logger.error('Error in initial ping check:', error);
-    });
-
-    // Set up recurring interval
-    this.monitoringInterval = setInterval(() => {
-      if (this.isMonitoring) {
-        this.checkAllDevices().catch(error => {
-          logger.error('Error in scheduled ping check:', error);
-        });
-      }
-    }, this.config.interval);
-
-    logger.info('Ping monitoring started successfully');
-  }
-
-  /**
-   * Stop monitoring
-   */
-  stopMonitoring() {
-    if (!this.isMonitoring) {
-      logger.warn('Ping monitoring is not running');
-      return;
-    }
-
-    logger.info('Stopping ping monitoring...');
-
-    this.isMonitoring = false;
-
-    if (this.monitoringInterval) {
-      clearInterval(this.monitoringInterval);
-      this.monitoringInterval = null;
-    }
-
-    logger.info('Ping monitoring stopped');
-  }
-
-  /**
    * Get monitoring statistics
    * @returns {Object} Monitoring stats
    */
   getStats() {
     return {
-      isMonitoring: this.isMonitoring,
+      isMonitoring: process.env.PING_MONITOR_ENABLED !== 'false',
       config: this.config,
       lastCheck: this.lastCheckStats,
     };
