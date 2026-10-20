@@ -45,12 +45,19 @@ jest.mock('../../src/services/settings.service', () => ({ getDeviceCredentialsFo
 jest.mock('../../src/services/device-poller.service', () => ({ withCxSession: jest.fn() }));
 jest.mock('../../src/services/ssh-device.service', () => ({ getNeighbors: jest.fn() }));
 jest.mock('../../src/services/cloud-providers/cloud-provider-factory', () => ({ forDevice: jest.fn() }));
+jest.mock('../../src/services/device-api/junos-api', () => {
+  const getLldpTopology = jest.fn();
+  const JunosAPI = jest.fn(() => ({ getLldpTopology }));
+  JunosAPI.getLldpTopology = getLldpTopology;
+  return JunosAPI;
+});
 
 const settingsService = require('../../src/services/settings.service');
 const devicePoller = require('../../src/services/device-poller.service');
 const sshDevice = require('../../src/services/ssh-device.service');
 const CloudProviderFactory = require('../../src/services/cloud-providers/cloud-provider-factory');
 const BaseCloudProvider = require('../../src/services/cloud-providers/base-cloud-provider');
+const JunosAPI = require('../../src/services/device-api/junos-api');
 const topology = require('../../src/services/topology/topology.service');
 
 const cx = {
@@ -126,6 +133,20 @@ test('a cloud AP whose provider has no neighbor API is unsupported', async () =>
   });
   expect(result.status).toBe('unsupported');
   expect(result.reason).toMatch(/does not support "topology"/);
+});
+
+test('a Mist-managed EX with an IP and a credential is read over NETCONF, not the cloud', async () => {
+  settingsService.getDeviceCredentialsForUse.mockResolvedValue({ username: 'u', password: 'p' });
+  JunosAPI.getLldpTopology.mockResolvedValue({
+    neighbors: [neighbor('mge-0/0/0', 'a8:f7:d9:b2:ed:0b', 'eth0', 'JNAP-01')],
+    identity: { chassisId: '4c:4a:b4:3b:79:80', sysName: 'JNEX-01' },
+  });
+  const result = await topology.collectDevice({
+    id: 'd-ex', name: 'JNEX-01', type: 'switch', vendor: 'juniper', platform: 'junos', ipAddress: '172.16.10.102', managementMode: 'cloud',
+  });
+  expect(result).toMatchObject({ status: 'ok', neighbors: 1 });
+  expect(CloudProviderFactory.forDevice).not.toHaveBeenCalled();
+  expect(sshDevice.getNeighbors).not.toHaveBeenCalled();
 });
 
 test('AOS-S reads over SSH', async () => {

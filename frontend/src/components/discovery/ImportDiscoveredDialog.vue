@@ -106,7 +106,7 @@
                   v-if="target?.centralMatch"
                   prepend-icon="mdi-cloud-check"
                   :title="`${target.centralMatch.deviceName || target.centralMatch.serial} (${target.centralMatch.model || 'Unknown model'})`"
-                  subtitle="Aruba Central Match"
+                  :subtitle="`Matched in ${target.centralMatch.integrationName || cloudProviderLabel(target.centralMatch.provider, { short: false })}`"
                 />
               </v-list>
             </v-col>
@@ -143,6 +143,7 @@
  */
 import { ref, computed, watch } from 'vue'
 import { useDiscoveryStore } from '@/stores/discovery'
+import { cloudProviderLabel } from '@/models/vendors'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -204,7 +205,7 @@ const typeHint = computed(() => {
 })
 
 const serialHint = computed(() => {
-  if (props.target?.centralSerial) return 'Detected from Aruba Central'
+  if (props.target?.centralSerial) return `Detected from ${cloudProviderLabel(props.target.centralMatch?.provider, { short: false })}`
   if (props.target?.macAddress) return 'Defaults to MAC address if left blank'
   return 'Required (not auto-detected)'
 })
@@ -214,7 +215,7 @@ const formatConflict = (conflictType) => {
     ip_conflict: 'IP Conflict',
     mac_conflict: 'MAC Conflict',
     serial_conflict: 'Serial Conflict',
-    central_managed: 'Central Managed'
+    central_managed: 'Cloud Managed'
   }
   return labels[conflictType] || conflictType
 }

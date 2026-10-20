@@ -12,7 +12,7 @@ const JunosAPI = require('./device-api/junos-api');
 const NetconfClient = require('./device-api/netconf-client');
 const { isCxRestCapable, detectPlatform } = require('../utils/device-platform');
 const { resolveTransport } = require('../utils/transport-router');
-const { ARTIFACT_KINDS, describeFormat, kindForFormat } = require('../utils/config-format');
+const { ARTIFACT_KINDS, describeFormat, kindForFormat, junosDeniedHierarchies } = require('../utils/config-format');
 const { unifiedDiff } = require('../utils/config-diff');
 const gitBackupService = require('./git-backup.service');
 const alertService = require('./alert.service');
@@ -29,6 +29,14 @@ function badRequest(message) {
   const error = new Error(message);
   error.statusCode = 400;
   return error;
+}
+
+/** A backup warning for the hierarchies a Junos config read withheld, or null. */
+function withheldWarning(text) {
+  const denied = junosDeniedHierarchies(text);
+  return denied.length
+    ? `Junos withheld ${denied.join(', ')} from this account; the CLI copy is missing those hierarchies.`
+    : null;
 }
 
 class ConfigBackupService {
@@ -173,7 +181,7 @@ class ConfigBackupService {
     });
 
     try {
-      const { artifacts, source, device: fullDevice } = await this.pullConfig(device);
+      const { artifacts, source, warning, device: fullDevice } = await this.pullConfig(device);
       // CLI first: it becomes the primary (ConfigBackup.filePath/format).
       const captured = artifacts
         .filter((a) => a.text && a.text.trim().length > 0)
@@ -238,6 +246,7 @@ class ConfigBackupService {
           hasChanges,
           format: primary.format,
           commitSha,
+          warning: warning || null,
           artifacts: {
             create: captured.map(({ kind, format, filePath, checksum, sizeBytes }) => ({
               kind, format, filePath, checksum, sizeBytes,
@@ -252,6 +261,7 @@ class ConfigBackupService {
         deviceName: device.name,
         hasChanges,
         kinds: captured.map((a) => a.kind),
+        ...(warning && { warning }),
       });
       alertService.clear('backup.failed', { subjectKey: `device:${device.id}` });
       return true;
@@ -300,7 +310,9 @@ class ConfigBackupService {
    *         switch-reported cloudManaged state).
    *       Junos:  NETCONF (set-format config). Not enabled by default on Junos,
    *         so a device that refuses the subsystem falls through to SSH below
-   *         rather than failing.
+   *         rather than failing. Cloud-managed (Mist): the cloud's config
+   *         object is added as the structured artifact, and any NETCONF
+   *         failure falls through to the cloud.
    *   - cloud:       the device's cloud integration (per its capabilities)
    *   - ssh:         the platform's SSH profile (`show running-config`, or
    *                  `show configuration | display set` on Junos)
@@ -325,6 +337,8 @@ class ConfigBackupService {
     const credentials = await settingsService.getDeviceCredentialsForUse(device.id);
     const transports = resolveTransport(device, 'config');
     const skipped = [];
+    // Failures a later transport covered for; shown with the backup's source.
+    const fallbackReasons = [];
 
     for (const transport of transports) {
       if (transport === 'device-rest') {
@@ -353,18 +367,42 @@ class ConfigBackupService {
 
         if (detectPlatform(device) === 'junos') {
           const api = new JunosAPI(device, credentials);
+          let text;
           try {
-            const text = await api.getConfiguration();
-            return { artifacts: [artifact('junos-set', text)], source: 'Junos NETCONF', device };
+            text = await api.getConfiguration();
           } catch (error) {
             // NETCONF is not enabled by default on Junos. If the device refused
-            // the subsystem, that is not a failure — fall through to the SSH CLI
-            // transport the matrix lists next. Any other error is real.
-            if (error.code !== NetconfClient.NETCONF_UNAVAILABLE) throw error;
-            logger.info(`NETCONF unavailable on ${device.name}; falling back to the SSH CLI`);
-            skipped.push('NETCONF (not enabled on the device)');
-            continue;
+            // the subsystem, that is not a failure — fall through to the next
+            // transport (the SSH CLI when direct, the cloud when cloud-managed).
+            if (error.code === NetconfClient.NETCONF_UNAVAILABLE) {
+              logger.info(`NETCONF unavailable on ${device.name}; trying the next transport`);
+              skipped.push('NETCONF (not enabled on the device)');
+              continue;
+            }
+            // Under cloud management the cloud still holds the device's config,
+            // so an unreachable switch or a wrong password costs the CLI copy,
+            // not the backup. Direct devices have no such fallback.
+            if (transports.includes('cloud')) {
+              logger.warn(`NETCONF failed on ${device.name}; falling back to the cloud: ${error.message}`);
+              skipped.push(`NETCONF (${error.message})`);
+              fallbackReasons.push(`NETCONF failed: ${error.message}`);
+              continue;
+            }
+            throw error;
           }
+          const artifacts = [artifact('junos-set', text)];
+          let source = 'Junos NETCONF';
+          const withheld = withheldWarning(text);
+          // Cloud-managed: the cloud's config object too, as the structured
+          // artifact (like AOS-CX's CLI + JSON). Best-effort.
+          if (transports.includes('cloud')) {
+            const snapshot = await this.cloudSnapshot(device);
+            if (snapshot) {
+              artifacts.push(artifact(snapshot.format, snapshot.text));
+              source = `${source} + ${snapshot.source}`;
+            }
+          }
+          return { artifacts, source, ...(withheld && { warning: withheld }), device };
         }
 
         skipped.push(`device API (no client for platform "${detectPlatform(device)}")`);
@@ -377,13 +415,21 @@ class ConfigBackupService {
         // propagates as-is: an honest "not supported" beats a fake retry,
         // and we never SSH into cloud-managed devices.
         const config = await provider.getDeviceConfiguration(device.serial);
+        await this.recordCloudManaged(device, config);
         // Providers return { text, format, source } per BaseCloudProvider.
         // Intent-based clouds (Mist, and Meraki later) yield a canonical-JSON
         // settings snapshot rather than a CLI running-config; `format` records
         // which, so the UI can label the backup honestly.
         const text = typeof config === 'string' ? config : config.text;
         const format = (typeof config === 'object' && config.format) || 'cli-text';
-        return { artifacts: [artifact(format, text)], source: config.source || provider.label, device };
+        const source = config.source || provider.label;
+        return {
+          artifacts: [artifact(format, text)],
+          source: fallbackReasons.length ? `${source} (${fallbackReasons.join('; ')})` : source,
+          // Shown on the backup: it succeeded, but without the device's own copy.
+          ...(fallbackReasons.length && { warning: `Only the cloud's copy was taken. ${fallbackReasons.join('; ')}` }),
+          device,
+        };
       }
 
       if (transport === 'ssh') {
@@ -391,8 +437,14 @@ class ConfigBackupService {
           throw new Error(`No credentials linked to device "${device.name}" for direct backup`);
         }
         const text = await sshDeviceService.getRunningConfig(device, credentials);
-        const format = detectPlatform(device) === 'junos' ? 'junos-set' : 'cli-text';
-        return { artifacts: [artifact(format, text)], source: 'SSH', device };
+        const junos = detectPlatform(device) === 'junos';
+        const withheld = junos ? withheldWarning(text) : null;
+        return {
+          artifacts: [artifact(junos ? 'junos-set' : 'cli-text', text)],
+          source: 'SSH',
+          ...(withheld && { warning: withheld }),
+          device,
+        };
       }
     }
 
@@ -400,6 +452,39 @@ class ConfigBackupService {
       `No transport available to back up "${device.name}"`
       + (skipped.length ? ` — skipped: ${skipped.join('; ')}` : '')
     );
+  }
+
+  /**
+   * The cloud's config object for a device read over its own API, or null
+   * when the cloud has none (a CapabilityError) or can't be reached right now.
+   */
+  async cloudSnapshot(device) {
+    try {
+      const provider = await CloudProviderFactory.forDevice(device);
+      const config = await provider.getDeviceConfiguration(device.serial);
+      await this.recordCloudManaged(device, config);
+      return { text: config.text, format: config.format, source: config.source || provider.label };
+    } catch (error) {
+      logger.info(`No cloud config snapshot for ${device.name}: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * A cloud config read can say whether the cloud owns the device's config
+   * (Mist's `mist_configured`). Record it, unless the switch itself answered
+   * (the AOS-CX Central probe), which outranks the cloud.
+   */
+  async recordCloudManaged(device, config) {
+    if (typeof config?.cloudManaged !== 'boolean' || device.cloudManagedSource === 'switch-rest') return;
+    try {
+      await getPrisma().device.update({
+        where: { id: device.id },
+        data: { cloudManaged: config.cloudManaged, cloudManagedSource: 'cloud-config', cloudManagedCheckedAt: new Date() },
+      });
+    } catch (error) {
+      logger.warn(`Could not record cloud management for ${device.name}: ${error.message}`);
+    }
   }
 
   /**

@@ -9,8 +9,10 @@
       <v-card-text>
         <p class="text-body-2 mb-4">
           NetHelper uses the device credential to reach a device directly: REST for AOS-CX (config
-          backup, live state, network map, also when Central manages the switch), NETCONF or SSH for the
-          others. Devices that are reached only through their cloud platform are skipped.
+          backup, live state, network map, also when Central manages the switch), NETCONF for Junos
+          (config backup and network map, also when Mist manages the switch), and SSH for the others.
+          A cloud-managed switch is never reached over SSH. Devices that are reached only through
+          their cloud platform are skipped.
         </p>
 
         <div class="d-flex flex-wrap align-center ga-4 mb-4">

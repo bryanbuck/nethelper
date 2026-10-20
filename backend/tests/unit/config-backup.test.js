@@ -13,6 +13,7 @@ const mockPrisma = {
   device: {
     findUnique: jest.fn(async ({ where }) => mockDb.devices.get(where.id) || null),
     findMany: jest.fn(async () => [...mockDb.devices.values()]),
+    update: jest.fn(async ({ where, data }) => Object.assign(mockDb.devices.get(where.id), data)),
   },
   backupSchedule: {
     findUnique: jest.fn(async ({ where }) => mockDb.schedules.get(where.id) || null),
@@ -220,6 +221,84 @@ describe('pullConfig transport dispatch', () => {
       artifacts: [{ kind: 'structured', format: 'mist-config-json', text: '{}' }],
     });
     expect(JunosAPI).not.toHaveBeenCalled();
+  });
+
+  describe('a Mist-managed Junos switch with local access', () => {
+    const mistConfig = { text: '{"mist_configured":true}', format: 'mist-config-json', source: 'Mist (juniper_mist)', cloudManaged: true };
+    const mistSwitch = () => addDevice({ vendor: 'juniper', platform: 'junos', managementMode: 'cloud', serial: 'MS2' });
+
+    test('captures the NETCONF config and the Mist config object, and records Mist ownership', async () => {
+      const device = mistSwitch();
+      JunosAPI.getConfiguration.mockResolvedValue('set system host-name ex1\n');
+      CloudProviderFactory.forDevice.mockResolvedValue({ label: 'Mist', getDeviceConfiguration: jest.fn(async () => mistConfig) });
+
+      const result = await configBackupService.pullConfig(device);
+
+      expect(result).toMatchObject({
+        source: 'Junos NETCONF + Mist (juniper_mist)',
+        artifacts: [{ kind: 'cli', format: 'junos-set' }, { kind: 'structured', format: 'mist-config-json' }],
+      });
+      expect(mockDb.devices.get(device.id)).toMatchObject({ cloudManaged: true, cloudManagedSource: 'cloud-config' });
+      expect(sshDeviceService.getRunningConfig).not.toHaveBeenCalled();
+    });
+
+    test('a config Junos partly withheld is kept, with a warning naming what is missing', async () => {
+      const device = mistSwitch();
+      JunosAPI.getConfiguration.mockResolvedValue('set system host-name ex1\nset secret /* ACCESS-DENIED */;\nset scripts /* ACCESS-DENIED */;\n');
+      CloudProviderFactory.forDevice.mockResolvedValue({ label: 'Mist', getDeviceConfiguration: jest.fn(async () => mistConfig) });
+
+      await expect(configBackupService.backupDevice(device)).resolves.toBe(true);
+      const row = mockDb.backups[mockDb.backups.length - 1];
+
+      expect(row.artifacts.map((a) => a.format)).toEqual(['junos-set', 'mist-config-json']);
+      expect(row.warning).toBe('Junos withheld secret, scripts from this account; the CLI copy is missing those hierarchies.');
+    });
+
+    test('still succeeds with the CLI copy alone when the cloud read fails', async () => {
+      const device = mistSwitch();
+      JunosAPI.getConfiguration.mockResolvedValue('set system host-name ex1\n');
+      CloudProviderFactory.forDevice.mockResolvedValue({ label: 'Mist', getDeviceConfiguration: jest.fn(async () => { throw new Error('503'); }) });
+
+      const result = await configBackupService.pullConfig(device);
+
+      expect(result.source).toBe('Junos NETCONF');
+      expect(result.artifacts).toHaveLength(1);
+    });
+
+    test('a NETCONF failure falls back to the cloud, and says so', async () => {
+      const device = mistSwitch();
+      JunosAPI.getConfiguration.mockRejectedValue(new Error('authentication failed'));
+      CloudProviderFactory.forDevice.mockResolvedValue({ label: 'Mist', getDeviceConfiguration: jest.fn(async () => mistConfig) });
+
+      const result = await configBackupService.pullConfig(device);
+
+      expect(result.source).toBe('Mist (juniper_mist) (NETCONF failed: authentication failed)');
+      expect(result.warning).toBe("Only the cloud's copy was taken. NETCONF failed: authentication failed");
+      expect(result.artifacts).toEqual([expect.objectContaining({ format: 'mist-config-json' })]);
+      expect(sshDeviceService.getRunningConfig).not.toHaveBeenCalled();
+    });
+
+    test('an account that may not read the config: the backup succeeds from Mist and keeps the warning', async () => {
+      const device = mistSwitch();
+      const denied = Object.assign(new Error("The device account can't read the configuration: Junos denied system."), { code: 'CONFIG_ACCESS_DENIED' });
+      JunosAPI.getConfiguration.mockRejectedValue(denied);
+      CloudProviderFactory.forDevice.mockResolvedValue({ label: 'Mist', getDeviceConfiguration: jest.fn(async () => mistConfig) });
+
+      await expect(configBackupService.backupDevice(device)).resolves.toBe(true);
+      const row = mockDb.backups[mockDb.backups.length - 1];
+
+      expect(row).toMatchObject({ status: 'success', format: 'mist-config-json' });
+      expect(row.warning).toMatch(/can't read the configuration/);
+    });
+
+    test("the switch's own Central-style answer is never overwritten by the cloud", async () => {
+      const device = addDevice({ vendor: 'juniper', platform: 'junos', managementMode: 'cloud', serial: 'MS3', ipAddress: null, cloudManagedSource: 'switch-rest', cloudManaged: false });
+      CloudProviderFactory.forDevice.mockResolvedValue({ label: 'Mist', getDeviceConfiguration: jest.fn(async () => mistConfig) });
+
+      await configBackupService.pullConfig(device);
+
+      expect(mockDb.devices.get(device.id)).toMatchObject({ cloudManaged: false, cloudManagedSource: 'switch-rest' });
+    });
   });
 
   test('a direct Meraki device has no transport', async () => {

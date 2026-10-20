@@ -35,6 +35,16 @@ describe('redactConfigSecrets', () => {
     expect(out.token[0]).toMatch(/REDACTED/);
   });
 
+  test('presigned URLs lose their signed query wherever they appear', () => {
+    // Shape of a live Mist WLAN (2026-10-19): an S3 link signed with a temporary session token.
+    const signed = 'https://papi.s3.us-east-1.amazonaws.com/portal_template/t-1.json?X-Amz-Algorithm=AWS4-HMAC-SHA256'
+      + '&X-Amz-Credential=ASIAX%2F20261019&X-Amz-Security-Token=IQoJb3&X-Amz-Signature=9d36a3';
+    const out = redactConfigSecrets({ wlans: [{ portal_template_url: signed, portal_image: 'https://example.com/logo.png?v=2' }], urls: [signed] });
+    expect(out.wlans[0].portal_template_url).toBe('https://papi.s3.us-east-1.amazonaws.com/portal_template/t-1.json?[signed query removed]');
+    expect(out.wlans[0].portal_image).toBe('https://example.com/logo.png?v=2');
+    expect(out.urls[0]).toBe(out.wlans[0].portal_template_url);
+  });
+
   test('without a key it masks without a fingerprint', () => {
     delete process.env.ENCRYPTION_KEY;
     expect(redactConfigSecrets({ psk: 'x' })).toEqual({ psk: '[REDACTED]' });

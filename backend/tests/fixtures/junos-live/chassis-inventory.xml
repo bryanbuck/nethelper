@@ -1,0 +1,59 @@
+<nc:rpc-reply xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:junos="http://xml.juniper.net/junos/24.4R2.25/junos"  message-id="4">
+<chassis-inventory xmlns="http://xml.juniper.net/junos/24.4R0/junos-chassis">
+<chassis junos:style="inventory">
+<name>Chassis</name>
+<serial-number>SN000002</serial-number>
+<description>EX4000-12MP</description>
+<chassis-module>
+<name>Pseudo CB 0</name>
+</chassis-module>
+<chassis-module>
+<name>Routing Engine 0</name>
+<part-number>BUILTIN</part-number>
+<serial-number>BUILTIN</serial-number>
+<description>RE-EX4000-12MP</description>
+<clei-code>CLEI000000</clei-code>
+<model-number>EX4000-12MP</model-number>
+</chassis-module>
+<chassis-module>
+<name>FPC 0</name>
+<version>REV 16</version>
+<part-number>650-178027</part-number>
+<serial-number>SN000002</serial-number>
+<description>EX4000-12MP</description>
+<clei-code>CLEI000000</clei-code>
+<model-number>EX4000-12MP</model-number>
+<chassis-sub-module>
+<name>CPU</name>
+<part-number>BUILTIN</part-number>
+<serial-number>BUILTIN</serial-number>
+<description>FPC CPU</description>
+</chassis-sub-module>
+<chassis-sub-module>
+<name>PIC 0</name>
+<version>REV 16</version>
+<part-number>BUILTIN</part-number>
+<serial-number>BUILTIN</serial-number>
+<description>4x100M/1G/2.5G Base-T &amp; 8x10M/100M/1G Base-T</description>
+<clei-code>CLEI000000</clei-code>
+<model-number>EX4000-12MP</model-number>
+</chassis-sub-module>
+<chassis-sub-module>
+<name>PIC 1</name>
+<version>REV 16</version>
+<part-number>650-178027</part-number>
+<serial-number>SN000002</serial-number>
+<description>4x1G/10G SFP/SFP+</description>
+<clei-code>CLEI000000</clei-code>
+<model-number>EX4000-12MP</model-number>
+</chassis-sub-module>
+</chassis-module>
+<chassis-module>
+<name>Power Supply 0</name>
+<description>JPSU-305W-AC</description>
+<part-number>BUILTIN</part-number>
+<serial-number>BUILTIN</serial-number>
+</chassis-module>
+</chassis>
+</chassis-inventory>
+</nc:rpc-reply>

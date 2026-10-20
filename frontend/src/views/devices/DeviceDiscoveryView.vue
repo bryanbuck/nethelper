@@ -6,7 +6,7 @@
         <div>
           <h1 class="text-h4 font-weight-bold mb-1">Device Discovery</h1>
           <p class="text-subtitle-1 text-medium-emphasis mb-0">
-            Scan your network for Aruba devices and import them into the inventory
+            Scan your network for Aruba and Juniper devices and import them into the inventory
           </p>
         </div>
 
@@ -152,7 +152,7 @@
             {{ discoveryStore.activeScan.totalHosts }} hosts
           </v-chip>
           <v-chip size="small" variant="tonal" color="success" class="mr-2">
-            {{ discoveryStore.activeScan.arubaHosts }} Aruba
+            {{ discoveryStore.activeScan.vendorHosts }} known vendor
           </v-chip>
           <v-chip size="small" variant="tonal" color="info">
             {{ discoveryStore.newDevices.length }} new
@@ -175,7 +175,7 @@
               mandatory
             >
               <v-btn value="all">All</v-btn>
-              <v-btn value="aruba">Aruba Only</v-btn>
+              <v-btn value="known">Known Vendors</v-btn>
               <v-btn value="new">New Only</v-btn>
             </v-btn-toggle>
 
@@ -209,7 +209,7 @@
           <template #item.vendor="{ item }">
             <div class="d-flex align-center">
               <v-icon
-                v-if="item.isArubaVendor"
+                v-if="item.matchedVendor"
                 color="success"
                 size="small"
                 class="mr-1"
@@ -245,7 +245,7 @@
             >
               {{ item.centralMatch.deviceName || item.centralMatch.serial }}
               <v-tooltip activator="parent" location="top">
-                Matched in Aruba Central:
+                Matched in {{ item.centralMatch.integrationName || cloudProviderLabel(item.centralMatch.provider, { short: false }) }}:
                 {{ item.centralMatch.model || 'Unknown model' }}
                 ({{ item.centralMatch.status || 'unknown status' }})
               </v-tooltip>
@@ -440,6 +440,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useDiscoveryStore } from '@/stores/discovery'
 import { useWebSocket } from '@/composables/useWebSocket'
 import ImportDiscoveredDialog from '@/components/discovery/ImportDiscoveredDialog.vue'
+import { cloudProviderLabel } from '@/models/vendors'
 
 const authStore = useAuthStore()
 const discoveryStore = useDiscoveryStore()
@@ -481,7 +482,7 @@ const scanHeaders = [
   { title: 'Status', key: 'status' },
   { title: 'Subnets', key: 'subnets', sortable: false },
   { title: 'Hosts', key: 'totalHosts' },
-  { title: 'Aruba', key: 'arubaHosts' },
+  { title: 'Known vendor', key: 'vendorHosts' },
   { title: 'Discovered', key: 'discovered', sortable: false },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' }
 ]
@@ -493,7 +494,7 @@ const resultHeaders = [
   { title: 'Hostname', key: 'hostname' },
   { title: 'Open Ports', key: 'openPorts', sortable: false },
   { title: 'Suggested Type', key: 'suggestedType' },
-  { title: 'Central Match', key: 'centralMatch', sortable: false },
+  { title: 'Cloud Match', key: 'centralMatch', sortable: false },
   { title: 'Conflict', key: 'conflictType' },
   { title: 'Status', key: 'status' },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' }
@@ -522,8 +523,8 @@ const suggestedSubnetItems = computed(() =>
 
 const filteredResults = computed(() => {
   const devices = discoveryStore.discoveredDevices
-  if (resultsFilter.value === 'aruba') {
-    return devices.filter(device => device.isArubaVendor)
+  if (resultsFilter.value === 'known') {
+    return devices.filter(device => device.matchedVendor)
   }
   if (resultsFilter.value === 'new') {
     return devices.filter(device => device.status === 'new')
@@ -556,7 +557,7 @@ const formatConflict = (conflictType) => {
     ip_conflict: 'IP Conflict',
     mac_conflict: 'MAC Conflict',
     serial_conflict: 'Serial Conflict',
-    central_managed: 'Central Managed'
+    central_managed: 'Cloud Managed'
   }
   return labels[conflictType] || conflictType
 }

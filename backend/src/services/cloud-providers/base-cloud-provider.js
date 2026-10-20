@@ -24,7 +24,9 @@ const { CapabilityError } = require('./errors');
  *     platform,        // constants/vendors.js platform id or null
  *     status,          // Prisma DeviceStatus value
  *     firmwareVersion, site, lastSeen,   // nullable extras
- *     metadata }       // provider-specific leftovers, persisted to Device.metadata
+ *     metadata,        // provider-specific leftovers, merged into Device.metadata
+ *     // optional, when the plane knows who owns the device's config:
+ *     cloudManaged, cloudManagedSource, cloudConnectionStatus }
  */
 class BaseCloudProvider {
   /**
@@ -68,6 +70,26 @@ class BaseCloudProvider {
   /** Device configuration from the cloud plane. @returns {Promise<{text, format, source}>} */
   async getDeviceConfiguration(serial) { // eslint-disable-line no-unused-vars
     this.unsupported('config-backup');
+  }
+
+  /** Push config to a device through the cloud plane. No provider does this yet. */
+  async updateDeviceConfiguration(serial, configuration) { // eslint-disable-line no-unused-vars
+    this.unsupported('config-write');
+  }
+
+  /** Ask the cloud plane to take a config backup of its own. */
+  async backupConfiguration(serial) { // eslint-disable-line no-unused-vars
+    this.unsupported('config-backup');
+  }
+
+  /** Run a CLI command on a device through the cloud plane. */
+  async executeCommand(serial, command) { // eslint-disable-line no-unused-vars
+    this.unsupported('command-execution');
+  }
+
+  /** Time-series stats for one device. */
+  async getDeviceStats(serial, metric, duration) { // eslint-disable-line no-unused-vars
+    this.unsupported('stats');
   }
 
   /**

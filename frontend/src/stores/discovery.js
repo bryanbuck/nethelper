@@ -33,8 +33,8 @@ export const useDiscoveryStore = defineStore('discovery', () => {
     discoveredDevices.value.filter(device => device.status === 'new')
   )
 
-  const arubaDevices = computed(() =>
-    discoveredDevices.value.filter(device => device.isArubaVendor)
+  const knownVendorDevices = computed(() =>
+    discoveredDevices.value.filter(device => device.matchedVendor)
   )
 
   async function fetchSubnets() {
@@ -196,10 +196,10 @@ export const useDiscoveryStore = defineStore('discovery', () => {
 
   /**
    * Handle scan completion (from 'discovery:completed')
-   * @param {Object} data - { scanId, totalHosts, arubaHosts }
+   * @param {Object} data - { scanId, totalHosts, vendorHosts }
    */
   async function handleScanCompleted(data) {
-    const { scanId, totalHosts, arubaHosts } = data
+    const { scanId, totalHosts, vendorHosts } = data
 
     if (scanProgress.value?.scanId === scanId) {
       scanProgress.value = null
@@ -210,7 +210,7 @@ export const useDiscoveryStore = defineStore('discovery', () => {
       scan.status = 'completed'
       scan.progress = 100
       scan.totalHosts = totalHosts
-      scan.arubaHosts = arubaHosts
+      scan.vendorHosts = vendorHosts
       scan.completedAt = new Date().toISOString()
     }
 
@@ -261,7 +261,7 @@ export const useDiscoveryStore = defineStore('discovery', () => {
     isScanning,
     discoveredDevices,
     newDevices,
-    arubaDevices,
+    knownVendorDevices,
     fetchSubnets,
     fetchScans,
     fetchScan,

@@ -2,6 +2,7 @@ const DeviceAPIFactory = require('./device-api/device-api-factory');
 const sshDeviceService = require('./ssh-device.service');
 const devicePollerService = require('./device-poller.service');
 const NetconfClient = require('./device-api/netconf-client');
+const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const { isCxRestCapable } = require('../utils/device-platform');
 const { resolveTransport } = require('../utils/transport-router');
 const logger = require('../utils/logger');
@@ -18,6 +19,10 @@ const logger = require('../utils/logger');
  * Shared by the per-device test (device-api-test.controller) and the
  * credential test (settings.service.testApiCredential), so both report what
  * the device actually said.
+ *
+ * A cloud-managed device that no direct transport reached gets its cloud's
+ * view attached as `cloudStatus` ("Mist reports it online"). That is context,
+ * never a pass: the test only succeeds when the device itself answered.
  *
  * @returns {Promise<Object>} { success, message, testedAt, ... }
  */
@@ -67,11 +72,33 @@ async function testDeviceConnection(device, credentials) {
     }
   }
 
-  return result || {
+  result = result || {
     success: false,
     message: `No usable transport for "${device.name}" (tried: ${transports.join(', ') || 'none'})`,
     testedAt: new Date().toISOString(),
   };
+
+  if (!result.success && transports.includes('cloud')) {
+    const cloudStatus = await cloudView(device);
+    if (cloudStatus) {
+      result.cloudStatus = cloudStatus;
+      result.message = `${result.message}. ${cloudStatus.provider} reports the device ${cloudStatus.status}; NetHelper did not reach it directly.`;
+    }
+  }
+  return result;
+}
+
+/** What the device's cloud says about it, or null when the cloud can't say. */
+async function cloudView(device) {
+  if (!device.serial) return null;
+  try {
+    const provider = await CloudProviderFactory.forDevice(device);
+    const { status, lastSeen } = await provider.getDeviceStatus(device.serial);
+    return { provider: provider.integration?.name || provider.label, status, lastSeen: lastSeen || null };
+  } catch (error) {
+    logger.debug(`No cloud status for ${device.name}: ${error.message}`);
+    return null;
+  }
 }
 
 module.exports = { testDeviceConnection };

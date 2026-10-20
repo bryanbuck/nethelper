@@ -1,5 +1,6 @@
 const { getPrisma } = require('../config/database');
 const { normalizeSerial, normalizeMac } = require('../utils/device-key');
+const { effectiveStatus, statusWhere } = require('../utils/device-status');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const { ENV_ARUBA_INTEGRATION_ID } = require('./cloud-providers/cloud-provider-factory');
 const alertService = require('./alert.service');
@@ -7,6 +8,8 @@ const { debugLog, Services } = require('../utils/debug-logger');
 
 // Create service-specific logger
 const logger = debugLog.createLogger(Services.DEVICE);
+
+const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 class DeviceService {
   async getDevices(filters = {}) {
@@ -22,13 +25,8 @@ class DeviceService {
       if (credential === 'none') where.apiCredentialId = null;
       else if (credential === 'any') where.apiCredentialId = { not: null };
       else if (credential) where.apiCredentialId = credential;
-      // Filter by pingStatus as primary status, fallback to cloudStatus
-      if (status) {
-        where.OR = [
-          { pingStatus: status },
-          { AND: [{ pingStatus: null }, { cloudStatus: status }] }
-        ];
-      }
+      // The same status the list shows (ping first, then the cloud; see utils/device-status.js)
+      if (status) where.OR = statusWhere(status).OR;
       if (location) where.location = { contains: location, mode: 'insensitive' };
 
       if (search) {
@@ -68,6 +66,10 @@ class DeviceService {
               name: true,
             },
           },
+          // The table and device page label the cloud plane ("Central", "Mist").
+          cloudIntegration: {
+            select: { id: true, name: true, provider: true },
+          },
           _count: {
             select: {
               executions: true,
@@ -83,8 +85,8 @@ class DeviceService {
       // Map pingStatus to status field for frontend compatibility
       return devices.map(device => ({
         ...device,
-        // Use pingStatus as primary, fallback to cloudStatus
-        status: device.pingStatus || device.cloudStatus || 'offline',
+        // Ping first, then the cloud; warning when only ping says it's down
+        status: effectiveStatus(device),
         // Include both statuses for frontend display
         pingStatus: device.pingStatus,
         cloudStatus: device.cloudStatus,
@@ -138,7 +140,7 @@ class DeviceService {
       });
 
       // Same status mapping as getDevices(), so a fetched row matches a listed one.
-      return device && { ...device, status: device.pingStatus || device.cloudStatus || 'offline' };
+      return device && { ...device, status: effectiveStatus(device) };
     } catch (error) {
       logger.error('Get device error', { error: error.message, stack: error.stack });
       throw error;
@@ -324,22 +326,28 @@ class DeviceService {
     // to findDuplicateGroups() and a person.
     const adoptable = existingDevice ? null : await this.findAdoptableDevice(normalized.macAddress);
 
+    const current = existingDevice || adoptable;
     const deviceData = {
       name: normalized.name,
       type: normalized.type,
       vendor: normalized.vendor,
       platform: normalized.platform,
       model: normalized.model,
-      ipAddress: normalized.ipAddress,
       macAddress: normalized.macAddress,
       location: normalized.site || null,
       cloudStatus: normalized.status,
       managementMode: 'cloud',
       cloudIntegrationId,
-      firmwareVersion: normalized.firmwareVersion,
+      // A provider that couldn't read live stats this time reports no IP or
+      // firmware; keep the known values (losing the IP would also cut off
+      // local reads such as NETCONF backups).
+      ...(normalized.ipAddress && { ipAddress: normalized.ipAddress }),
+      ...(normalized.firmwareVersion && { firmwareVersion: normalized.firmwareVersion }),
       // Never clear a lastSeen that ping or the live monitor recorded.
       ...(normalized.lastSeen && { lastSeen: normalized.lastSeen }),
-      metadata: normalized.metadata || {},
+      ...this.cloudManagedFields(normalized, current),
+      // Merged, so keys other writers keep in metadata survive a sync.
+      metadata: { ...(isPlainObject(current?.metadata) ? current.metadata : {}), ...(normalized.metadata || {}) },
     };
 
     if (existingDevice) {
@@ -360,6 +368,24 @@ class DeviceService {
     const created = await this.createDevice({ serial: normalized.serial, ...deviceData });
     if (created?.id) this.alertCloudStatus(created.id, created.name, normalized);
     return 'created';
+  }
+
+  /**
+   * Cloud-ownership fields a provider reported, if any. A switch's own answer
+   * (the AOS-CX Central probe, source switch-rest) outranks the cloud's
+   * inventory, so sync never overwrites it.
+   */
+  cloudManagedFields(normalized, current) {
+    const fields = {};
+    if (normalized.cloudConnectionStatus && current?.cloudManagedSource !== 'switch-rest') {
+      fields.cloudConnectionStatus = normalized.cloudConnectionStatus;
+    }
+    if (typeof normalized.cloudManaged === 'boolean' && current?.cloudManagedSource !== 'switch-rest') {
+      fields.cloudManaged = normalized.cloudManaged;
+      fields.cloudManagedSource = normalized.cloudManagedSource || 'cloud-inventory';
+      fields.cloudManagedCheckedAt = new Date();
+    }
+    return fields;
   }
 
   /**
@@ -386,7 +412,7 @@ class DeviceService {
     if (!mac) return null;
     const candidates = await getPrisma().device.findMany({
       where: { serial: null, macAddress: { not: null } },
-      select: { id: true, name: true, macAddress: true },
+      select: { id: true, name: true, macAddress: true, metadata: true, cloudManagedSource: true },
     });
     const matches = candidates.filter((d) => normalizeMac(d.macAddress) === mac);
     return matches.length === 1 ? matches[0] : null;
@@ -431,6 +457,7 @@ class DeviceService {
               type: true,
               pingStatus: true,
               cloudStatus: true,
+              managementMode: true,
             },
           },
           _count: {
@@ -448,7 +475,7 @@ class DeviceService {
         ...group,
         devices: group.devices.map(device => ({
           ...device,
-          status: device.pingStatus || device.cloudStatus || 'offline',
+          status: effectiveStatus(device),
         })),
       }));
     } catch (error) {

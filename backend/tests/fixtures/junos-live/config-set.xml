@@ -1,0 +1,12 @@
+<nc:rpc-reply xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:junos="http://xml.juniper.net/junos/24.4R2.25/junos"  message-id="6">
+<configuration-set format="set" database="committed" xmlns="http://xml.juniper.net/xnm/1.1/xnm">
+set version /* ACCESS-DENIED */;
+set groups /* ACCESS-DENIED */;
+set apply-groups /* ACCESS-DENIED */;
+set system /* ACCESS-DENIED */;
+set chassis /* ACCESS-DENIED */;
+set interfaces /* ACCESS-DENIED */;
+set protocols /* ACCESS-DENIED */;
+set vlans /* ACCESS-DENIED */;
+</configuration-set>
+</nc:rpc-reply>

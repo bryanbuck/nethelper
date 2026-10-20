@@ -59,8 +59,8 @@ class DeviceController {
         jobId: job.id,
       });
     } catch (error) {
-      // Handle enhanced Aruba errors
-      if (error.isArubaError && error.actions) {
+      // A cloud provider's error carries suggested actions for the user.
+      if (error.isProviderError && error.actions) {
         const errorResponse = ArubaErrorHandler.createErrorResponse({
           type: error.type,
           userMessage: error.message,

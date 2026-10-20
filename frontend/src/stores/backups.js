@@ -19,7 +19,7 @@ export const useBackupsStore = defineStore('backups', () => {
     itemsPerPage: 25
   })
 
-  // Cloud-scope backups (Mist org/sites)
+  // Cloud-scope backups (Mist org/sites, Central scopes)
   const scopeBackups = ref([])
   const scopeTotal = ref(0)
   const scopeLoading = ref(false)

@@ -9,11 +9,24 @@
  * Keys are matched on the leaf name, normalized across kebab, snake and camel
  * case (`shared-secret`, `plaintext-value`, `psk`, `password`, ...). Keys that
  * only describe a secret (`secret-type`) don't match.
+ *
+ * Presigned URLs are a secret too, whatever their key: Mist hands out each
+ * WLAN's `portal_template_url` as an S3 link signed with a temporary AWS
+ * session token, newly signed on every read. Their query string is dropped,
+ * which also keeps the backup from changing on every run.
  */
 const crypto = require('crypto');
 
 const SECRET_LEAF = /(password|passphrase|psk|secret|plaintextvalue|community|privatekey|apikey|token)$/;
 const MASK = '[REDACTED]';
+// AWS SigV4/SigV2, Azure SAS and GCS signed-URL query markers.
+const SIGNED_QUERY = /[?&](X-Amz-Signature|X-Amz-Security-Token|Signature|sig|X-Goog-Signature)=/i;
+
+/** A URL carrying a signature in its query, with the query replaced by a marker. */
+function stripSignedUrl(value) {
+  if (!/^https?:\/\//i.test(value) || !SIGNED_QUERY.test(value)) return value;
+  return `${value.split('?')[0]}?[signed query removed]`;
+}
 
 function isConfigSecretKey(key) {
   return SECRET_LEAF.test(String(key).toLowerCase().replace(/[-_]/g, ''));
@@ -36,6 +49,7 @@ function redactSecretValue(value) {
 /** A redacted deep copy of a config object. */
 function redactConfigSecrets(node) {
   if (Array.isArray(node)) return node.map(redactConfigSecrets);
+  if (typeof node === 'string') return stripSignedUrl(node);
   if (!node || typeof node !== 'object') return node;
   const out = {};
   for (const [key, value] of Object.entries(node)) {

@@ -34,6 +34,11 @@ const logger = require('../../utils/logger');
 
 const PAGE_LIMIT = 1000; // Mist caps `limit` at 1000 (default 100)
 
+// Device stats fields sync reads. Without `fields` the reply leaves out
+// config_status; `fields=*` adds everything (interface tables, clients) and
+// grows to kilobytes per device. A list returns exactly the fields named.
+const STATS_FIELDS = ['mac', 'ip', 'version', 'last_seen', 'status', 'uptime', 'config_status'];
+
 class MistProvider extends BaseCloudProvider {
   /**
    * @param {Object} integration - { id, provider, name, baseUrl,
@@ -112,15 +117,26 @@ class MistProvider extends BaseCloudProvider {
       const privileges = self.privileges || [];
       const scoped = privileges.some((p) => p.org_id === this.orgId);
       if (privileges.length > 0 && !scoped) {
+        const orgs = new Set(privileges.map((p) => p.org_id).filter(Boolean));
         return {
           success: false,
-          message: `Token authenticated as ${self.email || 'unknown user'}, but it has no privileges on org ${this.orgId}. Check the org ID and the regional cloud.`,
+          message: `Token authenticated as ${self.email || self.name || 'API token'}, but it has no privileges on org ${this.orgId}. Check the org ID and the regional cloud.`,
+          details: {
+            endpoint: this.integration.baseUrl,
+            explanation: `The token can see ${orgs.size} other org${orgs.size === 1 ? '' : 's'} in this regional cloud, not the configured one.`,
+            actions: [
+              'Copy the org ID from Mist: Organization → Settings',
+              'Pick the regional cloud the org lives in (the host you sign in to, e.g. manage.ac2.mist.com → api.ac2.mist.com)',
+            ],
+          },
         };
       }
+      // An org token is named, not tied to a user; a user token has an email.
+      const role = privileges.find((p) => p.org_id === this.orgId)?.role;
       return {
         success: true,
-        message: `Authenticated with Juniper Mist as ${self.email || self.name || 'API token'}`,
-        details: { email: self.email, orgId: this.orgId },
+        message: `Authenticated with Juniper Mist as ${self.email || self.name || 'API token'}${role ? ` (${role} access)` : ''}`,
+        details: { orgId: this.orgId, ...(self.email && { email: self.email }), ...(role && { role }) },
       };
     } catch (error) {
       return this.testFailure(error);
@@ -137,12 +153,21 @@ class MistProvider extends BaseCloudProvider {
       context: 'device_list',
     });
 
+    // Inventory names a device's site only by id; resolve names once.
+    const siteNames = new Map();
+    try {
+      const sites = await this.requestAllPages(`/api/v1/orgs/${this.orgId}/sites`, { context: 'site_list' });
+      for (const site of sites) siteNames.set(site.id, site.name);
+    } catch (error) {
+      logger.warn(`Mist site list unavailable for ${this.label}, syncing without site names: ${error.message}`);
+    }
+
     const statsByMac = new Map();
     try {
       // `type` defaults to `ap` on this endpoint — without type=all we would
       // silently sync only access points.
       const stats = await this.requestAllPages(`/api/v1/orgs/${this.orgId}/stats/devices`, {
-        params: { type: 'all' },
+        params: { type: 'all', fields: STATS_FIELDS.join(',') },
         context: 'device_stats',
       });
       for (const stat of stats) {
@@ -152,24 +177,48 @@ class MistProvider extends BaseCloudProvider {
       logger.warn(`Mist device stats unavailable for ${this.label}, syncing inventory without live enrichment: ${error.message}`);
     }
 
-    const devices = inventory.map((item) => this.normalizeDevice(item, statsByMac.get((item.mac || '').toLowerCase())));
+    const devices = inventory.map((item) => this.normalizeDevice(
+      item,
+      statsByMac.get((item.mac || '').toLowerCase()),
+      siteNames.get(item.site_id)
+    ));
     logger.info(`Inventory fetched from ${this.label}: ${devices.length} device(s)`);
     return devices;
   }
 
   async getDeviceStatus(serial) {
-    const matches = await this.request('GET', `/api/v1/orgs/${this.orgId}/inventory`, {
-      params: { serial },
-      context: 'device_status',
-    });
-    const item = (Array.isArray(matches) ? matches : matches.results || [])[0];
-    if (!item) throw new Error(`Device ${serial} not found in ${this.label}`);
+    const item = await this.findInventoryItem(serial, 'device_status');
+
+    // Inventory says only whether the device is connected; its stats say when
+    // Mist last heard from it. A device without a site has no stats.
+    let stats = null;
+    if (item.site_id && item.id) {
+      try {
+        stats = await this.request('GET', `/api/v1/sites/${item.site_id}/stats/devices/${item.id}`, {
+          params: { fields: STATS_FIELDS.join(',') },
+          context: 'device_status',
+        });
+      } catch (error) {
+        logger.warn(`Mist stats unavailable for ${serial}: ${error.message}`);
+      }
+    }
 
     return {
       status: item.connected ? 'online' : 'offline',
-      lastSeen: item.last_disconnected ? new Date(item.last_disconnected * 1000) : null,
-      raw: item,
+      lastSeen: stats?.last_seen ? new Date(stats.last_seen * 1000) : null,
+      raw: { inventory: item, stats },
     };
+  }
+
+  /** The org inventory record of one device, by serial. */
+  async findInventoryItem(serial, context) {
+    const matches = await this.request('GET', `/api/v1/orgs/${this.orgId}/inventory`, {
+      params: { serial },
+      context,
+    });
+    const item = (Array.isArray(matches) ? matches : matches.results || [])[0];
+    if (!item) throw new Error(`Device ${serial} not found in ${this.label}`);
+    return item;
   }
 
   /**
@@ -180,12 +229,7 @@ class MistProvider extends BaseCloudProvider {
    * diffs reflect real changes rather than key reordering.
    */
   async getDeviceConfiguration(serial) {
-    const matches = await this.request('GET', `/api/v1/orgs/${this.orgId}/inventory`, {
-      params: { serial },
-      context: 'device_config',
-    });
-    const item = (Array.isArray(matches) ? matches : matches.results || [])[0];
-    if (!item) throw new Error(`Device ${serial} not found in ${this.label}`);
+    const item = await this.findInventoryItem(serial, 'device_config');
 
     if (!item.site_id) {
       this.unsupported(
@@ -214,6 +258,9 @@ class MistProvider extends BaseCloudProvider {
       text: this.canonicalJson(config),
       format: 'mist-config-json',
       source: this.label,
+      // Whether Mist owns this device's config (false: monitored only, e.g. a
+      // brownfield switch adopted without config management).
+      ...(typeof config?.mist_configured === 'boolean' && { cloudManaged: config.mist_configured }),
     };
   }
 
@@ -294,8 +341,15 @@ class MistProvider extends BaseCloudProvider {
    * Map a Mist inventory record (+ optional live stats) onto the
    * NormalizedCloudDevice contract.
    */
-  normalizeDevice(item, stats = null) {
+  /**
+   * Field names follow a live org (2026-10-19): inventory carries `connected`,
+   * `site_id` and `version` but no last-seen time; stats carry `last_seen`
+   * (epoch seconds), `status` connected|disconnected, `ip` and `uptime`, and
+   * keep the last known values while a device is offline.
+   */
+  normalizeDevice(item, stats = null, siteName = null) {
     const type = this.mapDeviceType(item.type);
+    const connected = Boolean(item.connected);
     return {
       serial: item.serial,
       name: item.name || item.hostname || item.serial,
@@ -307,20 +361,22 @@ class MistProvider extends BaseCloudProvider {
       // Mist-managed Juniper switches/gateways run Junos; APs are appliances
       // with no CLI platform we would ever reach directly.
       platform: type === 'access_point' ? null : 'junos',
-      status: item.connected ? 'online' : 'offline',
-      firmwareVersion: stats?.version || null,
-      site: item.site_id || null,
-      lastSeen: stats?.last_seen
-        ? new Date(stats.last_seen * 1000)
-        : (item.last_disconnected ? new Date(item.last_disconnected * 1000) : null),
+      status: connected ? 'online' : 'offline',
+      firmwareVersion: stats?.version || item.version || null,
+      site: siteName || item.site_id || null,
+      lastSeen: stats?.last_seen ? new Date(stats.last_seen * 1000) : null,
+      // An AP assigned to a site takes its config from Mist. Whether Mist
+      // configures a switch or gateway is on its device object
+      // (`mist_configured`), which a config backup reads.
+      ...(type === 'access_point' && item.site_id && { cloudManaged: true, cloudManagedSource: 'cloud-inventory' }),
+      cloudConnectionStatus: connected ? 'connected' : 'not_reachable',
       metadata: {
         mistId: item.id,
         siteId: item.site_id,
+        siteName,
         hostname: item.hostname,
         sku: item.sku,
         hwRev: item.hw_rev,
-        adopted: item.adopted,
-        vcMac: item.vc_mac,
         uptime: stats?.uptime,
         configStatus: stats?.config_status,
       },
@@ -349,12 +405,19 @@ class MistProvider extends BaseCloudProvider {
     const detail = error.response?.data?.detail || error.response?.data?.error;
     let message;
 
+    let actions;
     if (status === 401) {
       message = `Juniper Mist rejected the API token (401). Check the token and that it belongs to this regional cloud (${this.integration.baseUrl}).`;
+      actions = [
+        'Check the token was copied whole and has not been revoked (Organization → Settings → API Token)',
+        'Pick the regional cloud the org lives in: a token only works on its own cloud',
+      ];
     } else if (status === 403) {
       message = `Juniper Mist denied access to org ${this.orgId} (403). The token may lack privileges on this org.`;
+      actions = ['Use an org token, or a user token with at least read access to this org'];
     } else if (status === 429) {
       message = 'Juniper Mist rate limit exceeded (5,000 requests/hour per org). Try again later.';
+      actions = ['Wait for the hourly budget to reset; other tools using the same org share it'];
     } else if (status) {
       message = `Juniper Mist API error (${status})${detail ? `: ${detail}` : ''}`;
     } else {
@@ -365,7 +428,10 @@ class MistProvider extends BaseCloudProvider {
     wrapped.statusCode = status;
     wrapped.context = context;
     wrapped.originalError = error;
+    wrapped.isProviderError = true;
+    if (actions) wrapped.actions = actions;
     wrapped.details = {
+      ...(actions && { actions }),
       context,
       ...(error.config?.method && { method: error.config.method.toUpperCase() }),
       ...(error.config?.url && { endpoint: error.config.url }),

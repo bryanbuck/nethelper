@@ -13,6 +13,7 @@
 const { CronExpressionParser } = require('cron-parser');
 const { getPrisma } = require('../../config/database');
 const alertService = require('../alert.service');
+const { effectiveStatus } = require('../../utils/device-status');
 const { ALERT_RULES, SEVERITIES } = require('../../constants/alert-rules');
 
 const AUTOMATION_RULE = 'automation.raised';
@@ -20,7 +21,7 @@ const ALERT_EVENTS = ['opened', 'resolved'];
 
 // Device fields a condition can test (what NetHelper actually stores).
 const DEVICE_PROPERTIES = {
-  status: (d) => d.pingStatus || d.cloudStatus,
+  status: (d) => effectiveStatus(d),
   cloudStatus: (d) => d.cloudStatus,
   type: (d) => d.type,
   vendor: (d) => d.vendor,

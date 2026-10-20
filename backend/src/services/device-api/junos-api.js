@@ -2,6 +2,7 @@ const BaseDeviceAPI = require('./base-device-api');
 const NetconfClient = require('./netconf-client');
 const junosTopology = require('../topology/parsers/junos');
 const logger = require('../../utils/logger');
+const { assertJunosConfigReadable } = require('../../utils/config-format');
 
 /**
  * Junos device API (Juniper EX / SRX / MX), over NETCONF.
@@ -108,7 +109,11 @@ class JunosAPI extends BaseDeviceAPI {
     });
   }
 
-  /** Chassis serial and public base MAC (spec-derived; not yet seen on hardware). */
+  /**
+   * Chassis serial and base MAC. The MAC element differs by platform: an
+   * EX4000 (24.4R2, seen 2026-10-19) reports `fpc-mac-base` per FPC; the
+   * spec's `public-base-address` is kept for platforms that use it.
+   */
   async getIdentity() {
     return this.withSession(async (client) => {
       const inventory = await client.rpc('<get-chassis-inventory/>');
@@ -116,7 +121,7 @@ class JunosAPI extends BaseDeviceAPI {
       return {
         // The chassis element comes first, so the first serial is the chassis's.
         serial: client.extractText(inventory, 'serial-number') || null,
-        macAddress: client.extractText(macs, 'public-base-address') || null,
+        macAddress: client.extractText(macs, 'public-base-address') || client.extractText(macs, 'fpc-mac-base') || null,
       };
     });
   }
@@ -157,6 +162,7 @@ class JunosAPI extends BaseDeviceAPI {
       if (!config) {
         throw new Error('NETCONF returned an empty configuration');
       }
+      assertJunosConfigReadable(config);
       return config;
     });
   }

@@ -462,7 +462,7 @@ model DiscoveryScan {
   status      ScanStatus @default(pending)
   subnets     Json // Array of CIDR strings scanned
   totalHosts  Int        @default(0) // Hosts that responded to the sweep
-  arubaHosts  Int        @default(0) // Hosts matching Aruba/HPE OUIs or fingerprint
+  vendorHosts Int        @default(0) // Hosts matched to a known vendor (OUI or cloud inventory)
   progress    Int        @default(0) // 0-100
   error       String?
   startedAt   DateTime?
@@ -486,12 +486,12 @@ model DiscoveredDevice {
   macAddress       String?
   vendor           String? // OUI vendor name
   hostname         String?
-  isArubaVendor    Boolean                @default(false)
+  matchedVendor    Vendor? // From a cloud inventory match, else the MAC's OUI
   openPorts        Json? // Array of open ports found during fingerprinting
   suggestedType    DeviceType? // Best-effort type detection
   suggestedName    String?
-  centralSerial    String? // Serial if matched in Aruba Central inventory
-  centralMatch     Json? // Matched Central device summary (name, model, status)
+  centralSerial    String? // Serial if matched in a cloud inventory (any provider; name predates multi-vendor)
+  centralMatch     Json? // Matched cloud device summary (name, model, status, vendor, platform, provider)
   existingDeviceId String? // Local Device.id if IP/MAC conflicts with inventory
   conflictType     String? // ip_conflict | mac_conflict | central_managed | null
   status           DiscoveredDeviceStatus @default(new)
@@ -540,6 +540,7 @@ model ConfigBackup {
   commitSha    String? // Git commit holding this config, when the Git mirror is enabled
   format       String? // 'cli-text' | 'junos-set' | 'aoscx-json' | 'mist-config-json' | ...
   error        String?
+  warning      String? // A succeeded backup that is missing something, e.g. NETCONF refused so only the cloud's copy was taken
   triggeredBy  String? // User id (manual runs)
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt

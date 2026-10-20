@@ -147,7 +147,7 @@ model CloudIntegration {
   - Sync can be scoped to one integration (`POST /devices/sync { integrationId }`, or the per-integration "Sync devices" button in Settings) or run across all active ones.
   - `Device.cloudIntegrationId` is `SetNull` on delete: removing an integration keeps its device rows but drops their cloud attribution.
 - `ApiCredential` stays as-is for direct-device creds — `apiKey`/`apiSecret` already cover token-style auth.
-- `DiscoveredDevice.isArubaVendor` → generalize to `matchedVendor Vendor?` (low stakes; can lag to post-MVP).
+- ~~`DiscoveredDevice.isArubaVendor` → generalize to `matchedVendor Vendor?`~~ Done 2026-10-19 (`20261019190000_discovery_matched_vendor`; `DiscoveryScan.arubaHosts` → `vendorHosts`). Juniper and Mist OUIs added; the cloud cross-check keeps each match's vendor/platform.
 
 ## 4. Cloud provider abstraction
 
@@ -289,6 +289,17 @@ Shipped, no behavior change for Aruba:
 
 Also fixed a latent Phase 0 bug this exercised: `pullConfig()`'s cloud branch was `JSON.stringify`-ing the provider's whole `{text, format, source}` wrapper instead of storing `text`. It never fired because Central's config path is quarantined, but Mist hit it immediately.
 
+**Live contact (2026-10-19)**, against a real org (`api.ac2.mist.com`, read-only org token; one site, an AP33 and an EX4000-12MP, both powered off), with `scripts/probe-cloud.js` (GET only) and anonymised captures in `tests/fixtures/mist-live/`. What it changed:
+- **Site names.** Inventory names a site only by `site_id`, and sync stored the UUID as `Device.location` (and so in the location filter and the map's site scopes). `listInventory()` now reads `/orgs/:id/sites` once and stores the name; the id stays in `metadata.siteId`.
+- **Fields that don't exist.** Inventory has no `last_disconnected` or `adopted`; last-seen comes from stats `last_seen` (epoch seconds, kept while offline). Inventory does carry `version`, now the firmware fallback when stats fail.
+- **`config_status` needs `fields`.** `/stats/devices` leaves it out by default; `fields=*` returns kilobytes per device (interface tables, LLDP clients). A list (`fields=mac,ip,version,last_seen,status,uptime,config_status`) returns exactly those.
+- **Who owns the config.** A switch's device object has `mist_configured`; a config backup records it as `cloudManaged` (source `cloud-config`). APs assigned to a site are Mist-configured (source `cloud-inventory`). Mist rows used to stay "unverified" forever.
+- **A credential in WLANs.** Each WLAN's `portal_template_url` is an S3 link presigned with a temporary AWS session token, newly signed on every read: a secret, and the reason site scope backups changed on every run. `utils/config-redact.js` strips signed queries from any URL.
+- `/self` for an org token has a `name` and `privileges[].role`, no email; the test now reports the access level.
+- Scope backups (org and site) and a switch config-object backup ran live and are byte-stable across runs.
+
+With the devices powered on (same day): inventory `connected: true`, stats `status: connected` with fresh `last_seen`; sync flipped both to online and auto-resolved their `device.cloud-offline` alerts; scope backups kept the same checksums. NETCONF to the Mist-managed EX was then run once a firewall rule was fixed (see Phase 2's first hardware contact). Inputs for later work are captured: AP `lldp_stat` and switch `clients` (stats `fields=*`), `/stats/ports/search` with `neighbor_*` LLDP fields (cloud neighbors, §8d), and `/devices/events/search` (`SW_CONNECTED`, `AP_RESTARTED`, ...; cloud events).
+
 **Verified** end-to-end against a local mock of the Mist API built from the spec's response shapes: integration created with the token encrypted at rest and masked over the API; `testConnection` authenticated and validated org scope; sync produced `vendor=juniper` devices with correct type mapping (`ap`/`switch`/`gateway`), `platform=junos` on the switch and gateway but not the AP, and live IP/firmware from stats; config backup of a Mist-managed EX4400 stored and checksummed, and after mutating a port description in Mist the second backup's diff showed exactly that one line; an AP backup recorded an honest "not supported" reason instead of failing opaquely; a Mist org and a Central account were active simultaneously in `activeProviders()`.
 
 ### Phase 2 — Junos direct ✅ **COMPLETE** (2026-07-12) — NETCONF, not SSH
@@ -305,6 +316,8 @@ The deciding argument was correctness, not elegance. Screen-scraping an interact
 **Verified** (no hardware — a mock Junos device: a real `ssh2` SSH server serving both a NETCONF subsystem and a PTY-echoing Junos CLI shell, driven over actual SSH connections). 15 checks, all passing: transport routing and factory dispatch; NETCONF over chunked framing *and* legacy end-of-message framing; device info/firmware parsing; a pre-15.1 device rejecting `format="set"` and falling back to text; config backup storing set-format output, with change detection and a diff isolating exactly the one line changed; **the fallback path — NETCONF refused → detected → SSH CLI → identical config**; the CLI pager being disabled correctly; and Aruba routing unchanged.
 
 **Caveat worth stating**: a mock is faithful to the RFC and to Junos's documented RPCs, but it is still a mock. The first run against real hardware is where response-shape surprises would appear.
+
+**First hardware contact (2026-10-19)**, an EX4000-12MP on 24.4R2.25 managed by Mist, read over NETCONF with the device credential (captures in `tests/fixtures/junos-live/`). The framing, `<get-software-information/>` parsing and the LLDP parser all worked unchanged. Two surprises: an account whose login class lacks `view-configuration` gets a committed config made of `/* ACCESS-DENIED */` placeholders, not an RPC error, so a "successful" backup held nothing (now refused by `assertJunosConfigReadable`; a Mist-managed switch falls back to Mist's copy with a `ConfigBackup.warning`); and the chassis MAC is `fpc-mac-base` per FPC, not `public-base-address`. With `view-configuration` granted, the full pull ran (5.5 KB `set` config plus Mist's object; stable on a repeat run). Junos still withholds `scripts`, `event-options`, `secret` and `extension-service` from such an account, so a partly withheld read is kept and the withheld hierarchies go in the backup's warning; only a read with nothing readable is refused (the user's call, 2026-10-19). Still not run on hardware: the SSH CLI fallback.
 
 ### Phase 3 — Cisco Meraki (cloud)
 
@@ -349,9 +362,9 @@ AOS-CX yields both from one REST session: `GET /configs/running-config` with `Ac
 Cloud planes configure APs (and much else) **above the device**: Mist org/site objects (WLANs, RF templates, device profiles, switch templates), Central scopes and library profiles. There is no per-AP config to back up, so `ScopeBackup` captures the scope instead. It's read-only.
 
 - Provider contract (`BaseCloudProvider`): `listConfigScopes()` → `[{ scopeType: 'org'|'site-collection'|'site'|'device-group', scopeId, name }]` and `getScopeConfiguration(scope)` → `{ text, format, source }`, behind `supports('scope-backup')`. The defaults throw `CapabilityError`.
-- **Mist**: implemented (`mist-scope-json`; canonical JSON, lists sorted by id; a 404 section is recorded as null). Validated against spec-derived fixtures only; there's no live Mist tenant yet.
+- **Mist**: implemented (`mist-scope-json`; canonical JSON, lists sorted by id; a 404 section is recorded as null). Verified live 2026-10-19 (org + one site, byte-stable across runs once presigned URLs are stripped, see Phase 1).
 - **Central** (implemented and verified live 2026-10-16, `central-scope-json`): New Central's config model is a **profile library** plus **config-assignments** that bind a profile to a scope for a device function (persona), and **scope-maps** that index every object in effect at each scope (`resource: "<type>/<name>"`). Scopes: Global (`org`, `scopeId: 'global'`; the tenant's numeric id is learned from its `GLOBAL` assignments and recorded as `centralScopeId`), then `site-collections`, `sites` and `device-groups` (paged with `limit`/`offset`; the reply's `offset` field is unreliable). Device scopes are left to device backups. Each bundle holds the scope's `assignments` and its `objects`: the `view-type=LOCAL&scope-id=<id>` read of every profile type its scope map lists. Global also holds the `library`: the default (library) read of every type assigned or mapped anywhere. `view-type=EFFECTIVE` returns 400, so resolved per-device config isn't available here. A type Central won't list (400/404) is recorded as null. **Gotcha**: `scope-maps` and `config-assignments` send `scope-id` as a JSON number above 2^53, which `JSON.parse` rounds (`68797217769316352` → `…350`); those reads use a lossless parse (`exactScopeIds`). Against the home tenant: 7 scopes, Global ≈ 425 KB (28 library types) in ≈ 30 s, bundles byte-stable across runs.
-- **Secrets in scope bundles are redacted** (`utils/config-redact.js`, both providers). Central returns RADIUS shared secrets as `shared-secret-config.plaintext-value` (`secret-type: PLAIN_TEXT`) and a vSphere `endpoint.password` in clear; Mist WLANs carry `psk`. A secret leaf becomes `[REDACTED hmac:<16 hex>]`, an HMAC keyed with `ENCRYPTION_KEY`, so a rotated secret still shows in a diff while a leaked backup or Git mirror can't be brute-forced. The cost: a scope backup can't recreate those secrets, and rotating `ENCRYPTION_KEY` changes every fingerprint once. Device backups are not redacted (AOS-CX stores its secrets as ciphertext in both artifacts).
+- **Secrets in scope bundles are redacted** (`utils/config-redact.js`, both providers). Presigned URLs (S3/Azure/GCS signature in the query) lose their query too: Mist's WLAN `portal_template_url` carries a temporary AWS token. Central returns RADIUS shared secrets as `shared-secret-config.plaintext-value` (`secret-type: PLAIN_TEXT`) and a vSphere `endpoint.password` in clear; Mist WLANs carry `psk`. A secret leaf becomes `[REDACTED hmac:<16 hex>]`, an HMAC keyed with `ENCRYPTION_KEY`, so a rotated secret still shows in a diff while a leaked backup or Git mirror can't be brute-forced. The cost: a scope backup can't recreate those secrets, and rotating `ENCRYPTION_KEY` changes every fingerprint once. Device backups are not redacted (AOS-CX stores its secrets as ciphertext in both artifacts).
 - `services/scope-backup.service.js` mirrors the device path: flat files under `BACKUP_STORAGE_PATH/_scopes/` are authoritative, and the Git mirror commits to `_scopes/<integration>/<type>-<id>/`. `integrationId` is a plain column with denormalized names, so history outlives the integration. Runs are manual (`POST /backups/scopes/run`) or ride along on a schedule with `includeScopes`.
 
 ### Restore (not built; direction)
@@ -461,9 +474,11 @@ Links reported from both ends merge into one edge. Edges are oriented
 gateway → switch → AP → endpoint for layered layout.
 
 **Cloud planes:** `getNeighbors` is defined on `BaseCloudProvider` but not
-implemented anywhere. Mist's device stats probably carry an AP's uplink
-`lldp_stat`, and New Central may expose neighbors. Both need a live check
-before building parsers. Until then, cloud APs still appear wherever a switch
+implemented anywhere. Mist is now checked live (2026-10-19): `/stats/devices`
+with `fields=*` carries an AP's uplink in `lldp_stat` (`system_name`,
+`chassis_id`, `port_id`, plus PoE draw) and a switch's LLDP neighbors in
+`clients` (`source: lldp`, `port_ids`, neighbor `mac`). New Central may expose
+neighbors; that still needs a live check before a parser is written. Until then, cloud APs still appear wherever a switch
 NetHelper reads sees them over LLDP.
 
 ## 9. Risks & open questions

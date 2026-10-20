@@ -1,7 +1,10 @@
 const CXSwitchAPI = require('./device-api/cx-switch-api');
 const settingsService = require('./settings.service');
 const sshDeviceService = require('./ssh-device.service');
-const { isCxRestCapable } = require('../utils/device-platform');
+const JunosAPI = require('./device-api/junos-api');
+const NetconfClient = require('./device-api/netconf-client');
+const { isCxRestCapable, detectPlatform } = require('../utils/device-platform');
+const { resolveTransport } = require('../utils/transport-router');
 const { getPrisma } = require('../config/database');
 const { debugLog, Services } = require('../utils/debug-logger');
 
@@ -152,6 +155,37 @@ class DevicePollerService {
   }
 
   /**
+   * Where a firmware/system poll reads from, per the transport router's
+   * 'poll' order: { transport: 'cx-rest' } (the caller reads over its CX
+   * session), { transport: 'netconf', info } (Junos), or { transport: 'ssh',
+   * text } (`show version`). A cloud-managed device is never SSHed; when no
+   * local read is possible its versions come from cloud sync instead.
+   */
+  async readVersion(device, credentials) {
+    const tried = [];
+    for (const transport of resolveTransport(device, 'poll')) {
+      if (transport === 'device-rest') {
+        if (isCxRestCapable(device)) return { transport: 'cx-rest' };
+        if (detectPlatform(device) === 'junos') {
+          try {
+            return { transport: 'netconf', info: await new JunosAPI(device, credentials).getDeviceInfo() };
+          } catch (error) {
+            if (error.code !== NetconfClient.NETCONF_UNAVAILABLE) throw error;
+            tried.push('NETCONF (not enabled on the device)');
+            continue;
+          }
+        }
+        tried.push(`device API (no client for platform "${detectPlatform(device)}")`);
+      } else if (transport === 'ssh') {
+        return { transport: 'ssh', text: await sshDeviceService.getVersion(device, credentials) };
+      } else if (transport === 'cloud') {
+        tried.push('cloud (versions come from cloud sync)');
+      }
+    }
+    throw new Error(`No local transport can poll "${device.name}"${tried.length ? `: ${tried.join('; ')}` : ''}`);
+  }
+
+  /**
    * Firmware Poller Module
    * Polls firmware information from AOS-CX switches (REST) or other direct
    * devices via SSH `show version`.
@@ -163,13 +197,17 @@ class DevicePollerService {
     try {
       logger.progress(`Polling firmware info from ${device.name} (${device.ipAddress})`);
 
-      if (!isCxRestCapable(device)) {
-        // SSH fallback: return the raw `show version` text for CLI-only devices.
-        const versionText = await sshDeviceService.getVersion(device, credentials);
+      const version = await this.readVersion(device, credentials);
+      if (version.transport === 'netconf') {
+        const { info } = version;
+        return { transport: 'netconf', primary_version: info.version, model: info.model, hostname: info.hostname };
+      }
+      if (version.transport === 'ssh') {
+        // The raw `show version` text for CLI-only devices.
         return {
           transport: 'ssh',
-          raw_version: versionText,
-          primary_version: this.parseVersionFromText(versionText),
+          raw_version: version.text,
+          primary_version: this.parseVersionFromText(version.text),
         };
       }
 
@@ -209,14 +247,18 @@ class DevicePollerService {
     try {
       logger.progress(`Polling system info from ${device.name} (${device.ipAddress})`);
 
-      if (!isCxRestCapable(device)) {
-        // SSH fallback for CLI-only devices: return raw `show version` text.
-        const versionText = await sshDeviceService.getVersion(device, credentials);
+      const version = await this.readVersion(device, credentials);
+      if (version.transport === 'netconf') {
+        const { info } = version;
+        return { transport: 'netconf', hostname: info.hostname, platform_name: info.model, software_version: info.version };
+      }
+      if (version.transport === 'ssh') {
+        // CLI-only devices: the raw `show version` text.
         return {
           transport: 'ssh',
           hostname: null,
-          software_version: this.parseVersionFromText(versionText),
-          raw_version: versionText,
+          software_version: this.parseVersionFromText(version.text),
+          raw_version: version.text,
         };
       }
 
@@ -403,14 +445,16 @@ class DevicePollerService {
 
   /**
    * Can we read Central status from this device over CX REST? True for
-   * classified AOS-CX switches and for unclassified switches (which this
-   * codebase keeps on REST transport by default); false for AOS-S and
-   * non-switch devices.
+   * classified AOS-CX switches and for unclassified Aruba switches (which this
+   * codebase keeps on REST transport by default); false for AOS-S, other
+   * vendors' switches, and non-switch devices.
    */
   canProbeCentralStatus(device) {
-    const { detectPlatform } = require('../utils/device-platform');
     if (device?.type !== 'switch') return false;
-    return detectPlatform(device) !== 'aos-s';
+    // Vendor-aware: a Junos or IOS-XE switch never gets a CX REST login,
+    // whatever its model string looks like.
+    const platform = detectPlatform(device);
+    return platform === 'aos-cx' || (platform === 'unknown' && (device.vendor || 'aruba') === 'aruba');
   }
 
   /**

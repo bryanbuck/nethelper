@@ -114,8 +114,13 @@ const CLOUD_PROVIDERS = {
     vendor: 'juniper',
     defaultBaseUrl: 'https://api.mist.com',
     credentialFields: [
-      { key: 'apiToken', label: 'API Token', secret: true },
-      { key: 'orgId', label: 'Organization ID', secret: false },
+      {
+        key: 'apiToken',
+        label: 'API Token',
+        secret: true,
+        hint: 'An org token with read access is enough: Organization → Settings → API Token. NetHelper never writes to Mist.',
+      },
+      { key: 'orgId', label: 'Organization ID', secret: false, hint: 'Organization → Settings shows it (a UUID).' },
     ],
     // A Mist org lives in exactly one regional cloud; the wrong host 401s, so
     // the base URL is part of the integration config and the UI offers a picker.
