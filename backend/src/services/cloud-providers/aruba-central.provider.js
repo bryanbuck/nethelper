@@ -14,7 +14,7 @@ const logger = debugLog.createLogger(Services.ARUBA_CENTRAL);
 // (/configuration/v2, /troubleshooting/v1, /monitoring/v2, /firmware/v1) are
 // QUARANTINED below: they were never proven to work (the code paths that
 // called them carried an unset-baseURL bug since inception) and 404 on New
-// Central tenants. See docs/CENTRAL_ENDPOINT_TRIAGE.md before resurrecting.
+// Central tenants. Prove them against a live tenant before resurrecting.
 
 // Token endpoints (developer.arubanetworks.com "Generating and managing access
 // tokens"). A Central-scoped API client gets its token from HPE SSO; a
@@ -494,7 +494,7 @@ class ArubaCentralProvider extends BaseCloudProvider {
   }
 
   // -----------------------------------------------------------------------
-  // QUARANTINED classic-Central endpoints (docs/CENTRAL_ENDPOINT_TRIAGE.md).
+  // QUARANTINED classic-Central endpoints.
   // These families 404 on New Central tenants and the previous
   // implementations never worked (unset baseURL since inception). They throw
   // CapabilityError so callers report "not supported" instead of a confusing

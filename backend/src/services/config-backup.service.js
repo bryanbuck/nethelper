@@ -316,8 +316,7 @@ class ConfigBackupService {
    *   - cloud:       the device's cloud integration (per its capabilities)
    *   - ssh:         the platform's SSH profile (`show running-config`, or
    *                  `show configuration | display set` on Junos)
-   * See docs/CENTRAL_MANAGEMENT_MODE_PLAN.md section 3.3 and
-   * docs/MULTI_VENDOR_ROADMAP.md section 5.
+   * See docs/MULTI_VENDOR_ROADMAP.md section 5.
    *
    * @param {Object} deviceStub - at least { id, serial, name }
    * @returns {Promise<{ artifacts: Array<{kind, format, text}>, source: string, device: Object }>}
