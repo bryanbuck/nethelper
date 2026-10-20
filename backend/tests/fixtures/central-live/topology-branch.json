@@ -1,0 +1,146 @@
+{
+  "isolatedHealth": null,
+  "id": "linkTopology",
+  "devices": [
+    {
+      "conductorSerial": null,
+      "ipv4": "172.22.0.102",
+      "lastSeen": 1791422002371,
+      "status": "OFFLINE",
+      "deviceFunction": "-",
+      "type": "Switch",
+      "internet": false,
+      "name": "MLab-6200F",
+      "health": "Poor",
+      "healthReason": "DEVICE_OFFLINE",
+      "deployment": "Standalone",
+      "serial": "SN000005",
+      "mac": "5c:5b:35:00:00:05",
+      "model": "CX-6200F"
+    },
+    {
+      "conductorSerial": null,
+      "ipv4": null,
+      "lastSeen": null,
+      "status": "ONLINE",
+      "deviceFunction": "-",
+      "type": "Unmanaged",
+      "internet": null,
+      "name": "6200-48p-SR",
+      "health": null,
+      "healthReason": null,
+      "deployment": null,
+      "serial": "SN000020",
+      "mac": "5c:5b:35:00:00:08",
+      "model": null
+    },
+    {
+      "conductorSerial": null,
+      "ipv4": "172.22.0.1",
+      "lastSeen": null,
+      "status": "ONLINE",
+      "deviceFunction": null,
+      "type": "Gateway",
+      "internet": true,
+      "name": "MLab-GW",
+      "health": "Good",
+      "healthReason": null,
+      "deployment": "Cluster",
+      "serial": "SN000007",
+      "mac": "5c:5b:35:00:00:07",
+      "model": "A9004-LTE"
+    },
+    {
+      "conductorSerial": null,
+      "ipv4": null,
+      "lastSeen": null,
+      "status": "Down",
+      "deviceFunction": null,
+      "type": "Internet",
+      "internet": null,
+      "name": "wan0_inet",
+      "health": "Unknown",
+      "healthReason": null,
+      "deployment": null,
+      "serial": "SN000021",
+      "mac": null,
+      "model": null
+    },
+    {
+      "conductorSerial": null,
+      "ipv4": null,
+      "lastSeen": null,
+      "status": "Up",
+      "deviceFunction": null,
+      "type": "LTE",
+      "internet": null,
+      "name": "wan1_inet_lte",
+      "health": "Good",
+      "healthReason": null,
+      "deployment": null,
+      "serial": "SN000022",
+      "mac": null,
+      "model": null
+    }
+  ],
+  "isolatedDevicesCount": 0,
+  "type": "Topology",
+  "links": [
+    {
+      "isSibling": null,
+      "from": "SN000021",
+      "edgeType": "Internet",
+      "stpState": null,
+      "fromPortList": null,
+      "toPortList": null,
+      "health": "Poor",
+      "healthReason": null,
+      "speed": null,
+      "to": "SN000007"
+    },
+    {
+      "isSibling": null,
+      "from": "SN000005",
+      "edgeType": null,
+      "stpState": null,
+      "fromPortList": [
+        {
+          "index": null,
+          "health": "Unknown",
+          "healthReason": null,
+          "name": "1/1/4",
+          "lag": null
+        }
+      ],
+      "toPortList": [
+        {
+          "index": null,
+          "health": "Unknown",
+          "healthReason": null,
+          "name": "1/1/48",
+          "lag": null
+        }
+      ],
+      "health": "Unknown",
+      "healthReason": null,
+      "speed": 0,
+      "to": "SN000020"
+    },
+    {
+      "isSibling": null,
+      "from": "SN000022",
+      "edgeType": "LTE",
+      "stpState": null,
+      "fromPortList": [
+        null
+      ],
+      "toPortList": [
+        null
+      ],
+      "health": "Good",
+      "healthReason": null,
+      "speed": null,
+      "to": "SN000007"
+    }
+  ]
+}

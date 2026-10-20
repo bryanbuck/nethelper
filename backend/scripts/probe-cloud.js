@@ -55,6 +55,8 @@ function parseArgs(argv) {
 // Anonymisation: consistent replacements, so relations between replies
 // (inventory mac ↔ stats mac, site_id ↔ sites[].id) survive.
 // ---------------------------------------------------------------------------
+const SERIAL_KEY = /serial(number|_number)?$/;
+
 class Anonymiser {
   constructor() {
     this.maps = new Map();
@@ -93,10 +95,38 @@ class Anonymiser {
     return private_ ? value : this.replace('ip', value, (n) => `203.0.113.${n}`);
   }
 
+  serial(value) {
+    if (!value) return value; // an empty serial is no identifier (and "" is also a map key)
+    return this.replace('serial', value, (n) => `SN${String(n).padStart(6, '0')}`);
+  }
+
+  /**
+   * First pass over every reply: learn the serials, so a serial referenced
+   * under another key (Central topology links' `from`/`to`) maps the same way.
+   */
+  learn(node, key = '') {
+    if (Array.isArray(node)) node.forEach((item) => this.learn(item, key));
+    else if (node && typeof node === 'object') Object.entries(node).forEach(([k, v]) => this.learn(v, k));
+    else if (typeof node === 'string' && SERIAL_KEY.test(key.toLowerCase())) this.serial(node);
+  }
+
+  /** A learnt serial, a derived id (`<serial>_<n>`, Central WAN uplinks) or Central's `tpd_<mac>`. */
+  knownSerial(value) {
+    const serials = this.maps.get('serial');
+    if (!value) return null;
+    if (serials?.has(value)) return serials.get(value);
+    const derived = value.match(/^(.+)_(\d+)$/);
+    if (derived && serials?.has(derived[1])) return `${serials.get(derived[1])}_${derived[2]}`;
+    const tpd = value.match(/^tpd_([0-9a-f]{12})$/i);
+    return tpd ? `tpd_${this.mac(tpd[1])}` : null;
+  }
+
   string(key, value) {
     const k = key.toLowerCase();
     if (this.literals.has(value)) return this.literals.get(value);
-    if (/serial(number|_number)?$/.test(k)) return this.replace('serial', value, (n) => `SN${String(n).padStart(6, '0')}`);
+    if (SERIAL_KEY.test(k)) return this.serial(value);
+    const known = this.knownSerial(value);
+    if (known) return known;
     if (/email/.test(k)) return this.replace('email', value, (n) => `user${n}@example.com`);
     if (/^(address|latlng|lat|lng|street|city|zip|postal)/.test(k)) return '[anonymised]';
     if (/^(org_name|orgname)$/.test(k)) return this.replace('org', value, (n) => `Org ${n}`);
@@ -217,6 +247,7 @@ async function main() {
     await probe(`get-${pathname}`, pathname, Object.fromEntries(new URLSearchParams(query || '')));
   }
 
+  for (const { data } of captured) anonymiser.learn(data);
   for (const { file, data } of captured) {
     fs.writeFileSync(path.join(args.out, `${file}.anon.json`), `${JSON.stringify(anonymiser.walk(data), null, 2)}\n`);
   }

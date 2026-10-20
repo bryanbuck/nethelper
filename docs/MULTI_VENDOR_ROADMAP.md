@@ -442,12 +442,15 @@ Cisco) is on by default, and the reads use the access NetHelper already has.
 | Junos | NETCONF, SSH fallback | `<get-lldp-neighbors-information/>` + `<get-lldp-local-info/>`; CLI `show lldp neighbors` |
 | AOS-S | SSH | `show lldp info remote-device detail`, `show lldp info local-device` |
 | IOS-XE | SSH | `show cdp neighbors detail` + `show lldp neighbors detail` |
-| Cloud | provider `getNeighbors()` | `CapabilityError` on every provider for now (see below) |
+| Cloud (Mist) | provider `listNeighbors()`, once per run | `/orgs/:id/stats/devices?type=all&fields=…,lldp_stat,lldp_stats` (AP uplinks) + `/orgs/:id/stats/ports/search?neighbor_mac=*` (switch ports) |
+| Cloud (Central) | provider `listNeighbors()`, once per run | `/network-monitoring/v1/topology/{site-id}` per site (v1 only; v1alpha1 is 404) |
 
 Every collector returns the normalized neighbor in `services/topology/neighbor.js`.
-Parsers live in `services/topology/parsers/`. Only the AOS-CX parser is checked
-against hardware (6200F ML.10.16, `tests/fixtures/aos-cx-live/lldp-neighbors.json`).
-The Junos, AOS-S and IOS parsers are spec-derived. A scheduled Bull job
+Parsers live in `services/topology/parsers/`. Checked against real output: AOS-CX
+(6200F ML.10.16, `tests/fixtures/aos-cx-live/lldp-neighbors.json`), Junos NETCONF
+(EX4000, `junos-live/`), Mist (`mist-live/neighbors-*.json`) and Central
+(`central-live/`), the last three on 2026-10-19. The Junos CLI, AOS-S and IOS
+parsers are spec-derived. A scheduled Bull job
 (`TOPOLOGY_INTERVAL`, default 6 h) and an on-demand "Refresh topology" both run
 `collectAll`, which reads at most `TOPOLOGY_CONCURRENCY` devices at once and
 opens one session per device.
@@ -473,13 +476,30 @@ advertise an IP as their chassis id; their MAC then comes from `mac_addr`.
 Links reported from both ends merge into one edge. Edges are oriented
 gateway → switch → AP → endpoint for layered layout.
 
-**Cloud planes:** `getNeighbors` is defined on `BaseCloudProvider` but not
-implemented anywhere. Mist is now checked live (2026-10-19): `/stats/devices`
-with `fields=*` carries an AP's uplink in `lldp_stat` (`system_name`,
-`chassis_id`, `port_id`, plus PoE draw) and a switch's LLDP neighbors in
-`clients` (`source: lldp`, `port_ids`, neighbor `mac`). New Central may expose
-neighbors; that still needs a live check before a parser is written. Until then, cloud APs still appear wherever a switch
-NetHelper reads sees them over LLDP.
+**Cloud planes (2026-10-19):** a cloud-managed device that no direct transport
+reaches (no IP or credential, or not a platform NetHelper reads locally: APs,
+AOS-S under Central) gets its neighbors from its cloud. `listNeighbors()` reads
+the whole org/tenant in a few calls and returns a table by serial;
+`collectAll` reads it once per run and per integration and every device on that
+integration looks itself up. A device the cloud reports offline, or that its
+cloud has no data for, is *skipped*, so its last links stay as they were.
+- **Mist** relays the devices' own LLDP tables (protocol `lldp`): an AP's
+  `lldp_stats` (keyed by AP port, `""` on a single-port AP, which is `eth0`) or
+  `lldp_stat`, and a switch's per-port `neighbor_mac` / `neighbor_system_name` /
+  `neighbor_port_desc` (no remote port id; the description stands in). An AP's
+  chassis id is its switch's inventory MAC, and the switch's `neighbor_mac` is
+  the AP's, so both ends resolve and merge into one confirmed edge. Search
+  endpoints page by a `next` path (`search_after`), not `page`; only a same-API
+  path is followed.
+- **Central** serves a computed site topology (protocol `cloud`): each link is
+  listed once, by serial, with both ends' ports, and becomes a neighbor on both
+  ends. Unmanaged LLDP neighbors appear as `Unmanaged` under a synthetic serial
+  (`tpd_<mac>`), often named by their MAC (kept as chassis id, not name). A
+  gateway's WAN uplinks are links to `Internet`/`LTE` pseudo-devices with no
+  ports and are dropped. Offline devices keep their last links in the reply.
+- A link one end reads directly and the other end's cloud reports merges like
+  any two-ended link (e.g. an AOS-CX switch's own LLDP + Central's view of the
+  AP on that port).
 
 ## 9. Risks & open questions
 

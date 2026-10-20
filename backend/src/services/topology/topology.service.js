@@ -1,7 +1,8 @@
 /**
  * Network topology: collects LLDP/CDP neighbor tables over the transports
- * NetHelper already uses (AOS-CX REST, Junos NETCONF, SSH CLI; cloud planes
- * once a provider implements getNeighbors), stores them as DeviceLink rows,
+ * NetHelper already uses (AOS-CX REST, Junos NETCONF, SSH CLI, and the cloud
+ * planes' neighbor views for devices none of those reach: Mist relays its
+ * devices' LLDP, Central serves site topology), stores them as DeviceLink rows,
  * records link changes, and builds the Network Map graph.
  *
  * Read-only on every device. Nothing here needs switch-side setup: LLDP (and
@@ -63,6 +64,9 @@ function emit(event, payload) {
   }
 }
 
+/** Per-collection-run state: one cloud neighbor read per integration. */
+const newRun = () => ({ cloudNeighbors: new Map() });
+
 class TopologyService {
   constructor() {
     this.concurrency = num(process.env.TOPOLOGY_CONCURRENCY, 4);
@@ -70,11 +74,22 @@ class TopologyService {
   }
 
   /**
+   * A cloud plane's neighbor table for all of its devices, read once per
+   * collection run (`run.cloudNeighbors`) and shared by every device on it.
+   */
+  cloudNeighbors(provider, run) {
+    const key = provider.integration.id;
+    if (!run.cloudNeighbors.has(key)) run.cloudNeighbors.set(key, provider.listNeighbors());
+    return run.cloudNeighbors.get(key);
+  }
+
+  /**
    * Read one device's neighbor table over the first transport that answers.
+   * @param {Object} [run] - per-run state from collectAll (shared cloud reads)
    * @returns {Promise<{neighbors: Object[], identity: {chassisId, sysName}, source: string}>}
    * @throws {TopologySkip} when no transport can run; other errors are real failures
    */
-  async collectNeighbors(device) {
+  async collectNeighbors(device, run = newRun()) {
     const transports = resolveTransport(device, 'topology');
     if (!transports.length) {
       throw new TopologySkip(
@@ -120,11 +135,19 @@ class TopologyService {
       }
 
       if (transport === 'cloud') {
-        let provider;
         try {
-          provider = await CloudProviderFactory.forDevice(device);
-          const result = await provider.getNeighbors(device);
-          return { ...result, source: provider.label };
+          const provider = await CloudProviderFactory.forDevice(device);
+          const entry = (await this.cloudNeighbors(provider, run)).get(device.serial);
+          if (!entry) {
+            skipped.push(`${provider.label} has no neighbor data for this device`);
+            continue;
+          }
+          if (!entry.online) {
+            // Its last report would be stale; keep the links last collected.
+            skipped.push(`${provider.label} reports the device offline`);
+            continue;
+          }
+          return { neighbors: entry.neighbors, identity: entry.identity, source: provider.label };
         } catch (error) {
           if (error instanceof CapabilityError) {
             skipped.push(error.message);
@@ -154,14 +177,14 @@ class TopologyService {
    * Collect, reconcile and persist one device.
    * @returns {Promise<{deviceId, name, status, reason?, neighbors?, changes?}>}
    */
-  async collectDevice(device) {
+  async collectDevice(device, run = newRun()) {
     const prisma = getPrisma();
     const now = new Date();
     const prior = await prisma.deviceTopologyState.findUnique({ where: { deviceId: device.id } });
 
     let result;
     try {
-      result = await this.collectNeighbors(device);
+      result = await this.collectNeighbors(device, run);
     } catch (error) {
       const status = error instanceof TopologySkip ? error.status : 'failed';
       if (status === 'failed') logger.warn(`topology: collection failed for ${device.name}: ${error.message}`);
@@ -225,6 +248,7 @@ class TopologyService {
       where: deviceIds?.length ? { id: { in: deviceIds } } : {},
     });
     const results = [];
+    const run = newRun();
     let done = 0;
     let next = 0;
     emit('topology:progress', { done: 0, total: devices.length, trigger });
@@ -234,7 +258,7 @@ class TopologyService {
         const device = devices[next++];
         let result;
         try {
-          result = await this.collectDevice(device);
+          result = await this.collectDevice(device, run);
         } catch (error) {
           // Persisting failed (database), not the device read.
           logger.error(`topology: could not record ${device.name}: ${error.message}`);

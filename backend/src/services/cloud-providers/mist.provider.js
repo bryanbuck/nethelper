@@ -2,6 +2,7 @@ const axios = require('axios');
 const BaseCloudProvider = require('./base-cloud-provider');
 const { redactConfigSecrets } = require('../../utils/config-redact');
 const { CLOUD_PROVIDERS } = require('../../constants/vendors');
+const { parseMistNeighbors } = require('../topology/parsers/mist');
 const logger = require('../../utils/logger');
 
 /**
@@ -16,6 +17,7 @@ const logger = require('../../utils/logger');
  *   GET /api/v1/orgs/:org_id/inventory        - inventory (paginated)
  *   GET /api/v1/orgs/:org_id/stats/devices    - live stats (ip, version, uptime)
  *   GET /api/v1/sites/:site_id/devices/:id    - a device's Mist config object
+ *   GET /api/v1/orgs/:org_id/stats/ports/search - switch/gateway LLDP neighbors per port
  *   Scope backups (org and site config, where AP config lives):
  *   GET /api/v1/orgs/:org_id, /orgs/:org_id/sites
  *   GET /api/v1/orgs/:org_id/{setting,wlans,templates,rftemplates,
@@ -38,6 +40,8 @@ const PAGE_LIMIT = 1000; // Mist caps `limit` at 1000 (default 100)
 // config_status; `fields=*` adds everything (interface tables, clients) and
 // grows to kilobytes per device. A list returns exactly the fields named.
 const STATS_FIELDS = ['mac', 'ip', 'version', 'last_seen', 'status', 'uptime', 'config_status'];
+// What the neighbor read needs: an AP's LLDP view of its uplink.
+const NEIGHBOR_FIELDS = ['mac', 'serial', 'status', 'name', 'hostname', 'lldp_stat', 'lldp_stats'];
 
 class MistProvider extends BaseCloudProvider {
   /**
@@ -58,7 +62,7 @@ class MistProvider extends BaseCloudProvider {
   }
 
   supports(capability) {
-    return ['inventory', 'status', 'test', 'config-backup', 'scope-backup'].includes(capability);
+    return ['inventory', 'status', 'test', 'config-backup', 'scope-backup', 'topology'].includes(capability);
   }
 
   get orgId() {
@@ -105,6 +109,26 @@ class MistProvider extends BaseCloudProvider {
         logger.warn(`Mist pagination stopped at page 100 for ${endpoint} (${items.length} items)`);
         break;
       }
+    }
+    return items;
+  }
+
+  /**
+   * Follow a search endpoint's `next` link (search_after paging; the search
+   * endpoints ignore `page`). `next` is a path on the same host; anything
+   * else is refused so the token never goes elsewhere.
+   */
+  async searchAll(endpoint, { params = {}, context = 'api_call' } = {}) {
+    const items = [];
+    let data = await this.request('GET', endpoint, { params: { ...params, limit: PAGE_LIMIT }, context });
+    for (let pages = 1; ; pages++) {
+      items.push(...(data?.results || []));
+      if (!data?.next) break;
+      if (!/^\/api\/v1\//.test(data.next) || pages >= 100) {
+        logger.warn(`Mist search paging stopped for ${endpoint} after ${items.length} results`);
+        break;
+      }
+      data = await this.request('GET', data.next, { context });
     }
     return items;
   }
@@ -208,6 +232,24 @@ class MistProvider extends BaseCloudProvider {
       lastSeen: stats?.last_seen ? new Date(stats.last_seen * 1000) : null,
       raw: { inventory: item, stats },
     };
+  }
+
+  /**
+   * LLDP neighbors for every device in the org, from two reads: device stats
+   * (APs report their uplink) and port stats (switches report each port's
+   * neighbor). `neighbor_mac=*` keeps the port search to ports that have a
+   * neighbor; the parser filters again in case Mist ever ignores it.
+   */
+  async listNeighbors() {
+    const stats = await this.requestAllPages(`/api/v1/orgs/${this.orgId}/stats/devices`, {
+      params: { type: 'all', fields: NEIGHBOR_FIELDS.join(',') },
+      context: 'neighbors',
+    });
+    const ports = await this.searchAll(`/api/v1/orgs/${this.orgId}/stats/ports/search`, {
+      params: { neighbor_mac: '*' },
+      context: 'neighbors',
+    });
+    return parseMistNeighbors({ stats, ports });
   }
 
   /** The org inventory record of one device, by serial. */

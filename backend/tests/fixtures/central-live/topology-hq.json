@@ -1,0 +1,582 @@
+{
+  "isolatedHealth": "Poor",
+  "id": "linkTopology",
+  "devices": [
+    {
+      "conductorSerial": null,
+      "ipv4": "192.168.254.2",
+      "lastSeen": 0,
+      "status": "ONLINE",
+      "deviceFunction": "-",
+      "type": "Switch",
+      "internet": false,
+      "name": "Sw-Mgmt",
+      "health": "Good",
+      "healthReason": null,
+      "deployment": "Standalone",
+      "serial": "SN000012",
+      "mac": "5c:5b:35:00:00:0c",
+      "model": "AS-2930F"
+    },
+    {
+      "conductorSerial": null,
+      "ipv4": "192.168.0.14",
+      "lastSeen": 0,
+      "status": "ONLINE",
+      "deviceFunction": "-",
+      "type": "Switch",
+      "internet": false,
+      "name": "Sw-Studio",
+      "health": "Good",
+      "healthReason": null,
+      "deployment": "Standalone",
+      "serial": "SN000013",
+      "mac": "5c:5b:35:00:00:0d",
+      "model": "CX-6200F"
+    },
+    {
+      "conductorSerial": null,
+      "ipv4": "192.168.252.5",
+      "lastSeen": 0,
+      "status": "ONLINE",
+      "deviceFunction": "Core Switch",
+      "type": "Switch",
+      "internet": false,
+      "name": "Sw-CoreB",
+      "health": "Fair",
+      "healthReason": "SWITCH_OSPF_PEER_DOWN_FAIR",
+      "deployment": "Standalone",
+      "serial": "SN000010",
+      "mac": "5c:5b:35:00:00:0a",
+      "model": "CX-6300F"
+    },
+    {
+      "conductorSerial": null,
+      "ipv4": "192.168.252.4",
+      "lastSeen": 0,
+      "status": "ONLINE",
+      "deviceFunction": "Core Switch",
+      "type": "Switch",
+      "internet": false,
+      "name": "Sw-CoreA",
+      "health": "Fair",
+      "healthReason": "SWITCH_OSPF_PEER_DOWN_FAIR",
+      "deployment": "Standalone",
+      "serial": "SN000009",
+      "mac": "5c:5b:35:00:00:09",
+      "model": "CX-6300F"
+    },
+    {
+      "conductorSerial": null,
+      "ipv4": "192.168.9.21",
+      "lastSeen": null,
+      "status": "ONLINE",
+      "deviceFunction": "-",
+      "type": "Access Point",
+      "internet": false,
+      "name": "AP21",
+      "health": "Good",
+      "healthReason": null,
+      "deployment": "Standalone",
+      "serial": "SN000003",
+      "mac": "5c:5b:35:00:00:03",
+      "model": "AP-655"
+    },
+    {
+      "conductorSerial": null,
+      "ipv4": "192.168.9.98",
+      "lastSeen": null,
+      "status": "ONLINE",
+      "deviceFunction": "-",
+      "type": "Access Point",
+      "internet": false,
+      "name": "AP01",
+      "health": "Good",
+      "healthReason": null,
+      "deployment": "Standalone",
+      "serial": "SN000001",
+      "mac": "5c:5b:35:00:00:01",
+      "model": "AP-655"
+    },
+    {
+      "conductorSerial": null,
+      "ipv4": "192.168.9.26",
+      "lastSeen": null,
+      "status": "ONLINE",
+      "deviceFunction": "-",
+      "type": "Access Point",
+      "internet": false,
+      "name": "AP11",
+      "health": "Good",
+      "healthReason": null,
+      "deployment": "Standalone",
+      "serial": "SN000002",
+      "mac": "5c:5b:35:00:00:02",
+      "model": "AP-655"
+    },
+    {
+      "conductorSerial": null,
+      "ipv4": "192.168.9.69",
+      "lastSeen": null,
+      "status": "ONLINE",
+      "deviceFunction": "-",
+      "type": "Access Point",
+      "internet": false,
+      "name": "MLab-AP1",
+      "health": "Good",
+      "healthReason": null,
+      "deployment": "Standalone",
+      "serial": "SN000006",
+      "mac": "5c:5b:35:00:00:06",
+      "model": "AP-635"
+    },
+    {
+      "conductorSerial": null,
+      "ipv4": null,
+      "lastSeen": null,
+      "status": "ONLINE",
+      "deviceFunction": "-",
+      "type": "Unmanaged",
+      "internet": null,
+      "name": "5c:5b:35:00:00:0f",
+      "health": null,
+      "healthReason": null,
+      "deployment": null,
+      "serial": "SN000015",
+      "mac": "5c:5b:35:00:00:0f",
+      "model": null
+    },
+    {
+      "conductorSerial": null,
+      "ipv4": null,
+      "lastSeen": null,
+      "status": "ONLINE",
+      "deviceFunction": "-",
+      "type": "Unmanaged",
+      "internet": null,
+      "name": "5c:5b:35:00:00:10",
+      "health": null,
+      "healthReason": null,
+      "deployment": null,
+      "serial": "SN000016",
+      "mac": "5c:5b:35:00:00:10",
+      "model": null
+    },
+    {
+      "conductorSerial": null,
+      "ipv4": null,
+      "lastSeen": null,
+      "status": "ONLINE",
+      "deviceFunction": "-",
+      "type": "Unmanaged",
+      "internet": null,
+      "name": "Switch2",
+      "health": null,
+      "healthReason": null,
+      "deployment": null,
+      "serial": "SN000017",
+      "mac": "5c:5b:35:00:00:11",
+      "model": null
+    },
+    {
+      "conductorSerial": null,
+      "ipv4": null,
+      "lastSeen": null,
+      "status": "ONLINE",
+      "deviceFunction": "-",
+      "type": "Unmanaged",
+      "internet": null,
+      "name": "5c:5b:35:00:00:12",
+      "health": null,
+      "healthReason": null,
+      "deployment": null,
+      "serial": "SN000018",
+      "mac": "5c:5b:35:00:00:12",
+      "model": null
+    },
+    {
+      "conductorSerial": null,
+      "ipv4": null,
+      "lastSeen": null,
+      "status": "ONLINE",
+      "deviceFunction": "-",
+      "type": "Unmanaged",
+      "internet": null,
+      "name": "Lab-Core",
+      "health": null,
+      "healthReason": null,
+      "deployment": null,
+      "serial": "SN000019",
+      "mac": "5c:5b:35:00:00:13",
+      "model": null
+    }
+  ],
+  "isolatedDevicesCount": 3,
+  "type": "Topology",
+  "links": [
+    {
+      "isSibling": true,
+      "from": "SN000010",
+      "edgeType": "KEEPALIVE",
+      "stpState": null,
+      "fromPortList": [
+        {
+          "index": 24,
+          "health": "Good",
+          "healthReason": null,
+          "name": "1/1/24",
+          "lag": ""
+        }
+      ],
+      "toPortList": [
+        {
+          "index": 24,
+          "health": "Good",
+          "healthReason": null,
+          "name": "1/1/24",
+          "lag": ""
+        }
+      ],
+      "health": "Good",
+      "healthReason": null,
+      "speed": 1000000000,
+      "to": "SN000009"
+    },
+    {
+      "isSibling": null,
+      "from": "SN000009",
+      "edgeType": "System",
+      "stpState": null,
+      "fromPortList": [
+        {
+          "index": 20,
+          "health": "Good",
+          "healthReason": null,
+          "name": "1/1/20",
+          "lag": ""
+        }
+      ],
+      "toPortList": [
+        {
+          "index": 0,
+          "health": "Good",
+          "healthReason": null,
+          "name": "eth0",
+          "lag": null
+        }
+      ],
+      "health": "Good",
+      "healthReason": null,
+      "speed": 1000000000,
+      "to": "SN000002"
+    },
+    {
+      "isSibling": null,
+      "from": "SN000010",
+      "edgeType": "System",
+      "stpState": null,
+      "fromPortList": [
+        {
+          "index": 6,
+          "health": "Good",
+          "healthReason": null,
+          "name": "1/1/6",
+          "lag": ""
+        }
+      ],
+      "toPortList": [
+        {
+          "index": 13,
+          "health": "Good",
+          "healthReason": null,
+          "name": "1/1/13",
+          "lag": ""
+        }
+      ],
+      "health": "Good",
+      "healthReason": null,
+      "speed": 1000000000,
+      "to": "SN000013"
+    },
+    {
+      "isSibling": null,
+      "from": "SN000009",
+      "edgeType": "System",
+      "stpState": null,
+      "fromPortList": [
+        {
+          "index": 26,
+          "health": "Good",
+          "healthReason": null,
+          "name": "1/1/26",
+          "lag": ""
+        }
+      ],
+      "toPortList": [
+        {
+          "index": null,
+          "health": "Unknown",
+          "healthReason": null,
+          "name": "xg10",
+          "lag": null
+        }
+      ],
+      "health": "Good",
+      "healthReason": null,
+      "speed": 10000000000,
+      "to": "SN000017"
+    },
+    {
+      "isSibling": null,
+      "from": "SN000009",
+      "edgeType": "System",
+      "stpState": null,
+      "fromPortList": [
+        {
+          "index": 22,
+          "health": "Good",
+          "healthReason": null,
+          "name": "1/1/22",
+          "lag": ""
+        }
+      ],
+      "toPortList": [
+        {
+          "index": 0,
+          "health": "Good",
+          "healthReason": null,
+          "name": "eth0",
+          "lag": null
+        }
+      ],
+      "health": "Good",
+      "healthReason": null,
+      "speed": 1000000000,
+      "to": "SN000001"
+    },
+    {
+      "isSibling": null,
+      "from": "SN000009",
+      "edgeType": "System",
+      "stpState": null,
+      "fromPortList": [
+        {
+          "index": 4,
+          "health": "Good",
+          "healthReason": null,
+          "name": "1/1/4",
+          "lag": ""
+        }
+      ],
+      "toPortList": [
+        {
+          "index": null,
+          "health": "Unknown",
+          "healthReason": null,
+          "name": "1",
+          "lag": null
+        }
+      ],
+      "health": "Good",
+      "healthReason": null,
+      "speed": 1000000000,
+      "to": "SN000019"
+    },
+    {
+      "isSibling": null,
+      "from": "SN000009",
+      "edgeType": "System",
+      "stpState": null,
+      "fromPortList": [
+        {
+          "index": 21,
+          "health": "Good",
+          "healthReason": null,
+          "name": "1/1/21",
+          "lag": ""
+        }
+      ],
+      "toPortList": [
+        {
+          "index": 0,
+          "health": "Good",
+          "healthReason": null,
+          "name": "eth0",
+          "lag": null
+        }
+      ],
+      "health": "Good",
+      "healthReason": null,
+      "speed": 1000000000,
+      "to": "SN000003"
+    },
+    {
+      "isSibling": null,
+      "from": "SN000009",
+      "edgeType": "System",
+      "stpState": null,
+      "fromPortList": [
+        {
+          "index": 28,
+          "health": "Good",
+          "healthReason": null,
+          "name": "1/1/28",
+          "lag": ""
+        }
+      ],
+      "toPortList": [
+        {
+          "index": null,
+          "health": "Unknown",
+          "healthReason": null,
+          "name": "5c:5b:35:00:00:14",
+          "lag": null
+        }
+      ],
+      "health": "Good",
+      "healthReason": null,
+      "speed": 10000000000,
+      "to": "SN000016"
+    },
+    {
+      "isSibling": null,
+      "from": "SN000010",
+      "edgeType": "ISL",
+      "stpState": null,
+      "fromPortList": [
+        {
+          "index": 25,
+          "health": "Good",
+          "healthReason": null,
+          "name": "1/1/25",
+          "lag": "LAG256"
+        }
+      ],
+      "toPortList": [
+        {
+          "index": 25,
+          "health": "Good",
+          "healthReason": null,
+          "name": "1/1/25",
+          "lag": "LAG256"
+        }
+      ],
+      "health": "Good",
+      "healthReason": null,
+      "speed": 50000000000,
+      "to": "SN000009"
+    },
+    {
+      "isSibling": null,
+      "from": "SN000009",
+      "edgeType": "System",
+      "stpState": null,
+      "fromPortList": [
+        {
+          "index": 14,
+          "health": "Good",
+          "healthReason": null,
+          "name": "1/1/14",
+          "lag": ""
+        }
+      ],
+      "toPortList": [
+        {
+          "index": 0,
+          "health": "Good",
+          "healthReason": null,
+          "name": "eth0",
+          "lag": null
+        }
+      ],
+      "health": "Good",
+      "healthReason": null,
+      "speed": 1000000000,
+      "to": "SN000006"
+    },
+    {
+      "isSibling": null,
+      "from": "SN000009",
+      "edgeType": "System",
+      "stpState": null,
+      "fromPortList": [
+        {
+          "index": 3,
+          "health": "Good",
+          "healthReason": null,
+          "name": "1/1/3",
+          "lag": ""
+        }
+      ],
+      "toPortList": [
+        {
+          "index": 1,
+          "health": "Good",
+          "healthReason": null,
+          "name": "1",
+          "lag": null
+        }
+      ],
+      "health": "Good",
+      "healthReason": null,
+      "speed": 1000000000,
+      "to": "SN000012"
+    },
+    {
+      "isSibling": null,
+      "from": "SN000009",
+      "edgeType": "System",
+      "stpState": null,
+      "fromPortList": [
+        {
+          "index": 11,
+          "health": "Good",
+          "healthReason": null,
+          "name": "1/1/11",
+          "lag": ""
+        }
+      ],
+      "toPortList": [
+        {
+          "index": null,
+          "health": "Unknown",
+          "healthReason": null,
+          "name": "eth0",
+          "lag": null
+        }
+      ],
+      "health": "Good",
+      "healthReason": null,
+      "speed": 1000000000,
+      "to": "SN000015"
+    },
+    {
+      "isSibling": null,
+      "from": "SN000013",
+      "edgeType": "System",
+      "stpState": null,
+      "fromPortList": [
+        {
+          "index": 14,
+          "health": "Unknown",
+          "healthReason": null,
+          "name": "1/1/14",
+          "lag": ""
+        }
+      ],
+      "toPortList": [
+        {
+          "index": null,
+          "health": "Unknown",
+          "healthReason": null,
+          "name": "5c:5b:35:00:00:15",
+          "lag": null
+        }
+      ],
+      "health": "Unknown",
+      "healthReason": null,
+      "speed": 1000000000,
+      "to": "SN000018"
+    }
+  ]
+}
