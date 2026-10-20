@@ -49,6 +49,10 @@
                 <span v-if="device.cloudManagedCheckedAt"> &middot; </span>
                 {{ cloudPlaneName }} reports it online, but it doesn't answer ping from NetHelper
               </span>
+              <span v-else-if="answersPingButCloudOffline(device)">
+                <span v-if="device.cloudManagedCheckedAt"> &middot; </span>
+                {{ cloudPlaneName }} reports it offline, but its address answers ping (another device may now use this IP)
+              </span>
               <span v-if="device.cloudConnectionStatus && device.cloudConnectionStatus !== 'connected'">
                 <span v-if="device.cloudManagedCheckedAt"> &middot; </span>
                 {{ cloudPlaneName }} connection: {{ device.cloudConnectionStatus }}
@@ -698,7 +702,7 @@ import DeviceMergeDialog from '@/components/devices/DeviceMergeDialog.vue'
 import deviceService from '@/services/device.service'
 import deviceApiService from '@/services/deviceApi.service'
 import { cloudProviderLabel } from '@/models/vendors'
-import { unreachableFromHere } from '@/models/Device'
+import { unreachableFromHere, answersPingButCloudOffline } from '@/models/Device'
 
 const route = useRoute()
 const router = useRouter()
@@ -988,8 +992,7 @@ const testDirectConnection = async () => {
   lastTestCentralStatus.value = null
   lastTestCloudStatus.value = null
   try {
-    const response = await deviceApiService.testDeviceConnection(device.value.id)
-    const result = response?.data || response
+    const result = await deviceApiService.testDeviceConnection(device.value.id)
     if (result?.centralStatus) {
       const { centralManaged, connectionStatus } = result.centralStatus
       const label = centralManaged === true ? `${cloudPlaneName.value}-managed` : centralManaged === false ? 'Locally managed' : 'Unknown'
@@ -1002,6 +1005,9 @@ const testDirectConnection = async () => {
     if (result?.success) {
       const via = result.transport ? ` (via ${result.transport.toUpperCase()})` : ''
       notificationStore.showSuccess(`Direct connection successful${via}`, 'Connection Test')
+    } else if (result?.cloudOnly) {
+      // Nothing to test directly (a cloud-managed AP): not a failure.
+      notificationStore.showInfo(result.message, 'Connection Test')
     } else {
       notificationStore.showError(result?.message || 'Direct connection failed', 'Connection Test')
     }

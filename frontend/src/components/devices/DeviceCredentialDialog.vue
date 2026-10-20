@@ -277,8 +277,7 @@ const runTests = async (devices) => {
       const d = queue.shift()
       tests.value[d.id] = { state: 'running' }
       try {
-        const res = await deviceApiService.testDeviceConnection(d.id)
-        const result = res.data || {}
+        const result = await deviceApiService.testDeviceConnection(d.id)
         if (result.success) {
           ok += 1
           tests.value[d.id] = {

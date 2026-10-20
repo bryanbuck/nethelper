@@ -1,6 +1,7 @@
 const DeviceAPIFactory = require('../services/device-api/device-api-factory');
 const settingsService = require('../services/settings.service');
-const { testDeviceConnection } = require('../services/connection-test.service');
+const { testDeviceConnection, cloudView } = require('../services/connection-test.service');
+const { usesDeviceCredential } = require('../services/device-credential.service');
 const { getPrisma } = require('../config/database');
 const logger = require('../utils/logger');
 
@@ -36,6 +37,26 @@ class DeviceAPITestController {
         return res.status(404).json({
           success: false,
           error: 'Device not found',
+        });
+      }
+
+      // Nothing reaches a cloud-only device directly (a Mist or Central AP), so
+      // no credential can help: say so and show the cloud's view instead of
+      // asking for one. Not a pass: NetHelper didn't contact the device.
+      if (!usesDeviceCredential(device)) {
+        const cloudStatus = await cloudView(device);
+        const via = cloudStatus?.provider || 'its cloud';
+        return res.json({
+          success: true,
+          data: {
+            success: false,
+            cloudOnly: true,
+            transport: 'cloud',
+            message: `NetHelper reaches ${device.name} only through ${via}, so there is no direct connection to test.`
+              + (cloudStatus ? ` ${cloudStatus.provider} reports it ${cloudStatus.status}.` : ''),
+            ...(cloudStatus && { cloudStatus }),
+            testedAt: new Date(),
+          },
         });
       }
 

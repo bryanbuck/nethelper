@@ -6,7 +6,7 @@ Vue 3 SPA for NetHelper: device inventory and status, discovery, configuration b
 
 ## Development
 
-Needs Node 20+ and a running backend (see [`../backend/README.md`](../backend/README.md)).
+Needs Node 22+ and a running backend (see [`../backend/README.md`](../backend/README.md)).
 
 ```sh
 npm ci

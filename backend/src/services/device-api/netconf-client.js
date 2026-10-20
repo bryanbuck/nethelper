@@ -139,7 +139,9 @@ class NetconfClient {
 
       conn.on('error', (err) => {
         clearTimeout(timer);
-        fail(new Error(`NETCONF connection failed: ${err.message}`));
+        fail(new Error(err.level === 'client-authentication'
+          ? `NETCONF connection failed: the device rejected the username or password (${err.message})`
+          : `NETCONF connection failed: ${err.message}`));
       });
 
       conn.connect({

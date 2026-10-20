@@ -95,6 +95,17 @@ describe('login, refresh, logout', () => {
     expect(wrong.body).toEqual(unknown.body);
   });
 
+  test('a +tagged Gmail address created by the CLI can sign in', async () => {
+    // The CLI stores trim().toLowerCase(); login used normalizeEmail(), which
+    // turned this into someone@gmail.com and never found the user.
+    await mockPrisma.user.create({
+      data: { email: 'some.one+nh@gmail.com', name: 'Tagged', role: 'admin', password: bcrypt.hashSync(PASSWORD, 4) },
+    });
+    const login = await request(app).post(api('/login')).send({ email: ' Some.One+NH@Gmail.com ', password: PASSWORD });
+    expect(login.status).toBe(200);
+    expect(login.body.data.user.email).toBe('some.one+nh@gmail.com');
+  });
+
   test('full session lifecycle', async () => {
     const login = await request(app).post(api('/login')).send({ email: 'admin@example.com', password: PASSWORD });
     expect(login.status).toBe(200);

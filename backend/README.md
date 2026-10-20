@@ -17,7 +17,7 @@ Node.js backend for NetHelper, a **multi-vendor** network automation and monitor
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 22+
 - PostgreSQL 15+
 - Redis 7+
 - `nmap` on the host (device discovery)

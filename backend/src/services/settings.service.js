@@ -436,14 +436,14 @@ class SettingsService {
   }
 
   /**
-   * List every cloud integration for a user (secrets masked).
-   * @param {string} userId
+   * List every cloud integration (secrets masked). Integrations act
+   * system-wide (sync, status, streams), so every admin manages all of them;
+   * userId (the creator) only matters when that user is deleted.
    * @returns {Promise<Array>}
    */
-  async getCloudIntegrations(userId) {
+  async getCloudIntegrations() {
     const prisma = getPrisma();
     const integrations = await prisma.cloudIntegration.findMany({
-      where: { userId },
       orderBy: [{ provider: 'asc' }, { createdAt: 'asc' }],
       include: { _count: { select: { devices: true } } },
     });
@@ -512,10 +512,10 @@ class SettingsService {
   /**
    * Update a cloud integration. Blank secret fields keep their stored value.
    */
-  async updateCloudIntegration(integrationId, userId, data) {
+  async updateCloudIntegration(integrationId, data) {
     const prisma = getPrisma();
     const existing = await prisma.cloudIntegration.findFirst({
-      where: { id: integrationId, userId },
+      where: { id: integrationId },
     });
     if (!existing) {
       const error = new Error('Cloud integration not found');
@@ -546,10 +546,10 @@ class SettingsService {
    * Test a cloud integration's credentials against its provider.
    * Persists lastTested / lastTestStatus.
    */
-  async testCloudIntegration(integrationId, userId) {
+  async testCloudIntegration(integrationId) {
     const prisma = getPrisma();
     const row = await prisma.cloudIntegration.findFirst({
-      where: { id: integrationId, userId },
+      where: { id: integrationId },
     });
     if (!row) {
       const error = new Error('Cloud integration not found');
@@ -580,10 +580,10 @@ class SettingsService {
    * Delete a cloud integration. Devices that referenced it keep their rows
    * (the FK is SetNull) but lose their cloud attribution.
    */
-  async deleteCloudIntegration(integrationId, userId) {
+  async deleteCloudIntegration(integrationId) {
     const prisma = getPrisma();
     const integration = await prisma.cloudIntegration.findFirst({
-      where: { id: integrationId, userId },
+      where: { id: integrationId },
     });
     if (!integration) {
       const error = new Error('Cloud integration not found');
@@ -616,10 +616,10 @@ class SettingsService {
   // ---------------------------------------------------------------------
 
   /** @deprecated Use getCloudIntegrations(). */
-  async getArubaCentralConfig(userId) {
+  async getArubaCentralConfig() {
     const prisma = getPrisma();
     const integration = await prisma.cloudIntegration.findFirst({
-      where: { userId, provider: 'aruba_central', isActive: true },
+      where: { provider: 'aruba_central', isActive: true },
       orderBy: { updatedAt: 'desc' },
     });
     if (!integration) return null;
@@ -652,16 +652,16 @@ class SettingsService {
     };
 
     const existing = await prisma.cloudIntegration.findFirst({
-      where: { userId, provider: 'aruba_central', isActive: true },
+      where: { provider: 'aruba_central', isActive: true },
     });
 
     if (existing) {
-      const updated = await this.updateCloudIntegration(existing.id, userId, {
+      const updated = await this.updateCloudIntegration(existing.id, {
         baseUrl: configData.baseUrl,
         credentials,
         notes: configData.notes,
       });
-      return { data: await this.getArubaCentralConfig(userId), isNew: false, integration: updated };
+      return { data: await this.getArubaCentralConfig(), isNew: false, integration: updated };
     }
 
     const created = await this.createCloudIntegration(userId, {
@@ -671,32 +671,32 @@ class SettingsService {
       credentials,
       notes: configData.notes,
     });
-    return { data: await this.getArubaCentralConfig(userId), isNew: true, integration: created };
+    return { data: await this.getArubaCentralConfig(), isNew: true, integration: created };
   }
 
   /** @deprecated Use testCloudIntegration(). */
-  async testArubaCentralConfig(userId, configId) {
+  async testArubaCentralConfig(configId) {
     const prisma = getPrisma();
     const integration = configId
-      ? await prisma.cloudIntegration.findFirst({ where: { id: configId, userId, provider: 'aruba_central' } })
-      : await prisma.cloudIntegration.findFirst({ where: { userId, provider: 'aruba_central', isActive: true } });
+      ? await prisma.cloudIntegration.findFirst({ where: { id: configId, provider: 'aruba_central' } })
+      : await prisma.cloudIntegration.findFirst({ where: { provider: 'aruba_central', isActive: true } });
 
     if (!integration) {
       throw new Error('Aruba Central configuration not found');
     }
-    return this.testCloudIntegration(integration.id, userId);
+    return this.testCloudIntegration(integration.id);
   }
 
   /** @deprecated Use deleteCloudIntegration(). */
-  async deleteArubaCentralConfig(configId, userId) {
+  async deleteArubaCentralConfig(configId) {
     const prisma = getPrisma();
     const integration = await prisma.cloudIntegration.findFirst({
-      where: { id: configId, userId, provider: 'aruba_central' },
+      where: { id: configId, provider: 'aruba_central' },
     });
     if (!integration) {
       throw new Error('Aruba Central configuration not found');
     }
-    return this.deleteCloudIntegration(configId, userId);
+    return this.deleteCloudIntegration(configId);
   }
 
   // ---------------------------------------------------------------------

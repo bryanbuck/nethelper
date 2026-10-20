@@ -258,8 +258,8 @@ const testConnection = async () => {
       response = await deviceApiService.testDeviceConnection(props.deviceId)
     }
 
-    // Extract result from response (handle both { success, data } and direct result)
-    const result = response.data || response
+    // testDeviceConnection already unwraps; the manual test returns the envelope
+    const result = props.mode === 'manual' ? response.data || response : response
     testResult.value = result
 
     if (result.success) {

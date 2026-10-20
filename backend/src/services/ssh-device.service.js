@@ -5,7 +5,7 @@ const aosSTopology = require('./topology/parsers/aos-s');
 const junosTopology = require('./topology/parsers/junos');
 const iosTopology = require('./topology/parsers/ios');
 const { normalizePortName } = require('./topology/neighbor');
-const { assertJunosConfigReadable } = require('../utils/config-format');
+const { assertJunosConfigReadable, assertCliConfigReadable } = require('../utils/config-format');
 
 const logger = debugLog.createLogger(Services.DEVICE);
 
@@ -77,9 +77,31 @@ const PLATFORM_PROFILES = {
 const PROMPT_LINE_REGEX = /(?:^|[\r\n])([^\r\n]*[#>$])[ \t]*$/;
 // AOS-S (and some others) hold the login banner until a key is pressed.
 const PRESS_ANY_KEY_REGEX = /press any key/i;
-// ANSI escape sequences some CLIs emit around prompts.
+// ANSI escape sequences some CLIs emit around prompts (cursor moves aside).
 // eslint-disable-next-line no-control-regex
-const ANSI_REGEX = /\x1b\[[0-9;?]*[A-Za-z]/g;
+const ANSI_EXCEPT_CURSOR_REGEX = /\x1b\[[0-9;?]*[A-GI-Za-eg-z]/g;
+// eslint-disable-next-line no-control-regex
+const CURSOR_MOVES_REGEX = /(?:\x1b\[[0-9;]*[Hf])+/g;
+
+/**
+ * Terminal output as plain lines. AOS-S (2930F, WC.16.11) draws a VT100
+ * screen: its prompt and command echo arrive between cursor moves
+ * (ESC[24;1H), with no newline, and it wraps a long echo into pieces the
+ * same way. A cursor move therefore starts a new line, unless the text is
+ * already at the start of one: the switch also repositions after ordinary
+ * line breaks at its 24-line screen boundary, and a newline there would
+ * scatter blank lines through a config.
+ */
+function cleanTerminal(text) {
+  return text
+    .replace(ANSI_EXCEPT_CURSOR_REGEX, '')
+    .replace(CURSOR_MOVES_REGEX, (m, offset, str) => {
+      // A move at the very end only parks the cursor (e.g. after the prompt);
+      // the caller cleans the whole buffer again when more text arrives.
+      if (offset + m.length === str.length) return '';
+      return offset > 0 && str[offset - 1] === '\n' ? '' : '\n';
+    });
+}
 
 /**
  * Run commands over an open interactive shell, one at a time.
@@ -127,7 +149,7 @@ function driveShell(stream, queue, done, { settleMs = 300, nudgeMs = 8000 } = {}
   };
 
   const endsWithPrompt = (text) => {
-    const clean = text.replace(ANSI_REGEX, '').replace(/\s+$/, '');
+    const clean = cleanTerminal(text).replace(/\s+$/, '');
     return clean.endsWith(prompt) &&
       /[\r\n]/.test(clean.slice(0, clean.length - prompt.length));
   };
@@ -138,7 +160,7 @@ function driveShell(stream, queue, done, { settleMs = 300, nudgeMs = 8000 } = {}
 
     if (prompt === null) {
       clearTimeout(settleTimer);
-      const clean = buffer.replace(ANSI_REGEX, '');
+      const clean = cleanTerminal(buffer);
       if (!keyPressed && PRESS_ANY_KEY_REGEX.test(clean)) {
         keyPressed = true;
         buffer = '';
@@ -158,7 +180,7 @@ function driveShell(stream, queue, done, { settleMs = 300, nudgeMs = 8000 } = {}
 
     if (endsWithPrompt(buffer)) {
       const current = queue[index];
-      outputs[current.label] = stripEcho(buffer.replace(ANSI_REGEX, ''), current.command, prompt);
+      outputs[current.label] = stripEcho(cleanTerminal(buffer), current.command, prompt);
       sendNext();
     }
   });
@@ -172,8 +194,23 @@ function driveShell(stream, queue, done, { settleMs = 300, nudgeMs = 8000 } = {}
  */
 function stripEcho(raw, command, prompt = null) {
   const lines = raw.replace(/\r\n/g, '\n').replace(/\r/g, '').split('\n');
-  // Drop the first line if it echoes the command we sent.
-  if (lines.length && lines[0].includes(command)) lines.shift();
+  while (lines.length && lines[0].trim() === '') lines.shift();
+  while (lines.length && lines[lines.length - 1].trim() === '') lines.pop();
+  // Drop the echoed command: one line, or (AOS-S) the pieces it was wrapped into.
+  if (lines.length && lines[0].includes(command)) {
+    lines.shift();
+  } else {
+    const target = command.replace(/\s+/g, '');
+    let echoed = '';
+    let count = 0;
+    while (count < lines.length && echoed.length < target.length) {
+      const next = echoed + lines[count].replace(/\s+/g, '');
+      if (!target.startsWith(next)) break;
+      echoed = next;
+      count++;
+    }
+    if (echoed === target && target) lines.splice(0, count);
+  }
   // Drop the trailing prompt line.
   const last = lines.length ? lines[lines.length - 1].trim() : '';
   if (prompt ? last === prompt : /[#>$]$/.test(last)) lines.pop();
@@ -260,7 +297,9 @@ class SshDeviceService {
 
       conn.on('error', (err) => {
         clearTimeout(overallTimer);
-        finish(new Error(`SSH connection failed: ${err.message}`));
+        finish(new Error(err.level === 'client-authentication'
+          ? `SSH connection failed: the device rejected the username or password (${err.message})`
+          : `SSH connection failed: ${err.message}`));
       });
 
       conn.connect({
@@ -302,6 +341,7 @@ class SshDeviceService {
     if (!config || config.length === 0) {
       throw new Error('SSH returned an empty running configuration');
     }
+    assertCliConfigReadable(config, detectPlatform(device));
     if (profile === PLATFORM_PROFILES.junos) assertJunosConfigReadable(config);
     return config;
   }
@@ -380,3 +420,4 @@ class SshDeviceService {
 module.exports = new SshDeviceService();
 module.exports.driveShell = driveShell;
 module.exports.stripEcho = stripEcho;
+module.exports.cleanTerminal = cleanTerminal;

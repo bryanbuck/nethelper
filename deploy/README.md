@@ -5,7 +5,11 @@ What's supported, known limitations, and how to report problems: [`docs/BETA_NOT
 Two supported ways to run the 0.9 beta:
 
 - **Docker Compose**: everything, including Postgres and Redis, in containers. Quickest to stand up.
-- **Bare metal**: systemd runs the backend and nginx serves the UI, on a Debian 12 / Ubuntu 24.04 host with Postgres and Redis from the distro.
+- **Bare metal**: systemd runs the backend and nginx serves the UI, on a Debian or Ubuntu host with Postgres and Redis from the distro.
+
+Both were installed from this runbook on clean Debian 13 (trixie) VMs on 2026-10-20. Debian 12 and Ubuntu 24.04 should work the same way but haven't been run end to end.
+
+**Getting the code.** Clone the repository (`git clone … /opt/nethelper`) or unpack a release tarball there. Every command below runs from that tree.
 
 Either way, the browser talks to one origin: nginx serves the SPA and proxies `/api` and `/socket.io` to the backend. You don't need `CORS_ORIGINS` unless the UI is served from somewhere else.
 
@@ -17,6 +21,7 @@ Files in this directory:
 | `docker-compose.host-network.yml` | Optional override for L2 discovery (MAC addresses) |
 | `.env.example` | Compose settings and secrets → copy to `.env` |
 | `systemd/nethelper-backend.service` | Bare-metal backend unit (sandboxed) |
+| `systemd/backend.env.example` | Bare-metal settings template → `/etc/nethelper/backend.env` |
 | `nginx/nethelper.conf` | Bare-metal nginx site with TLS |
 
 The images are built from `backend/Dockerfile` and `frontend/Dockerfile` (nginx config in `frontend/nginx/`).
@@ -25,10 +30,22 @@ The images are built from `backend/Dockerfile` and `frontend/Dockerfile` (nginx 
 
 ## Docker Compose
 
-Requirements: Docker Engine 24+ with Compose v2 (2.24+ for the host-network override).
+Requirements: Docker Engine 24+ with Compose v2 (2.24+ for the host-network override). The distro's `docker.io` package is often older; Docker's own repository is the simplest route (tested on Debian 13: Engine 29, Compose 5):
 
 ```sh
-cd deploy
+apt install ca-certificates curl
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+. /etc/os-release
+echo "deb [signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $VERSION_CODENAME stable" \
+  > /etc/apt/sources.list.d/docker.list
+apt update && apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+(On Ubuntu, use `linux/ubuntu` in both URLs.) Then:
+
+```sh
+cd /opt/nethelper/deploy
 cp .env.example .env
 # Fill in the five secrets; one per line, e.g.:
 #   openssl rand -hex 32
@@ -36,6 +53,8 @@ $EDITOR .env
 docker compose up -d --build
 docker compose ps          # backend and frontend should become "healthy"
 ```
+
+**Health probes** for a load balancer or monitoring: `http://<host>:8080/health` (liveness) and `/health/ready` (database and Redis; 503 when either is down). Both pass through the bundled nginx to the backend.
 
 The backend applies database migrations every time it starts, and does nothing when the schema is already current. Set `RUN_MIGRATIONS=false` on the backend service to turn that off.
 
@@ -53,15 +72,22 @@ It prints a generated password once. To choose the password instead, pass `-e NE
 
 Running `npm run user:manage` with no arguments opens an interactive menu for listing, editing, and deleting users, and resetting passwords.
 
-**Network access and discovery.** In the default (bridge) setup, the backend reaches devices through Docker's NAT. That covers ping monitoring, SSH, REST, NETCONF, cloud APIs, and discovery of hosts on any routed subnet. What it can't see is the host's own ARP table, so hosts discovered on the local L2 segment come back **without MAC addresses or vendors**. If you need those, add the host-network override:
+**Network access and discovery.** In the default (bridge) setup, the backend reaches devices through Docker's NAT. That covers ping monitoring, SSH, REST, NETCONF, cloud APIs, and discovery of hosts on any routed subnet. What it can't see is the host's own ARP table, so hosts discovered on the local L2 segment come back **without MAC addresses or vendors**. If you need those, use the host-network override. Turn it on in `deploy/.env`, not with `-f` flags:
 
 ```sh
-docker compose -f docker-compose.yml -f docker-compose.host-network.yml up -d --build
+# deploy/.env
+COMPOSE_FILE=docker-compose.yml:docker-compose.host-network.yml
 ```
+
+```sh
+docker compose up -d --build
+```
+
+Every `docker compose` command then loads the override, which matters: a command given only `docker-compose.yml` (for example the `run` command under **First admin**) recreates Postgres and Redis without the ports the host-network backend needs, and the backend loses its database. Setting `COMPOSE_FILE` also stops Compose from loading `docker-compose.override.yml` by itself. If you have one (the Git mirror key below), add it to the list: `COMPOSE_FILE=docker-compose.yml:docker-compose.host-network.yml:docker-compose.override.yml`.
 
 With the override, the backend and nginx share the host's network. The API listens on 127.0.0.1:3000 only, Postgres and Redis are published on 127.0.0.1 only, and the UI listens on `HTTP_PORT` on every interface.
 
-**TLS.** The bundled nginx speaks plain HTTP on `HTTP_PORT`. The app handles device and cloud credentials, so run it behind TLS beyond a lab:
+**TLS.** The bundled nginx speaks plain HTTP on `HTTP_PORT`. Browse to `http://<host>:8080`: a browser that tries `https://` on that port (typed, or Firefox's HTTPS-Only Mode) shows `SSL_ERROR_RX_RECORD_TOO_LONG`. Add an exception for the address, or put TLS in front. The app handles device and cloud credentials, so run it behind TLS beyond a lab:
 
 - If a TLS-terminating reverse proxy (host nginx, Caddy, Traefik, a load balancer) runs in front, set `TRUST_PROXY=2` so rate limiting sees real client IPs.
 - Bind the UI to loopback when the proxy runs on the same host: `HTTP_BIND=127.0.0.1`.
@@ -74,12 +100,16 @@ With the override, the backend and nginx share the host's network. The API liste
 | `nethelper_redisdata` | Redis (job queues, token cache; rebuildable) |
 | `nethelper_nethelper-data` | `/data/config-backups` (flat config files), `/data/config-repo` (Git mirror), and `/data/git-known_hosts` (the mirror's SSH host key) |
 
-To mirror backups to a remote over SSH, mount the key read-only into the backend container, then enter that path in Settings → Git mirror. For example, add this under the `backend` service in a `docker-compose.override.yml`:
+To mirror backups to a remote over SSH, mount the key read-only into the backend container, then enter that path in Settings → Git mirror. For example, create `deploy/docker-compose.override.yml`:
 
 ```yaml
-volumes:
-  - /srv/nethelper/git_ed25519:/run/secrets/git_ed25519:ro
+services:
+  backend:
+    volumes:
+      - /srv/nethelper/git_ed25519:/run/secrets/git_ed25519:ro
 ```
+
+With the host-network override, add this file to `COMPOSE_FILE` (see above); otherwise Compose ignores it. The remote must be private: device configs contain secrets. On GitHub, add the public key as a deploy key with write access.
 
 The mounted file must be readable by uid 1000. The remote's host key is accepted on first use and remembered in `/data/git-known_hosts`, on the data volume, so it survives recreating the container. To pin the key instead of trusting the first connection, write it there before the first push (`ssh-keyscan <host>`, checked against the fingerprint your Git server publishes).
 
@@ -98,11 +128,20 @@ Tested layout (adjust the unit file if yours differs):
 | `/var/lib/nethelper` | Config backups and the Git mirror; also the service user's home |
 | `/var/log/nethelper` | Log files (rotate at 10 MB, 5 kept; also in the journal) |
 
-1. **Packages.** Install Node.js 20+ at `/usr/bin/node` (the distro package, or NodeSource), plus the rest:
+1. **Packages.** Install Node.js 22+ at `/usr/bin/node`. Node 20 is end-of-life and some dependencies require 22, so where the distro ships 20 (Debian 12 and 13, Ubuntu 24.04), use NodeSource:
+
+   ```sh
+   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+   apt install nodejs
+   ```
+
+   Then the rest:
 
    ```sh
    apt install postgresql redis-server nginx nmap iproute2 iputils-ping git openssh-client
    ```
+
+   Tested on Debian 13 with PostgreSQL 17, Redis 8 and nginx 1.26.
 
 2. **Service user and directories**:
 
@@ -129,16 +168,15 @@ Tested layout (adjust the unit file if yours differs):
    cd /opt/nethelper/frontend && npm ci && npm run build   # produces dist/
    ```
 
-5. **Configuration.** Copy `backend/.env.example` to `/etc/nethelper/backend.env`, then:
-   - Set `DATABASE_URL`, `REDIS_PASSWORD`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, and `ENCRYPTION_KEY`. Generate each secret with `openssl rand -hex 32`.
-   - Leave `NODE_ENV`, `BIND_ADDRESS`, `TRUST_PROXY`, `LOG_DIR`, and the backup paths alone: the unit sets them.
-
-   Then lock the file down:
+5. **Configuration.** Start from the bare-metal template, **not** `backend/.env.example` (that one is for development):
 
    ```sh
-   chown root:nethelper /etc/nethelper/backend.env
-   chmod 0640 /etc/nethelper/backend.env
+   install -o root -g nethelper -m 0640 /opt/nethelper/deploy/systemd/backend.env.example /etc/nethelper/backend.env
    ```
+
+   Set `DATABASE_URL` (with the database password from step 3), `REDIS_PASSWORD`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, and `ENCRYPTION_KEY`. Generate each secret with `openssl rand -hex 32`.
+
+   Don't add `NODE_ENV`, `BIND_ADDRESS`, `TRUST_PROXY`, `LOG_DIR`, or the backup paths. The unit sets them, and systemd lets this file override the unit: a copied development value such as `LOG_DIR=./logs` makes the service crash-loop (it can't write inside `/opt`), and `NODE_ENV=development` would run it in development mode on every interface.
 
 6. **Backend service.** It migrates the database, then starts:
 
@@ -148,7 +186,7 @@ Tested layout (adjust the unit file if yours differs):
    curl -s 127.0.0.1:3000/health/ready     # {"status":"ready",...}
    ```
 
-7. **nginx and TLS.** Edit `server_name` and the certificate paths first, then install the site:
+7. **nginx and TLS.** Edit `server_name` and the certificate paths first (certbot, your internal CA, or for a lab a self-signed certificate with the host's name and IP in `subjectAltName`), then install the site:
 
    ```sh
    cp /opt/nethelper/frontend/nginx/security-headers.conf /etc/nginx/snippets/nethelper-security-headers.conf

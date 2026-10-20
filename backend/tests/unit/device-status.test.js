@@ -27,10 +27,16 @@ describe('effectiveStatus', () => {
     expect(effectiveStatus(cloud())).toBe('warning');
   });
 
+  test('a cloud device down in the cloud whose address answers ping is a warning', () => {
+    // Central kept an offline switch's old IP, which another switch now uses.
+    expect(effectiveStatus(cloud({ pingStatus: 'online', cloudStatus: 'offline' }))).toBe('warning');
+    expect(effectiveStatus(cloud({ pingStatus: 'online', cloudStatus: 'offline', managementMode: 'direct' }))).toBe('online');
+  });
+
   test('otherwise ping wins, then the cloud', () => {
     expect(effectiveStatus(cloud({ cloudStatus: 'offline' }))).toBe('offline');
     expect(effectiveStatus(cloud({ managementMode: 'direct' }))).toBe('offline');
-    expect(effectiveStatus(cloud({ pingStatus: 'online', cloudStatus: 'offline' }))).toBe('online');
+    expect(effectiveStatus(cloud({ pingStatus: 'online', cloudStatus: 'online' }))).toBe('online');
     expect(effectiveStatus(cloud({ pingStatus: null, cloudStatus: 'offline' }))).toBe('offline');
     expect(effectiveStatus({})).toBe('offline');
   });

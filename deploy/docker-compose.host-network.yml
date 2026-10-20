@@ -3,7 +3,11 @@
 # report MAC addresses and vendors. Without it discovery still finds hosts on
 # routed subnets, but MACs come back empty.
 #
-#   docker compose -f docker-compose.yml -f docker-compose.host-network.yml up -d --build
+# Turn it on in deploy/.env so every compose command loads it (a command
+# without it recreates postgres/redis without the ports below):
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.host-network.yml
+# Add :docker-compose.override.yml if you have one; COMPOSE_FILE stops Compose
+# loading it by itself.
 #
 # Needs Docker Compose 2.24+ (for !reset). On the host:
 #   - the UI listens on HTTP_PORT (default 8080) on every interface,

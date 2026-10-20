@@ -158,7 +158,8 @@ class DeviceService {
           type: deviceData.type,
           vendor: deviceData.vendor || 'aruba',
           platform: deviceData.platform || null,
-          model: deviceData.model,
+          // Required column; the API treats it as optional (same default as a discovery import).
+          model: deviceData.model || 'Unknown',
           ipAddress: deviceData.ipAddress,
           macAddress: deviceData.macAddress,
           location: deviceData.location,

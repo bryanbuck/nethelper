@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
+const { normalizeEmail } = require('../utils/email');
 const { getPrisma } = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
 const logger = require('../utils/logger');
@@ -13,7 +14,7 @@ const DUMMY_PASSWORD_HASH = bcrypt.hashSync(require('crypto').randomBytes(16).to
 
 // Register validation rules
 const registerValidation = [
-  body('email').isEmail().normalizeEmail(),
+  body('email').trim().isEmail().customSanitizer(normalizeEmail),
   body('password').isLength({ min: 12 }).withMessage('Password must be at least 12 characters'),
   body('name').trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
   body('role').optional().isIn(['admin', 'operator', 'viewer']).withMessage('Invalid role'),
@@ -21,7 +22,7 @@ const registerValidation = [
 
 // Login validation rules
 const loginValidation = [
-  body('email').isEmail().normalizeEmail(),
+  body('email').trim().isEmail().customSanitizer(normalizeEmail),
   body('password').notEmpty().withMessage('Password is required'),
 ];
 
@@ -364,7 +365,7 @@ router.get('/me', authenticate, async (req, res) => {
 // Update user profile
 router.put('/me', authenticate, [
   body('name').optional().trim().isLength({ min: 2 }),
-  body('email').optional().isEmail().normalizeEmail(),
+  body('email').optional().trim().isEmail().customSanitizer(normalizeEmail),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
