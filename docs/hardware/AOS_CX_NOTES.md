@@ -1,14 +1,31 @@
-# AOS-CX live state: protocol check on hardware (2026-10-15)
+# AOS-CX: behavior observed on hardware
 
-Point-in-time record of "Step 0" for the live port/PoE state work: what an
-AOS-CX switch actually does, observed before and while building
-`services/live/`. The design that came out of it is in
-`docs/MULTI_VENDOR_ROADMAP.md` §8c. Trimmed captures are the fixtures in
-`backend/tests/fixtures/aos-cx-live/`.
+Facts about AOS-CX that the code depends on and that the API docs don't make
+obvious. Each was observed on real switches; the live-state design that came
+out of them is in `docs/MULTI_VENDOR_ROADMAP.md` §8c. Trimmed captures are the
+fixtures in `backend/tests/fixtures/aos-cx-live/`.
 
-**Reference switch:** Aruba 6200F 12G Class4 PoE, ML.10.16.1010, managed by
-Aruba Central (local configuration locked), dedicated read-write REST account.
+**Reference switches:** Aruba 6200F 12G Class4 PoE, ML.10.16.1010, managed by
+Aruba Central (local configuration locked), dedicated read-write REST account
+(2026-10-15/16). The Central probe was first verified on a 10.10-era 6100-class
+switch (2026-07-08).
 
+## Enabling the REST API
+
+On the switch (any user with `administrators` works; prefer a dedicated
+account, since each user gets only 6 sessions):
+
+```
+configure terminal
+user nethelper group administrators password plaintext <password>
+https-server rest access-mode read-write
+https-server vrf mgmt        # and/or: https-server vrf default
+```
+
+Check with `show https-server`. The reference switch used a read-write
+account; NetHelper only reads, but `read-only` hasn't been tried. Central's connection is
+independent of `access-mode`: changing it doesn't affect Central, and local
+REST reads keep working on a Central-managed switch.
 ## REST
 
 - `GET /rest` (no auth) lists v10.04 through v10.16. The shapes used here are
@@ -86,3 +103,22 @@ Two consequences for automation triggers (a later phase): PoE delivers
 several seconds before the link comes up, so "PD came online" should key on
 `port.poe.up`; and PoE devices bounce their link while booting, so triggers
 need a settle time. Events are recorded raw.
+
+## Central management probe
+
+`device-poller.service.js` (`central-status`) reads the switch's own view of
+its Central relationship, the data behind `show aruba-central`:
+
+- `GET /rest/v10.10/system/aruba_central`. AOS-CX 10.15+ adds an equivalent
+  `hpe_anw_central` resource; the legacy URI still works.
+- The flag is **inverted**: `disable: false` means Central is enabled. Connection
+  state is nested: `status.central_connection` (`connected` / `not-reachable` /
+  `connection_failure`), alongside `central_source` (activate/dhcp/manual) and
+  `location`. Newer firmware may rename attributes, so the normalizer tries
+  several candidates.
+- A switch connects to Central in **monitor** or **managed** mode. Managed means
+  Central is the only source of configuration; `configuration-lockout central
+  managed` additionally blocks every other writer (its `no` form only works while
+  disconnected). `normalizeCentralStatus` sets `cloudManaged` (source
+  `switch-rest`): true when connected and not in monitor mode, false when
+  disabled or monitor-only, null (unknown) when enabled but not connected.

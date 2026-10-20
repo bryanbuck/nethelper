@@ -70,7 +70,7 @@ test parses it the way the provider does.
 ML.10.16.1010 (2026-10-15), with port descriptions anonymised. They are the
 REST responses behind `CXSwitchAPI.getPortState()` / `getInterfaceCounters()`
 and the notification frames of a PoE phone being unplugged and replugged. See
-`docs/archive/LIVE_STATE_CX_PROTOCOL_CHECK_2026-10-15.md`.
+`docs/hardware/AOS_CX_NOTES.md`.
 `aos-cx-live/lldp-neighbors.json` is a trimmed real capture from the same switch
 on 2026-10-16: `GET system/interfaces/*/lldp_neighbors?depth=2` (organizational
 TLVs dropped, domain name anonymised) plus `GET system?attributes=hostname,system_mac`.

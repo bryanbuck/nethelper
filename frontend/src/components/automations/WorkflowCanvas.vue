@@ -231,7 +231,7 @@ const edgeTypes = {}
 // Style configurations
 const connectionLineStyle = {
   strokeWidth: 2,
-  stroke: 'rgb(var(--v-theme-primary))'
+  stroke: 'rgb(var(--v-theme-primary-text))'
 }
 
 const defaultEdgeOptions = {
@@ -260,7 +260,7 @@ const selectionBoxStyle = computed(() => {
     top: `${top}px`,
     width: `${width}px`,
     height: `${height}px`,
-    border: '2px dashed rgb(var(--v-theme-primary))',
+    border: '2px dashed rgb(var(--v-theme-primary-text))',
     backgroundColor: 'rgba(var(--v-theme-primary), 0.1)',
     pointerEvents: 'none',
     zIndex: 1000
@@ -613,7 +613,7 @@ onMounted(() => {
 :deep(.vue-flow__selection),
 :deep(.vue-flow__nodesselection-rect) {
   background: rgba(var(--v-theme-primary), 0.08);
-  border: 1px dotted rgb(var(--v-theme-primary));
+  border: 1px dotted rgb(var(--v-theme-primary-text));
 }
 
 .selection-box {

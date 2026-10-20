@@ -1,4 +1,5 @@
-const { validateMirrorSettings } = require('../../src/services/git-backup.service');
+const { validateMirrorSettings, sshCommand, KNOWN_HOSTS_PATH, DEFAULT_REPO_PATH } = require('../../src/services/git-backup.service');
+const path = require('path');
 
 const ok = (settings) => expect(() => validateMirrorSettings(settings)).not.toThrow();
 const bad = (settings, pattern) => {
@@ -44,4 +45,14 @@ describe('git-backup validateMirrorSettings', () => {
   });
 
   test('empty settings are fine (mirror disabled)', () => ok({}));
+});
+
+describe('git-backup sshCommand', () => {
+  test('keeps accepted host keys on the data volume, not in the home directory', () => {
+    expect(KNOWN_HOSTS_PATH).toBe(path.join(path.dirname(DEFAULT_REPO_PATH), 'git-known_hosts'));
+    expect(sshCommand('/run/secrets/git key', '/data/git-known_hosts')).toBe(
+      "ssh -i '/run/secrets/git key' -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new " +
+      "-o 'UserKnownHostsFile=\"/data/git-known_hosts\" ~/.ssh/known_hosts' -o BatchMode=yes",
+    );
+  });
 });

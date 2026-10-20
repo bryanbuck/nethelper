@@ -1,4 +1,5 @@
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
 const { getPrisma } = require('../config/database');
@@ -25,6 +26,12 @@ const DEFAULT_REPO_PATH = process.env.BACKUP_GIT_REPO_PATH
   ? path.resolve(process.env.BACKUP_GIT_REPO_PATH)
   : path.resolve(__dirname, '../../storage/config-repo');
 const GIT_TIMEOUT_MS = Number(process.env.BACKUP_GIT_TIMEOUT_MS || 60000);
+// Where ssh remembers the remote's host key: next to the default repo, on the
+// data volume. In Docker the home directory is recreated with the container,
+// so a key kept there was accepted anew on every recreate.
+const KNOWN_HOSTS_PATH = process.env.BACKUP_GIT_KNOWN_HOSTS
+  ? path.resolve(process.env.BACKUP_GIT_KNOWN_HOSTS)
+  : path.join(path.dirname(DEFAULT_REPO_PATH), 'git-known_hosts');
 
 // Transports git may use for the mirror. Excludes ext:: and fd::, which run
 // arbitrary commands, and anything else exotic.
@@ -33,6 +40,21 @@ const GIT_ALLOWED_PROTOCOLS = 'https:http:ssh:git:file';
 /** Quote a value for the POSIX shell that git runs GIT_SSH_COMMAND through. */
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, "'\\''")}'`;
+}
+
+/**
+ * The ssh command git runs for an SSH remote. A new host key is accepted on
+ * first use and written to knownHostsPath; ~/.ssh/known_hosts is still read,
+ * so keys an install already trusted there keep working.
+ */
+function sshCommand(sshKeyPath, knownHostsPath = KNOWN_HOSTS_PATH) {
+  return [
+    'ssh', '-i', shellQuote(sshKeyPath),
+    '-o', 'IdentitiesOnly=yes',
+    '-o', 'StrictHostKeyChecking=accept-new',
+    '-o', shellQuote(`UserKnownHostsFile="${knownHostsPath}" ~/.ssh/known_hosts`),
+    '-o', 'BatchMode=yes',
+  ].join(' ');
 }
 
 /**
@@ -143,7 +165,10 @@ class GitBackupService {
 
     const sshKeyPath = config?.credentials?.sshKeyPath;
     if (sshKeyPath) {
-      env.GIT_SSH_COMMAND = `ssh -i ${shellQuote(sshKeyPath)} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o BatchMode=yes`;
+      env.GIT_SSH_COMMAND = sshCommand(sshKeyPath);
+      // ssh can't create the file's directory, and without it the key is
+      // accepted but never saved.
+      fsSync.mkdirSync(path.dirname(KNOWN_HOSTS_PATH), { recursive: true });
     }
 
     return new Promise((resolve, reject) => {
@@ -586,3 +611,5 @@ module.exports = new GitBackupService();
 module.exports.GIT_CREDENTIAL_FIELDS = GIT_CREDENTIAL_FIELDS;
 module.exports.DEFAULT_REPO_PATH = DEFAULT_REPO_PATH;
 module.exports.validateMirrorSettings = validateMirrorSettings;
+module.exports.sshCommand = sshCommand;
+module.exports.KNOWN_HOSTS_PATH = KNOWN_HOSTS_PATH;

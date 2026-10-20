@@ -15,7 +15,7 @@ NetHelper is Aruba-only, and the vendor coupling is uneven — some layers are a
 | `BaseDeviceAPI` (`backend/src/services/device-api/base-device-api.js`) | Vendor-neutral interface (login/testConnection/getDeviceInfo/getConfiguration/...) — good |
 | `DeviceAPIFactory` | Switch only handles `cx_switch`; `determineDeviceAPIType()` infers platform from hardcoded Aruba model regexes, defaults to CX |
 | `utils/device-platform.js` | The transport-decision choke point (`detectPlatform`, `isCxRestCapable`, `useSshTransport`) — knows only `aos-cx`/`aos-s`, classifies via Aruba model-number regexes |
-| Cloud plane | `aruba-central.service.js` singleton + bespoke `ArubaCentralConfig` table, imported **directly** by device sync, config backup, automation, discovery. Several methods are dead (unset `this.baseURL`); tenant OAuth currently 401s (`docs/archive/CENTRAL_ENDPOINT_TRIAGE.md`) |
+| Cloud plane | `aruba-central.service.js` singleton + bespoke `ArubaCentralConfig` table, imported **directly** by device sync, config backup, automation, discovery. Several methods are dead (unset `this.baseURL`); tenant OAuth currently 401s (2026-07-08 endpoint triage) |
 | Data model | **No `vendor` field anywhere.** `DeviceType` is category-only (access_point/switch/gateway). Platform is regex-inferred from `Device.model`. `managementMode` enum is `central \| direct`; `centralManaged*` columns are Aruba-shaped |
 | Config backup | `pullConfig()` in `config-backup.service.js` has the cleanest transport dispatch in the app (CX REST → Central → SSH) — the pattern to generalize |
 | SSH | `ssh-device.service.js` `PLATFORM_PROFILES` keyed `aos-s`/`aos-cx`/`generic`; the `generic` profile is already IOS-style |
@@ -376,7 +376,7 @@ Nothing writes config today. When it comes, it is a `restore` operation in the t
 Near-real-time switch state, for people watching a device and as the event
 source for future automation triggers (e.g. "PoE device came online"). The
 hardware findings behind these choices are in
-`archive/LIVE_STATE_CX_PROTOCOL_CHECK_2026-10-15.md`.
+`hardware/AOS_CX_NOTES.md`.
 
 **Why not streaming telemetry.** gNMI / Junos JTI / IOS-XE model-driven
 telemetry were considered and rejected for now: each needs per-switch setup

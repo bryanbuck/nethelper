@@ -182,7 +182,7 @@ model Device {
   // The device's OWN report of whether its cloud plane owns its configuration
   // (e.g. probed from the AOS-CX `system/aruba_central` REST resource). Independent
   // of managementMode, which only records how the record entered our inventory.
-  // null = never probed / not determinable. See docs/CENTRAL_MANAGEMENT_MODE_PLAN.md.
+  // null = never probed / not determinable. See docs/hardware/AOS_CX_NOTES.md.
   cloudManaged          Boolean?
   cloudConnectionStatus String? // connected | not_reachable | connection_failure | disabled | unknown
   cloudManagedSource    String? // switch-rest | central-group | manual (probe source, vocabulary unchanged from 5b)

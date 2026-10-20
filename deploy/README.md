@@ -72,7 +72,7 @@ With the override, the backend and nginx share the host's network. The API liste
 |---|---|
 | `nethelper_pgdata` | PostgreSQL database |
 | `nethelper_redisdata` | Redis (job queues, token cache; rebuildable) |
-| `nethelper_nethelper-data` | `/data/config-backups` (flat config files) and `/data/config-repo` (Git mirror) |
+| `nethelper_nethelper-data` | `/data/config-backups` (flat config files), `/data/config-repo` (Git mirror), and `/data/git-known_hosts` (the mirror's SSH host key) |
 
 To mirror backups to a remote over SSH, mount the key read-only into the backend container, then enter that path in Settings → Git mirror. For example, add this under the `backend` service in a `docker-compose.override.yml`:
 
@@ -81,7 +81,7 @@ volumes:
   - /srv/nethelper/git_ed25519:/run/secrets/git_ed25519:ro
 ```
 
-The mounted file must be readable by uid 1000. The remote's host key is accepted on first use and remembered in the container's home directory, so it is accepted again whenever the container is recreated.
+The mounted file must be readable by uid 1000. The remote's host key is accepted on first use and remembered in `/data/git-known_hosts`, on the data volume, so it survives recreating the container. To pin the key instead of trusting the first connection, write it there before the first push (`ssh-keyscan <host>`, checked against the fingerprint your Git server publishes).
 
 **Logs:** `docker compose logs -f backend`. In production, logs are JSON on stdout.
 
@@ -170,6 +170,7 @@ The unit is sandboxed:
 - Discovery runs `nmap -sn` without privileges and reads MAC addresses from the kernel neighbour table.
 - The unit can only write to `/var/lib/nethelper` and `/var/log/nethelper`.
 - Put Git mirror SSH keys under `/var/lib/nethelper/.ssh/` (owner `nethelper`, mode 0600).
+- The Git mirror remembers the remote's host key in `git-known_hosts` next to the repository (`/var/lib/nethelper/git-known_hosts` with the default layout). It still reads the service user's `~/.ssh/known_hosts`.
 
 **Logs:**
 

@@ -29,6 +29,7 @@
 // dashboard cards use. NetHelper keeps no status history yet, so this is
 // deliberately not a time series.
 import { computed } from 'vue'
+import { useTheme } from 'vuetify'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
 import { Doughnut } from 'vue-chartjs'
 import { useDevicesStore } from '@/stores/devices'
@@ -36,6 +37,16 @@ import { useDevicesStore } from '@/stores/devices'
 ChartJS.register(ArcElement, Tooltip, Legend)
 
 const devicesStore = useDevicesStore()
+const theme = useTheme()
+
+// Chart.js paints a canvas, so it needs real colors, not CSS variables: read
+// them from the current theme (the chart redraws when the theme changes).
+const colors = computed(() => theme.current.value.colors)
+
+function alpha(hex, opacity) {
+  const n = parseInt(hex.slice(1), 16)
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${opacity})`
+}
 
 const hasDevices = computed(() => devicesStore.stats.total > 0)
 
@@ -44,10 +55,10 @@ const chartData = computed(() => {
   const unknown = Math.max(0, total - online - warning - offline)
 
   const slices = [
-    { label: 'Online', value: online, color: '#4CAF50' },
-    { label: 'Warning', value: warning, color: '#FF9800' },
-    { label: 'Offline', value: offline, color: '#F44336' },
-    { label: 'Unknown', value: unknown, color: '#9E9E9E' }
+    { label: 'Online', value: online, color: colors.value.success },
+    { label: 'Warning', value: warning, color: colors.value.warning },
+    { label: 'Offline', value: offline, color: colors.value.error },
+    { label: 'Unknown', value: unknown, color: alpha(colors.value['on-surface'], 0.38) }
   ].filter((s) => s.value > 0)
 
   return {
@@ -55,18 +66,22 @@ const chartData = computed(() => {
     datasets: [{
       data: slices.map((s) => s.value),
       backgroundColor: slices.map((s) => s.color),
+      borderColor: colors.value.surface,
       borderWidth: 1
     }]
   }
 })
 
-const chartOptions = {
+const chartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { position: 'right' }
+    legend: {
+      position: 'right',
+      labels: { color: alpha(colors.value['on-surface'], 0.87) }
+    }
   }
-}
+}))
 </script>
 
 <style scoped>
