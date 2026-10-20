@@ -541,17 +541,20 @@ class DevicePollerService {
 
   /**
    * Best-effort extraction of a version string from `show version` output
-   * across AOS-S / AOS-CX / IOS-like formats.
+   * across AOS-S / AOS-CX / IOS-like formats. Boot ROM lines are skipped: a
+   * real 2930F prints "Boot ROM Version: WC.16.01.0010" after its firmware.
    */
   parseVersionFromText(text) {
     if (!text) return null;
+    const body = text.split('\n').filter((line) => !/boot\s*rom/i.test(line)).join('\n');
     const patterns = [
-      /Version[:\s]+([A-Za-z0-9._-]+)/i,      // AOS-S: "Software revision : WC.16.11.x"
+      /\b([A-Z]{2}\.\d{2}\.\d{2}\.\d{4})\b/,   // HPE: WC.16.11.0015, FL.10.16.1006
+      /Version[:\s]+([A-Za-z0-9._-]+)/i,
       /revision\s*:\s*([A-Za-z0-9._-]+)/i,
       /\b(\d+\.\d+\.\d+[A-Za-z0-9._-]*)\b/,   // generic semver-ish
     ];
     for (const re of patterns) {
-      const match = re.exec(text);
+      const match = re.exec(body);
       if (match) return match[1];
     }
     return null;

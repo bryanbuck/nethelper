@@ -153,4 +153,99 @@ describe('getRunningConfig', () => {
     await expect(service.getRunningConfig({ ipAddress: '10.0.0.1', vendor: 'cisco', platform: 'ios-xe' }, creds))
       .resolves.toBe('Current configuration:\nhostname X');
   });
+
+  test('refuses a CLI error instead of storing it as a config (AOS-S operator login)', async () => {
+    // What a real 2930F answers an operator's `show running-config`.
+    jest.spyOn(service, 'runCommands').mockResolvedValue({ config: 'Invalid input: running-config' });
+    await expect(service.getRunningConfig({ ipAddress: '10.0.0.1', vendor: 'aruba', platform: 'aos-s' }, creds))
+      .rejects.toMatchObject({ code: 'CONFIG_ACCESS_DENIED', message: expect.stringMatching(/operator login.*manager account/) });
+  });
+
+  test('keeps a config that merely mentions an error word', async () => {
+    const config = 'hostname "sw"\nbanner motd "Error: unauthorized access prohibited"\nvlan 1\n   name "DEFAULT_VLAN"';
+    jest.spyOn(service, 'runCommands').mockResolvedValue({ config });
+    await expect(service.getRunningConfig({ ipAddress: '10.0.0.1', vendor: 'aruba', platform: 'aos-s' }, creds))
+      .resolves.toBe(config);
+  });
+});
+
+describe('AOS-S on real hardware (2930F, WC.16.11)', () => {
+  const aosS = require('../../src/services/topology/parsers/aos-s');
+  const { chunks } = require('../fixtures/aos-s-live/ssh-session.json');
+
+  // Replays the captured session: everything up to the first typed command on
+  // connect, then each command's chunks when that command is typed.
+  function replayShell() {
+    const stream = new EventEmitter();
+    const turns = [[]];
+    for (const chunk of chunks) {
+      if (typeof chunk === 'string') turns[turns.length - 1].push(chunk);
+      else turns.push([]);
+    }
+    let turn = 0;
+    const play = (n) => setImmediate(() => {
+      for (const text of turns[n] || []) stream.emit('data', Buffer.from(text));
+    });
+    stream.written = [];
+    stream.write = (text) => {
+      stream.written.push(text);
+      if (text === '\n') return; // "press any key": the next screen is in the same turn
+      turn += 1;
+      play(turn);
+    };
+    stream.start = () => {
+      // The banner and "Press any key" arrive first; the prompt after the key.
+      const [banner, pressKey, ...rest] = turns[0];
+      stream.emit('data', Buffer.from(banner));
+      stream.emit('data', Buffer.from(pressKey));
+      setImmediate(() => rest.forEach((text) => stream.emit('data', Buffer.from(text))));
+    };
+    return stream;
+  }
+
+  test('finds the operator prompt drawn with cursor moves and reads every command', async () => {
+    const stream = replayShell();
+    const result = drive(stream, [
+      { label: '_paging', command: 'no page' },
+      { label: 'version', command: 'show version' },
+      { label: 'identity', command: 'show lldp info local-device' },
+      { label: 'neighbors', command: 'show lldp info remote-device detail' },
+    ]);
+    stream.start();
+    const out = await result;
+
+    expect(stream.written).toEqual([
+      '\n', 'no page\n', 'show version\n', 'show lldp info local-device\n', 'show lldp info remote-device detail\n',
+    ]);
+    expect(out._paging).toBe('');
+    // The echo arrived as "show versi" + cursor move + "on": none of it is kept.
+    expect(out.version.split('\n')[0]).toMatch(/^Image stamp:/);
+    expect(out.version).toContain('WC.16.11.0015');
+    expect(out.version).not.toMatch(/Lab-Core>|show versi/);
+    // A cursor move after a line break (the screen scrolling) adds no blank line.
+    expect(out.identity).toContain('Address: 203.0.113.10\n     Type: ipv4\n     Address: 203.0.113.14');
+  });
+
+  test('the LLDP parsers read the real output', async () => {
+    const stream = replayShell();
+    const result = drive(stream, [
+      { label: '_paging', command: 'no page' },
+      { label: 'version', command: 'show version' },
+      { label: 'identity', command: 'show lldp info local-device' },
+      { label: 'neighbors', command: 'show lldp info remote-device detail' },
+    ]);
+    stream.start();
+    const out = await result;
+
+    const neighbors = aosS.parseRemoteDetail(out.neighbors);
+    expect(neighbors.map((n) => [n.localPort, n.sysName, n.portId])).toEqual([
+      ['1', 'Sw-CoreA', '1/1/4'],
+      ['2', 'Sw-CoreB', '1/1/4'],
+      ['4', 'Lab-Edge2', '1/1/1'],
+      ['5', 'JNEX-01', 'ge-0/0/11'],
+    ]);
+    // AOS-S prints MACs as 02aa00-0000a1 (not the manual's spaced form); matching uses .mac.
+    expect(neighbors[0].mac).toBe('02:aa:00:00:00:a1');
+    expect(aosS.parseLocalDevice(out.identity)).toEqual({ chassisId: '02:aa:00:00:00:01', sysName: 'Lab-Core' });
+  });
 });

@@ -116,3 +116,13 @@ describe('version pollers follow the transport router', () => {
     expect(CXSwitchAPI).not.toHaveBeenCalled();
   });
 });
+
+test('parseVersionFromText reads the firmware, not the Boot ROM (real 2930F show version)', () => {
+  const text = [
+    'Image stamp:', ' /ws/swbuildm/rel_beluru_qaoff/code/build/lvm(swbuildm_rel_beluru_qaoff_rel_belu', 'ru)',
+    '                Nov 21 2023 03:09:33', '                WC.16.11.0015', '                567',
+    'Boot Image:     Primary', '', 'Boot ROM Version:    WC.16.01.0010', 'Active Boot ROM:     Primary',
+  ].join('\n');
+  expect(poller.parseVersionFromText(text)).toBe('WC.16.11.0015');
+  expect(poller.parseVersionFromText('Cisco IOS XE Software, Version 17.09.04a')).toBe('17.09.04a');
+});

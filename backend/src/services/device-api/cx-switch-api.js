@@ -87,7 +87,14 @@ class CXSwitchAPI extends BaseDeviceAPI {
 
       // Check if login was successful
       if (response.status !== 200) {
-        throw new Error(`Login failed with status ${response.status}: ${response.statusText}`);
+        // The switch's own words (e.g. "Login failed."), so a session limit
+        // can be told apart from a bad password.
+        const reply = typeof response.data === 'string' ? response.data.trim().slice(0, 200) : '';
+        const error = new Error(response.status === 401
+          ? `The switch rejected the username or password (HTTP 401${reply ? `: ${reply}` : ''})`
+          : `Login failed with status ${response.status}: ${reply || response.statusText}`);
+        error.code = response.status === 401 ? 'AUTH_REJECTED' : undefined;
+        throw error;
       }
 
       // Extract session cookie from Set-Cookie header

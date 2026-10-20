@@ -75,7 +75,28 @@ function assertJunosConfigReadable(text) {
   throw error;
 }
 
+// What a CLI prints instead of a config when the command is refused.
+const CLI_ERROR_REGEX = /^(?:invalid input\b|% ?invalid\b|% ?unknown command|% ?incomplete command|% ?authorization failed|insufficient privilege|permission denied|syntax error|error:)/i;
+
+/**
+ * Throw when a CLI config read returned only an error, so it is never stored
+ * as a backup. AOS-S (2930F, WC.16.11) answers an operator login's
+ * `show running-config` with "Invalid input: running-config": only a manager
+ * may read the config.
+ */
+function assertCliConfigReadable(text, platform) {
+  const lines = String(text || '').split('\n').map((line) => line.trim()).filter(Boolean);
+  if (lines.length > 3 || !lines.some((line) => CLI_ERROR_REGEX.test(line))) return;
+  const hint = platform === 'aos-s'
+    ? ' On AOS-S an operator login cannot read the configuration: use a manager account.'
+    : ' Check that the device account may read the configuration.';
+  const error = new Error(`The device refused to show its configuration ("${lines[0]}").${hint}`);
+  error.code = 'CONFIG_ACCESS_DENIED';
+  throw error;
+}
+
 module.exports = {
+  assertCliConfigReadable,
   assertJunosConfigReadable,
   junosDeniedHierarchies,
   CONFIG_FORMATS,

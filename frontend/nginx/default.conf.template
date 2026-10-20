@@ -26,6 +26,15 @@ server {
     gzip_min_length 1024;
     gzip_types text/css application/javascript application/json image/svg+xml;
 
+    # Backend probes: /health (liveness) and /health/ready (DB + Redis).
+    # Without this the SPA fallback answered them with index.html and a 200.
+    location = /health {
+        proxy_pass http://nethelper_backend;
+    }
+    location = /health/ready {
+        proxy_pass http://nethelper_backend;
+    }
+
     location /api/ {
         proxy_pass http://nethelper_backend;
         proxy_http_version 1.1;

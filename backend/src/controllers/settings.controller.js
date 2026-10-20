@@ -199,9 +199,8 @@ class SettingsController {
    */
   async getArubaCentralConfig(req, res, next) {
     try {
-      const userId = req.user.id;
 
-      const config = await settingsService.getArubaCentralConfig(userId);
+      const config = await settingsService.getArubaCentralConfig();
 
       res.json({
         success: true,
@@ -241,10 +240,9 @@ class SettingsController {
    */
   async testArubaCentralConfig(req, res, next) {
     try {
-      const userId = req.user.id;
       const { configId } = req.body;
 
-      const testResult = await settingsService.testArubaCentralConfig(userId, configId);
+      const testResult = await settingsService.testArubaCentralConfig(configId);
 
       res.json({
         success: true,
@@ -263,9 +261,8 @@ class SettingsController {
   async deleteArubaCentralConfig(req, res, next) {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
 
-      await settingsService.deleteArubaCentralConfig(id, userId);
+      await settingsService.deleteArubaCentralConfig(id);
 
       res.json({
         success: true,
@@ -296,7 +293,7 @@ class SettingsController {
    */
   async getCloudIntegrations(req, res, next) {
     try {
-      const integrations = await settingsService.getCloudIntegrations(req.user.id);
+      const integrations = await settingsService.getCloudIntegrations();
 
       res.json({
         success: true,
@@ -349,11 +346,7 @@ class SettingsController {
    */
   async updateCloudIntegration(req, res, next) {
     try {
-      const integration = await settingsService.updateCloudIntegration(
-        req.params.id,
-        req.user.id,
-        req.body
-      );
+      const integration = await settingsService.updateCloudIntegration(req.params.id, req.body);
 
       res.json({
         success: true,
@@ -372,7 +365,7 @@ class SettingsController {
    */
   async testCloudIntegration(req, res, next) {
     try {
-      const result = await settingsService.testCloudIntegration(req.params.id, req.user.id);
+      const result = await settingsService.testCloudIntegration(req.params.id);
 
       res.json({
         success: true,
@@ -390,7 +383,7 @@ class SettingsController {
    */
   async deleteCloudIntegration(req, res, next) {
     try {
-      await settingsService.deleteCloudIntegration(req.params.id, req.user.id);
+      await settingsService.deleteCloudIntegration(req.params.id);
 
       res.json({
         success: true,

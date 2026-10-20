@@ -77,3 +77,11 @@ TLVs dropped, domain name anonymised) plus `GET system?attributes=hostname,syste
 It holds a switch neighbor (chassis id = system MAC) and a Cisco phone that
 advertises an IP as its chassis id. The Junos, AOS-S and IOS neighbor outputs in
 `tests/unit/topology-parsers.test.js` are spec-derived, not captures.
+
+`aos-s-live/ssh-session.json` is a **real SSH session** with an Aruba 2930F on
+WC.16.11.0015 (2026-10-20, operator login), IPs and MACs anonymised: the
+chunks as received, with `{ "tx": … }` marking what was typed (`no page`,
+`show version`, `show lldp info local-device`, `show lldp info remote-device
+detail`). The CLI draws a VT100 screen, so prompts and echoes arrive between
+cursor moves; `tests/unit/ssh-shell.test.js` replays it. See
+`docs/hardware/AOS_S_NOTES.md`.

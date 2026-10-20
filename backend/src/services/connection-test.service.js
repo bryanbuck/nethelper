@@ -101,4 +101,4 @@ async function cloudView(device) {
   }
 }
 
-module.exports = { testDeviceConnection };
+module.exports = { testDeviceConnection, cloudView };

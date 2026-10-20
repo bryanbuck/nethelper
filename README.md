@@ -19,7 +19,7 @@ deploy/     Docker Compose, systemd, nginx
 docs/       Architecture, roadmap, configuration, beta notes
 ```
 
-Needs Node 20+, PostgreSQL 15+, Redis 7+, and `nmap` on the backend host.
+Needs Node 22+, PostgreSQL 15+, Redis 7+, and `nmap` on the backend host.
 
 ```sh
 cd backend  && npm ci && cp .env.example .env   # set DATABASE_URL and the secrets

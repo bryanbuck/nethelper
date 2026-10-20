@@ -2,7 +2,10 @@
 #
 # Assumes (see deploy/README.md):
 #   code         /opt/nethelper            (git checkout or release tarball)
-#   config       /etc/nethelper/backend.env (mode 0640, root:nethelper)
+#   config       /etc/nethelper/backend.env (mode 0640, root:nethelper), from
+#                deploy/systemd/backend.env.example. Never copy backend/.env.example:
+#                EnvironmentFile= overrides Environment=, so its development
+#                values (NODE_ENV, LOG_DIR, paths, BIND_ADDRESS) would win.
 #   data         /var/lib/nethelper         (config backups, Git mirror; the user's HOME)
 #   logs         /var/log/nethelper         (rotated by size; also in the journal)
 #   user         nethelper                  (system user, no login shell)
@@ -29,6 +32,10 @@ Environment=TRUST_PROXY=loopback
 Environment=LOG_DIR=/var/log/nethelper
 Environment=BACKUP_STORAGE_PATH=/var/lib/nethelper/config-backups
 Environment=BACKUP_GIT_REPO_PATH=/var/lib/nethelper/config-repo
+# Prisma's update check prints a banner and leaves a child process behind
+# (systemd: "Found left-over process ... in control group").
+Environment=CHECKPOINT_DISABLE=1
+Environment=NPM_CONFIG_UPDATE_NOTIFIER=false
 
 # Apply pending database migrations before every start (no-op when current).
 ExecStartPre=/usr/bin/node node_modules/prisma/build/index.js migrate deploy

@@ -357,6 +357,10 @@
                 {{ cloudPlaneName(item) }} reports it online, but it doesn't answer ping from NetHelper
                 (no route, or ICMP filtered).
               </div>
+              <div v-else-if="answersPingButCloudOffline(item)" class="mb-1">
+                {{ cloudPlaneName(item) }} reports it offline, but its address answers ping
+                (another device may now use this IP).
+              </div>
               <div v-if="item.pingLastChecked">
                 <strong>Ping Status:</strong> {{ item.pingStatus || 'unknown' }}<br>
                 <strong v-if="item.managementMode === 'cloud'">Cloud Status:</strong>
@@ -578,7 +582,7 @@ import ConnectionStatusBadge from './ConnectionStatusBadge.vue'
 import DeviceMergeDialog from './DeviceMergeDialog.vue'
 import DeviceCredentialDialog from './DeviceCredentialDialog.vue'
 import { cloudProviderLabel, platformOptions } from '@/models/vendors'
-import { unreachableFromHere } from '@/models/Device'
+import { unreachableFromHere, answersPingButCloudOffline } from '@/models/Device'
 import { useSettingsStore } from '@/stores/settings'
 
 const router = useRouter()

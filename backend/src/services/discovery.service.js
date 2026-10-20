@@ -5,7 +5,7 @@ const { getPrisma } = require('../config/database');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const { getIO } = require('../websocket/socket.handler');
 const logger = require('../utils/logger');
-const { normalizeMac } = require('../utils/device-key');
+const { normalizeMac, normalizeSerial } = require('../utils/device-key');
 const { VENDORS } = require('../constants/vendors');
 
 const execFileAsync = promisify(execFile);
@@ -215,9 +215,10 @@ class DiscoveryService {
       await this.fingerprintHosts(hosts);
       await prisma.discoveryScan.update({ where: { id: scanId }, data: { progress: 70 } });
 
-      // Phase 4: cross-check every cloud's inventory by MAC (70-85%)
+      // Phase 4: cross-check every cloud's inventory by MAC, or by IP for a
+      // routed host that came back without one (70-85%)
       this.emitProgress(scanId, 75, 'central', 'Cross-checking cloud inventories');
-      const cloudByMac = await this.getCloudInventoryByMac();
+      const { byMac: cloudByMac, byIp: cloudByIp } = await this.getCloudInventory();
       await prisma.discoveryScan.update({ where: { id: scanId }, data: { progress: 85 } });
 
       // Phase 5: conflict detection against local inventory and persistence (85-100%)
@@ -237,7 +238,7 @@ class DiscoveryService {
       const records = [];
       for (const host of hosts.values()) {
         const mac = this.normalizeMac(host.macAddress);
-        const central = mac ? cloudByMac.get(mac) : null;
+        const central = mac ? cloudByMac.get(mac) : cloudByIp.get(host.ipAddress) || null;
         // A cloud's inventory names the vendor outright; the OUI is a guess.
         const matchedVendor = central?.vendor || host.matchedVendor || null;
         if (matchedVendor) vendorCount++;
@@ -418,11 +419,17 @@ class DiscoveryService {
 
   /**
    * Fetch the inventory of every active cloud integration and index it by
-   * normalized MAC. An integration that is unconfigured or unreachable is
-   * skipped so the scan still completes with whatever data is available.
+   * normalized MAC, and by IP for hosts on routed subnets (no MAC). An IP two
+   * cloud devices report (a stale address, e.g. Central keeping an offline
+   * switch's old IP) matches neither. An integration that is unconfigured or
+   * unreachable is skipped so the scan still completes with whatever data is
+   * available.
+   * @returns {Promise<{byMac: Map, byIp: Map}>}
    */
-  async getCloudInventoryByMac() {
+  async getCloudInventory() {
     const byMac = new Map();
+    const byIp = new Map();
+    const sharedIps = new Set();
     const providers = await CloudProviderFactory.activeProviders().catch((error) => {
       logger.warn('Cloud inventory cross-check skipped:', error.message);
       return [];
@@ -432,8 +439,7 @@ class DiscoveryService {
       try {
         for (const device of await provider.listInventory()) {
           const mac = this.normalizeMac(device.macAddress);
-          if (!mac) continue;
-          byMac.set(mac, {
+          const entry = {
             serial: device.serial,
             deviceName: device.name,
             deviceType: device.type,
@@ -444,13 +450,19 @@ class DiscoveryService {
             provider: provider.providerType,
             integrationId: provider.id,
             integrationName: provider.integration?.name || provider.label,
-          });
+          };
+          if (mac) byMac.set(mac, entry);
+          if (device.ipAddress) {
+            if (byIp.has(device.ipAddress)) sharedIps.add(device.ipAddress);
+            else byIp.set(device.ipAddress, entry);
+          }
         }
       } catch (error) {
         logger.warn(`Cloud inventory cross-check skipped for ${provider.label}:`, error.message);
       }
     }
-    return byMac;
+    for (const ip of sharedIps) byIp.delete(ip);
+    return { byMac, byIp };
   }
 
   async getScans(limit = 20) {
@@ -527,12 +539,9 @@ class DiscoveryService {
       return { device: updated, merged: true };
     }
 
-    const serial = overrides.serial || discovered.centralSerial || discovered.macAddress?.toUpperCase();
-    if (!serial) {
-      const error = new Error('A serial number is required to import this device (none detected)');
-      error.statusCode = 400;
-      throw error;
-    }
+    // No serial when none is known (serials are optional): using the MAC here
+    // made a later cloud sync, which knows the real serial, add a duplicate.
+    const serial = normalizeSerial(overrides.serial) || normalizeSerial(discovered.centralSerial) || null;
     const type = overrides.type || discovered.suggestedType;
     if (!type) {
       const error = new Error('A device type is required to import this device (none detected)');

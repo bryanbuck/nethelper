@@ -27,7 +27,9 @@ ENV NODE_ENV=production \
     PORT=3000 \
     LOG_FILES=false \
     BACKUP_STORAGE_PATH=/data/config-backups \
-    BACKUP_GIT_REPO_PATH=/data/config-repo
+    BACKUP_GIT_REPO_PATH=/data/config-repo \
+    CHECKPOINT_DISABLE=1 \
+    NPM_CONFIG_UPDATE_NOTIFIER=false
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json server.js docker-entrypoint.sh ./

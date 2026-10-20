@@ -609,11 +609,11 @@ const executeCredentialTest = async () => {
 
     if (result.success) {
       notificationStore.showSuccess('Connection test successful')
-      // Update the credential's last tested status
-      await settingsStore.fetchApiCredentials()
     } else {
       notificationStore.showWarning('Connection test failed')
     }
+    // The test records its outcome on the credential either way
+    await settingsStore.fetchApiCredentials()
   } catch (error) {
     debugLog.error(DebugCategory.SETTINGS, 'Failed to test credential:', error)
     testResult.value = {

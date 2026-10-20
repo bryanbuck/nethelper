@@ -69,15 +69,24 @@ export const DeviceStatusInfo = {
 }
 
 /**
- * A device's displayed status: ping first, then its cloud's view. A
- * cloud-managed device that fails ping while its cloud reports it online is
- * up but unreachable from NetHelper: warning, not offline. Mirrors
+ * A device's displayed status: ping first, then its cloud's view. When the
+ * two disagree about a cloud-managed device it is warning: cloud online but
+ * no ping (up, but unreachable from NetHelper), or cloud offline but its
+ * address answers ping (maybe another device now has that IP). Mirrors
  * backend/src/utils/device-status.js.
  */
 export function effectiveStatus(device) {
   const { pingStatus, cloudStatus, managementMode } = device || {}
-  if (pingStatus === 'offline' && managementMode === 'cloud' && cloudStatus === 'online') return DeviceStatus.WARNING
+  if (managementMode === 'cloud') {
+    if (pingStatus === 'offline' && cloudStatus === 'online') return DeviceStatus.WARNING
+    if (pingStatus === 'online' && cloudStatus === 'offline') return DeviceStatus.WARNING
+  }
   return pingStatus || cloudStatus || DeviceStatus.OFFLINE
+}
+
+/** True when the cloud reports a device offline but its address answers ping. */
+export function answersPingButCloudOffline(device) {
+  return device?.pingStatus === 'online' && effectiveStatus(device) === DeviceStatus.WARNING
 }
 
 /** True when the cloud reports a device online that NetHelper can't ping. */

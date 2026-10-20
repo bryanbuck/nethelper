@@ -16,6 +16,7 @@ const readline = require('readline');
 const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
 const { deleteUserPreservingData } = require('../src/services/user-lifecycle');
+const { normalizeEmail } = require('../src/utils/email');
 
 const prisma = new PrismaClient();
 
@@ -95,8 +96,8 @@ async function createUser() {
     // Get email
     let email;
     while (true) {
-      email = await question('Email: ');
-      if (!email.trim()) {
+      email = normalizeEmail(await question('Email: '));
+      if (!email) {
         console.log(colorize('Email is required.', 'red'));
         continue;
       }
@@ -165,7 +166,7 @@ async function createUser() {
     // Create user
     const user = await prisma.user.create({
       data: {
-        email: email.trim(),
+        email,
         name: name.trim(),
         password: hashedPassword,
         role: role.toLowerCase()
@@ -240,8 +241,8 @@ async function updateUser(user) {
 
   try {
     // Update email
-    let newEmail = await question(`New email [${user.email}]: `);
-    if (newEmail.trim() && newEmail !== user.email) {
+    let newEmail = normalizeEmail(await question(`New email [${user.email}]: `));
+    if (newEmail && newEmail !== user.email) {
       if (!validateEmail(newEmail)) {
         console.log(colorize('Invalid email format.', 'red'));
         return user;
@@ -440,7 +441,8 @@ function parseFlags(args) {
 
 async function createAdminCommand(args) {
   const { email, name } = parseFlags(args);
-  if (!email || !validateEmail(email)) throw new Error('--email <address> is required');
+  if (!email) throw new Error('--email <address> is required');
+  if (!validateEmail(email)) throw new Error(`Not a valid email address: ${email}`);
   if (!name || name.trim().length < 2) throw new Error('--name "<full name>" is required');
 
   const provided = process.env.NETHELPER_ADMIN_PASSWORD;
@@ -449,7 +451,7 @@ async function createAdminCommand(args) {
   }
   const password = provided || crypto.randomBytes(18).toString('base64url');
 
-  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedEmail = normalizeEmail(email);
   if (await prisma.user.findUnique({ where: { email: normalizedEmail } })) {
     throw new Error(`A user with email ${normalizedEmail} already exists`);
   }
