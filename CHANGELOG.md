@@ -2,7 +2,7 @@
 
 All notable changes to NetHelper. Versions follow [Semantic Versioning](https://semver.org/); pre-1.0 releases may change behavior between minor versions.
 
-## [0.9.0-beta.1] — unreleased
+## [0.9.0-beta.1] — 2026-10-20
 
 First packaged release, for a private in-house beta. Covers everything built so far, hardened and packaged for deployment. See [`docs/BETA_NOTES.md`](docs/BETA_NOTES.md) for scope and known limitations.
 
