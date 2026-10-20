@@ -12,16 +12,30 @@ const centralFixture = require('../fixtures/central-devices.json');
 const mistInventory = require('../fixtures/mist-inventory.json');
 const mistStats = require('../fixtures/mist-stats.json');
 const mistScope = require('../fixtures/mist-scope.json');
+// Live captures (2026-10-19, anonymised): one site, an AP33 and an EX4000, both powered off.
+const mistLive = {
+  self: require('../fixtures/mist-live/self.json'),
+  org: require('../fixtures/mist-live/org.json'),
+  sites: require('../fixtures/mist-live/sites.json'),
+  inventory: require('../fixtures/mist-live/inventory.json'),
+  stats: require('../fixtures/mist-live/stats-devices.json'),
+  switchConfig: require('../fixtures/mist-live/device-switch-config.json'),
+  // The same org minutes after both devices were powered on.
+  inventoryOnline: require('../fixtures/mist-live/inventory-online.json'),
+  statsOnline: require('../fixtures/mist-live/stats-devices-allfields-online.json'),
+};
 
 const CONTRACT_KEYS = [
   'serial', 'name', 'model', 'macAddress', 'ipAddress', 'type', 'vendor', 'platform',
   'status', 'firmwareVersion', 'site', 'lastSeen', 'metadata',
 ].sort();
+// A provider may also report who owns the device's config.
+const OPTIONAL_KEYS = ['cloudManaged', 'cloudManagedSource', 'cloudConnectionStatus'];
 const DEVICE_TYPES = ['access_point', 'switch', 'gateway', 'other'];
 const DEVICE_STATUSES = ['online', 'offline', 'warning', 'maintenance'];
 
 function expectContract(device) {
-  expect(Object.keys(device).sort()).toEqual(CONTRACT_KEYS);
+  expect(Object.keys(device).filter((key) => !OPTIONAL_KEYS.includes(key)).sort()).toEqual(CONTRACT_KEYS);
   expect(DEVICE_TYPES).toContain(device.type);
   expect(DEVICE_STATUSES).toContain(device.status);
   expect(typeof device.name).toBe('string');
@@ -206,6 +220,7 @@ describe('MistProvider', () => {
     let statsParams;
     routeAxios({
       '/api/v1/orgs/org-1/inventory': () => mistInventory,
+      '/api/v1/orgs/org-1/sites': () => mistScope.sites,
       '/api/v1/orgs/org-1/stats/devices': (config) => {
         statsParams = config.params;
         return mistStats;
@@ -215,6 +230,8 @@ describe('MistProvider', () => {
     const devices = await provider.listInventory();
 
     expect(statsParams.type).toBe('all');
+    // A field list, so config_status comes back without the per-port tables.
+    expect(statsParams.fields.split(',')).toEqual(expect.arrayContaining(['mac', 'ip', 'last_seen', 'config_status']));
     expect(axios.mock.calls[0][0].headers.Authorization).toBe('Token token');
     expect(devices).toHaveLength(3);
     devices.forEach(expectContract);
@@ -224,12 +241,138 @@ describe('MistProvider', () => {
     expect(ex).toMatchObject({
       serial: 'FX0001', type: 'switch', vendor: 'juniper', platform: 'junos', status: 'online',
       ipAddress: '10.1.0.2', firmwareVersion: '23.4R2-S3', lastSeen: new Date(1758800500 * 1000),
+      site: 'HQ', cloudConnectionStatus: 'connected',
     });
+    expect(ex.metadata).toMatchObject({ siteId: 'site-a', siteName: 'HQ', configStatus: 'synced' });
     expect(ap).toMatchObject({
       name: 'ap-lobby', type: 'access_point', platform: null, status: 'offline',
-      ipAddress: null, lastSeen: new Date(1758600000 * 1000),
+      ipAddress: null, lastSeen: null, cloudManaged: true, cloudManagedSource: 'cloud-inventory',
     });
     expect(srx).toMatchObject({ name: 'SRX0003', type: 'gateway', platform: 'junos', site: null });
+  });
+
+  describe('against a live org (captured 2026-10-19)', () => {
+    const live = new MistProvider({
+      id: 'int-live',
+      provider: 'juniper_mist',
+      name: 'Live',
+      baseUrl: 'https://api.mist.com',
+      credentials: { apiToken: 'token', orgId: mistLive.org.id },
+    });
+    const orgPath = `/api/v1/orgs/${mistLive.org.id}`;
+    const [apItem, switchItem] = mistLive.inventory;
+
+    test('inventory, stats and sites normalize into offline devices with their last known state', async () => {
+      routeAxios({
+        [`${orgPath}/inventory`]: () => mistLive.inventory,
+        [`${orgPath}/sites`]: () => mistLive.sites,
+        [`${orgPath}/stats/devices`]: () => mistLive.stats,
+      });
+
+      const [ap, ex] = await live.listInventory();
+
+      [ap, ex].forEach(expectContract);
+      // Offline devices keep their last-known stats; inventory says not connected.
+      expect(ex).toMatchObject({
+        name: 'JNEX-01', model: 'EX4000-12MP', type: 'switch', platform: 'junos', status: 'offline',
+        ipAddress: '172.16.10.102', firmwareVersion: '24.4R2.25', site: 'Primary Site',
+        lastSeen: new Date(1791421861 * 1000), cloudConnectionStatus: 'not_reachable',
+      });
+      // Whether Mist configures a switch is on its device object, not inventory.
+      expect(ex.cloudManaged).toBeUndefined();
+      expect(ap).toMatchObject({
+        name: 'JNAP-01', type: 'access_point', platform: null, firmwareVersion: '0.12.27458',
+        site: 'Primary Site', cloudManaged: true,
+      });
+      expect(ap.metadata).toMatchObject({ siteId: apItem.site_id, mistId: apItem.id, uptime: 34016 });
+    });
+
+    test('powered on, both devices are online and connected with fresh stats', async () => {
+      routeAxios({
+        [`${orgPath}/inventory`]: () => mistLive.inventoryOnline,
+        [`${orgPath}/sites`]: () => mistLive.sites,
+        [`${orgPath}/stats/devices`]: () => mistLive.statsOnline,
+      });
+
+      const devices = await live.listInventory();
+      const statsByMac = new Map(mistLive.statsOnline.map((stat) => [stat.mac, stat]));
+
+      for (const device of devices) {
+        const stat = statsByMac.get(device.macAddress);
+        expect(device).toMatchObject({
+          status: 'online', cloudConnectionStatus: 'connected', ipAddress: stat.ip,
+          lastSeen: new Date(stat.last_seen * 1000),
+        });
+        expect(device.metadata.uptime).toBe(stat.uptime);
+      }
+      expect(devices.find((d) => d.type === 'switch').metadata.configStatus).toBe('NO_CHANGE');
+    });
+
+    test('firmware falls back to the inventory version, and site to its id, when stats and sites fail', async () => {
+      const unavailable = () => { throw Object.assign(new Error('503'), { response: { status: 503 } }); };
+      routeAxios({
+        [`${orgPath}/inventory`]: () => mistLive.inventory,
+        [`${orgPath}/sites`]: unavailable,
+        [`${orgPath}/stats/devices`]: unavailable,
+      });
+
+      const [, ex] = await live.listInventory();
+
+      expect(ex).toMatchObject({ firmwareVersion: '24.4R2.25', ipAddress: null, site: switchItem.site_id, lastSeen: null });
+    });
+
+    test('a switch config backup reports whether Mist configures it', async () => {
+      routeAxios({
+        [`${orgPath}/inventory`]: () => [switchItem],
+        [`/api/v1/sites/${switchItem.site_id}/devices/${switchItem.id}`]: () => mistLive.switchConfig,
+      });
+
+      const config = await live.getDeviceConfiguration(switchItem.serial);
+
+      expect(config).toMatchObject({ format: 'mist-config-json', cloudManaged: true });
+      expect(JSON.parse(config.text).mist_configured).toBe(true);
+    });
+
+    test('device status takes last-seen from the device stats', async () => {
+      routeAxios({
+        [`${orgPath}/inventory`]: () => [switchItem],
+        [`/api/v1/sites/${switchItem.site_id}/stats/devices/${switchItem.id}`]: () => mistLive.stats[0],
+      });
+
+      const status = await live.getDeviceStatus(switchItem.serial);
+
+      expect(status).toMatchObject({ status: 'offline', lastSeen: new Date(1791421861 * 1000) });
+    });
+
+    test('an org token with read access passes the test and says so', async () => {
+      routeAxios({ '/api/v1/self': () => mistLive.self });
+
+      const result = await live.testConnection();
+
+      expect(result).toMatchObject({ success: true, details: { orgId: mistLive.org.id, role: 'read' } });
+      expect(result.message).toMatch(/NetHelper \(read access\)/);
+    });
+
+    test('a token without privileges on the org explains what to fix', async () => {
+      routeAxios({ '/api/v1/self': () => mistLive.self });
+      const wrongOrg = new MistProvider({ ...live.integration, credentials: { apiToken: 'token', orgId: 'other-org' } });
+
+      const result = await wrongOrg.testConnection();
+
+      expect(result.success).toBe(false);
+      expect(result.details.actions.length).toBeGreaterThan(0);
+      expect(result.details.explanation).toMatch(/1 other org/);
+    });
+
+    test('a rejected token is a provider error with suggested actions', async () => {
+      routeAxios({ '/api/v1/self': () => { throw Object.assign(new Error('401'), { response: { status: 401, data: { detail: 'Unauthorized' } } }); } });
+
+      const result = await live.testConnection();
+
+      expect(result.success).toBe(false);
+      expect(result.message).toMatch(/rejected the API token/);
+      expect(result.details.actions[0]).toMatch(/token/);
+    });
   });
 
   test('a stats failure still returns the inventory', async () => {

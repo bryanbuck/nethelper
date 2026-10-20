@@ -1,0 +1,113 @@
+<nc:rpc-reply xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:junos="http://xml.juniper.net/junos/24.4R2.25/junos"  message-id="3">
+<lldp-local-info>
+<lldp-local-chassis-id>5c:5b:35:00:00:02</lldp-local-chassis-id>
+<lldp-local-chassis-id-type>Mac address</lldp-local-chassis-id-type>
+<lldp-local-system-name>JNEX-01</lldp-local-system-name>
+<lldp-local-system-description>Juniper Networks, Inc. ex4000-12mp Ethernet Switch, kernel JUNOS 24.4R2.25, Build date: 2025-09-20 09:45:49 UTC Copyright (c) 1996-2025 Juniper Networks, Inc.</lldp-local-system-description>
+<lldp-local-system-capabilities-supported>Bridge Router </lldp-local-system-capabilities-supported>
+<lldp-local-system-capabilities-enabled>Bridge Router </lldp-local-system-capabilities-enabled>
+<lldp-local-management-address-info>
+<lldp-local-management-address-interface-name>vme</lldp-local-management-address-interface-name>
+<lldp-local-management-address-subtype>802(6)</lldp-local-management-address-subtype>
+<lldp-local-management-address-address>5c:5b:35:00:00:03</lldp-local-management-address-address>
+<lldp-local-management-address-interface-number>35</lldp-local-management-address-interface-number>
+<lldp-local-management-address-interface-number-subtype>ifIndex(2)</lldp-local-management-address-interface-number-subtype>
+</lldp-local-management-address-info>
+<lldp-local-cloud-connect-info>
+<cc-state>111</cc-state>
+<cc-message>Agent connected to controller</cc-message>
+<cc-errno>0</cc-errno>
+</lldp-local-cloud-connect-info>
+<lldp-local-interface-info junos:style="brief">
+<lldp-local-interface-name>ge-0/0/10</lldp-local-interface-name>
+<lldp-parent-local-interface-name>-</lldp-parent-local-interface-name>
+<lldp-local-interface-id>526</lldp-local-interface-id>
+<lldp-local-interface-description>-</lldp-local-interface-description>
+<lldp-local-interface-status>Down</lldp-local-interface-status>
+</lldp-local-interface-info>
+<lldp-local-interface-info junos:style="brief">
+<lldp-local-interface-name>ge-0/0/11</lldp-local-interface-name>
+<lldp-parent-local-interface-name>-</lldp-parent-local-interface-name>
+<lldp-local-interface-id>527</lldp-local-interface-id>
+<lldp-local-interface-description>ge-0/0/11</lldp-local-interface-description>
+<lldp-local-interface-status>Up</lldp-local-interface-status>
+</lldp-local-interface-info>
+<lldp-local-interface-info junos:style="brief">
+<lldp-local-interface-name>ge-0/0/4</lldp-local-interface-name>
+<lldp-parent-local-interface-name>-</lldp-parent-local-interface-name>
+<lldp-local-interface-id>520</lldp-local-interface-id>
+<lldp-local-interface-description>-</lldp-local-interface-description>
+<lldp-local-interface-status>Down</lldp-local-interface-status>
+</lldp-local-interface-info>
+<lldp-local-interface-info junos:style="brief">
+<lldp-local-interface-name>ge-0/0/5</lldp-local-interface-name>
+<lldp-parent-local-interface-name>-</lldp-parent-local-interface-name>
+<lldp-local-interface-id>521</lldp-local-interface-id>
+<lldp-local-interface-description>-</lldp-local-interface-description>
+<lldp-local-interface-status>Down</lldp-local-interface-status>
+</lldp-local-interface-info>
+<lldp-local-interface-info junos:style="brief">
+<lldp-local-interface-name>ge-0/0/6</lldp-local-interface-name>
+<lldp-parent-local-interface-name>-</lldp-parent-local-interface-name>
+<lldp-local-interface-id>522</lldp-local-interface-id>
+<lldp-local-interface-description>-</lldp-local-interface-description>
+<lldp-local-interface-status>Down</lldp-local-interface-status>
+</lldp-local-interface-info>
+<lldp-local-interface-info junos:style="brief">
+<lldp-local-interface-name>ge-0/0/7</lldp-local-interface-name>
+<lldp-parent-local-interface-name>-</lldp-parent-local-interface-name>
+<lldp-local-interface-id>523</lldp-local-interface-id>
+<lldp-local-interface-description>-</lldp-local-interface-description>
+<lldp-local-interface-status>Down</lldp-local-interface-status>
+</lldp-local-interface-info>
+<lldp-local-interface-info junos:style="brief">
+<lldp-local-interface-name>ge-0/0/8</lldp-local-interface-name>
+<lldp-parent-local-interface-name>-</lldp-parent-local-interface-name>
+<lldp-local-interface-id>524</lldp-local-interface-id>
+<lldp-local-interface-description>-</lldp-local-interface-description>
+<lldp-local-interface-status>Down</lldp-local-interface-status>
+</lldp-local-interface-info>
+<lldp-local-interface-info junos:style="brief">
+<lldp-local-interface-name>ge-0/0/9</lldp-local-interface-name>
+<lldp-parent-local-interface-name>-</lldp-parent-local-interface-name>
+<lldp-local-interface-id>525</lldp-local-interface-id>
+<lldp-local-interface-description>-</lldp-local-interface-description>
+<lldp-local-interface-status>Down</lldp-local-interface-status>
+</lldp-local-interface-info>
+<lldp-local-interface-info junos:style="brief">
+<lldp-local-interface-name>me0</lldp-local-interface-name>
+<lldp-parent-local-interface-name>-</lldp-parent-local-interface-name>
+<lldp-local-interface-id>33</lldp-local-interface-id>
+<lldp-local-interface-description>-</lldp-local-interface-description>
+<lldp-local-interface-status>Down</lldp-local-interface-status>
+</lldp-local-interface-info>
+<lldp-local-interface-info junos:style="brief">
+<lldp-local-interface-name>mge-0/0/0</lldp-local-interface-name>
+<lldp-parent-local-interface-name>-</lldp-parent-local-interface-name>
+<lldp-local-interface-id>516</lldp-local-interface-id>
+<lldp-local-interface-description>mge-0/0/0</lldp-local-interface-description>
+<lldp-local-interface-status>Up</lldp-local-interface-status>
+</lldp-local-interface-info>
+<lldp-local-interface-info junos:style="brief">
+<lldp-local-interface-name>mge-0/0/1</lldp-local-interface-name>
+<lldp-parent-local-interface-name>-</lldp-parent-local-interface-name>
+<lldp-local-interface-id>517</lldp-local-interface-id>
+<lldp-local-interface-description>-</lldp-local-interface-description>
+<lldp-local-interface-status>Down</lldp-local-interface-status>
+</lldp-local-interface-info>
+<lldp-local-interface-info junos:style="brief">
+<lldp-local-interface-name>mge-0/0/2</lldp-local-interface-name>
+<lldp-parent-local-interface-name>-</lldp-parent-local-interface-name>
+<lldp-local-interface-id>518</lldp-local-interface-id>
+<lldp-local-interface-description>-</lldp-local-interface-description>
+<lldp-local-interface-status>Down</lldp-local-interface-status>
+</lldp-local-interface-info>
+<lldp-local-interface-info junos:style="brief">
+<lldp-local-interface-name>mge-0/0/3</lldp-local-interface-name>
+<lldp-parent-local-interface-name>-</lldp-parent-local-interface-name>
+<lldp-local-interface-id>519</lldp-local-interface-id>
+<lldp-local-interface-description>-</lldp-local-interface-description>
+<lldp-local-interface-status>Down</lldp-local-interface-status>
+</lldp-local-interface-info>
+</lldp-local-info>
+</nc:rpc-reply>

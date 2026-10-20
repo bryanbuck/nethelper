@@ -2,6 +2,7 @@ const ping = require('ping');
 const { getPrisma } = require('../config/database');
 const logger = require('../utils/logger');
 const alertService = require('./alert.service');
+const { effectiveStatus } = require('../utils/device-status');
 
 class PingMonitorService {
   constructor() {
@@ -94,6 +95,10 @@ class PingMonitorService {
           ipAddress: true,
           consecutiveFailures: true,
           pingStatus: true,
+          // The cloud's view, so a device it reports online reads as "unreachable from here"
+          managementMode: true,
+          cloudStatus: true,
+          cloudIntegration: { select: { name: true } },
         },
       });
 
@@ -120,7 +125,7 @@ class PingMonitorService {
           batch.map(async (device) => {
             try {
               const result = await this.pingDeviceWithRetries(device.ipAddress);
-              await this.updateDeviceStatus(device.id, device.name, result.alive, result.time, device.consecutiveFailures, device.pingStatus);
+              await this.updateDeviceStatus(device.id, device.name, result.alive, result.time, device.consecutiveFailures, device.pingStatus, device);
 
               if (result.alive) {
                 this.lastCheckStats.successful++;
@@ -155,8 +160,9 @@ class PingMonitorService {
    * @param {number|null} responseTime - Response time in ms
    * @param {number} currentFailures - Current consecutive failures count
    * @param {string|null} currentStatus - Current ping status
+   * @param {Object} [cloud] - { managementMode, cloudStatus, cloudIntegration: { name } }
    */
-  async updateDeviceStatus(deviceId, deviceName, alive, responseTime, currentFailures, currentStatus) {
+  async updateDeviceStatus(deviceId, deviceName, alive, responseTime, currentFailures, currentStatus, cloud = {}) {
     const prisma = getPrisma();
 
     try {
@@ -202,7 +208,7 @@ class PingMonitorService {
         logger.info(`Device ${deviceName} status changed: ${currentStatus || 'unknown'} -> ${newStatus}`);
 
         // Emit WebSocket event for real-time UI updates
-        this.emitStatusUpdate(deviceId, deviceName, newStatus, responseTime);
+        this.emitStatusUpdate(deviceId, deviceName, newStatus, responseTime, cloud);
 
         if (newStatus === 'online') alertService.clear('device.offline', { subjectKey: deviceId, deviceId });
       }
@@ -211,12 +217,18 @@ class PingMonitorService {
       // already offline when alerting started still gets an alert. Repeats
       // of an open one are no-ops.
       if (newStatus === 'offline') {
+        // Its cloud still hearing from it means the device is up and
+        // NetHelper can't reach it (no route, ICMP filtered): say so.
+        const cloudUp = effectiveStatus({ ...cloud, pingStatus: newStatus }) === 'warning';
+        const cloudName = cloud.cloudIntegration?.name || 'Its cloud';
         alertService.raise('device.offline', {
           subjectKey: deviceId,
           deviceId,
-          title: `${deviceName} is offline`,
-          message: `Stopped answering ping (${this.config.failureThreshold} or more missed checks in a row).`,
-          data: { consecutiveFailures: newConsecutiveFailures },
+          title: cloudUp ? `${deviceName} is not answering ping` : `${deviceName} is offline`,
+          message: cloudUp
+            ? `Stopped answering ping from NetHelper, but ${cloudName} reports it online. NetHelper probably has no route to it, or ICMP is filtered.`
+            : `Stopped answering ping (${this.config.failureThreshold} or more missed checks in a row).`,
+          data: { consecutiveFailures: newConsecutiveFailures, ...(cloudUp && { cloudStatus: 'online' }) },
         }, { bump: currentStatus !== 'offline' });
       }
     } catch (error) {
@@ -250,8 +262,9 @@ class PingMonitorService {
    * @param {string} deviceName - Device name
    * @param {string} status - New status
    * @param {number|null} responseTime - Response time
+   * @param {Object} [cloud] - { managementMode, cloudStatus }, for the displayed status
    */
-  emitStatusUpdate(deviceId, deviceName, status, responseTime) {
+  emitStatusUpdate(deviceId, deviceName, status, responseTime, cloud = {}) {
     try {
       // Lazy load socket to avoid circular dependency issues
       const { getIO } = require('../websocket/socket.handler');
@@ -261,7 +274,8 @@ class PingMonitorService {
         io.emit('device:status:update', {
           deviceId,
           deviceName,
-          status,
+          // What the device list shows (utils/device-status.js); pingStatus is the raw result.
+          status: effectiveStatus({ ...cloud, pingStatus: status }),
           pingStatus: status,
           pingResponseTime: responseTime,
           pingLastChecked: new Date(),

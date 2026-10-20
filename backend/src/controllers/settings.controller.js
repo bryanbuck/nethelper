@@ -311,6 +311,7 @@ class SettingsController {
             // ship a region list; the UI renders a picker instead of asking the
             // user to type a base URL.
             regions: provider.regions || null,
+            regionHint: provider.regionHint || null,
             implemented: provider.implemented,
           })),
         },

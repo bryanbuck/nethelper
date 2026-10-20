@@ -47,8 +47,8 @@ class CloudProviderFactory {
   /**
    * Provider managing a given device (via device.cloudIntegrationId).
    * Cloud-managed legacy rows without an integration reference fall back to
-   * the most recently updated active Aruba Central integration, then to the
-   * ARUBA_CENTRAL_* env vars — mirroring the old single-tenant behavior.
+   * the one active integration of the device vendor's cloud, then (Aruba
+   * only) to the ARUBA_CENTRAL_* env vars.
    * @param {Object} device - Device row
    * @returns {Promise<BaseCloudProvider>}
    */
@@ -69,13 +69,21 @@ class CloudProviderFactory {
       throw new Error(`Device "${device.name}" is not cloud-managed`);
     }
 
-    const fallback = await prisma.cloudIntegration.findFirst({
-      where: { provider: 'aruba_central', isActive: true },
-      orderBy: { updatedAt: 'desc' },
-    });
-    if (fallback) return this.instantiate(fallback);
+    // A legacy cloud row with no integration: use the vendor's own cloud, but
+    // only when exactly one integration of it is active. With several, picking
+    // one would be a guess (a Juniper switch must never go to Central).
+    const providers = Object.entries(CLOUD_PROVIDERS)
+      .filter(([, meta]) => meta.vendor === (device.vendor || 'aruba'))
+      .map(([key]) => key);
+    const candidates = providers.length
+      ? await prisma.cloudIntegration.findMany({ where: { provider: { in: providers }, isActive: true } })
+      : [];
+    if (candidates.length === 1) return this.instantiate(candidates[0]);
+    if (candidates.length > 1) {
+      throw new Error(`Device "${device.name}" has no cloud integration and ${candidates.length} could manage it. Sync devices to attribute it.`);
+    }
 
-    const envIntegration = this.envArubaIntegration();
+    const envIntegration = (device.vendor || 'aruba') === 'aruba' ? this.envArubaIntegration() : null;
     if (envIntegration) return this.instantiate(envIntegration);
 
     throw new Error(`No cloud integration available for device "${device.name}". Configure one in Settings.`);

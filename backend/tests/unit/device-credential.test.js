@@ -56,6 +56,11 @@ describe('usesDeviceCredential', () => {
     expect(usesDeviceCredential(cx({ vendor: 'cisco', platform: 'meraki', managementMode: 'direct' }))).toBe(false);
   });
 
+  test('a Mist-managed Junos switch does (NETCONF reads); a Mist AP does not', () => {
+    expect(usesDeviceCredential(cx({ vendor: 'juniper', platform: 'junos', model: 'EX4000-12MP', managementMode: 'cloud' }))).toBe(true);
+    expect(usesDeviceCredential(centralAp({ vendor: 'juniper', model: 'AP33' }))).toBe(false);
+  });
+
   test('direct SSH platforms do', () => {
     expect(usesDeviceCredential(cx({ platform: 'aos-s' }))).toBe(true);
     expect(usesDeviceCredential(cx({ vendor: 'juniper', platform: 'junos' }))).toBe(true);

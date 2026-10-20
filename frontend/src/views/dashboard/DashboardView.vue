@@ -264,7 +264,7 @@ const quickActions = computed(() => [
   {
     id: 'sync-devices',
     title: 'Sync All Devices',
-    description: 'Update device information from Aruba Central',
+    description: 'Update device information from every cloud integration',
     icon: 'mdi-sync',
     color: 'primary'
   },

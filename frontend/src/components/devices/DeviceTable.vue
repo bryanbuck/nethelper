@@ -279,8 +279,14 @@
               </v-chip>
             </template>
             <div class="text-caption">
+              <div v-if="unreachableFromHere(item)" class="mb-1">
+                {{ cloudPlaneName(item) }} reports it online, but it doesn't answer ping from NetHelper
+                (no route, or ICMP filtered).
+              </div>
               <div v-if="item.pingLastChecked">
-                <strong>Ping Status:</strong> {{ item.status }}<br>
+                <strong>Ping Status:</strong> {{ item.pingStatus || 'unknown' }}<br>
+                <strong v-if="item.managementMode === 'cloud'">Cloud Status:</strong>
+                <template v-if="item.managementMode === 'cloud'"> {{ item.cloudStatus }}<br></template>
                 <strong>Last Checked:</strong> {{ formatLastSeen(item.pingLastChecked) }}<br>
                 <span v-if="item.pingResponseTime">
                   <strong>Response Time:</strong> {{ item.pingResponseTime }}ms
@@ -572,6 +578,7 @@ import ConnectionStatusBadge from './ConnectionStatusBadge.vue'
 import DeviceMergeDialog from './DeviceMergeDialog.vue'
 import DeviceCredentialDialog from './DeviceCredentialDialog.vue'
 import { cloudProviderLabel, platformOptions } from '@/models/vendors'
+import { unreachableFromHere } from '@/models/Device'
 import { useSettingsStore } from '@/stores/settings'
 
 const router = useRouter()

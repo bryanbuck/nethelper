@@ -248,9 +248,10 @@ class ScopeBackupService {
 
   async getScopeBackups(filters = {}) {
     const prisma = getPrisma();
-    const { integrationId, scopeType, scopeId, status, limit = 50, offset = 0 } = filters;
+    const { integrationId, provider, scopeType, scopeId, status, limit = 50, offset = 0 } = filters;
     const where = {};
     if (integrationId) where.integrationId = integrationId;
+    if (provider) where.provider = provider;
     if (scopeType) where.scopeType = scopeType;
     if (scopeId) where.scopeId = scopeId;
     if (status) where.status = status;

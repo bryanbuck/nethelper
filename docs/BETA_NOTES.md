@@ -9,7 +9,7 @@ This is a **private, in-house beta**. Install it from [`deploy/README.md`](../de
 | Platform | How NetHelper reaches it | Inventory | Status | Config backup | Connection test |
 |---|---|---|---|---|---|
 | Aruba Central (cloud) | New Central API (GreenLake API client), per integration | ✅ | ✅ | ⛔ see below | ✅ |
-| Juniper Mist (cloud) | Mist API token, per org/region | ✅ | ✅ | ✅ switches/gateways (JSON snapshot); ⛔ APs | ✅ |
+| Juniper Mist (cloud) | Mist API token, per org/region | ✅ | ✅ | ✅ switches/gateways (JSON snapshot, plus the Junos config over NETCONF when the switch has an IP and a credential); ⛔ APs | ✅ |
 | AOS-CX switch (direct) | Device REST API | manual/discovery | ping | ✅ | ✅ |
 | AOS-S switch (direct) | SSH CLI | manual/discovery | ping | ✅ | ✅ |
 | Junos (direct) | NETCONF, falling back to SSH CLI | manual/discovery | ping | ✅ (`set` format) | ✅ |
@@ -18,9 +18,11 @@ Notes:
 
 - **New Central only.** Create the API client in HPE GreenLake and pick your cluster (e.g. US-West-4 → `us4.api.central.arubanetworks.com`). Classic Central API gateway apps (`apigw-*` hosts) don't work. Integrations saved before 2026-10-16 need their base URL re-picked and a GreenLake client ID/secret; the old Customer ID field is gone.
 - **Central config backup is not supported.** Central's classic configuration endpoints don't work on New Central tenants, so NetHelper reports "not supported" instead of faking it. An AOS-CX switch managed by Central is still backed up directly over its REST API, when it has an IP address and linked credentials.
-- **Mist is intent-based.** Its "backup" is the device's configuration object, stored as sorted JSON so diffs are meaningful. It isn't a CLI running-config. Mist configures APs through templates, so there's no per-AP config to back up, and NetHelper says so.
-- **Junos NETCONF is off by default.** To use it, enable it with `set system services netconf ssh`. If you don't, NetHelper uses the SSH CLI automatically.
-- **Status** for directly managed devices comes from ICMP ping. For cloud devices it comes from the provider.
+- **Mist is intent-based.** Its "backup" is the device's configuration object, stored as sorted JSON so diffs are meaningful. It isn't a CLI running-config. Mist configures APs through templates, so there's no per-AP config to back up, and NetHelper says so. Link a device credential to a Mist-managed EX switch and its backup also holds the Junos `set` config, read over NETCONF (never SSH: Mist owns the switch). If NETCONF fails, the backup still succeeds from Mist and says why.
+- **A Mist org token with read access is enough.** NetHelper never writes to Mist.
+- **Junos NETCONF is off by default.** To use it, enable it with `set system services netconf ssh`. If you don't, NetHelper uses the SSH CLI automatically. (Mist enables it on switches it manages.)
+- **The Junos account must be able to read the configuration.** A login class without `view-configuration` passes the connection test, but a config read returns `/* ACCESS-DENIED */` for every section. NetHelper treats that as a failed read: a direct switch's backup fails and names the denied sections, and a Mist-managed switch is backed up from Mist alone, with a warning on the backup. A good read-only class is `set system login class nethelper-ro permissions [ view view-configuration ]` (on a Mist-managed switch, add it through Mist's Additional CLI Commands). Even then Junos withholds a few hierarchies (on an EX4000: scripts, event-options, secret, extension-service); the backup keeps the rest and its warning names what's missing.
+- **Status** comes from ICMP ping first, then from the device's cloud. A cloud-managed device that its cloud reports online but that doesn't answer NetHelper's ping shows **warning** (hover the status for why): it's up, but NetHelper has no route to it or ICMP is filtered. Its ping alert says the same ("is not answering ping").
 - **Live port/PoE state (AOS-CX only).** The device page's **Live** tab shows each port's link, speed, PoE status and draw, throughput, and CPU/memory while it's open. Turn on **Always monitor** to record link and PoE changes as events even when nobody is watching. The switch pushes changes, so nothing needs configuring on it, and it works on Central-managed switches too (read-only, using the device's linked credentials and IP). Other platforms show "not available yet". Use a dedicated switch account for NetHelper: AOS-CX allows 6 REST sessions per user, and each monitored switch keeps one open.
 
 ### How much has been tested on real equipment
@@ -29,8 +31,8 @@ Notes:
 |---|---|
 | AOS-CX REST (backup, Central-management detection, live state) | Run against a Central-managed 6200F on ML.10.16 (2026-10-15), including PoE and link changes. Backups over REST needed a fix found there: the switch refuses HTTP Basic auth. |
 | Central inventory sync | Inventory read verified against a live New Central tenant (2026-10-16, 14 devices). That first contact found the field mapping wrong (serial, status, last-seen) and it was fixed; a full sync writing to the database has not yet been run live |
-| Mist | Only against a mock built from Mist's API documentation |
-| Junos NETCONF / SSH | Only against a mock SSH/NETCONF server |
+| Mist | Run against a live org (2026-10-19, an AP33 and an EX4000-12MP), powered off and then on: inventory sync (status flips to online, IP/firmware/last seen/config status filled, the cloud-offline alert auto-resolves), org and site scope backups (byte-stable across runs), a switch config-object backup, and the connection test reporting Mist's view when the switch can't be reached. First contact fixed the field mapping (site names, last seen, config status) and found a presigned S3 URL in WLANs that changed every read (now stripped). NETCONF to the Mist-managed EX also ran (same day): connection test, firmware/system polls, and LLDP neighbors (the AP and the core switch) all worked first time |
+| Junos NETCONF / SSH | NETCONF run against an EX4000-12MP on 24.4R2.25 (Mist-managed, 2026-10-19): test, polls and LLDP worked; the config read showed that an account without `view-configuration` gets placeholders instead of an error (now detected, see below), and that the chassis MAC is in `fpc-mac-base` (fixed). With `view-configuration` added, a full backup ran (Junos `set` config + Mist's object, byte-stable on a repeat run), with four hierarchies Junos still withholds named in the backup's warning. The SSH CLI fallback hasn't run on hardware yet |
 | AOS-S SSH | No recorded hardware run |
 | Docker Compose / bare-metal packaging | Not yet run on a clean host |
 

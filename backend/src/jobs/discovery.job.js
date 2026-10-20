@@ -10,7 +10,7 @@ module.exports = (queue) => {
     return {
       success: true,
       totalHosts: scan.totalHosts,
-      arubaHosts: scan.arubaHosts,
+      vendorHosts: scan.vendorHosts,
     };
   });
 };

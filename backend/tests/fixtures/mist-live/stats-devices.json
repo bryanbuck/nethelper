@@ -1,0 +1,253 @@
+[
+  {
+    "memory_stat": {
+      "usage": 25
+    },
+    "version": "24.4R2.25",
+    "ip": "172.16.10.102",
+    "uptime": 34138,
+    "last_seen": 1791421861,
+    "module_stat": [
+      {
+        "locating": false,
+        "optics_cpld_version": "",
+        "power_cpld_version": "",
+        "memory_stat": {
+          "usage": 25
+        },
+        "cpld_version": "1.26",
+        "bcm_mac_pcie_version": "",
+        "vc_state": "present",
+        "boot_partition": "junos",
+        "poe": {
+          "max_power": 240,
+          "total_power_allocated": 19.5,
+          "power_draw": 6.6,
+          "status": "BT_MODE",
+          "power_reserved": 23.2
+        },
+        "backup_version": "",
+        "vc_mode": "HiGiG",
+        "tpmversion": "",
+        "type": "fpc",
+        "mac": "5c5b35000002",
+        "_idx": 0,
+        "temperatures": [
+          {
+            "name": "Thermal board Sensor 1",
+            "status": "ok",
+            "celsius": 46
+          },
+          {
+            "name": "Thermal board Sensor 2",
+            "status": "ok",
+            "celsius": 45
+          },
+          {
+            "name": "Thermal board Sensor 3",
+            "status": "ok",
+            "celsius": 37
+          },
+          {
+            "name": "PFE Die Sensor",
+            "status": "ok",
+            "celsius": 55
+          },
+          {
+            "name": "PoE Controller Sensor 1",
+            "status": "ok",
+            "celsius": 36
+          },
+          {
+            "name": "PoE Controller Sensor 2",
+            "status": "ok",
+            "celsius": 38
+          },
+          {
+            "name": "PoE Controller Sensor 3",
+            "status": "ok",
+            "celsius": 36
+          }
+        ],
+        "psus": [
+          {
+            "name": "Power Supply 0",
+            "status": "ok",
+            "description": "JPSU-305W-AC"
+          }
+        ],
+        "humidity": [],
+        "fiber_port_cpldversion": "",
+        "model": "EX4000-12MP",
+        "private_mac": "",
+        "pics": [
+          {
+            "port_groups": [
+              {
+                "count": 4,
+                "type": "GE"
+              },
+              {
+                "count": 8,
+                "type": "GE"
+              }
+            ],
+            "index": 0,
+            "model_number": "EX4000-12MP"
+          },
+          {
+            "port_groups": [
+              {
+                "count": 4,
+                "type": "SFP/SFP+"
+              }
+            ],
+            "index": 1,
+            "model_number": "EX4000-12MP"
+          }
+        ],
+        "nvme_disk_version": "",
+        "re_fpga_version": "",
+        "recovery_version": "24.4R2.25",
+        "fpga_version": "",
+        "pending_version": "",
+        "uboot_version": "2.14",
+        "tmc_fpga_version": "",
+        "cpu_stat": {
+          "interrupt": 0,
+          "idle": 95,
+          "user": 2,
+          "system": 3,
+          "load_avg": [
+            0.77,
+            0.54,
+            0.46
+          ]
+        },
+        "bios_version": "",
+        "fan_cpldversion": "",
+        "version": "24.4R2.25",
+        "fpc_idx": 0,
+        "fans": [],
+        "uptime": 34140,
+        "cpu_cpldversion": "",
+        "vc_links": [
+          {
+            "port_id": "vcp-0/1/1"
+          },
+          {
+            "port_id": "vcp-0/1/0"
+          }
+        ],
+        "serial": "SN000002",
+        "poe_version": "6.0.0.12.0 (type4)",
+        "vc_role": "master",
+        "part_number": ""
+      }
+    ],
+    "cpu_stat": {
+      "system": 3,
+      "idle": 95,
+      "interrupt": 0,
+      "user": 2,
+      "load_avg": [
+        0.77,
+        0.54,
+        0.46
+      ]
+    },
+    "_ttl": 14521642,
+    "_id": "5c5b35000002",
+    "expiring_certs": {},
+    "status": "disconnected",
+    "fwupdate": {},
+    "auto_upgrade_stat": {},
+    "notes": "",
+    "vars": {},
+    "id": "00000000-0000-0000-1000-5c5b35000002",
+    "name": "JNEX-01",
+    "site_id": "00000000-0000-4000-8000-000000000005",
+    "org_id": "00000000-0000-4000-8000-000000000001",
+    "created_time": 1788548704,
+    "modified_time": 1788556536,
+    "map_id": null,
+    "mac": "5c5b35000002",
+    "serial": "SN000002",
+    "model": "EX4000-12MP",
+    "hw_rev": "B",
+    "type": "switch",
+    "tag_uuid": "00000000-0000-4000-8000-000000000001",
+    "tag_id": 1432276,
+    "evpntopo_id": null,
+    "deviceprofile_id": null
+  },
+  {
+    "cpu2_stat": null,
+    "memory_stat": null,
+    "module2_stat": null,
+    "memory2_stat": null,
+    "version": "0.12.27458",
+    "ip": "172.16.10.100",
+    "uptime": 34016,
+    "last_seen": 1791421831,
+    "module_stat": null,
+    "cpu_stat": null,
+    "_ttl": 14521612,
+    "_id": "5c5b35000001",
+    "ble_stat": {
+      "power": 8,
+      "beacon_enabled": true,
+      "beacon_rate": 4,
+      "uuid": "00000000-0000-4000-8000-000000000001",
+      "major": 349,
+      "minors": [
+        44384,
+        44385,
+        44386,
+        44387,
+        44388,
+        44389,
+        44390,
+        44391,
+        44392,
+        -1
+      ],
+      "ibeacon_enabled": false,
+      "ibeacon_uuid": "00000000-0000-4000-8000-000000000001",
+      "ibeacon_major": 349,
+      "ibeacon_minor": 44384,
+      "ibeacon_freq_msec": 1000,
+      "eddystone_uid_enabled": false,
+      "eddystone_uid_freq_msec": 1000,
+      "eddystone_uid_namespace": "[anonymised]",
+      "eddystone_uid_instance": "[anonymised]",
+      "eddystone_url_enabled": false,
+      "eddystone_url_freq_msec": 1000,
+      "eddystone_url_url": ""
+    },
+    "expiring_certs": {},
+    "status": "disconnected",
+    "auto_upgrade_stat": {},
+    "switch_redundancy": {
+      "num_redundant_aps": 0
+    },
+    "notes": "",
+    "radio_config": {},
+    "id": "00000000-0000-0000-1000-5c5b35000001",
+    "name": "JNAP-01",
+    "site_id": "00000000-0000-4000-8000-000000000005",
+    "org_id": "00000000-0000-4000-8000-000000000001",
+    "created_time": 1788548692,
+    "modified_time": 1788556473,
+    "map_id": null,
+    "mac": "5c5b35000001",
+    "serial": "SN000001",
+    "model": "AP33",
+    "hw_rev": "CC",
+    "type": "ap",
+    "tag_uuid": "00000000-0000-4000-8000-000000000001",
+    "tag_id": 1432278,
+    "evpntopo_id": null,
+    "deviceprofile_id": null
+  }
+]

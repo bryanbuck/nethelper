@@ -1,0 +1,10 @@
+{
+  "name": "Org 1",
+  "id": "00000000-0000-4000-8000-000000000001",
+  "msp_id": null,
+  "created_time": 1767817078,
+  "modified_time": 1769712268,
+  "allow_mist": true,
+  "session_expiry": 1440,
+  "alarmtemplate_id": "00000000-0000-4000-8000-000000000002"
+}

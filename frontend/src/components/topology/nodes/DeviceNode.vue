@@ -34,7 +34,7 @@
 <script setup>
 import { computed } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
-import { DeviceTypeInfo, DeviceStatusInfo } from '@/models/Device'
+import { DeviceTypeInfo, DeviceStatusInfo, effectiveStatus } from '@/models/Device'
 import { VendorInfo } from '@/models/vendors'
 
 const props = defineProps({
@@ -47,8 +47,8 @@ const vendorInfo = computed(() => VendorInfo[props.data.vendor] || VendorInfo.ot
 
 // Ping status first (reachability), then the cloud plane's view.
 const statusInfo = computed(() => {
-  const status = props.data.pingStatus || (props.data.managementMode === 'cloud' ? props.data.cloudStatus : null)
-  return DeviceStatusInfo[status] || { label: 'Status unknown', color: 'grey' }
+  const known = props.data.pingStatus || (props.data.managementMode === 'cloud' && props.data.cloudStatus)
+  return (known && DeviceStatusInfo[effectiveStatus(props.data)]) || { label: 'Status unknown', color: 'grey' }
 })
 
 const hasNeighborData = computed(() => props.data.topology?.status === 'ok')

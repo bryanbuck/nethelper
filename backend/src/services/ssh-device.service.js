@@ -5,6 +5,7 @@ const aosSTopology = require('./topology/parsers/aos-s');
 const junosTopology = require('./topology/parsers/junos');
 const iosTopology = require('./topology/parsers/ios');
 const { normalizePortName } = require('./topology/neighbor');
+const { assertJunosConfigReadable } = require('../utils/config-format');
 
 const logger = debugLog.createLogger(Services.DEVICE);
 
@@ -301,6 +302,7 @@ class SshDeviceService {
     if (!config || config.length === 0) {
       throw new Error('SSH returned an empty running configuration');
     }
+    if (profile === PLATFORM_PROFILES.junos) assertJunosConfigReadable(config);
     return config;
   }
 

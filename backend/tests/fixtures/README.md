@@ -6,14 +6,41 @@ anonymised). It replaced a spec-derived fixture that turned out to be wrong:
 the live API sends `serialNumber`, `status` `ONLINE`/`OFFLINE`, `lastSeenAt`
 (ISO, null while online) and `uptimeInMillis`, and rejects filters on `serial`.
 
-`mist-*.json` follow the documented response shapes of the Mist org inventory
-and device-stats endpoints. They were written from the API specs, not captured
-from a live tenant. When real captures are available (phase 7 of the beta
-plan), replace them with redacted recordings. That is where response-shape
-surprises will show up.
+`mist-live/` holds **live** captures from a Mist org (2026-10-19, `api.ac2.mist.com`),
+anonymised by `scripts/probe-cloud.js` (serials, MACs, ids, org name, claim
+codes, public IPs, locations; secrets were already fingerprinted). The org has
+one site, an AP33 and an EX4000-12MP, both powered off, so the stats show the
+last-known state (`status: disconnected`, stale `ip`/`uptime`). What first
+contact taught: inventory has `connected` and `version` but no last-seen time
+(stats have `last_seen`); `config_status` only comes back when `fields` asks
+for it; an org token's `/self` has a `name`, not an email; switches carry
+`mist_configured` on their device object; WLANs carry a presigned S3
+`portal_template_url` that changes on every read. `stats-devices-allfields.json`
+(`fields=*`) keeps the AP's `lldp_stat` and the switch's LLDP `clients` for the
+cloud-neighbor work. The `*-online.json` files are the same org minutes after
+both devices were powered on: `inventory-online.json` (`connected: true`),
+`stats-devices-allfields-online.json` (`status: connected`, fresh `last_seen`),
+`stats-ports-search-online.json` (`/stats/ports/search`: per-port state, with
+`neighbor_mac`/`neighbor_system_name`/`neighbor_port_desc` from LLDP) and
+`device-events-online.json` (`/devices/events/search`: `SW_RESTARTED`,
+`SW_CONNECTED`, `AP_RESTARTED` with `reason: power_cycle`, ...), the inputs for
+cloud neighbors and cloud events.
 
-`mist-scope.json` is spec-derived too: the org/site objects behind
-`MistProvider.getScopeConfiguration()` (scope backups).
+`junos-live/` holds **real** NETCONF replies from the same EX4000-12MP (Junos
+24.4R2.25, Mist-managed, 2026-10-19), with MACs, serials and CLEI codes
+anonymised: `<get-software-information/>`, `<get-lldp-neighbors-information/>`
+(brief style: the far end's port arrives as `lldp-remote-port-description`
+only), `<get-lldp-local-info/>`, `<get-chassis-inventory/>`,
+`<get-chassis-mac-addresses/>` (the base MAC is `fpc-mac-base`, not the spec's
+`public-base-address`) and a committed set-format config read by an account
+without `view-configuration`, which Junos answers with `/* ACCESS-DENIED */`
+placeholders rather than an error. `tests/unit/junos-live.test.js` runs
+`JunosAPI` over them.
+
+`mist-inventory.json`, `mist-stats.json` and `mist-scope.json` are older
+spec-derived fixtures, kept for cases the live org doesn't have (a connected
+switch, an unassigned gateway, several sites). Their field names were checked
+against the live captures.
 
 `central-scope.json` follows **live** New Central `network-config/v1alpha1`
 responses (captured 2026-10-16, values anonymised). `scopeMapsText` is kept as

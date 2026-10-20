@@ -227,9 +227,10 @@ class WebSocketService {
     try {
       const { deviceId, status, pingStatus, pingResponseTime, pingLastChecked } = data
 
-      // Use local update (no API call) to avoid unnecessary requests
+      // Use local update (no API call) to avoid unnecessary requests.
+      // `status` is the displayed one (it accounts for the cloud's view).
       this.stores.devices.updateDeviceLocally(deviceId, {
-        status: pingStatus || status,
+        status: status || pingStatus,
         pingStatus,
         pingResponseTime,
         pingLastChecked
@@ -323,18 +324,18 @@ class WebSocketService {
 
   /**
    * Handle discovery scan completed events
-   * @param {Object} data - { scanId, totalHosts, arubaHosts }
+   * @param {Object} data - { scanId, totalHosts, vendorHosts }
    */
   handleDiscoveryCompleted(data) {
     console.log('Discovery completed:', data)
 
     try {
-      const { totalHosts, arubaHosts } = data
+      const { totalHosts, vendorHosts } = data
 
       this.stores.discovery.handleScanCompleted(data)
 
       this.stores.notifications.showSuccess(
-        `Found ${totalHosts} host(s), ${arubaHosts} Aruba device(s)`,
+        `Found ${totalHosts} host(s), ${vendorHosts} from a known vendor`,
         'Discovery Scan Complete'
       )
     } catch (error) {
@@ -361,7 +362,7 @@ class WebSocketService {
     }
   }
 
-  /** What a backup event is about: a device, or a cloud scope (Mist org/site). */
+  /** What a backup event is about: a device, or a cloud scope (a Mist org/site, a Central scope). */
   backupSubject(data) {
     return data.scope ? `${data.scopeType} "${data.scopeName}"` : `"${data.deviceName}"`
   }
@@ -374,14 +375,16 @@ class WebSocketService {
     console.log('Backup completed:', data)
 
     try {
-      const { hasChanges } = data
+      const { hasChanges, warning } = data
 
       this.stores.backups.applyBackupEvent(data)
 
-      this.stores.notifications.showSuccess(
-        `Configuration backup for ${this.backupSubject(data)} completed${hasChanges ? ' (configuration changed)' : ''}`,
-        'Backup Complete'
-      )
+      const message = `Configuration backup for ${this.backupSubject(data)} completed${hasChanges ? ' (configuration changed)' : ''}`
+      if (warning) {
+        this.stores.notifications.showWarning(`${message}. ${warning}`, 'Backup Incomplete')
+      } else {
+        this.stores.notifications.showSuccess(message, 'Backup Complete')
+      }
     } catch (error) {
       console.error('Error handling backup completed:', error)
     }

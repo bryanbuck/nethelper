@@ -1,0 +1,20 @@
+<nc:rpc-reply xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:junos="http://xml.juniper.net/junos/24.4R2.25/junos"  message-id="2">
+<lldp-neighbors-information junos:style="brief">
+<lldp-neighbor-information>
+<lldp-local-port-id>mge-0/0/0</lldp-local-port-id>
+<lldp-local-parent-interface-name>-</lldp-local-parent-interface-name>
+<lldp-remote-chassis-id-subtype>Mac address</lldp-remote-chassis-id-subtype>
+<lldp-remote-chassis-id>5c:5b:35:00:00:01</lldp-remote-chassis-id>
+<lldp-remote-port-description>ETH0</lldp-remote-port-description>
+<lldp-remote-system-name>JNAP-01</lldp-remote-system-name>
+</lldp-neighbor-information>
+<lldp-neighbor-information>
+<lldp-local-port-id>ge-0/0/11</lldp-local-port-id>
+<lldp-local-parent-interface-name>-</lldp-local-parent-interface-name>
+<lldp-remote-chassis-id-subtype>Mac address</lldp-remote-chassis-id-subtype>
+<lldp-remote-chassis-id>02:00:00:00:00:10</lldp-remote-chassis-id>
+<lldp-remote-port-description>5</lldp-remote-port-description>
+<lldp-remote-system-name>Lab-Core</lldp-remote-system-name>
+</lldp-neighbor-information>
+</lldp-neighbors-information>
+</nc:rpc-reply>

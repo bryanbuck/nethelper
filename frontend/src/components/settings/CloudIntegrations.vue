@@ -103,6 +103,9 @@
             <v-btn size="small" variant="text" :loading="syncingId === integration.id" @click="syncIntegration(integration)">
               Sync devices
             </v-btn>
+            <v-btn size="small" variant="text" :loading="scopeBackupId === integration.id" @click="backUpScopes(integration)">
+              Back up scopes
+            </v-btn>
             <v-spacer />
             <v-btn size="small" variant="text" icon="mdi-pencil" @click="openEdit(integration)" />
             <v-btn size="small" variant="text" icon="mdi-delete" color="error" @click="confirmDelete(integration)" />
@@ -217,10 +220,12 @@ import { ref, computed, reactive, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSettingsStore } from '@/stores/settings'
 import { useDevicesStore } from '@/stores/devices'
+import { useBackupsStore } from '@/stores/backups'
 import { CloudProviderInfo } from '@/models/vendors'
 
 const settingsStore = useSettingsStore()
 const devicesStore = useDevicesStore()
+const backupsStore = useBackupsStore()
 const { cloudIntegrations: integrations, cloudProviders, loading, error } = storeToRefs(settingsStore)
 
 const dialog = ref(false)
@@ -231,6 +236,7 @@ const saving = ref(false)
 const deleting = ref(false)
 const testingId = ref(null)
 const syncingId = ref(null)
+const scopeBackupId = ref(null)
 const revealed = reactive({})
 // Latest test result per integration id (this session only; the persisted
 // lastTestStatus is the summary).
@@ -267,8 +273,12 @@ const providerLabel = (id) =>
 
 const providerColor = (id) => CloudProviderInfo[id]?.color || 'grey'
 
-// Key facts of a failed call, in the order an operator reads them.
+// Key facts of a test, in the order an operator reads them: who the
+// credential authenticated as on success, the failed call otherwise.
 const detailRows = (details) => [
+  { label: 'Account', value: details.email },
+  { label: 'Org ID', value: details.orgId },
+  { label: 'Access', value: details.role },
   { label: 'Request', value: [details.method, details.endpoint].filter(Boolean).join(' ') },
   { label: 'HTTP status', value: details.statusCode },
   { label: 'Provider error', value: details.providerError },
@@ -370,6 +380,19 @@ const testIntegration = async (integration) => {
     notify(err.message || 'Test failed', 'error')
   } finally {
     testingId.value = null
+  }
+}
+
+// The integration's org/site (Mist) or scope (Central) configuration.
+const backUpScopes = async (integration) => {
+  scopeBackupId.value = integration.id
+  try {
+    await backupsStore.runScopeBackup(integration.id)
+    notify(`Scope backup started for ${integration.name}`)
+  } catch (err) {
+    notify(err.userMessage || err.message || 'Scope backup failed', 'error')
+  } finally {
+    scopeBackupId.value = null
   }
 }
 

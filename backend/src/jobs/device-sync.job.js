@@ -31,9 +31,9 @@ async function processDeviceSync(job) {
     emit('device:sync:completed', { integrationId, ...result });
     return result;
   } catch (error) {
-    // Check if this is an enhanced Aruba error
-    if (error.isArubaError && error.actions) {
-      logger.error('Device sync failed - Aruba Central error', {
+    // A cloud provider's error carries suggested actions for the user.
+    if (error.isProviderError && error.actions) {
+      logger.error('Device sync failed - cloud provider error', {
         jobId: job.id,
         errorType: error.type,
         userMessage: error.message,

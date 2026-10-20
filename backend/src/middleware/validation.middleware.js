@@ -6,12 +6,18 @@ const DEVICE_TYPES = ['access_point', 'switch', 'gateway', 'controller', 'other'
 const VENDOR_IDS = Object.keys(VENDORS);
 const PLATFORM_IDS = Object.keys(PLATFORMS);
 
+// Separated (aa:bb:.., aa-bb-.., aabb.ccdd.eeff) or bare hex: Mist reports
+// MACs as bare hex, and the edit form sends them back unchanged.
+const MAC_PATTERN = /^(?:[0-9a-f]{2}([:-])(?:[0-9a-f]{2}\1){4}[0-9a-f]{2}|[0-9a-f]{4}\.[0-9a-f]{4}\.[0-9a-f]{4}|[0-9a-f]{12})$/i;
+const isMac = (value) => typeof value === 'string' && MAC_PATTERN.test(value);
+
 // Handle validation errors
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({
       success: false,
+      error: errors.array().map((e) => e.msg).join('; '),
       errors: errors.array(),
     });
   }
@@ -55,7 +61,7 @@ const validateDevice = {
     body('ipAddress').trim().isIP().withMessage('IP address is required and must be valid'),
     body('serial').optional({ values: 'null' }).trim(),
     body('model').optional().trim(),
-    body('macAddress').optional().isMACAddress().withMessage('Invalid MAC address'),
+    body('macAddress').optional({ values: 'falsy' }).custom(isMac).withMessage('Invalid MAC address'),
     body('location').optional().trim(),
     body('managementMode').optional().isIn(['cloud', 'direct']).withMessage('Invalid management mode'),
     body('cloudIntegrationId').optional({ nullable: true }).isUUID().withMessage('Invalid cloud integration ID'),
@@ -71,7 +77,7 @@ const validateDevice = {
     body('platform').optional({ nullable: true }).isIn(PLATFORM_IDS).withMessage('Invalid platform'),
     body('model').optional().trim(),
     body('ipAddress').optional().isIP(),
-    body('macAddress').optional().isMACAddress(),
+    body('macAddress').optional({ values: 'falsy' }).custom(isMac).withMessage('Invalid MAC address'),
     body('location').optional().trim(),
     body('status').optional().isIn(['online', 'offline', 'warning', 'maintenance']),
     body('managementMode').optional().isIn(['cloud', 'direct']).withMessage('Invalid management mode'),

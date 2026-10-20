@@ -1,0 +1,268 @@
+<nc:rpc-reply xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:junos="http://xml.juniper.net/junos/24.4R2.25/junos"  message-id="1">
+<multi-routing-engine-results>
+
+<multi-routing-engine-item>
+
+<re-name>fpc0</re-name>
+
+<software-information>
+<host-name>JNEX-01</host-name>
+<product-model>ex4000-12mp</product-model>
+<product-name>ex4000-12mp</product-name>
+<os-name>junos-ex</os-name>
+<junos-version>24.4R2.25</junos-version>
+<package-information>
+<name>jma</name>
+<package-name>jma-junos-armv8-64-v1.0.3059-8</package-name>
+<comment>JUNOS Mist Agent [v1.0.3059-8]</comment>
+</package-information>
+<package-information>
+<name>os-kernel</name>
+<package-name>os-kernel-prd-arm-64-20250918.f1352d2_builder_bsd15_244</package-name>
+<comment>JUNOS OS Kernel 64-bit  [20250918.f1352d2_builder_bsd15_244]</comment>
+</package-information>
+<package-information>
+<name>junos-platform-platform</name>
+<package-name>junos-platform-ex-arm-32-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS ex platform support [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>junos-runtime-platform</name>
+<package-name>junos-runtime-ex-arm-32-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS ex runtime [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>junos-modules</name>
+<package-name>junos-modules-arm-64-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS modules [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>os-libs</name>
+<package-name>os-libs-15-arm-64-20250918.f1352d2_builder_bsd15_244</package-name>
+<comment>JUNOS OS libs [20250918.f1352d2_builder_bsd15_244]</comment>
+</package-information>
+<package-information>
+<name>os-pkgrs</name>
+<package-name>os-pkgrs-arm-64-20250918.f1352d2_builder_bsd15_244</package-name>
+<comment>JUNOS OS pkgrs [20250918.f1352d2_builder_bsd15_244]</comment>
+</package-information>
+<package-information>
+<name>os-libs-compat32</name>
+<package-name>os-libs-compat32-15-arm-64-20250918.f1352d2_builder_bsd15_244</package-name>
+<comment>JUNOS OS libs compat32 [20250918.f1352d2_builder_bsd15_244]</comment>
+</package-information>
+<package-information>
+<name>junos-modules-ex</name>
+<package-name>junos-modules-ex-arm-64-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS ex modules [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>os-runtime</name>
+<package-name>os-runtime-arm-64-20250918.f1352d2_builder_bsd15_244</package-name>
+<comment>JUNOS OS runtime [20250918.f1352d2_builder_bsd15_244]</comment>
+</package-information>
+<package-information>
+<name>os-compat32</name>
+<package-name>os-compat32-arm-64-20250918.f1352d2_builder_bsd15_244</package-name>
+<comment>JUNOS OS 32-bit compatibility [20250918.f1352d2_builder_bsd15_244]</comment>
+</package-information>
+<package-information>
+<name>netstack</name>
+<package-name>junos-net-prd-arm-64-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS network stack and utilities [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>zoneinfo</name>
+<package-name>os-zoneinfo-20250918.f1352d2_builder_bsd15_244</package-name>
+<comment>JUNOS OS time zone information [20250918.f1352d2_builder_bsd15_244]</comment>
+</package-information>
+<package-information>
+<name>os-efi</name>
+<package-name>os-efi-arm-64-20250918.f1352d2_builder_bsd15_244</package-name>
+<comment>JUNOS OS EFI runtime [20250918.f1352d2_builder_bsd15_244]</comment>
+</package-information>
+<package-information>
+<name>os-crypto</name>
+<package-name>os-crypto-arm-64-20250918.f1352d2_builder_bsd15_244</package-name>
+<comment>JUNOS OS crypto [20250918.f1352d2_builder_bsd15_244]</comment>
+</package-information>
+<package-information>
+<name>os-boot-junos</name>
+<package-name>os-boot-junos-efi-arm-64-20250918.f1352d2_builder_bsd15_244</package-name>
+<comment>JUNOS OS boot files [20250918.f1352d2_builder_bsd15_244]</comment>
+</package-information>
+<package-information>
+<name>os-boot-efi</name>
+<package-name>os-boot-efi-arm-64-20250918.f1352d2_builder_bsd15_244</package-name>
+<comment>JUNOS OS EFI boot files [20250918.f1352d2_builder_bsd15_244]</comment>
+</package-information>
+<package-information>
+<name>junos-libs</name>
+<package-name>junos-libs-arm-64-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS libs [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>jail-runtime</name>
+<package-name>jail-runtime-arm-32-20250918.f1352d2_builder_bsd15_244</package-name>
+<comment>JUNOS jail runtime [20250918.f1352d2_builder_bsd15_244]</comment>
+</package-information>
+<package-information>
+<name>py-extensions</name>
+<package-name>py-extensions-arm-32-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS py extensions [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>py-base</name>
+<package-name>py-base-arm-32-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS py base [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>jsdn</name>
+<package-name>jsdn-arm-32-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS SDN Software Suite [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>junos-libs-platform</name>
+<package-name>junos-libs-ex-arm-32-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS ex libs [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>platform-config</name>
+<package-name>platform-config-ex-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS early ex config [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>os-package</name>
+<package-name>os-package-20250625.193841_builder_main</package-name>
+<comment>JUNOS OS package [20250625.193841_builder_main]</comment>
+</package-information>
+<package-information>
+<name>junos-net-platform</name>
+<package-name>junos-net-dcp-prd-arm-64-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS dcp network modules [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>os-modules-net</name>
+<package-name>os-modules-net-arm-64-20250918.f1352d2_builder_bsd15_244</package-name>
+<comment>JUNOS OS network modules [20250918.f1352d2_builder_bsd15_244]</comment>
+</package-information>
+<package-information>
+<name>junos-libs-compat32</name>
+<package-name>junos-libs-compat32-arm-64-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS libs compat32 [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>junos-libs-compat32-platform</name>
+<package-name>junos-libs-compat32-ex-arm-64-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS ex libs compat32 [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>junos-daemons</name>
+<package-name>junos-daemons-arm-64-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS daemons [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>junos-runtime</name>
+<package-name>junos-runtime-arm-32-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS runtime [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>junos-routing-scripts</name>
+<package-name>junos-routing-scripts-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS python routing scripts for consistency check in RIB/FIB/PFE [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>junos-schedtrace</name>
+<package-name>junos-schedtrace-arm-64-20250920.074808_builder_junos_244_r2</package-name>
+<comment>Junos scheduler tracing [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>junos-support</name>
+<package-name>junos-support-arm-64-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS support scripts [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>junos-sysmond-lite</name>
+<package-name>junos-sysmond-lite-arm-64-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS lite sysmond [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>ex-pfe-logging</name>
+<package-name>ex-pfe-logging-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS EX PFE LOGGING [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>junos-l2-rsi</name>
+<package-name>junos-l2-rsi-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS L2 RSI Scripts [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>dsa</name>
+<package-name>dsa-arm-64-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS dsa [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>jtpm2</name>
+<package-name>jtpm2-arm-32-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS Common BIOS [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>jweb-ex</name>
+<package-name>jweb-ex-arm-32-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS Web Management Platform Package [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>jsd-jet-1</name>
+<package-name>jsd-arm-32-20250920.074808_builder_junos_244_r2-jet-1</package-name>
+<comment>JUNOS Extension Toolkit [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>jphone-home</name>
+<package-name>jphone-home-arm-32-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS Phone-home [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>jpfe-platform</name>
+<package-name>jpfe-EX40XX-arm-32-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS Packet Forwarding Engine Support (EX40XX) [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>na-telemetry</name>
+<package-name>na-telemetry-arm-64-24.4R2.25</package-name>
+<comment>JUNOS na telemetry [24.4R2.25]</comment>
+</package-information>
+<package-information>
+<name>jfirmware-ex40xx</name>
+<package-name>jfirmware-ex40xx-arm-64-24.4R2.11</package-name>
+<comment>JUNOS Firmware Platform Package [24.4R2.11]</comment>
+</package-information>
+<package-information>
+<name>jdocs-ex</name>
+<package-name>jdocs-ex-arm-32-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS jdocs ex [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>junos-routing-aggregated</name>
+<package-name>junos-routing-aggregated-arm-32-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS Routing aggregated [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>junos-openconfig</name>
+<package-name>junos-openconfig-arm-64-24.4R2.25</package-name>
+<comment>JUNOS Openconfig [24.4R2.25]</comment>
+</package-information>
+<package-information>
+<name>junos-probe</name>
+<package-name>junos-probe-arm-64-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS probe utility [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+<package-information>
+<name>junos-dp-crypto-support-platform</name>
+<package-name>junos-dp-crypto-support-ex-arm-32-20250920.074808_builder_junos_244_r2</package-name>
+<comment>JUNOS ex Data Plane Crypto Support [20250920.074808_builder_junos_244_r2]</comment>
+</package-information>
+</software-information>
+</multi-routing-engine-item>
+
+</multi-routing-engine-results>
+</nc:rpc-reply>

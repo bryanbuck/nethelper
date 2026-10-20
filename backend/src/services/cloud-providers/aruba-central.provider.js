@@ -505,6 +505,7 @@ class ArubaCentralProvider extends BaseCloudProvider {
     userError.category = enhanced.category;
     userError.actions = enhanced.actions;
     userError.isArubaError = enhanced.isArubaError;
+    userError.isProviderError = enhanced.isArubaError;
     userError.statusCode = enhanced.details?.statusCode;
     userError.originalError = error;
     userError.details = ArubaErrorHandler.diagnostics(enhanced);

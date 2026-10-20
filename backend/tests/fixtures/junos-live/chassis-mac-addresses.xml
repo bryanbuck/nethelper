@@ -1,0 +1,11 @@
+<nc:rpc-reply xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:junos="http://xml.juniper.net/junos/24.4R2.25/junos"  message-id="5">
+<chassis-mac-addresses xmlns="http://xml.juniper.net/junos/24.4R0/junos-chassis">
+<chassis-mac-addresses-edge-info>
+<fpc-mac-address>
+<name>FPC 0</name>
+<fpc-mac-base>5c:5b:35:00:00:02</fpc-mac-base>
+<fpc-mac-count>128</fpc-mac-count>
+</fpc-mac-address>
+</chassis-mac-addresses-edge-info>
+</chassis-mac-addresses>
+</nc:rpc-reply>

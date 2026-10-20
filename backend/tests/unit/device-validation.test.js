@@ -1,0 +1,30 @@
+const express = require('express');
+const request = require('supertest');
+const { validateDevice } = require('../../src/middleware/validation.middleware');
+
+const ID = 'b48dcfc0-06f2-466e-8cb8-0eef143294ca';
+
+const app = express();
+app.use(express.json());
+app.put('/devices/:deviceId', validateDevice.update, (req, res) => res.json({ ok: true }));
+
+const put = (body) => request(app).put(`/devices/${ID}`).send(body);
+
+describe('device update validation', () => {
+  it.each(['4c4ab43b7980', '4C:4A:B4:3B:79:80', '4c-4a-b4-3b-79-80', '4c4a.b43b.7980'])(
+    'accepts MAC %s',
+    async (macAddress) => {
+      expect((await put({ macAddress })).status).toBe(200);
+    },
+  );
+
+  it.each(['', null])('accepts an empty MAC (%p)', async (macAddress) => {
+    expect((await put({ macAddress })).status).toBe(200);
+  });
+
+  it('rejects a malformed MAC and says why', async () => {
+    const res = await put({ macAddress: '4c:4a-b4:3b:79:80' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Invalid MAC address');
+  });
+});

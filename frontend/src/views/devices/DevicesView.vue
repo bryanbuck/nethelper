@@ -257,7 +257,7 @@
                   variant="outlined"
                   clearable
                   :hint="newDevice.managementMode === 'cloud'
-                    ? 'Optional: enables read-only local access (AOS-CX config backup, live state)'
+                    ? 'Optional: enables read-only local access (AOS-CX REST, Junos NETCONF: config backup, network map)'
                     : 'Required for direct (REST/SSH) access'"
                   persistent-hint
                 />
@@ -435,7 +435,7 @@
                   clearable
                   :loading="loadingCredentials"
                   :hint="editingDevice.managementMode === 'cloud'
-                    ? 'Optional: enables read-only local access (AOS-CX config backup, live state)'
+                    ? 'Optional: enables read-only local access (AOS-CX REST, Junos NETCONF: config backup, network map)'
                     : 'Select the API credentials to use for this device'"
                   persistent-hint
                 >
@@ -659,7 +659,8 @@ const rules = {
   },
   macAddress: value => {
     if (!value) return true
-    const pattern = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/
+    // Same forms the API accepts; Mist reports bare hex
+    const pattern = /^(?:[0-9a-f]{2}([:-])(?:[0-9a-f]{2}\1){4}[0-9a-f]{2}|[0-9a-f]{4}\.[0-9a-f]{4}\.[0-9a-f]{4}|[0-9a-f]{12})$/i
     return pattern.test(value) || 'Invalid MAC address format'
   }
 }
@@ -845,7 +846,7 @@ const updateDevice = async () => {
       vendor: editingDevice.value.vendor || 'aruba',
       platform: editingDevice.value.platform || null,
       ipAddress: editingDevice.value.ipAddress,
-      macAddress: editingDevice.value.macAddress || '',
+      macAddress: editingDevice.value.macAddress || null,
       location: editingDevice.value.location,
       serial: editingDevice.value.serialNumber?.trim() || null,
       model: editingDevice.value.model || '',

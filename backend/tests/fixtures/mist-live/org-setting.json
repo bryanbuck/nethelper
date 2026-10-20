@@ -1,0 +1,57 @@
+{
+  "disable_pcap": false,
+  "mgmt": {
+    "use_wxtunnel": false,
+    "use_mxtunnel": false,
+    "mxtunnel_ids": []
+  },
+  "cloudshark": {
+    "apitoken": "[REDACTED hmac:7c458f8f578e1674]",
+    "url": ""
+  },
+  "cacerts": [],
+  "ui_idle_timeout": 0,
+  "security": {
+    "limit_ssh_access": false
+  },
+  "ssr": {
+    "conductor_hosts": []
+  },
+  "installer": {
+    "grace_period": 7,
+    "allow_all_devices": false
+  },
+  "mist_nac": {
+    "eu_only": false
+  },
+  "synthetic_test": {
+    "disabled": false,
+    "vlans": [],
+    "wan_speedtest": {
+      "enabled": false
+    }
+  },
+  "mxedge_mgmt": {
+    "fips_enabled": false
+  },
+  "password_policy": {
+    "enabled": false,
+    "min_length": 8,
+    "requires_special_char": false,
+    "requires_two_factor_auth": false
+  },
+  "junos_shell_access": null,
+  "switch": {
+    "auto_upgrade": {}
+  },
+  "juniper_srx": {
+    "auto_upgrade": {}
+  },
+  "id": "00000000-0000-4000-8000-000000000003",
+  "for_site": false,
+  "site_id": "00000000-0000-4000-8000-000000000004",
+  "org_id": "00000000-0000-4000-8000-000000000001",
+  "created_time": 1767817078,
+  "modified_time": 1769712268,
+  "tags": []
+}

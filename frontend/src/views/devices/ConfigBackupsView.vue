@@ -78,6 +78,14 @@
                 >
                   {{ item.error }}
                 </div>
+                <!-- Succeeded, but without everything (e.g. NETCONF refused, cloud copy only) -->
+                <div
+                  v-if="item.status === 'success' && item.warning"
+                  class="text-caption text-warning backup-error"
+                  :title="item.warning"
+                >
+                  <v-icon icon="mdi-alert" size="x-small" /> {{ item.warning }}
+                </div>
                 <!-- APs have no per-device config: point at where it lives -->
                 <v-btn
                   v-if="item.status === 'failed' && isApConfigError(item.error)"
@@ -215,6 +223,16 @@
             <v-card-title class="d-flex align-center flex-wrap ga-2">
               <span>Cloud Scope Backups</span>
               <v-spacer />
+              <v-select
+                v-model="scopeProvider"
+                :items="scopeProviderOptions"
+                label="Cloud"
+                density="compact"
+                variant="outlined"
+                hide-details
+                class="scope-provider-filter"
+                @update:model-value="onScopeProviderChange"
+              />
               <v-btn
                 v-if="canManage"
                 color="primary"
@@ -244,7 +262,7 @@
               <template #[`item.scopeName`]="{ item }">
                 <div class="font-weight-medium">{{ item.scopeName }}</div>
                 <div class="text-caption text-medium-emphasis">
-                  {{ scopeTypeLabel(item.scopeType) }} · {{ item.integrationName }}
+                  {{ cloudProviderLabel(item.provider, { short: false }) }} · {{ scopeTypeLabel(item.scopeType) }} · {{ item.integrationName }}
                 </div>
               </template>
 
@@ -752,6 +770,7 @@ import { useBackupsStore } from '@/stores/backups'
 import { useDevicesStore } from '@/stores/devices'
 import { useWebSocket } from '@/composables/useWebSocket'
 import ConfigDiffViewer from '@/components/backups/ConfigDiffViewer.vue'
+import { CloudProviderInfo, cloudProviderLabel } from '@/models/vendors'
 
 const authStore = useAuthStore()
 const backupsStore = useBackupsStore()
@@ -910,20 +929,35 @@ function scopeTypeLabel(type) {
  * How a person would apply this artifact by hand. NetHelper itself never
  * writes config; this only says where the text can go.
  */
-function applyHint(artifact, device, isScope) {
+const SCOPE_APPLY_HINTS = {
+  aruba_central: 'Configuration Central holds for this scope: the library profiles assigned here and the objects in effect. Changes are made in Central (profiles and their assignments), not on a device.',
+  juniper_mist: 'Configuration Mist holds for this org or site: settings, WLANs and templates. Changes are made in Mist, not on a device.',
+}
+
+const CLOUD_CLI_HINTS = {
+  aruba_central: 'This device is managed by Aruba Central and refuses local configuration changes. Apply changes through Central, e.g. MultiEdit for AOS-CX switches in UI groups.',
+  juniper_mist: 'Mist configures this device, so local changes are overwritten on its next config push. Apply changes in Mist (device, site or switch template).',
+}
+
+function applyHint(artifact, device, isScope, provider = null) {
   if (!artifact) return null
+  const secretsNote = ' Secrets are replaced by fingerprints that change when the secret does.'
   if (isScope) {
-    return 'Configuration held by the cloud for this scope. Changes are applied through the cloud dashboard or API, not on a device. Secrets are replaced by fingerprints that change when the secret does.'
+    return (SCOPE_APPLY_HINTS[provider]
+      || 'Configuration held by the cloud for this scope. Changes are applied through the cloud dashboard or API, not on a device.') + secretsNote
   }
   const cloudManaged = device && (device.managementMode === 'cloud' || device.cloudManaged === true)
+  const deviceProvider = device?.cloudIntegration?.provider
+  const cloudName = cloudProviderLabel(deviceProvider, { short: false })
   if (artifact.kind === 'cli') {
     if (artifact.format === 'junos-set') {
       return cloudManaged
-        ? 'Set commands for this Junos device. It is cloud-managed, so apply changes through Mist rather than the local CLI.'
+        ? `Set commands for this Junos device. It is managed by ${cloudName}, so apply changes there rather than on the local CLI.`
         : 'Junos: enter configuration mode, run "load set terminal", paste, then "commit confirmed 5" and confirm with "commit".'
     }
     if (cloudManaged) {
-      return 'This device is cloud-managed and refuses local configuration changes. Apply changes through its cloud, e.g. Aruba Central MultiEdit for AOS-CX switches in UI groups.'
+      return CLOUD_CLI_HINTS[deviceProvider]
+        || `This device is cloud-managed and refuses local configuration changes. Apply changes through ${cloudName}.`
     }
     return 'Paste over SSH in configuration mode ("configure terminal"). Pasting merges into the running config; it does not remove lines that are absent from this text.'
   }
@@ -966,7 +1000,7 @@ const viewArtifact = computed(() =>
   viewTarget.value?.artifacts.find(a => a.kind === viewKind.value) || viewTarget.value?.artifacts[0] || null
 )
 const viewHint = computed(() =>
-  viewTarget.value ? applyHint(viewArtifact.value, viewTarget.value.device, viewTarget.value.isScope) : null
+  viewTarget.value ? applyHint(viewArtifact.value, viewTarget.value.device, viewTarget.value.isScope, viewTarget.value.provider) : null
 )
 
 async function viewBackup(item) {
@@ -994,6 +1028,7 @@ function viewScopeBackup(item) {
     createdAt: item.createdAt,
     artifacts: [{ kind: 'structured', format: item.format }],
     isScope: true,
+    provider: item.provider,
     device: null
   }
   viewKind.value = 'structured'
@@ -1111,12 +1146,23 @@ async function loadDiff() {
 // Cloud scopes
 const scopePage = ref(1)
 const scopeItemsPerPage = ref(25)
+const scopeProvider = ref(null)
+const scopeProviderOptions = [
+  { title: 'All clouds', value: null },
+  ...Object.entries(CloudProviderInfo).map(([value, info]) => ({ title: info.label, value }))
+]
+
+function onScopeProviderChange() {
+  scopePage.value = 1
+  reloadScopeBackups()
+}
 
 async function reloadScopeBackups() {
   try {
     await backupsStore.fetchScopeBackups({
       limit: scopeItemsPerPage.value,
-      offset: (scopePage.value - 1) * scopeItemsPerPage.value
+      offset: (scopePage.value - 1) * scopeItemsPerPage.value,
+      ...(scopeProvider.value && { provider: scopeProvider.value })
     })
   } catch (error) {
     notify(error.userMessage || error.message || 'Failed to load cloud scope backups', 'error')
@@ -1321,6 +1367,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.scope-provider-filter {
+  max-width: 200px;
+}
+
 .config-content {
   font-family: 'Roboto Mono', 'Courier New', monospace;
   font-size: 0.8125rem;

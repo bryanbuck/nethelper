@@ -109,9 +109,9 @@ class BackupController {
 
   async getScopeBackups(req, res, next) {
     try {
-      const { integrationId, scopeType, scopeId, status, limit, offset } = req.query;
+      const { integrationId, provider, scopeType, scopeId, status, limit, offset } = req.query;
       const { backups, total } = await scopeBackupService.getScopeBackups({
-        integrationId, scopeType, scopeId, status, limit, offset,
+        integrationId, provider, scopeType, scopeId, status, limit, offset,
       });
       res.json({ success: true, data: backups, total });
     } catch (error) {

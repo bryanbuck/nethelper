@@ -292,7 +292,7 @@ router.beforeEach(async (to, from, next) => {
 
   // Set page title
   if (to.meta.title) {
-    document.title = `${to.meta.title} - Aruba Central Automation`
+    document.title = `${to.meta.title} - NetHelper`
   }
 
   debugLog.success(DebugCategory.ROUTER, 'Navigation allowed')

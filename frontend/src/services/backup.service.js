@@ -119,11 +119,11 @@ class BackupService {
     }
   }
 
-  // Cloud-scope backups (Mist org/site config, where AP config lives)
+  // Cloud-scope backups (Mist org/sites, Central scopes: where AP config lives)
 
   /**
    * List cloud-scope backups
-   * @param {Object} params - { integrationId?, scopeType?, scopeId?, status?, limit?, offset? }
+   * @param {Object} params - { integrationId?, provider?, scopeType?, scopeId?, status?, limit?, offset? }
    * @returns {Promise<Object>} { success, data: scopeBackups, total }
    */
   async getScopeBackups(params = {}) {

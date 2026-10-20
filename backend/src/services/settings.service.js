@@ -451,6 +451,27 @@ class SettingsService {
   }
 
   /**
+   * An integration's base URL without trailing slashes (providers append
+   * paths that start with one). Only http(s) URLs are accepted.
+   */
+  normalizeBaseUrl(baseUrl) {
+    if (!baseUrl) return null;
+    const trimmed = String(baseUrl).trim().replace(/\/+$/, '');
+    let url;
+    try {
+      url = new URL(trimmed);
+    } catch {
+      url = null;
+    }
+    if (!url || !['http:', 'https:'].includes(url.protocol)) {
+      const error = new Error(`"${baseUrl}" is not an http(s) URL`);
+      error.statusCode = 400;
+      throw error;
+    }
+    return trimmed;
+  }
+
+  /**
    * Create a cloud integration.
    * @param {string} userId
    * @param {Object} data - { provider, name, baseUrl?, credentials, isActive?, notes? }
@@ -466,7 +487,7 @@ class SettingsService {
       data: {
         provider: data.provider,
         name: data.name,
-        baseUrl: data.baseUrl || spec.defaultBaseUrl,
+        baseUrl: this.normalizeBaseUrl(data.baseUrl) || spec.defaultBaseUrl,
         credentials: this.encryptCredentials(data.provider, data.credentials),
         isActive: data.isActive !== false,
         notes: data.notes || null,
@@ -495,7 +516,7 @@ class SettingsService {
       where: { id: integrationId },
       data: {
         name: data.name ?? undefined,
-        baseUrl: data.baseUrl ?? undefined,
+        baseUrl: data.baseUrl ? this.normalizeBaseUrl(data.baseUrl) : undefined,
         credentials: data.credentials
           ? this.encryptCredentials(existing.provider, data.credentials, existing.credentials)
           : undefined,
