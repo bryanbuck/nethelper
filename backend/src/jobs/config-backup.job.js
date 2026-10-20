@@ -1,4 +1,5 @@
 const configBackupService = require('../services/config-backup.service');
+const scopeBackupService = require('../services/scope-backup.service');
 const logger = require('../utils/logger');
 
 module.exports = (queue) => {
@@ -11,6 +12,13 @@ module.exports = (queue) => {
       trigger: 'manual',
       triggeredBy,
     });
+  });
+
+  // Manual cloud-scope runs (Mist org/sites; all integrations or one)
+  queue.process('runScopeBackup', async (job) => {
+    const { integrationId, triggeredBy } = job.data;
+    logger.info(`Manual scope backup started${integrationId ? ` for integration ${integrationId}` : ''}`);
+    return scopeBackupService.runScopeBackups({ integrationId, trigger: 'manual', triggeredBy });
   });
 
   // Cron-scheduled runs (registered as Bull repeatable jobs per schedule)

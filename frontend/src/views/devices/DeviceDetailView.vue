@@ -10,7 +10,7 @@
               divider=">"
               class="pa-0"
             >
-              <template v-slot:item="{ item }">
+              <template #item="{ item }">
                 <v-breadcrumbs-item
                   :to="item.to"
                   :disabled="item.disabled"
@@ -43,7 +43,15 @@
             </h1>
             <div v-if="device" class="text-caption text-grey mt-1">
               <span v-if="device.cloudManagedCheckedAt">
-                Verified {{ formatRelativeTime(device.cloudManagedCheckedAt) }}
+                Verified {{ verifiedBy }} {{ formatRelativeTime(device.cloudManagedCheckedAt) }}
+              </span>
+              <span v-if="unreachableFromHere(device)">
+                <span v-if="device.cloudManagedCheckedAt"> &middot; </span>
+                {{ cloudPlaneName }} reports it online, but it doesn't answer ping from NetHelper
+              </span>
+              <span v-else-if="answersPingButCloudOffline(device)">
+                <span v-if="device.cloudManagedCheckedAt"> &middot; </span>
+                {{ cloudPlaneName }} reports it offline, but its address answers ping (another device may now use this IP)
               </span>
               <span v-if="device.cloudConnectionStatus && device.cloudConnectionStatus !== 'connected'">
                 <span v-if="device.cloudManagedCheckedAt"> &middot; </span>
@@ -54,7 +62,7 @@
           <div class="d-flex flex-column align-end gap-2">
             <div class="d-flex gap-2">
               <v-btn
-                v-if="device && device.managementMode === 'direct'"
+                v-if="device && (device.managementMode === 'direct' || device.apiCredentialId)"
                 color="info"
                 variant="outlined"
                 :loading="testingConnection"
@@ -80,8 +88,25 @@
             <div v-if="lastTestCentralStatus" class="text-caption text-grey">
               Switch reports: {{ lastTestCentralStatus }}
             </div>
+            <div v-if="lastTestCloudStatus" class="text-caption text-grey">
+              {{ lastTestCloudStatus }}
+            </div>
           </div>
         </div>
+      </v-col>
+    </v-row>
+
+    <!-- Another row looks like the same hardware -->
+    <v-row v-if="device && duplicateGroup">
+      <v-col cols="12">
+        <v-alert type="warning" variant="tonal" icon="mdi-content-duplicate">
+          {{ duplicateGroup.devices.length - 1 === 1 ? 'Another device has' : `${duplicateGroup.devices.length - 1} other devices have` }}
+          the same {{ { mac: 'MAC address', 'name-ip': 'name and IP address' }[duplicateGroup.reason] || 'IP address' }} and is probably this device,
+          for example after a cloud sync found a device that was added by hand.
+          <template v-if="canEdit" #append>
+            <v-btn variant="tonal" color="warning" @click="mergeDialog = true">Review and merge</v-btn>
+          </template>
+        </v-alert>
       </v-col>
     </v-row>
 
@@ -93,6 +118,22 @@
         </v-alert>
       </v-col>
     </v-row>
+
+    <!-- Overview / Live -->
+    <v-tabs v-if="device" v-model="tab" color="primary" class="mb-4">
+      <v-tab value="overview">
+        <v-icon start icon="mdi-information-outline" />
+        Overview
+      </v-tab>
+      <v-tab value="live">
+        <v-icon start icon="mdi-access-point" />
+        Live
+      </v-tab>
+      <v-tab value="neighbors">
+        <v-icon start icon="mdi-lan" />
+        Neighbors
+      </v-tab>
+    </v-tabs>
 
     <!-- Loading State -->
     <v-row v-if="loading && !device">
@@ -120,6 +161,12 @@
         </v-alert>
       </v-col>
     </v-row>
+
+    <!-- Live port/PoE state; subscribes only while this tab is open -->
+    <DeviceLivePanel v-else-if="device && tab === 'live'" :device="device" @update="applyDevicePatch" />
+
+    <!-- LLDP/CDP neighbors (Network Map data for this device) -->
+    <DeviceNeighborsPanel v-else-if="device && tab === 'neighbors'" :device="device" />
 
     <!-- Device Content -->
     <template v-else-if="device">
@@ -193,7 +240,7 @@
               <v-alert type="warning" variant="tonal">
                 <v-alert-title>Unable to retrieve system information</v-alert-title>
                 {{ systemError }}
-                <template v-slot:append>
+                <template #append>
                   <v-btn
                     variant="text"
                     size="small"
@@ -211,7 +258,7 @@
                 <v-col cols="12" md="6">
                   <v-list density="compact">
                     <v-list-item>
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-icon>mdi-server</v-icon>
                       </template>
                       <v-list-item-title>Hostname</v-list-item-title>
@@ -221,7 +268,7 @@
                     </v-list-item>
 
                     <v-list-item>
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-icon>mdi-chip</v-icon>
                       </template>
                       <v-list-item-title>Platform</v-list-item-title>
@@ -231,7 +278,7 @@
                     </v-list-item>
 
                     <v-list-item>
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-icon>mdi-package-variant</v-icon>
                       </template>
                       <v-list-item-title>Software Version</v-list-item-title>
@@ -241,7 +288,7 @@
                     </v-list-item>
 
                     <v-list-item>
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-icon>mdi-clock</v-icon>
                       </template>
                       <v-list-item-title>Boot Time</v-list-item-title>
@@ -251,7 +298,7 @@
                     </v-list-item>
 
                     <v-list-item v-if="systemData.boot_time">
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-icon>mdi-timer</v-icon>
                       </template>
                       <v-list-item-title>Uptime</v-list-item-title>
@@ -265,7 +312,7 @@
                 <v-col cols="12" md="6">
                   <v-list density="compact">
                     <v-list-item>
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-icon>mdi-earth</v-icon>
                       </template>
                       <v-list-item-title>Timezone</v-list-item-title>
@@ -275,7 +322,7 @@
                     </v-list-item>
 
                     <v-list-item v-if="systemData.location">
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-icon>mdi-map-marker</v-icon>
                       </template>
                       <v-list-item-title>System Location</v-list-item-title>
@@ -285,7 +332,7 @@
                     </v-list-item>
 
                     <v-list-item v-if="systemData.contact">
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-icon>mdi-account</v-icon>
                       </template>
                       <v-list-item-title>System Contact</v-list-item-title>
@@ -295,7 +342,7 @@
                     </v-list-item>
 
                     <v-list-item v-if="systemData.description">
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-icon>mdi-text</v-icon>
                       </template>
                       <v-list-item-title>Description</v-list-item-title>
@@ -305,7 +352,7 @@
                     </v-list-item>
 
                     <v-list-item v-if="systemData.usb_status">
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-icon>mdi-usb</v-icon>
                       </template>
                       <v-list-item-title>USB Status</v-list-item-title>
@@ -386,10 +433,10 @@
             <v-divider />
             <v-card-text>
               <v-list density="compact">
-                <v-list-item v-if="device.serialNumber">
+                <v-list-item v-if="device.serial">
                   <v-list-item-title>Serial Number</v-list-item-title>
                   <v-list-item-subtitle class="text-body-2 font-weight-medium">
-                    {{ device.serialNumber }}
+                    {{ device.serial }}
                   </v-list-item-subtitle>
                 </v-list-item>
 
@@ -400,26 +447,47 @@
                   </v-list-item-subtitle>
                 </v-list-item>
 
-                <v-list-item v-if="device.firmware">
+                <v-list-item v-if="device.firmwareVersion">
                   <v-list-item-title>Firmware Version</v-list-item-title>
                   <v-list-item-subtitle class="text-body-2 font-weight-medium">
-                    {{ device.firmware }}
+                    {{ device.firmwareVersion }}
                   </v-list-item-subtitle>
                 </v-list-item>
 
-                <v-list-item v-if="device.group_name">
-                  <v-list-item-title>Group</v-list-item-title>
-                  <v-list-item-subtitle class="text-body-2 font-weight-medium">
-                    {{ device.group_name }}
-                  </v-list-item-subtitle>
-                </v-list-item>
-
-                <v-list-item v-if="device.site">
-                  <v-list-item-title>Site</v-list-item-title>
-                  <v-list-item-subtitle class="text-body-2 font-weight-medium">
-                    {{ device.site }}
-                  </v-list-item-subtitle>
-                </v-list-item>
+                <!-- What the device's cloud last reported (at sync) -->
+                <template v-if="device.managementMode === 'cloud'">
+                  <v-list-item v-if="device.cloudIntegration">
+                    <v-list-item-title>Cloud</v-list-item-title>
+                    <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                      {{ cloudProviderLabel(device.cloudIntegration.provider, { short: false }) }}
+                      &middot; {{ device.cloudIntegration.name }}
+                    </v-list-item-subtitle>
+                  </v-list-item>
+                  <v-list-item>
+                    <v-list-item-title>Cloud Status</v-list-item-title>
+                    <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                      {{ device.cloudStatus || 'unknown' }}
+                    </v-list-item-subtitle>
+                  </v-list-item>
+                  <v-list-item v-if="cloudInfo.site">
+                    <v-list-item-title>Site</v-list-item-title>
+                    <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                      {{ cloudInfo.site }}
+                    </v-list-item-subtitle>
+                  </v-list-item>
+                  <v-list-item v-if="cloudInfo.configStatus">
+                    <v-list-item-title>Config Status</v-list-item-title>
+                    <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                      {{ cloudInfo.configStatus }}
+                    </v-list-item-subtitle>
+                  </v-list-item>
+                  <v-list-item v-if="cloudInfo.uptime">
+                    <v-list-item-title>Uptime ({{ device.cloudStatus === 'online' ? 'reported' : 'when last seen' }})</v-list-item-title>
+                    <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                      {{ cloudInfo.uptime }}
+                    </v-list-item-subtitle>
+                  </v-list-item>
+                </template>
               </v-list>
             </v-card-text>
           </v-card>
@@ -505,14 +573,6 @@
                     </v-list-item-subtitle>
                   </v-list-item>
                 </template>
-
-                <!-- Fallback if no type-specific data -->
-                <v-list-item v-if="device.uptime">
-                  <v-list-item-title>Uptime</v-list-item-title>
-                  <v-list-item-subtitle class="text-body-2 font-weight-medium">
-                    {{ device.uptime }}
-                  </v-list-item-subtitle>
-                </v-list-item>
               </v-list>
             </v-card-text>
           </v-card>
@@ -617,29 +677,63 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <DeviceMergeDialog
+      v-if="duplicateGroup"
+      v-model="mergeDialog"
+      :devices="duplicateGroup.devices"
+      :preferred-id="route.params.id"
+      @merged="onMerged"
+    />
   </v-container>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
 import { useNotificationsStore } from '@/stores/notifications'
+import { useAuthStore } from '@/stores/auth'
 import { formatDistanceToNow, format, fromUnixTime } from 'date-fns'
 import DeviceConnectionTest from '@/components/devices/DeviceConnectionTest.vue'
+import DeviceLivePanel from '@/components/devices/DeviceLivePanel.vue'
+import DeviceNeighborsPanel from '@/components/devices/DeviceNeighborsPanel.vue'
+import DeviceMergeDialog from '@/components/devices/DeviceMergeDialog.vue'
+import deviceService from '@/services/device.service'
 import deviceApiService from '@/services/deviceApi.service'
 import { cloudProviderLabel } from '@/models/vendors'
+import { unreachableFromHere, answersPingButCloudOffline } from '@/models/Device'
 
 const route = useRoute()
 const router = useRouter()
 const devicesStore = useDevicesStore()
 const notificationStore = useNotificationsStore()
+const authStore = useAuthStore()
+const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole))
 
-const device = ref(null)
+// The row shown is the store's own object whenever the store holds it, so
+// changes made elsewhere (live monitoring toggle, socket status updates) show
+// here. The store's array is replaced by every list fetch and holds only one
+// table page, so keep a by-id copy as the fallback; never cache the store
+// object itself (that copy goes stale the moment the array is replaced).
+const fetchedDevice = ref(null)
+const device = computed(() =>
+  devicesStore.devices.find(d => d.id === route.params.id)
+  || (fetchedDevice.value?.id === route.params.id ? fetchedDevice.value : null)
+)
 const loading = ref(false)
 const error = ref(null)
 const testingConnection = ref(false)
 const lastTestCentralStatus = ref(null)
+// What the device's cloud said when a direct test couldn't reach it.
+const lastTestCloudStatus = ref(null)
+
+// Selected tab, kept in the URL (?tab=live) so a live view can be linked.
+const TABS = ['live', 'neighbors']
+const tab = computed({
+  get: () => (TABS.includes(route.query.tab) ? route.query.tab : 'overview'),
+  set: (value) => router.replace({ query: { ...route.query, tab: TABS.includes(value) ? value : undefined } }),
+})
 
 // Connection test dialog state
 const showConnectionTestDialog = ref(false)
@@ -649,10 +743,28 @@ const systemData = computed(() => devicesStore.systemData)
 const systemLoading = computed(() => devicesStore.systemLoading)
 const systemError = computed(() => devicesStore.systemError)
 
-const breadcrumbs = [
+const breadcrumbs = computed(() => [
   { text: 'Devices', to: '/devices', disabled: false },
   { text: device.value?.name || 'Device Details', disabled: true }
-]
+])
+
+/** Apply a change to the shown device, wherever that object lives. */
+const applyDevicePatch = (patch) => {
+  devicesStore.updateDeviceLocally(route.params.id, patch)
+  if (fetchedDevice.value?.id === route.params.id) Object.assign(fetchedDevice.value, patch)
+}
+
+// Another row that looks like the same hardware (e.g. added by hand, then
+// synced from the cloud). Offer to merge them.
+const mergeDialog = ref(false)
+const duplicateGroup = computed(() =>
+  (devicesStore.duplicateGroups || []).find(g => g.devices.some(d => d.id === route.params.id)) || null
+)
+const onMerged = (merged) => {
+  mergeDialog.value = false
+  if (merged.id !== route.params.id) router.replace({ path: `/devices/${merged.id}`, query: route.query })
+  else fetchDevice()
+}
 
 const getStatusColor = (status) => {
   const colors = {
@@ -665,6 +777,35 @@ const getStatusColor = (status) => {
 }
 
 // Name of the cloud plane managing this device ("Central", "Mist", ...).
+// Who confirmed the device's cloud ownership (Device.cloudManagedSource).
+const verifiedBy = computed(() => {
+  const source = device.value?.cloudManagedSource
+  if (source === 'switch-rest') return 'by the switch'
+  if (source === 'cloud-inventory' || source === 'cloud-config') return `by ${cloudPlaneName.value}`
+  return ''
+})
+
+/** Uptime as days/hours/minutes from seconds. */
+const formatDuration = (seconds) => {
+  if (!Number.isFinite(seconds) || seconds <= 0) return null
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  return [days && `${days}d`, (days || hours) && `${hours}h`, `${minutes}m`].filter(Boolean).join(' ')
+}
+
+// Cloud-reported extras kept in Device.metadata by sync. Central reports
+// uptime in milliseconds (uptimeMs), Mist in seconds (uptime).
+const cloudInfo = computed(() => {
+  const meta = device.value?.metadata || {}
+  const seconds = meta.uptimeMs != null ? meta.uptimeMs / 1000 : meta.uptime
+  return {
+    site: meta.siteName || device.value?.location || null,
+    configStatus: meta.configStatus || null,
+    uptime: formatDuration(Number(seconds)),
+  }
+})
+
 const cloudPlaneName = computed(() =>
   cloudProviderLabel(device.value?.cloudIntegration?.provider)
 )
@@ -785,26 +926,29 @@ const clearError = () => {
   devicesStore.clearError()
 }
 
+/** Fetch the current row by id and refresh the store's copy too. */
+const fetchDevice = async () => {
+  const id = route.params.id
+  const response = await deviceService.getDevice(id)
+  if (route.params.id !== id || !response?.data) return
+  fetchedDevice.value = response.data
+  devicesStore.updateDeviceLocally(id, response.data)
+}
+
 const loadDevice = async () => {
+  const id = route.params.id
   loading.value = true
   error.value = null
+  devicesStore.clearSystemData()
 
   try {
-    // First check if device is in store
-    const storeDevice = devicesStore.devices.find(d => d.id === route.params.id)
-
-    if (storeDevice) {
-      device.value = storeDevice
-    } else {
-      // Fetch from API
-      const response = await devicesStore.fetchDevices()
-      device.value = devicesStore.devices.find(d => d.id === route.params.id)
-
-      if (!device.value) {
-        error.value = 'Device not found'
-        return
-      }
+    await fetchDevice()
+    if (route.params.id !== id) return
+    if (!device.value) {
+      error.value = 'Device not found'
+      return
     }
+    devicesStore.fetchDuplicates().catch(() => {})
 
     // Automatically poll system info on load
     await refreshSystemInfo()
@@ -812,9 +956,19 @@ const loadDevice = async () => {
     console.error('Failed to load device:', err)
     error.value = err.userMessage || err.message || 'Failed to load device details'
   } finally {
-    loading.value = false
+    if (route.params.id === id) loading.value = false
   }
 }
+
+// The same view is reused when navigating from one device to another.
+watch(() => route.params.id, (id, previous) => {
+  if (id && id !== previous) loadDevice()
+})
+
+// A cloud sync may have changed this device (or merged it by MAC).
+watch(() => devicesStore.lastSyncResult, () => {
+  fetchDevice().catch(() => {})
+})
 
 const openConnectionTestDialog = () => {
   showConnectionTestDialog.value = true
@@ -836,17 +990,24 @@ const testDirectConnection = async () => {
   if (!device.value) return
   testingConnection.value = true
   lastTestCentralStatus.value = null
+  lastTestCloudStatus.value = null
   try {
-    const response = await deviceApiService.testDeviceConnection(device.value.id)
-    const result = response?.data || response
+    const result = await deviceApiService.testDeviceConnection(device.value.id)
     if (result?.centralStatus) {
       const { centralManaged, connectionStatus } = result.centralStatus
-      const label = centralManaged === true ? 'Central-managed' : centralManaged === false ? 'Locally managed' : 'Unknown'
+      const label = centralManaged === true ? `${cloudPlaneName.value}-managed` : centralManaged === false ? 'Locally managed' : 'Unknown'
       lastTestCentralStatus.value = connectionStatus ? `${label} (${connectionStatus})` : label
+    }
+    if (result?.cloudStatus) {
+      const { provider, status, lastSeen } = result.cloudStatus
+      lastTestCloudStatus.value = `${provider} reports it ${status}${lastSeen ? `, last seen ${formatRelativeTime(lastSeen)}` : ''}`
     }
     if (result?.success) {
       const via = result.transport ? ` (via ${result.transport.toUpperCase()})` : ''
       notificationStore.showSuccess(`Direct connection successful${via}`, 'Connection Test')
+    } else if (result?.cloudOnly) {
+      // Nothing to test directly (a cloud-managed AP): not a failure.
+      notificationStore.showInfo(result.message, 'Connection Test')
     } else {
       notificationStore.showError(result?.message || 'Direct connection failed', 'Connection Test')
     }

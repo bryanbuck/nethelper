@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { Automation, AutomationType } from '@/models'
+import { Automation } from '@/models'
 import automationService from '@/services/automation.service'
 
 export const useAutomationsStore = defineStore('automations', () => {

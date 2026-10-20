@@ -1,6 +1,8 @@
 const BaseDeviceAPI = require('./base-device-api');
 const NetconfClient = require('./netconf-client');
+const junosTopology = require('../topology/parsers/junos');
 const logger = require('../../utils/logger');
+const { assertJunosConfigReadable } = require('../../utils/config-format');
 
 /**
  * Junos device API (Juniper EX / SRX / MX), over NETCONF.
@@ -107,6 +109,23 @@ class JunosAPI extends BaseDeviceAPI {
     });
   }
 
+  /**
+   * Chassis serial and base MAC. The MAC element differs by platform: an
+   * EX4000 (24.4R2, seen 2026-10-19) reports `fpc-mac-base` per FPC; the
+   * spec's `public-base-address` is kept for platforms that use it.
+   */
+  async getIdentity() {
+    return this.withSession(async (client) => {
+      const inventory = await client.rpc('<get-chassis-inventory/>');
+      const macs = await client.rpc('<get-chassis-mac-addresses/>');
+      return {
+        // The chassis element comes first, so the first serial is the chassis's.
+        serial: client.extractText(inventory, 'serial-number') || null,
+        macAddress: client.extractText(macs, 'public-base-address') || client.extractText(macs, 'fpc-mac-base') || null,
+      };
+    });
+  }
+
   /** Firmware view of the same RPC, shaped like the other device APIs. */
   async getFirmwareInfo() {
     const info = await this.getDeviceInfo();
@@ -143,7 +162,26 @@ class JunosAPI extends BaseDeviceAPI {
       if (!config) {
         throw new Error('NETCONF returned an empty configuration');
       }
+      assertJunosConfigReadable(config);
       return config;
+    });
+  }
+
+  /**
+   * LLDP neighbors plus this device's own LLDP identity, in one session.
+   * @returns {Promise<{neighbors: Object[], identity: {chassisId, sysName}}>}
+   */
+  async getLldpTopology() {
+    return this.withSession(async (client) => {
+      const neighbors = junosTopology.parseLldpNeighborsXml(await client.rpc('<get-lldp-neighbors-information/>'));
+      let identity = { chassisId: null, sysName: null };
+      try {
+        identity = junosTopology.parseLocalInfoXml(await client.rpc('<get-lldp-local-info/>'));
+      } catch (error) {
+        // Identity only improves matching; the neighbor table is what matters.
+        logger.debug(`Junos ${this.device.name}: no LLDP local info (${error.message})`);
+      }
+      return { neighbors, identity };
     });
   }
 

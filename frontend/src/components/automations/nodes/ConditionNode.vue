@@ -18,15 +18,15 @@
     <!-- Custom handles for true/false branches -->
     <template v-if="data?.conditionType">
       <Handle 
+        id="true" 
         type="source" 
-        position="Position.Right" 
-        id="true"
+        position="Position.Right"
         :style="{ background: '#4caf50', top: '30%' }"
       />
       <Handle 
+        id="false" 
         type="source" 
-        position="Position.Right" 
-        id="false"
+        position="Position.Right"
         :style="{ background: '#f44336', top: '70%' }"
       />
       
@@ -48,10 +48,13 @@
 <script setup>
 import { computed } from 'vue'
 import BaseNode from './BaseNode.vue'
-import { Handle, Position } from '@vue-flow/core'
+import { Handle } from '@vue-flow/core'
 
 const props = defineProps({
-  id: String,
+  id: {
+    type: String,
+    default: ''
+  },
   data: {
     type: Object,
     default: () => ({})
@@ -66,6 +69,7 @@ const nodeLabel = computed(() => {
   
   const conditionTypes = {
     'device-property': 'Device Property',
+    'alert-severity': 'Alert Severity',
     'time-window': 'Time Window',
     'user-approval': 'User Approval',
     'custom-script': 'Custom Script',
@@ -81,14 +85,22 @@ const nodeSubtitle = computed(() => {
   switch (props.data.conditionType) {
     case 'device-property':
       return props.data.config.property || 'Select property'
+    case 'alert-severity':
+      return props.data.config.severity
+        ? `Severity ${props.data.config.operator || '>='} ${props.data.config.severity}`
+        : 'Set severity'
     case 'time-window':
-      return `${props.data.config.startTime} - ${props.data.config.endTime}` || 'Set time window'
+      return props.data.config.startTime && props.data.config.endTime
+        ? `${props.data.config.startTime} - ${props.data.config.endTime}`
+        : 'Set time window'
     case 'user-approval':
       return props.data.config.approver || 'Set approver'
     case 'custom-script':
       return props.data.config.scriptName || 'Configure script'
     case 'device-count':
-      return `Count ${props.data.config.operator} ${props.data.config.count}` || 'Set count condition'
+      return props.data.config.operator && props.data.config.count != null
+        ? `Count ${props.data.config.operator} ${props.data.config.count}`
+        : 'Set count condition'
     default:
       return 'Configure condition'
   }
@@ -100,6 +112,8 @@ const nodeDescription = computed(() => {
   switch (props.data.conditionType) {
     case 'device-property':
       return `If ${props.data.config.property} ${props.data.config.operator} ${props.data.config.value}`
+    case 'alert-severity':
+      return 'Checks the triggering alert'
     case 'time-window':
       return `Only between ${props.data.config.startTime} and ${props.data.config.endTime}`
     case 'user-approval':
@@ -117,6 +131,7 @@ const nodeIcon = computed(() => {
   if (!props.data?.conditionType) return 'mdi-help-rhombus'
   
   const conditionIcons = {
+    'alert-severity': 'mdi-alert',
     'device-property': 'mdi-cog',
     'time-window': 'mdi-clock-outline',
     'user-approval': 'mdi-account-check',
@@ -187,8 +202,8 @@ const validationErrors = computed(() => {
   font-weight: 600;
   padding: 2px 6px;
   border-radius: 12px;
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   white-space: nowrap;
 }
 

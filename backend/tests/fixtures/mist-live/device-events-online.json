@@ -1,0 +1,65 @@
+{
+  "results": [
+    {
+      "org_id": "00000000-0000-4000-8000-000000000001",
+      "site_id": "00000000-0000-4000-8000-000000000005",
+      "type": "AP_RESTARTED",
+      "ap": "5c5b35000001",
+      "mac": "5c5b35000001",
+      "device_type": "ap",
+      "reason": "power_cycle",
+      "timestamp": 1792455016
+    },
+    {
+      "org_id": "00000000-0000-4000-8000-000000000001",
+      "site_id": "00000000-0000-4000-8000-000000000005",
+      "type": "AP_CONNECTED",
+      "ap": "5c5b35000001",
+      "mac": "5c5b35000001",
+      "device_type": "ap",
+      "timestamp": 1792455016
+    },
+    {
+      "org_id": "00000000-0000-4000-8000-000000000001",
+      "site_id": "00000000-0000-4000-8000-000000000005",
+      "type": "SW_CONNECTED",
+      "mac": "5c5b35000002",
+      "version": "24.4R2.25",
+      "device_type": "switch",
+      "model": "EX4000-12MP",
+      "chassis_mac": "5c5b35000002",
+      "timestamp": 1792454997
+    },
+    {
+      "org_id": "00000000-0000-4000-8000-000000000001",
+      "site_id": "00000000-0000-4000-8000-000000000005",
+      "type": "SW_RESTARTED",
+      "mac": "5c5b35000002",
+      "text": "SNMPD_TRAP_COLD_START: trap_generate_cold: SNMP trap: cold start",
+      "version": "24.4R2.25",
+      "model": "EX4000-12MP",
+      "reason": "power_cycle",
+      "device_type": "switch",
+      "count": 1,
+      "chassis_mac": "5c5b35000002",
+      "timestamp": 1792454949
+    },
+    {
+      "org_id": "00000000-0000-4000-8000-000000000001",
+      "site_id": "00000000-0000-4000-8000-000000000005",
+      "type": "SW_VC_MASTER_CHANGED",
+      "mac": "5c5b35000002",
+      "text": "CHASSISD_VCHASSIS_MEMBER_UPDATE_NOTICE: Membership update: Member 0->0, Mode Linecard->Master, 0M -1B, Master Detected, Members Changed",
+      "version": "24.4R2.25",
+      "model": "EX4000-12MP",
+      "device_type": "switch",
+      "count": 1,
+      "chassis_mac": "5c5b35000002",
+      "timestamp": 1792454947
+    }
+  ],
+  "limit": 50,
+  "start": 1791850350.3136084,
+  "end": 1792455150.3136084,
+  "total": 5
+}

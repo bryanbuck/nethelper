@@ -15,7 +15,7 @@ NetHelper is Aruba-only, and the vendor coupling is uneven — some layers are a
 | `BaseDeviceAPI` (`backend/src/services/device-api/base-device-api.js`) | Vendor-neutral interface (login/testConnection/getDeviceInfo/getConfiguration/...) — good |
 | `DeviceAPIFactory` | Switch only handles `cx_switch`; `determineDeviceAPIType()` infers platform from hardcoded Aruba model regexes, defaults to CX |
 | `utils/device-platform.js` | The transport-decision choke point (`detectPlatform`, `isCxRestCapable`, `useSshTransport`) — knows only `aos-cx`/`aos-s`, classifies via Aruba model-number regexes |
-| Cloud plane | `aruba-central.service.js` singleton + bespoke `ArubaCentralConfig` table, imported **directly** by device sync, config backup, automation, discovery. Several methods are dead (unset `this.baseURL`); tenant OAuth currently 401s (`docs/archive/CENTRAL_ENDPOINT_TRIAGE.md`) |
+| Cloud plane | `aruba-central.service.js` singleton + bespoke `ArubaCentralConfig` table, imported **directly** by device sync, config backup, automation, discovery. Several methods are dead (unset `this.baseURL`); tenant OAuth currently 401s (2026-07-08 endpoint triage) |
 | Data model | **No `vendor` field anywhere.** `DeviceType` is category-only (access_point/switch/gateway). Platform is regex-inferred from `Device.model`. `managementMode` enum is `central \| direct`; `centralManaged*` columns are Aruba-shaped |
 | Config backup | `pullConfig()` in `config-backup.service.js` has the cleanest transport dispatch in the app (CX REST → Central → SSH) — the pattern to generalize |
 | SSH | `ssh-device.service.js` `PLATFORM_PROFILES` keyed `aos-s`/`aos-cx`/`generic`; the `generic` profile is already IOS-style |
@@ -120,7 +120,7 @@ model CloudIntegration {
   name           String            // user label, e.g. "Prod Mist Org"
   baseUrl        String            // Central base URL / api.mist.com / api.meraki.com/api/v1
   credentials    Json              // shape per provider (secrets field-encrypted):
-                                   //   aruba_central: { clientId, clientSecret, customerId }
+                                   //   aruba_central: { clientId, clientSecret, workspaceId? }  (customerId pre-2026-10-16)
                                    //   juniper_mist:  { apiToken, orgId }
                                    //   cisco_meraki:  { apiKey, orgId }
   isActive       Boolean           @default(true)
@@ -142,12 +142,12 @@ model CloudIntegration {
 - **Migration**: copy `ArubaCentralConfig` rows → `CloudIntegration(provider: aruba_central)`; keep the old `/settings/aruba-central` routes as aliases for one release.
 - **Multiple active integrations** are a first-class case, not an edge case: a user can configure, say, two Aruba Central accounts and a Mist org simultaneously. Every inventoried device is attributed to the specific tenant that owns it via `cloudIntegrationId`. Consequences, all implemented in Phase 0:
   - `activeProviders()` returns one provider instance per active integration; sync iterates all of them, and one integration failing (bad credentials, unreachable) does not abort the others — errors are reported per-integration.
-  - Upserts are **serial-keyed and idempotent**, with ownership following the most recent sync that saw the device. A device that moves between tenants is re-attributed rather than duplicated.
+  - Upserts are **serial-keyed and idempotent**, with ownership following the most recent sync that saw the device. A device that moves between tenants is re-attributed rather than duplicated. When no row has the serial, sync adopts the one serial-less row with the same MAC (a device added by hand before it was synced); weaker matches are left as possible duplicates for a person to merge (`services/device-merge.service.js`, 2026-10-16).
   - Credentials and OAuth token caches are **per integration** (Redis key `cloud:{integrationId}:access_token`), so two Central accounts never share a token.
   - Sync can be scoped to one integration (`POST /devices/sync { integrationId }`, or the per-integration "Sync devices" button in Settings) or run across all active ones.
   - `Device.cloudIntegrationId` is `SetNull` on delete: removing an integration keeps its device rows but drops their cloud attribution.
 - `ApiCredential` stays as-is for direct-device creds — `apiKey`/`apiSecret` already cover token-style auth.
-- `DiscoveredDevice.isArubaVendor` → generalize to `matchedVendor Vendor?` (low stakes; can lag to post-MVP).
+- ~~`DiscoveredDevice.isArubaVendor` → generalize to `matchedVendor Vendor?`~~ Done 2026-10-19 (`20261019190000_discovery_matched_vendor`; `DiscoveryScan.arubaHosts` → `vendorHosts`). Juniper and Mist OUIs added; the cloud cross-check keeps each match's vendor/platform.
 
 ## 4. Cloud provider abstraction
 
@@ -202,21 +202,24 @@ CloudProviderFactory.activeProviders()     // all isActive integrations, instant
 - `determineDeviceAPIType(device)` becomes **vendor-field driven**: `(vendor, platform, type)` → api type via the capability matrix in `constants/vendors.js`. The Aruba model regexes survive only in the Phase 0 backfill script and as a last-ditch fallback for `vendor: aruba, platform: null`.
 - The switch grows over phases: `cx_switch` → `junos` (Phase 2, only if a structured client is built) → `catalyst_restconf` (Phase 4, optional).
 - `getSupportedDeviceTypes()` is generated from `constants/vendors.js` — this also fixes the frontend's hardcoded type lists.
-- Cloud-managed devices never reach the factory; the router short-circuits them to their CloudProvider.
+- Cloud-managed devices normally don't reach the factory; the router sends them to their CloudProvider. **Exception: read-only local reads of AOS-CX** (config backup, live state in §8c, LLDP topology in §8d), which keep working under Central management and are ranked ahead of the cloud plane when the device has an IP and a linked credential.
 
 ### Transport router (`utils/transport-router.js`)
 
 Generalizes `pullConfig()`'s three-way branch and `useSshTransport()` into one declarative matrix:
 
 ```js
-// resolveTransport(device, operation) → ordered transports: 'cloud' | 'device-rest' | 'ssh' | 'unsupported'
+// resolveTransport(device, operation) → ordered transports: 'cloud' | 'device-rest' | 'ssh'
+// (an empty list means unsupported). As built, in constants/vendors.js (2026-10-16):
 const TRANSPORT_MATRIX = {
-  'aruba/aos-cx':  { config: ['device-rest', 'ssh'], status: ['device-rest'], test: ['device-rest', 'ssh'] },
-  'aruba/aos-s':   { config: ['ssh'],                status: ['ssh'],         test: ['ssh'] },
-  'juniper/junos': { config: ['ssh'],                status: ['ssh'],         test: ['ssh'] },  // Phase 2
-  'cisco/ios-xe':  { config: ['ssh'],                status: ['ssh'],         test: ['ssh'] },  // Phase 4 (+ device-rest if RESTCONF)
+  'aruba/aos-cx':  { config: ['device-rest'], test: ['device-rest'], poll: ['device-rest'], live: ['device-rest'], topology: ['device-rest'] },
+  'aruba/aos-s':   { config: ['ssh'], test: ['ssh'], poll: ['ssh'], live: [], topology: ['ssh'] },
+  'juniper/junos': { config: ['device-rest', 'ssh'], test: ['device-rest', 'ssh'], poll: ['device-rest', 'ssh'], live: [], topology: ['device-rest', 'ssh'] },  // device-rest = NETCONF
+  'cisco/ios-xe':  { config: ['ssh'], test: ['ssh'], poll: ['ssh'], live: [], topology: ['ssh'] },
+  'cisco/meraki':  { config: [], test: [], poll: [], live: [], topology: [] },
 };
-// managementMode === 'cloud' overrides everything → ['cloud'], gated by provider.supports(capability)
+// managementMode === 'cloud': device-rest (when listed) then 'cloud', never ssh.
+// live: device-rest only, and only with an IP. topology: device-rest with an IP, then 'cloud'.
 ```
 
 `device-platform.js` is rewritten **field-first**: `detectPlatform()` returns `device.platform` when set, falling back to today's regexes only for legacy/unclassified rows. `isCxRestCapable()` / `useSshTransport()` keep their signatures (so `config-backup`, `device-poller`, and `device-api-test.controller` don't all change at once) but delegate to the router. `pullConfig()` becomes an ordered-fallback loop over `resolveTransport(device, 'config')`.
@@ -264,10 +267,12 @@ Shipped, no behavior change for Aruba:
 
 - **Schema** (`migrations/20260712000000_multi_vendor_phase0`): `Vendor` enum + `Device.vendor`/`platform`; `DeviceType` +`controller`/+`other`; `ManagementMode` `central`→`cloud`; `central*`→`cloud*` column renames; `CloudProviderType` enum + `CloudIntegration` table + `Device.cloudIntegrationId`. Hand-written SQL (Prisma's diff would have dropped/recreated for the renames). Data migrations copy `ArubaCentralConfig` rows into `CloudIntegration`, attribute existing cloud devices to the active Central integration, and backfill `platform` by mirroring `detectPlatform()`'s detection order.
 - **Central cleanup**: `aruba-central.service.js` **deleted**. Its working parts (OAuth, `network-monitoring/v1alpha1` inventory) live in `cloud-providers/aruba-central.provider.js`; the dead `this.baseURL` methods and unverified classic endpoints (`/configuration/v2`, `/troubleshooting/v1`, `/monitoring/v2`, `/firmware/v1`) now throw typed `CapabilityError` rather than failing opaquely. Token cache is keyed per integration, so tenants never share a token.
+- **Central auth (2026-10-16)**: tokens come from HPE GreenLake, not `<baseUrl>/oauth2/token` (which nothing accepts for `client_credentials`). A Central-scoped GreenLake API client uses `sso.common.cloud.hpe.com/as/token.oauth2`; a GreenLake-platform client sets `workspaceId` and uses its workspace token URL. Both are New-Central-only, so the base URL is a cluster picker (`*.api.central.arubanetworks.com`) and a Classic `apigw-*` host fails the test with that explanation. `customerId` is gone (New Central doesn't take it). `testConnection()` also makes one inventory call, since a token proves the client but not the cluster.
+- **Central response shape (2026-10-16, first live contact)**: the inventory items carry `serialNumber` (not `serial`), `status` `ONLINE`/`OFFLINE`, `lastSeenAt` (ISO, null while online), `uptimeInMillis`, `siteName`; filters must use `serialNumber`. Normalization was rewritten to match and the fixture replaced with the live shape. Switch platform is taken from the firmware version (`XX.10.*` = AOS-CX, `XX.15/16.*` = AOS-S) before the model regex, since Central reports some CX models as a bare `6200`.
 - **Abstractions**: `constants/vendors.js` (vendors, platforms, providers, transport matrix), `utils/transport-router.js`, field-first `device-platform.js`, `BaseCloudProvider` + `CloudProviderFactory` (`forIntegration` / `forDevice` / `activeProviders`).
 - **Consumers migrated**: `syncDevicesFromCloud()` (loops every active integration, stamps `cloudIntegrationId`), `pullConfig()` (ordered-fallback over the router), automation actions, discovery cross-check, device controller, sync job. Zero `require('.../aruba-central.service')` remain.
 - **Settings**: `/settings/cloud-integrations` CRUD + test (multi-row, multi-provider); deprecated `/settings/aruba-central` routes still work against the `aruba_central` rows.
-- **SSH profiles**: `junos` and `cisco-ios` added ahead of Phases 2/4.
+- **SSH profiles**: `junos` and `ios-xe` (planned as `cisco-ios`; shipped keyed by platform id) added ahead of Phases 2/4.
 - **Frontend**: `models/vendors.js`, `CloudIntegrations.vue` (replaces `ArubaCentralCredentials.vue`), vendor/platform/cloud-integration selectors in the device modals, Central→Cloud column and chip renames with provider-branded labels, device-type dropdowns now use enum values (killed the display-cased-string round-trip).
 
 **Verified** against the live dev DB: two Central tenants configured simultaneously and both returned by `activeProviders()`; a device attributed to the second tenant resolved through `forDevice()` to exactly that tenant; secrets stored as ciphertext and masked over the API; a Juniper switch with an Aruba-looking model (`6300F`) correctly routed to SSH instead of CX REST (proving the vendor field, not the model regex, now drives transport); quarantined Central config endpoint threw `CapabilityError`; transport routing reproduces all prior Aruba behavior including the legacy unclassified-switch quirk. Frontend builds clean.
@@ -283,6 +288,17 @@ Shipped, no behavior change for Aruba:
 - **Config-backup semantics**: Mist is intent-based, so a "config" is the device's **Mist configuration object**, snapshotted as canonical (sorted-key) JSON so diffs show real changes rather than key reordering. The `config_cmd` endpoint is *not* the device's config — it returns only the CLI Mist *would* generate when adopting a brownfield switch. For a true Junos running-config, reach the device over SSH (Phase 2). APs have no per-device config at all (they are configured by site/WLAN templates), so they return a typed `CapabilityError` rather than a misleading near-empty "backup".
 
 Also fixed a latent Phase 0 bug this exercised: `pullConfig()`'s cloud branch was `JSON.stringify`-ing the provider's whole `{text, format, source}` wrapper instead of storing `text`. It never fired because Central's config path is quarantined, but Mist hit it immediately.
+
+**Live contact (2026-10-19)**, against a real org (`api.ac2.mist.com`, read-only org token; one site, an AP33 and an EX4000-12MP, both powered off), with `scripts/probe-cloud.js` (GET only) and anonymised captures in `tests/fixtures/mist-live/`. What it changed:
+- **Site names.** Inventory names a site only by `site_id`, and sync stored the UUID as `Device.location` (and so in the location filter and the map's site scopes). `listInventory()` now reads `/orgs/:id/sites` once and stores the name; the id stays in `metadata.siteId`.
+- **Fields that don't exist.** Inventory has no `last_disconnected` or `adopted`; last-seen comes from stats `last_seen` (epoch seconds, kept while offline). Inventory does carry `version`, now the firmware fallback when stats fail.
+- **`config_status` needs `fields`.** `/stats/devices` leaves it out by default; `fields=*` returns kilobytes per device (interface tables, LLDP clients). A list (`fields=mac,ip,version,last_seen,status,uptime,config_status`) returns exactly those.
+- **Who owns the config.** A switch's device object has `mist_configured`; a config backup records it as `cloudManaged` (source `cloud-config`). APs assigned to a site are Mist-configured (source `cloud-inventory`). Mist rows used to stay "unverified" forever.
+- **A credential in WLANs.** Each WLAN's `portal_template_url` is an S3 link presigned with a temporary AWS session token, newly signed on every read: a secret, and the reason site scope backups changed on every run. `utils/config-redact.js` strips signed queries from any URL.
+- `/self` for an org token has a `name` and `privileges[].role`, no email; the test now reports the access level.
+- Scope backups (org and site) and a switch config-object backup ran live and are byte-stable across runs.
+
+With the devices powered on (same day): inventory `connected: true`, stats `status: connected` with fresh `last_seen`; sync flipped both to online and auto-resolved their `device.cloud-offline` alerts; scope backups kept the same checksums. NETCONF to the Mist-managed EX was then run once a firewall rule was fixed (see Phase 2's first hardware contact). Inputs for later work are captured: AP `lldp_stat` and switch `clients` (stats `fields=*`), `/stats/ports/search` with `neighbor_*` LLDP fields (cloud neighbors, §8d), and `/devices/events/search` (`SW_CONNECTED`, `AP_RESTARTED`, ...; cloud events).
 
 **Verified** end-to-end against a local mock of the Mist API built from the spec's response shapes: integration created with the token encrypted at rest and masked over the API; `testConnection` authenticated and validated org scope; sync produced `vendor=juniper` devices with correct type mapping (`ap`/`switch`/`gateway`), `platform=junos` on the switch and gateway but not the AP, and live IP/firmware from stats; config backup of a Mist-managed EX4400 stored and checksummed, and after mutating a port description in Mist the second backup's diff showed exactly that one line; an AP backup recorded an honest "not supported" reason instead of failing opaquely; a Mist org and a Central account were active simultaneously in `activeProviders()`.
 
@@ -301,6 +317,8 @@ The deciding argument was correctness, not elegance. Screen-scraping an interact
 
 **Caveat worth stating**: a mock is faithful to the RFC and to Junos's documented RPCs, but it is still a mock. The first run against real hardware is where response-shape surprises would appear.
 
+**First hardware contact (2026-10-19)**, an EX4000-12MP on 24.4R2.25 managed by Mist, read over NETCONF with the device credential (captures in `tests/fixtures/junos-live/`). The framing, `<get-software-information/>` parsing and the LLDP parser all worked unchanged. Two surprises: an account whose login class lacks `view-configuration` gets a committed config made of `/* ACCESS-DENIED */` placeholders, not an RPC error, so a "successful" backup held nothing (now refused by `assertJunosConfigReadable`; a Mist-managed switch falls back to Mist's copy with a `ConfigBackup.warning`); and the chassis MAC is `fpc-mac-base` per FPC, not `public-base-address`. With `view-configuration` granted, the full pull ran (5.5 KB `set` config plus Mist's object; stable on a repeat run). Junos still withholds `scripts`, `event-options`, `secret` and `extension-service` from such an account, so a partly withheld read is kept and the withheld hierarchies go in the backup's warning; only a read with nothing readable is refused (the user's call, 2026-10-19). Still not run on hardware: the SSH CLI fallback.
+
 ### Phase 3 — Cisco Meraki (cloud)
 
 - `meraki.provider.js`: API-key auth (`X-Cisco-Meraki-API-Key`), testConnection via `GET /organizations`, org devices + statuses, rate-limit throttle (~10 req/s/org).
@@ -314,7 +332,7 @@ The deciding argument was correctness, not elegance. Screen-scraping an interact
 
 ### Post-MVP (explicitly out of scope above)
 
-Per-vendor pollers (generalize `device-poller.service.js`), automation actions for new vendors, Juniper/Cisco discovery OUI tables, Mist WebSocket streaming, NETCONF, restore/rollback.
+Per-vendor pollers (generalize `device-poller.service.js`), automation actions for new vendors, Juniper/Cisco discovery OUI tables, Mist WebSocket streaming, NETCONF, restore/rollback (direction in §8b: a future `restore` transport operation, direct and atomic platforms only; cloud writes are a separate feature).
 
 ## 8b. Config-backup storage (2026-09-14)
 
@@ -325,10 +343,239 @@ Backups are stored twice, on purpose:
 
 Two consequences matter for the vendor work:
 
-- **`format` is now persisted, not discarded.** `pullConfig()` returns `{ text, source, format }` and the value lands on `ConfigBackup.format`. This closes the gap flagged in §9.1: an intent-based settings snapshot (Mist today, Meraki later) is recorded as `mist-config-json` / `meraki-settings-json` and committed as `settings.json`, while a real running-config is `cli-text` → `running-config.cfg` and Junos set-format is `junos-set` → `running-config.set`. The repo is self-describing, so "settings snapshot ≠ running-config" is visible on disk rather than only in the UI.
+- **`format` is now persisted, not discarded.** `pullConfig()` returns `{ artifacts: [{ kind, format, text }], source }` (artifacts since 2026-10-16, below) and each format lands on a `ConfigBackupArtifact` row (the primary's also on `ConfigBackup.format`). This closes the gap flagged in §9.1: an intent-based settings snapshot (Mist today, Meraki later) is recorded as `mist-config-json` / `meraki-settings-json` and committed as `settings.json`, while a real running-config is `cli-text` → `running-config.cfg` and Junos set-format is `junos-set` → `running-config.set`. The repo is self-describing, so "settings snapshot ≠ running-config" is visible on disk rather than only in the UI.
 - **Retention and history are deliberately asymmetric.** `pruneRetention()` drops rows and flat files; Git history is never rewritten (that would require a force-push that breaks clones). The repo is the long-term archive beneath a bounded working index.
 
 The mirror is additive and best-effort throughout: a commit or push failure is logged and the backup still succeeds, because the authoritative bytes are already on disk. A `CapabilityError` still produces no commit at all — an honest "not supported" must not leave a phantom version in history.
+
+### Artifacts: pasteable text and structured config (2026-10-16)
+
+A backup can hold more than one representation, one `ConfigBackupArtifact` per **kind** (`utils/config-format.js`):
+
+- `cli`: text a person can paste back (`cli-text`, `junos-set`).
+- `structured`: a JSON document (`aoscx-json`, `mist-config-json`, ...). Machine-readable, not pasteable.
+
+AOS-CX yields both from one REST session: `GET /configs/running-config` with `Accept: text/plain` returns the CLI rendering (what `show running-config` prints; verified on a 6200F, ML.10.16), and `/fullconfigs/running-config` the REST config database. The CLI read is best-effort, so a backup still succeeds JSON-only. `ConfigBackup.filePath/format/checksum` mirror the **primary** artifact (CLI when present), so pre-artifact readers keep working; the migration backfilled one artifact per existing backup. Change detection compares each kind with the same kind last time. Content, download and diff take `?kind=cli|structured`; diff defaults to a kind both backups hold, CLI first. The Git mirror writes `running-config.cfg` and `settings.json` side by side.
+
+### Cloud scopes (2026-10-16)
+
+Cloud planes configure APs (and much else) **above the device**: Mist org/site objects (WLANs, RF templates, device profiles, switch templates), Central scopes and library profiles. There is no per-AP config to back up, so `ScopeBackup` captures the scope instead. It's read-only.
+
+- Provider contract (`BaseCloudProvider`): `listConfigScopes()` → `[{ scopeType: 'org'|'site-collection'|'site'|'device-group', scopeId, name }]` and `getScopeConfiguration(scope)` → `{ text, format, source }`, behind `supports('scope-backup')`. The defaults throw `CapabilityError`.
+- **Mist**: implemented (`mist-scope-json`; canonical JSON, lists sorted by id; a 404 section is recorded as null). Verified live 2026-10-19 (org + one site, byte-stable across runs once presigned URLs are stripped, see Phase 1).
+- **Central** (implemented and verified live 2026-10-16, `central-scope-json`): New Central's config model is a **profile library** plus **config-assignments** that bind a profile to a scope for a device function (persona), and **scope-maps** that index every object in effect at each scope (`resource: "<type>/<name>"`). Scopes: Global (`org`, `scopeId: 'global'`; the tenant's numeric id is learned from its `GLOBAL` assignments and recorded as `centralScopeId`), then `site-collections`, `sites` and `device-groups` (paged with `limit`/`offset`; the reply's `offset` field is unreliable). Device scopes are left to device backups. Each bundle holds the scope's `assignments` and its `objects`: the `view-type=LOCAL&scope-id=<id>` read of every profile type its scope map lists. Global also holds the `library`: the default (library) read of every type assigned or mapped anywhere. `view-type=EFFECTIVE` returns 400, so resolved per-device config isn't available here. A type Central won't list (400/404) is recorded as null. **Gotcha**: `scope-maps` and `config-assignments` send `scope-id` as a JSON number above 2^53, which `JSON.parse` rounds (`68797217769316352` → `…350`); those reads use a lossless parse (`exactScopeIds`). Against the home tenant: 7 scopes, Global ≈ 425 KB (28 library types) in ≈ 30 s, bundles byte-stable across runs.
+- **Secrets in scope bundles are redacted** (`utils/config-redact.js`, both providers). Presigned URLs (S3/Azure/GCS signature in the query) lose their query too: Mist's WLAN `portal_template_url` carries a temporary AWS token. Central returns RADIUS shared secrets as `shared-secret-config.plaintext-value` (`secret-type: PLAIN_TEXT`) and a vSphere `endpoint.password` in clear; Mist WLANs carry `psk`. A secret leaf becomes `[REDACTED hmac:<16 hex>]`, an HMAC keyed with `ENCRYPTION_KEY`, so a rotated secret still shows in a diff while a leaked backup or Git mirror can't be brute-forced. The cost: a scope backup can't recreate those secrets, and rotating `ENCRYPTION_KEY` changes every fingerprint once. Device backups are not redacted (AOS-CX stores its secrets as ciphertext in both artifacts).
+- `services/scope-backup.service.js` mirrors the device path: flat files under `BACKUP_STORAGE_PATH/_scopes/` are authoritative, and the Git mirror commits to `_scopes/<integration>/<type>-<id>/`. `integrationId` is a plain column with denormalized names, so history outlives the integration. Runs are manual (`POST /backups/scopes/run`) or ride along on a schedule with `includeScopes`.
+
+### Restore (not built; direction)
+
+Nothing writes config today. When it comes, it is a `restore` operation in the transport matrix, **only** where the apply is atomic with rollback: Junos NETCONF (`load-configuration` + `commit confirmed`), and direct-managed AOS-CX REST (`PUT /fullconfigs/running-config` from the `structured` artifact, after a checkpoint). It is refused outright for `managementMode === 'cloud'` or `cloudManaged === true`. SSH paste stays a human action (not atomic; a half-applied config can lock us out). Cloud writes are a separate feature that edits provider profiles/templates, not "restore a device backup".
+
+## 8c. Live port/PoE state (2026-10-15)
+
+Near-real-time switch state, for people watching a device and as the event
+source for future automation triggers (e.g. "PoE device came online"). The
+hardware findings behind these choices are in
+`hardware/AOS_CX_NOTES.md`.
+
+**Why not streaming telemetry.** gNMI / Junos JTI / IOS-XE model-driven
+telemetry were considered and rejected for now: each needs per-switch setup
+(enable the service, TLS certificates, sometimes an extra package, and for
+dial-out an inbound listener). NetHelper should work with the access it
+already has. Change-driven state over the existing REST session needs nothing
+configured on the switch.
+
+**Two layers, sized differently:**
+
+1. **Event layer** — `services/live/state-monitor.service.js`. Always on for
+   devices with `Device.liveMonitoring` (opt-in, `PATCH
+   /devices/:id/live-monitoring`), and on demand while someone has the Live
+   tab open. Each port change becomes a `DeviceEvent` row
+   (`port.link.up|down`, `port.admin.up|down`, `port.poe.up|down|fault`,
+   `monitor.connected|disconnected`) and a global `device:event`. Cost per
+   device is one idle socket; traffic only on change. Events are raw
+   transitions, not debounced; consumers apply their own settle time.
+2. **Live view** — `services/live/live-view.service.js`. While at least one
+   browser watches a device, poll counters every `LIVE_VIEW_POLL_INTERVAL`
+   and emit rates, PoE draw, and CPU/memory to `device:live:<id>`. Nothing is
+   stored; there is no metrics history yet.
+
+**Delivery per platform** (`PLATFORMS[*].liveState`, mirrored in the
+frontend; matrix operation `live`):
+
+| Platform | liveState | How |
+|---|---|---|
+| AOS-CX | `push` | REST notification WebSocket, one topic per physical port + PoE wildcard |
+| Junos, AOS-S, IOS-XE, Meraki | `null` | Not yet. The monitor already supports `poll` (re-read + diff every `LIVE_STATE_POLL_INTERVAL`); a platform needs only a `getPortState()` reader. |
+
+`live` is read-only and never uses the cloud plane: a cloud-managed device is
+watched over its local API when it has an IP and a device credential
+(`resolveTransport(device, 'live')`).
+
+**Correctness rules:** every (re)connect takes a full snapshot and diffs it
+against the last, so changes made while disconnected still become events
+(`source: resync`); a skipped per-topic sequence number forces the same
+resync; a periodic resync (`LIVE_RESYNC_INTERVAL`) is the backstop and also
+keeps the REST session from idling out, which an open notification socket
+does not do. Sessions and streams are recycled every `LIVE_SESSION_MAX_AGE`
+(AOS-CX ends sessions after 480 minutes) and immediately when a resync had to
+log in again. One `CXSwitchAPI` instance (one REST session) per device is
+shared by the stream, resyncs, and live-view counter polls; AOS-CX allows 6
+sessions per user.
+
+**Known limits:** single backend instance (replicas would each watch every
+device and record duplicate events; a Redis leader lock is a roadmap item);
+`LIVE_MAX_CONNECTIONS` caps watched devices per process.
+
+## 8d. Network topology / Network Map (2026-10-16)
+
+A `/map` page that draws the managed network from each device's own LLDP/CDP
+neighbor table, plus Discovery hosts. No switch-side setup: LLDP (and CDP on
+Cisco) is on by default, and the reads use the access NetHelper already has.
+
+**Collection** (`services/topology/topology.service.js`), via
+`resolveTransport(device, 'topology')`, read-only:
+
+| Platform | Transport | Read |
+|---|---|---|
+| AOS-CX | device REST (also under Central) | `GET system/interfaces/*/lldp_neighbors?depth=2`, identity from `GET system?attributes=hostname,system_mac` |
+| Junos | NETCONF, SSH fallback | `<get-lldp-neighbors-information/>` + `<get-lldp-local-info/>`; CLI `show lldp neighbors` |
+| AOS-S | SSH | `show lldp info remote-device detail`, `show lldp info local-device` |
+| IOS-XE | SSH | `show cdp neighbors detail` + `show lldp neighbors detail` |
+| Cloud (Mist) | provider `listNeighbors()`, once per run | `/orgs/:id/stats/devices?type=all&fields=…,lldp_stat,lldp_stats` (AP uplinks) + `/orgs/:id/stats/ports/search?neighbor_mac=*` (switch ports) |
+| Cloud (Central) | provider `listNeighbors()`, once per run | `/network-monitoring/v1/topology/{site-id}` per site (v1 only; v1alpha1 is 404) |
+
+Every collector returns the normalized neighbor in `services/topology/neighbor.js`.
+Parsers live in `services/topology/parsers/`. Checked against real output: AOS-CX
+(6200F ML.10.16, `tests/fixtures/aos-cx-live/lldp-neighbors.json`), Junos NETCONF
+(EX4000, `junos-live/`), Mist (`mist-live/neighbors-*.json`) and Central
+(`central-live/`), the last three on 2026-10-19. The Junos CLI, AOS-S and IOS
+parsers are spec-derived. A scheduled Bull job
+(`TOPOLOGY_INTERVAL`, default 6 h) and an on-demand "Refresh topology" both run
+`collectAll`, which reads at most `TOPOLOGY_CONCURRENCY` devices at once and
+opens one session per device.
+
+**Storage:**
+- `DeviceLink`: one row per local port and remote chassis/port.
+- `DeviceTopologyState`: status `ok | skipped | unsupported | failed`, with a
+  reason and the device's own chassis id/sysName.
+- `TopologyChange`: `link.added | removed | changed`.
+- `MapLayout`: shared node positions per `all` / `site:<location>`.
+
+`link-diff.js` reconciles a fresh table against the stored rows:
+- A failed or skipped read never deactivates links.
+- A device's first collection records no changes.
+- A removal plus an addition on the same port is one `link.changed`.
+
+**Resolution happens when the graph is built (`graph.js`), not when links are
+stored.** A far end matches a Device by MAC (its own advertised chassis id
+first, then `Device.macAddress`), then by management IP, then by an unambiguous
+name. Anything left over is a ghost node, matched to a `DiscoveredDevice` by
+MAC or IP so the map can import it. AOS-CX endpoints such as phones may
+advertise an IP as their chassis id; their MAC then comes from `mac_addr`.
+Links reported from both ends merge into one edge. Edges are oriented
+gateway → switch → AP → endpoint for layered layout.
+
+**Cloud planes (2026-10-19):** a cloud-managed device that no direct transport
+reaches (no IP or credential, or not a platform NetHelper reads locally: APs,
+AOS-S under Central) gets its neighbors from its cloud. `listNeighbors()` reads
+the whole org/tenant in a few calls and returns a table by serial;
+`collectAll` reads it once per run and per integration and every device on that
+integration looks itself up. A device the cloud reports offline, or that its
+cloud has no data for, is *skipped*, so its last links stay as they were.
+- **Mist** relays the devices' own LLDP tables (protocol `lldp`): an AP's
+  `lldp_stats` (keyed by AP port, `""` on a single-port AP, which is `eth0`) or
+  `lldp_stat`, and a switch's per-port `neighbor_mac` / `neighbor_system_name` /
+  `neighbor_port_desc` (no remote port id; the description stands in). An AP's
+  chassis id is its switch's inventory MAC, and the switch's `neighbor_mac` is
+  the AP's, so both ends resolve and merge into one confirmed edge. Search
+  endpoints page by a `next` path (`search_after`), not `page`; only a same-API
+  path is followed.
+- **Central** serves a computed site topology (protocol `cloud`): each link is
+  listed once, by serial, with both ends' ports, and becomes a neighbor on both
+  ends. Unmanaged LLDP neighbors appear as `Unmanaged` under a synthetic serial
+  (`tpd_<mac>`), often named by their MAC (kept as chassis id, not name). A
+  gateway's WAN uplinks are links to `Internet`/`LTE` pseudo-devices with no
+  ports and are dropped. Offline devices keep their last links in the reply.
+- A link one end reads directly and the other end's cloud reports merges like
+  any two-ended link (e.g. an AOS-CX switch's own LLDP + Central's view of the
+  AP on that port).
+
+## 8e. Cloud sync and status refresh (2026-10-19)
+
+Two Bull repeatables on the `device-sync` queue (`jobs/device-sync.job.js`),
+both single-attempt (the next run is the retry):
+- **`syncDevices`** every `CLOUD_SYNC_INTERVAL` (1 h): the full
+  `syncDevicesFromCloud()` that the Sync button runs. It creates, adopts and
+  updates rows, and is skipped when no integration is active. Its socket
+  events carry `trigger: 'scheduled'`, and the UI reports only failures.
+- **`refreshStatuses`** every `CLOUD_STATUS_INTERVAL` (5 min):
+  `cloud-status.service.js` asks each provider for `listStatuses()`. That is a
+  Map by serial of status, last seen, IP, firmware, connection state and
+  config state, and it updates only the cloud rows owned by that integration.
+  It never creates rows, never clears a known IP or firmware, and never
+  overrides a `switch-rest` connection state. It writes only changed columns.
+  An online device's last-seen time alone is not a change, because Central
+  reports "now". It emits `device:status:update` (`status` is
+  `effectiveStatus`, plus `cloudStatus`) and raises or clears
+  `device.cloud-offline` / `device.cloud-config` on a change. Mist overrides
+  the base read (full inventory) with one paged org stats call.
+
+**Config state** (`configInSync` on the NormalizedCloudDevice): Central
+`Synchronized` → true, `Out of sync` → false, null → null; Mist `NO_CHANGE` →
+true, anything else → null (no failure value seen live yet). The
+`device.cloud-config` rule opens only for an online device that is out of sync
+(10-minute settle, since a push briefly reads out of sync) and clears when it
+is back in sync.
+
+## 8f. Cloud event streams (2026-10-19)
+
+A provider that supports `'events'` offers `listEventChannels()` and
+`openEventStream(channels)`: an unopened, read-only EventEmitter (`open`,
+`data`, `close`). `services/cloud/cloud-stream.service.js` holds one
+connection per such integration. It starts with the server, reconciles every
+5 minutes and after any integration edit (open new, close removed, reconnect
+edited, subscribe new sites), and reconnects with backoff (5 s doubling to
+5 min). It is in-memory and single-instance, like the live monitor.
+`CLOUD_STREAM_ENABLED` turns it off.
+
+**Mist** (`services/cloud/mist-stream.js`): `wss://api-ws.<region>.mist.com/api-ws/v1/stream`
+(the API host with `api-ws.` for `api.`), the REST token in the upgrade
+request, one `/sites/:id/stats/devices` subscription per site. Checked live on
+2026-10-19 (`probe-cloud.js --stream`, `tests/fixtures/mist-live/stream-stats-devices.json`):
+- `channel_subscribed` acks each subscription; an unknown channel gets no
+  reply (`/sites/:id/devices/events` is not one). `/sites/:id/devices` sent
+  nothing in two minutes with no config change.
+- `data` is a JSON string of **partial** stats, about once a minute per
+  connected device: a switch sends one message (serial, uptime, `if_stat`),
+  an AP sends two (`port_stat`, then uptime/version) keyed by MAC with no
+  serial. Each says how long it stays valid (`_ttl`, 190 s).
+- **No message carries a status**, and a disconnecting device just goes quiet.
+
+So the stream is a trigger, and REST stays the source of truth: a device the
+database holds as not online that reports, an online device whose last report
+expired (`_ttl` + 30 s, swept every 30 s, re-asked each window while the cloud
+still says online), and every (re)connect all run the §8e status refresh for
+that integration, one at a time and at most every 30 s. Status, alerts and
+`device:status:update` therefore come from one place. The refresh writes a
+status change only if the status is still the one it read, so overlapping
+refreshes report a change once.
+
+**Events** (`DeviceEvent`, source `cloud`, `services/device-events.service.js`,
+which also records the live monitor's): `port.link.up`/`down` when a port's
+state differs between two messages (switch ports from their logical units,
+skipping irb/vme/me0/lo0), `device.restarted` when uptime goes backwards by
+more than a minute, and `cloud.<status>` for every status change the refresh
+writes from a known status (both clouds). The first message after start is a
+baseline. Events stay raw. The device page's Live tab lists them for devices
+without live state; Settings → Cloud Integrations shows each stream's state
+(`eventStream` on `GET /settings/cloud-integrations`).
+
+**Central: none.** New Central delivers alerts only by HTTP POST to a URL it
+calls (webhooks under Alert Management, or the GreenLake event framework).
+That needs a public HTTPS endpoint, so it is deferred
+(`ROADMAP_AND_TODO.md` item 1). Classic Central's protobuf streaming API does
+not apply to New Central. Central stays on the 5-minute refresh.
 
 ## 9. Risks & open questions
 
@@ -350,6 +597,6 @@ The mirror is additive and best-effort throughout: a commit or push failure is l
 | `backend/src/services/aruba-central.service.js` | cleanup → `cloud-providers/aruba-central.provider.js`; template for `BaseCloudProvider` |
 | `backend/src/services/config-backup.service.js` | `pullConfig()` — the dispatch pattern to generalize; every vendor's backup path |
 | `backend/src/services/device-api/device-api-factory.js` | vendor-driven `determineDeviceAPIType`, constants-driven supported types |
-| `backend/src/services/ssh-device.service.js` | `PLATFORM_PROFILES` additions for junos / cisco-ios |
+| `backend/src/services/ssh-device.service.js` | `PLATFORM_PROFILES` additions for junos / ios-xe |
 | `frontend/src/views/devices/DevicesView.vue` | vendor/platform/cloud-integration selectors in Add/Edit |
 | `frontend/src/components/settings/ArubaCentralCredentials.vue` | → generic `CloudIntegrations.vue` |

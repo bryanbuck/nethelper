@@ -68,6 +68,32 @@ export const DeviceStatusInfo = {
   }
 }
 
+/**
+ * A device's displayed status: ping first, then its cloud's view. When the
+ * two disagree about a cloud-managed device it is warning: cloud online but
+ * no ping (up, but unreachable from NetHelper), or cloud offline but its
+ * address answers ping (maybe another device now has that IP). Mirrors
+ * backend/src/utils/device-status.js.
+ */
+export function effectiveStatus(device) {
+  const { pingStatus, cloudStatus, managementMode } = device || {}
+  if (managementMode === 'cloud') {
+    if (pingStatus === 'offline' && cloudStatus === 'online') return DeviceStatus.WARNING
+    if (pingStatus === 'online' && cloudStatus === 'offline') return DeviceStatus.WARNING
+  }
+  return pingStatus || cloudStatus || DeviceStatus.OFFLINE
+}
+
+/** True when the cloud reports a device offline but its address answers ping. */
+export function answersPingButCloudOffline(device) {
+  return device?.pingStatus === 'online' && effectiveStatus(device) === DeviceStatus.WARNING
+}
+
+/** True when the cloud reports a device online that NetHelper can't ping. */
+export function unreachableFromHere(device) {
+  return device?.pingStatus === 'offline' && effectiveStatus(device) === DeviceStatus.WARNING
+}
+
 export class Device {
   constructor(data = {}) {
     this.id = data.id || null
@@ -265,10 +291,7 @@ export class Device {
   validate() {
     const errors = []
 
-    // Serial validation
-    if (!this.serial || this.serial.trim().length === 0) {
-      errors.push('Serial number is required')
-    }
+    // Serial is optional (directly-managed devices may not have one)
 
     // Name validation
     if (!this.name || this.name.trim().length < 2) {

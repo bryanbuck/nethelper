@@ -81,8 +81,41 @@
         </v-col>
       </v-row>
       
+      <!-- Likely duplicates (e.g. a device added by hand, then synced from the cloud) -->
+      <v-alert
+        v-if="currentDuplicate"
+        type="warning"
+        variant="tonal"
+        icon="mdi-content-duplicate"
+        class="mb-4"
+      >
+        <div class="font-weight-medium">
+          {{ visibleDuplicates.length === 1 ? 'Possible duplicate device' : `${visibleDuplicates.length} possible duplicate devices` }}
+        </div>
+        <div class="text-body-2">
+          {{ currentDuplicate.devices.map((d) => `"${d.name}"`).join(' and ') }} share
+          {{ currentDuplicate.reason === 'mac' ? 'a MAC address' : `${currentDuplicate.reason === 'name-ip' ? 'a name and ' : ''}IP ${currentDuplicate.devices[0].ipAddress}` }}
+          and are probably the same device.
+        </div>
+        <template #append>
+          <div class="d-flex flex-wrap ga-2">
+            <v-btn v-if="canEdit" variant="tonal" color="warning" size="small" @click="showMergeDialog = true">
+              Review and merge
+            </v-btn>
+            <v-btn variant="text" size="small" @click="dismissDuplicate(currentDuplicate)">Not duplicates</v-btn>
+          </div>
+        </template>
+      </v-alert>
+
       <!-- Device Table -->
-      <DeviceTable @edit-device="handleEditDevice" />
+      <DeviceTable ref="deviceTable" @edit-device="handleEditDevice" />
+
+      <DeviceMergeDialog
+        v-if="currentDuplicate"
+        v-model="showMergeDialog"
+        :devices="currentDuplicate.devices"
+        @merged="onDuplicateMerged"
+      />
     </v-container>
     
     <!-- Add Device Dialog -->
@@ -223,9 +256,10 @@
                   label="Device Credential"
                   variant="outlined"
                   clearable
-                  hint="Required for direct (REST/SSH) access"
+                  :hint="newDevice.managementMode === 'cloud'
+                    ? 'Optional: enables read-only local access (AOS-CX REST, Junos NETCONF: config backup, network map)'
+                    : 'Required for direct (REST/SSH) access'"
                   persistent-hint
-                  :disabled="newDevice.managementMode === 'cloud'"
                 />
               </v-col>
             </v-row>
@@ -243,8 +277,8 @@
           <v-btn
             color="primary"
             variant="flat"
-            @click="saveDevice"
             :loading="saving"
+            @click="saveDevice"
           >
             Add Device
           </v-btn>
@@ -400,15 +434,17 @@
                   prepend-inner-icon="mdi-key-variant"
                   clearable
                   :loading="loadingCredentials"
-                  hint="Select the API credentials to use for this device"
+                  :hint="editingDevice.managementMode === 'cloud'
+                    ? 'Optional: enables read-only local access (AOS-CX REST, Junos NETCONF: config backup, network map)'
+                    : 'Select the API credentials to use for this device'"
                   persistent-hint
                 >
-                  <template v-slot:item="{ props, item }">
+                  <template #item="{ props, item }">
                     <v-list-item
                       v-bind="props"
                       :subtitle="`${item.raw.type} - ${item.raw.username || 'No username'}`"
                     >
-                      <template v-slot:append v-if="item.raw.lastTestStatus">
+                      <template v-if="item.raw.lastTestStatus" #append>
                         <v-chip
                           :color="item.raw.lastTestStatus === 'success' ? 'success' : 'error'"
                           size="x-small"
@@ -420,7 +456,7 @@
                     </v-list-item>
                   </template>
 
-                  <template v-slot:selection="{ item }">
+                  <template #selection="{ item }">
                     <div class="d-flex align-center">
                       <span>{{ item.title }}</span>
                       <v-chip
@@ -435,7 +471,7 @@
                     </div>
                   </template>
 
-                  <template v-slot:prepend-item>
+                  <template #prepend-item>
                     <v-list-item
                       title="Manage Credentials"
                       prepend-icon="mdi-cog"
@@ -454,7 +490,9 @@
                   density="compact"
                   class="mt-2"
                 >
-                  No credential assigned. Direct device polling will not be available.
+                  {{ editingDevice.managementMode === 'cloud'
+                    ? 'No credential assigned. Local config backup and live state will not be available.'
+                    : 'No credential assigned. Direct device polling will not be available.' }}
                 </v-alert>
               </v-col>
             </v-row>
@@ -472,8 +510,8 @@
           <v-btn
             color="primary"
             variant="flat"
-            @click="updateDevice"
             :loading="saving"
+            @click="updateDevice"
           >
             Save Changes
           </v-btn>
@@ -489,7 +527,7 @@
       location="bottom right"
     >
       {{ snackbar.message }}
-      <template v-slot:actions>
+      <template #actions>
         <v-btn
           icon="mdi-close"
           variant="text"
@@ -503,18 +541,53 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import DeviceMergeDialog from '@/components/devices/DeviceMergeDialog.vue'
+import { useRoute } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
 import { useSettingsStore } from '@/stores/settings'
 import { useWebSocket } from '@/composables/useWebSocket'
 import DeviceTable from '@/components/devices/DeviceTable.vue'
 import { vendorOptions, platformOptions, cloudProviderLabel } from '@/models/vendors'
 
-const router = useRouter()
 const route = useRoute()
 const devicesStore = useDevicesStore()
 const settingsStore = useSettingsStore()
 const { connected, connecting } = useWebSocket()
+const authStore = useAuthStore()
+const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole))
+
+// Possible duplicates, one group at a time. "Not duplicates" is remembered per
+// browser (a convenience; the server re-reports the group elsewhere).
+const DISMISSED_KEY = 'nethelper.dismissedDuplicates'
+const readDismissed = () => {
+  try {
+    return JSON.parse(localStorage.getItem(DISMISSED_KEY) || '[]')
+  } catch {
+    return []
+  }
+}
+const dismissedDuplicates = ref(readDismissed())
+const visibleDuplicates = computed(() =>
+  (devicesStore.duplicateGroups || []).filter((g) => !dismissedDuplicates.value.includes(g.key))
+)
+const currentDuplicate = computed(() => visibleDuplicates.value[0] || null)
+const showMergeDialog = ref(false)
+const deviceTable = ref(null)
+
+const dismissDuplicate = (group) => {
+  dismissedDuplicates.value = [...dismissedDuplicates.value, group.key]
+  try {
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify(dismissedDuplicates.value))
+  } catch {
+    // Storage unavailable: dismissed for this visit only.
+  }
+}
+
+const onDuplicateMerged = () => {
+  showMergeDialog.value = false
+  deviceTable.value?.refreshTable?.()
+}
 
 // Credentials state
 const loadingCredentials = ref(false)
@@ -586,7 +659,8 @@ const rules = {
   },
   macAddress: value => {
     if (!value) return true
-    const pattern = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/
+    // Same forms the API accepts; Mist reports bare hex
+    const pattern = /^(?:[0-9a-f]{2}([:-])(?:[0-9a-f]{2}\1){4}[0-9a-f]{2}|[0-9a-f]{4}\.[0-9a-f]{4}\.[0-9a-f]{4}|[0-9a-f]{12})$/i
     return pattern.test(value) || 'Invalid MAC address format'
   }
 }
@@ -665,13 +739,15 @@ const saveDevice = async () => {
       vendor: newDevice.value.vendor || 'aruba',
       platform: newDevice.value.platform || null,
       ipAddress: newDevice.value.ipAddress, // Required
-      macAddress: newDevice.value.macAddress || generateRandomMac(),
+      macAddress: newDevice.value.macAddress || undefined, // optional; never invent one
       location: newDevice.value.location,
-      serial: newDevice.value.serialNumber || '', // Optional - send empty string if not provided
+      serial: newDevice.value.serialNumber?.trim() || null, // optional; blank is stored as no serial
       model: newDevice.value.model || '',
       managementMode: newDevice.value.managementMode || 'direct',
       cloudIntegrationId: isCloud ? (newDevice.value.cloudIntegrationId || null) : null,
-      apiCredentialId: isCloud ? null : (newDevice.value.apiCredentialId || null)
+      // Kept for cloud devices too: read-only local access (AOS-CX config
+      // backup, live state) uses it. Writes still go through the provider.
+      apiCredentialId: newDevice.value.apiCredentialId || null
     }
 
     // Create device via API
@@ -687,16 +763,6 @@ const saveDevice = async () => {
   } finally {
     saving.value = false
   }
-}
-
-const generateRandomMac = () => {
-  const hex = '0123456789ABCDEF'
-  let mac = ''
-  for (let i = 0; i < 6; i++) {
-    if (i > 0) mac += ':'
-    mac += hex[Math.floor(Math.random() * 16)] + hex[Math.floor(Math.random() * 16)]
-  }
-  return mac
 }
 
 const showSnackbar = (message, color = 'success') => {
@@ -780,13 +846,15 @@ const updateDevice = async () => {
       vendor: editingDevice.value.vendor || 'aruba',
       platform: editingDevice.value.platform || null,
       ipAddress: editingDevice.value.ipAddress,
-      macAddress: editingDevice.value.macAddress || '',
+      macAddress: editingDevice.value.macAddress || null,
       location: editingDevice.value.location,
-      serial: editingDevice.value.serialNumber || '',
+      serial: editingDevice.value.serialNumber?.trim() || null,
       model: editingDevice.value.model || '',
       managementMode: editingDevice.value.managementMode || 'direct',
       cloudIntegrationId: isCloud ? (editingDevice.value.cloudIntegrationId || null) : null,
-      apiCredentialId: isCloud ? null : (editingDevice.value.apiCredentialId || null)
+      // Kept for cloud devices too: read-only local access (AOS-CX config
+      // backup, live state) uses it. Writes still go through the provider.
+      apiCredentialId: editingDevice.value.apiCredentialId || null
     }
 
     // Update device via API
@@ -815,6 +883,7 @@ const handleQueryParams = () => {
 // Initialize
 onMounted(() => {
   handleQueryParams()
+  devicesStore.fetchDuplicates().catch(() => {})
   // Needed by the cloud-integration selector in the add/edit dialogs.
   settingsStore.fetchCloudIntegrations().catch((error) => {
     console.error('Failed to load cloud integrations:', error)

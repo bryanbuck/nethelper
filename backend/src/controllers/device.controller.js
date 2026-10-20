@@ -1,15 +1,16 @@
 const deviceService = require('../services/device.service');
+const deviceMerge = require('../services/device-merge.service');
+const deviceCredentials = require('../services/device-credential.service');
 const CloudProviderFactory = require('../services/cloud-providers/cloud-provider-factory');
 const { getPrisma } = require('../config/database');
 const devicePollerService = require('../services/device-poller.service');
 const ArubaErrorHandler = require('../utils/aruba-error-handler');
-const logger = require('../utils/logger');
 
 class DeviceController {
   async getDevices(req, res, next) {
     try {
-      const { type, status, location, search } = req.query;
-      const filters = { type, status, location, search };
+      const { type, status, location, search, platform, credential } = req.query;
+      const filters = { type, status, location, search, platform, credential };
       
       const devices = await deviceService.getDevices(filters);
       
@@ -58,8 +59,8 @@ class DeviceController {
         jobId: job.id,
       });
     } catch (error) {
-      // Handle enhanced Aruba errors
-      if (error.isArubaError && error.actions) {
+      // A cloud provider's error carries suggested actions for the user.
+      if (error.isProviderError && error.actions) {
         const errorResponse = ArubaErrorHandler.createErrorResponse({
           type: error.type,
           userMessage: error.message,
@@ -71,6 +72,72 @@ class DeviceController {
           timestamp: new Date().toISOString()
         });
         return res.status(error.statusCode || 500).json(errorResponse);
+      }
+      next(error);
+    }
+  }
+
+  /** Groups of devices that are probably the same hardware (see device-merge.service). */
+  async getDuplicates(req, res, next) {
+    try {
+      const groups = await deviceMerge.findDuplicateGroups();
+      res.json({ success: true, data: groups });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /** Fold sourceIds into targetId; the sources are deleted. */
+  async mergeDevices(req, res, next) {
+    try {
+      const { targetId, sourceIds, identityFrom } = req.body;
+      const device = await deviceMerge.merge(targetId, sourceIds, { identityFrom: identityFrom || null });
+      res.json({ success: true, data: device });
+    } catch (error) {
+      if (error instanceof deviceMerge.MergeError) {
+        return res.status(error.statusCode).json({ success: false, error: error.message, code: error.code });
+      }
+      next(error);
+    }
+  }
+
+  /** How a merge would settle serial/MAC (asks the cloud and/or device); changes nothing. */
+  async previewMerge(req, res, next) {
+    try {
+      const { targetId, sourceIds } = req.body;
+      const preview = await deviceMerge.preview(targetId, sourceIds);
+      res.json({ success: true, data: preview });
+    } catch (error) {
+      if (error instanceof deviceMerge.MergeError) {
+        return res.status(error.statusCode).json({ success: false, error: error.message, code: error.code });
+      }
+      next(error);
+    }
+  }
+
+  /** What linking a credential to these devices would do; changes nothing. */
+  async previewCredentialAssignment(req, res, next) {
+    try {
+      const { deviceIds, apiCredentialId } = req.body;
+      const plan = await deviceCredentials.plan(deviceIds, apiCredentialId || null);
+      res.json({ success: true, data: plan });
+    } catch (error) {
+      if (error instanceof deviceCredentials.CredentialAssignError) {
+        return res.status(error.statusCode).json({ success: false, error: error.message });
+      }
+      next(error);
+    }
+  }
+
+  /** Link apiCredentialId to deviceIds (null unlinks); skipped devices are reported. */
+  async assignCredential(req, res, next) {
+    try {
+      const { deviceIds, apiCredentialId } = req.body;
+      const result = await deviceCredentials.assign(deviceIds, apiCredentialId || null, { userId: req.user.id });
+      res.json({ success: true, data: result });
+    } catch (error) {
+      if (error instanceof deviceCredentials.CredentialAssignError) {
+        return res.status(error.statusCode).json({ success: false, error: error.message });
       }
       next(error);
     }
@@ -326,6 +393,86 @@ class DeviceController {
   }
 
   /**
+   * Recent live-state events for a device, newest first.
+   * Query: limit (1-200, default 50), before (ISO timestamp cursor),
+   * type (comma-separated exact types or prefixes, e.g. "port.poe").
+   */
+  async getDeviceEvents(req, res, next) {
+    try {
+      const { deviceId } = req.params;
+      const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+      const where = { deviceId };
+
+      if (req.query.before) {
+        const before = new Date(req.query.before);
+        if (Number.isNaN(before.getTime())) {
+          return res.status(400).json({ success: false, error: 'before must be an ISO timestamp' });
+        }
+        where.occurredAt = { lt: before };
+      }
+      if (req.query.type) {
+        const types = String(req.query.type).split(',').map((t) => t.trim()).filter(Boolean);
+        where.OR = types.map((t) => ({ type: { startsWith: t } }));
+      }
+
+      const events = await getPrisma().deviceEvent.findMany({
+        where,
+        orderBy: { occurredAt: 'desc' },
+        take: limit,
+      });
+
+      res.json({
+        success: true,
+        data: events,
+        nextBefore: events.length === limit ? events[events.length - 1].occurredAt : null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Turn always-on live state monitoring on or off. Body: { enabled: boolean }.
+   * Enabling checks up front that the device can be watched, so the toggle
+   * never claims monitoring that isn't happening.
+   */
+  async setLiveMonitoring(req, res, next) {
+    try {
+      const { deviceId } = req.params;
+      const { enabled } = req.body || {};
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ success: false, error: 'enabled must be true or false' });
+      }
+
+      const stateMonitor = require('../services/live/state-monitor.service');
+      const prisma = getPrisma();
+      const device = await prisma.device.findUnique({ where: { id: deviceId } });
+      if (!device) {
+        return res.status(404).json({ success: false, error: 'Device not found' });
+      }
+
+      if (enabled) {
+        const reason = stateMonitor.unsupportedReason(device)
+          || (device.apiCredentialId ? null : 'Link a device credential first; live state reads the device directly');
+        if (reason) return res.status(400).json({ success: false, error: reason });
+      }
+
+      const updated = await prisma.device.update({ where: { id: deviceId }, data: { liveMonitoring: enabled } });
+      try {
+        await stateMonitor.setAlwaysOn(updated, enabled);
+      } catch (error) {
+        // e.g. LIVE_MAX_CONNECTIONS reached: don't leave the flag claiming otherwise.
+        await prisma.device.update({ where: { id: deviceId }, data: { liveMonitoring: false } });
+        return res.status(409).json({ success: false, error: error.message });
+      }
+
+      res.json({ success: true, data: { deviceId, liveMonitoring: enabled } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * Manually trigger ping check for specific device
    */
   async pingDevice(req, res, next) {
@@ -378,8 +525,6 @@ class DeviceController {
    */
   async pingAllDevices(req, res, next) {
     try {
-      const pingMonitorService = require('../services/ping-monitor.service');
-
       // Queue the job instead of running synchronously
       const { getQueue } = require('../config/bull');
       const pingMonitorQueue = getQueue('pingMonitor');

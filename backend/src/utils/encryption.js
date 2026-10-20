@@ -5,18 +5,19 @@ const logger = require('./logger');
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
 const SALT_LENGTH = 64;
-const TAG_LENGTH = 16;
 const KEY_LENGTH = 32;
 const ITERATIONS = 100000;
 
 class EncryptionService {
-  constructor() {
-    this.encryptionKey = process.env.ENCRYPTION_KEY;
-
-    if (!this.encryptionKey) {
-      logger.warn('ENCRYPTION_KEY not set in environment variables. Using default key (NOT SECURE FOR PRODUCTION)');
-      this.encryptionKey = 'default-key-change-this-in-production-for-security';
+  // Read lazily, with no fallback: config/env.js refuses to start without
+  // ENCRYPTION_KEY, and a hardcoded default would make stored credentials
+  // readable by anyone with the source.
+  get key() {
+    const key = process.env.ENCRYPTION_KEY;
+    if (!key) {
+      throw new Error('ENCRYPTION_KEY is not set; cannot encrypt or decrypt credentials');
     }
+    return key;
   }
 
   /**
@@ -26,7 +27,7 @@ class EncryptionService {
    */
   deriveKey(salt) {
     return crypto.pbkdf2Sync(
-      this.encryptionKey,
+      this.key,
       salt,
       ITERATIONS,
       KEY_LENGTH,

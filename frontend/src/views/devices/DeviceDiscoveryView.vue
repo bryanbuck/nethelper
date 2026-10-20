@@ -6,7 +6,7 @@
         <div>
           <h1 class="text-h4 font-weight-bold mb-1">Device Discovery</h1>
           <p class="text-subtitle-1 text-medium-emphasis mb-0">
-            Scan your network for Aruba devices and import them into the inventory
+            Scan your network for Aruba and Juniper devices and import them into the inventory
           </p>
         </div>
 
@@ -89,7 +89,7 @@
           :items-per-page="10"
           no-data-text="No discovery scans yet. Start a new scan to find devices on your network."
         >
-          <template v-slot:item.status="{ item }">
+          <template #item.status="{ item }">
             <v-chip
               :color="getScanStatusColor(item.status)"
               size="small"
@@ -99,19 +99,19 @@
             </v-chip>
           </template>
 
-          <template v-slot:item.subnets="{ item }">
+          <template #item.subnets="{ item }">
             <span class="text-body-2">{{ formatSubnets(item.subnets) }}</span>
           </template>
 
-          <template v-slot:item.discovered="{ item }">
+          <template #item.discovered="{ item }">
             {{ item._count?.discoveredDevices ?? 0 }}
           </template>
 
-          <template v-slot:item.createdAt="{ item }">
+          <template #item.createdAt="{ item }">
             {{ formatDate(item.createdAt) }}
           </template>
 
-          <template v-slot:item.actions="{ item }">
+          <template #item.actions="{ item }">
             <v-btn
               icon="mdi-eye"
               size="small"
@@ -152,7 +152,7 @@
             {{ discoveryStore.activeScan.totalHosts }} hosts
           </v-chip>
           <v-chip size="small" variant="tonal" color="success" class="mr-2">
-            {{ discoveryStore.activeScan.arubaHosts }} Aruba
+            {{ discoveryStore.activeScan.vendorHosts }} known vendor
           </v-chip>
           <v-chip size="small" variant="tonal" color="info">
             {{ discoveryStore.newDevices.length }} new
@@ -175,7 +175,7 @@
               mandatory
             >
               <v-btn value="all">All</v-btn>
-              <v-btn value="aruba">Aruba Only</v-btn>
+              <v-btn value="known">Known Vendors</v-btn>
               <v-btn value="new">New Only</v-btn>
             </v-btn-toggle>
 
@@ -202,14 +202,14 @@
           :items-per-page="25"
           no-data-text="No devices found in this scan"
         >
-          <template v-slot:item.ipAddress="{ item }">
+          <template #item.ipAddress="{ item }">
             <span class="font-weight-medium">{{ item.ipAddress }}</span>
           </template>
 
-          <template v-slot:item.vendor="{ item }">
+          <template #item.vendor="{ item }">
             <div class="d-flex align-center">
               <v-icon
-                v-if="item.isArubaVendor"
+                v-if="item.matchedVendor"
                 color="success"
                 size="small"
                 class="mr-1"
@@ -220,11 +220,11 @@
             </div>
           </template>
 
-          <template v-slot:item.openPorts="{ item }">
+          <template #item.openPorts="{ item }">
             <span class="text-body-2">{{ (item.openPorts || []).join(', ') || '—' }}</span>
           </template>
 
-          <template v-slot:item.suggestedType="{ item }">
+          <template #item.suggestedType="{ item }">
             <v-chip
               v-if="item.suggestedType"
               size="small"
@@ -236,7 +236,7 @@
             <span v-else class="text-medium-emphasis">—</span>
           </template>
 
-          <template v-slot:item.centralMatch="{ item }">
+          <template #item.centralMatch="{ item }">
             <v-chip
               v-if="item.centralMatch"
               size="small"
@@ -245,7 +245,7 @@
             >
               {{ item.centralMatch.deviceName || item.centralMatch.serial }}
               <v-tooltip activator="parent" location="top">
-                Matched in Aruba Central:
+                Matched in {{ item.centralMatch.integrationName || cloudProviderLabel(item.centralMatch.provider, { short: false }) }}:
                 {{ item.centralMatch.model || 'Unknown model' }}
                 ({{ item.centralMatch.status || 'unknown status' }})
               </v-tooltip>
@@ -253,7 +253,7 @@
             <span v-else class="text-medium-emphasis">—</span>
           </template>
 
-          <template v-slot:item.conflictType="{ item }">
+          <template #item.conflictType="{ item }">
             <v-chip
               v-if="item.conflictType"
               size="small"
@@ -265,7 +265,7 @@
             <span v-else class="text-medium-emphasis">—</span>
           </template>
 
-          <template v-slot:item.status="{ item }">
+          <template #item.status="{ item }">
             <v-chip
               :color="getDiscoveredStatusColor(item.status)"
               size="small"
@@ -275,7 +275,7 @@
             </v-chip>
           </template>
 
-          <template v-slot:item.actions="{ item }">
+          <template #item.actions="{ item }">
             <template v-if="item.status === 'new'">
               <v-btn
                 size="small"
@@ -372,139 +372,12 @@
     </v-dialog>
 
     <!-- Import Device Dialog -->
-    <v-dialog
+    <ImportDiscoveredDialog
       v-model="showImportDialog"
-      max-width="600px"
-      persistent
-    >
-      <v-card>
-        <v-card-title class="text-h5">
-          Import Discovered Device
-        </v-card-title>
-
-        <v-card-text>
-          <v-container>
-            <v-row>
-              <v-col cols="12">
-                <v-alert
-                  v-if="importTarget?.conflictType"
-                  type="warning"
-                  variant="tonal"
-                  density="compact"
-                >
-                  This device conflicts with an existing inventory device
-                  ({{ formatConflict(importTarget.conflictType) }}).
-                  Enable "Update existing device" below to merge the scanned
-                  IP/MAC into the existing record instead of creating a new one.
-                </v-alert>
-
-                <v-alert
-                  v-if="importConflictMessage"
-                  type="warning"
-                  variant="tonal"
-                  density="compact"
-                  class="mt-2"
-                >
-                  {{ importConflictMessage }}
-                </v-alert>
-              </v-col>
-
-              <v-col v-if="importTarget?.conflictType || importConflictMessage" cols="12">
-                <v-checkbox
-                  v-model="importForm.updateExisting"
-                  label="Update existing device (merge scan data)"
-                  color="warning"
-                  hide-details
-                />
-              </v-col>
-
-              <template v-if="!importForm.updateExisting">
-                <v-col cols="12" sm="6">
-                  <v-text-field
-                    v-model="importForm.name"
-                    label="Device Name"
-                    variant="outlined"
-                    :hint="importTarget?.suggestedName ? 'Suggested from scan' : ''"
-                    persistent-hint
-                  />
-                </v-col>
-
-                <v-col cols="12" sm="6">
-                  <v-select
-                    v-model="importForm.type"
-                    label="Device Type"
-                    :items="deviceTypeItems"
-                    item-title="title"
-                    item-value="value"
-                    variant="outlined"
-                    :rules="importTarget?.suggestedType ? [] : [rules.required]"
-                    :hint="importTarget?.suggestedType ? 'Detected from scan' : 'Required (not auto-detected)'"
-                    persistent-hint
-                  />
-                </v-col>
-
-                <v-col cols="12" sm="6">
-                  <v-text-field
-                    v-model="importForm.serial"
-                    label="Serial Number"
-                    variant="outlined"
-                    :hint="serialHint"
-                    persistent-hint
-                  />
-                </v-col>
-
-                <v-col cols="12" sm="6">
-                  <v-text-field
-                    v-model="importForm.model"
-                    label="Model"
-                    variant="outlined"
-                  />
-                </v-col>
-
-                <v-col cols="12">
-                  <v-text-field
-                    v-model="importForm.location"
-                    label="Location"
-                    variant="outlined"
-                  />
-                </v-col>
-              </template>
-
-              <v-col cols="12">
-                <v-list density="compact" class="bg-transparent">
-                  <v-list-item prepend-icon="mdi-ip-network" :title="importTarget?.ipAddress || '—'" subtitle="IP Address" />
-                  <v-list-item prepend-icon="mdi-lan" :title="importTarget?.macAddress || 'Not detected'" subtitle="MAC Address" />
-                  <v-list-item
-                    v-if="importTarget?.centralMatch"
-                    prepend-icon="mdi-cloud-check"
-                    :title="`${importTarget.centralMatch.deviceName || importTarget.centralMatch.serial} (${importTarget.centralMatch.model || 'Unknown model'})`"
-                    subtitle="Aruba Central Match"
-                  />
-                </v-list>
-              </v-col>
-            </v-row>
-          </v-container>
-        </v-card-text>
-
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn
-            variant="text"
-            @click="closeImportDialog"
-          >
-            Cancel
-          </v-btn>
-          <v-btn
-            color="primary"
-            variant="flat"
-            :loading="importing"
-            @click="importDevice"
-          >
-            {{ importForm.updateExisting ? 'Merge Into Existing' : 'Import Device' }}
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+      :target="importTarget"
+      @imported="onImported"
+      @error="(message) => showSnackbar(message, 'error')"
+    />
 
     <!-- Delete Scan Confirmation Dialog -->
     <v-dialog
@@ -549,7 +422,7 @@
       location="bottom right"
     >
       {{ snackbar.message }}
-      <template v-slot:actions>
+      <template #actions>
         <v-btn
           icon="mdi-close"
           variant="text"
@@ -566,6 +439,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDiscoveryStore } from '@/stores/discovery'
 import { useWebSocket } from '@/composables/useWebSocket'
+import ImportDiscoveredDialog from '@/components/discovery/ImportDiscoveredDialog.vue'
+import { cloudProviderLabel } from '@/models/vendors'
 
 const authStore = useAuthStore()
 const discoveryStore = useDiscoveryStore()
@@ -579,21 +454,10 @@ const autoDetectSubnets = ref(true)
 const selectedSubnets = ref([])
 const resultsFilter = ref('all')
 const resultsSearch = ref('')
-const importing = ref(false)
 const deleting = ref(false)
 const ignoringId = ref(null)
 const importTarget = ref(null)
-const importConflictMessage = ref('')
 const scanToDelete = ref(null)
-
-const importForm = ref({
-  name: '',
-  type: null,
-  serial: '',
-  model: '',
-  location: '',
-  updateExisting: false
-})
 
 const snackbar = ref({
   show: false,
@@ -605,7 +469,6 @@ const snackbar = ref({
 // Form validation rules
 const cidrPattern = /^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/
 const rules = {
-  required: value => !!value || 'This field is required',
   subnetList: value => {
     if (!value || value.length === 0) return 'Select at least one subnet or enable auto-detect'
     const invalid = value.find(subnet => !cidrPattern.test(subnet))
@@ -613,20 +476,13 @@ const rules = {
   }
 }
 
-// Device types (backend values with display labels)
-const deviceTypeItems = [
-  { title: 'Access Point', value: 'access_point' },
-  { title: 'Switch', value: 'switch' },
-  { title: 'Gateway', value: 'gateway' }
-]
-
 // Table headers
 const scanHeaders = [
   { title: 'Started', key: 'createdAt' },
   { title: 'Status', key: 'status' },
   { title: 'Subnets', key: 'subnets', sortable: false },
   { title: 'Hosts', key: 'totalHosts' },
-  { title: 'Aruba', key: 'arubaHosts' },
+  { title: 'Known vendor', key: 'vendorHosts' },
   { title: 'Discovered', key: 'discovered', sortable: false },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' }
 ]
@@ -638,7 +494,7 @@ const resultHeaders = [
   { title: 'Hostname', key: 'hostname' },
   { title: 'Open Ports', key: 'openPorts', sortable: false },
   { title: 'Suggested Type', key: 'suggestedType' },
-  { title: 'Central Match', key: 'centralMatch', sortable: false },
+  { title: 'Cloud Match', key: 'centralMatch', sortable: false },
   { title: 'Conflict', key: 'conflictType' },
   { title: 'Status', key: 'status' },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' }
@@ -667,19 +523,13 @@ const suggestedSubnetItems = computed(() =>
 
 const filteredResults = computed(() => {
   const devices = discoveryStore.discoveredDevices
-  if (resultsFilter.value === 'aruba') {
-    return devices.filter(device => device.isArubaVendor)
+  if (resultsFilter.value === 'known') {
+    return devices.filter(device => device.matchedVendor)
   }
   if (resultsFilter.value === 'new') {
     return devices.filter(device => device.status === 'new')
   }
   return devices
-})
-
-const serialHint = computed(() => {
-  if (importTarget.value?.centralSerial) return 'Detected from Aruba Central'
-  if (importTarget.value?.macAddress) return 'Defaults to MAC address if left blank'
-  return 'Required (not auto-detected)'
 })
 
 // Formatters
@@ -707,7 +557,7 @@ const formatConflict = (conflictType) => {
     ip_conflict: 'IP Conflict',
     mac_conflict: 'MAC Conflict',
     serial_conflict: 'Serial Conflict',
-    central_managed: 'Central Managed'
+    central_managed: 'Cloud Managed'
   }
   return labels[conflictType] || conflictType
 }
@@ -820,66 +670,17 @@ const deleteScan = async () => {
 
 const openImportDialog = (device) => {
   importTarget.value = device
-  importConflictMessage.value = ''
-  importForm.value = {
-    name: device.suggestedName || device.hostname || device.ipAddress || '',
-    type: device.suggestedType || null,
-    serial: device.centralSerial || '',
-    model: device.centralMatch?.model || '',
-    location: '',
-    updateExisting: false
-  }
   showImportDialog.value = true
 }
 
-const closeImportDialog = () => {
-  showImportDialog.value = false
+const onImported = (response) => {
+  showSnackbar(
+    response.merged
+      ? 'Scan data merged into existing device'
+      : 'Device imported successfully',
+    'success'
+  )
   importTarget.value = null
-  importConflictMessage.value = ''
-  importForm.value = {
-    name: '',
-    type: null,
-    serial: '',
-    model: '',
-    location: '',
-    updateExisting: false
-  }
-}
-
-const importDevice = async () => {
-  if (!importTarget.value) return
-
-  importing.value = true
-  try {
-    const payload = {}
-    if (importForm.value.updateExisting) {
-      payload.updateExisting = true
-    } else {
-      if (importForm.value.name) payload.name = importForm.value.name
-      if (importForm.value.type) payload.type = importForm.value.type
-      if (importForm.value.serial) payload.serial = importForm.value.serial
-      if (importForm.value.model) payload.model = importForm.value.model
-      if (importForm.value.location) payload.location = importForm.value.location
-    }
-
-    const response = await discoveryStore.importDevice(importTarget.value.id, payload)
-    showSnackbar(
-      response.merged
-        ? 'Scan data merged into existing device'
-        : 'Device imported successfully',
-      'success'
-    )
-    closeImportDialog()
-  } catch (error) {
-    if (error.statusCode === 409) {
-      // Conflict - surface the message and offer the merge option
-      importConflictMessage.value = error.userMessage || 'This device conflicts with an existing device.'
-    } else {
-      showSnackbar(error.userMessage || 'Failed to import device', 'error')
-    }
-  } finally {
-    importing.value = false
-  }
 }
 
 const ignoreDevice = async (device) => {

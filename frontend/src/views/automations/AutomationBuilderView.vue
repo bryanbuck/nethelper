@@ -8,12 +8,13 @@
             <v-btn 
               variant="text" 
               icon="mdi-arrow-left"
-              @click="handleBack"
               class="mr-2"
+              @click="handleBack"
             />
             <div>
               <h1 class="text-h5 font-weight-bold mb-1">
                 {{ isEditing ? 'Edit Automation' : 'Create Automation' }}
+                <v-chip size="small" color="warning" variant="tonal" label class="ml-2 align-middle">Experimental</v-chip>
               </h1>
               <p class="text-body-2 text-medium-emphasis mb-0">
                 {{ workflowMetadata.name || 'Untitled Workflow' }}
@@ -36,19 +37,30 @@
             
             <!-- Action Buttons -->
             <v-btn
+              v-if="workflowId"
+              variant="text"
+              prepend-icon="mdi-history"
+              :to="{ path: '/automations/executions', query: { automationId: workflowId } }"
+            >
+              Runs
+            </v-btn>
+
+            <v-btn
               variant="outlined"
               prepend-icon="mdi-play"
-              @click="testWorkflow"
               :disabled="!canTestWorkflow"
+              :loading="running"
+              title="Save, then run once now (Manual and Schedule triggers)"
+              @click="testWorkflow"
             >
-              Test
+              Run now
             </v-btn>
             
             <v-btn
               variant="outlined"
               prepend-icon="mdi-content-save"
-              @click="saveWorkflow"
               :loading="saving"
+              @click="saveWorkflow"
             >
               Save
             </v-btn>
@@ -56,15 +68,15 @@
             <v-btn
               color="primary"
               prepend-icon="mdi-rocket-launch"
-              @click="deployWorkflow"
               :disabled="!canDeployWorkflow"
               :loading="deploying"
+              @click="deployWorkflow"
             >
               Deploy
             </v-btn>
             
             <v-menu>
-              <template v-slot:activator="{ props }">
+              <template #activator="{ props }">
                 <v-btn
                   variant="outlined"
                   icon="mdi-dots-vertical"
@@ -105,8 +117,8 @@
               variant="outlined"
               size="small"
               prepend-icon="mdi-undo"
-              @click="undo"
               :disabled="!canUndo"
+              @click="undo"
             >
               Undo
             </v-btn>
@@ -115,8 +127,8 @@
               variant="outlined"
               size="small"
               prepend-icon="mdi-redo"
-              @click="redo"
               :disabled="!canRedo"
+              @click="redo"
             >
               Redo
             </v-btn>
@@ -240,9 +252,9 @@
                 variant="outlined"
                 size="small"
                 prepend-icon="mdi-cog"
-                @click="configureSelectedNode"
                 class="mt-3"
                 block
+                @click="configureSelectedNode"
               >
                 Configure Node
               </v-btn>
@@ -270,6 +282,7 @@
     <NodeConfigDialog
       v-model="configDialog"
       :node="selectedNode"
+      :nodes="workflowElements.filter((el) => !(el.source && el.target))"
       @save="onNodeSave"
       @test="onNodeTest"
     />
@@ -384,10 +397,10 @@
             label="Or paste JSON here"
             variant="outlined"
             rows="8"
-            placeholder='{
-  "nodes": [...],
-  "edges": [...]
-}'
+            placeholder="{
+  &quot;nodes&quot;: [...],
+  &quot;edges&quot;: [...]
+}"
           />
         </v-card-text>
         
@@ -442,7 +455,7 @@
       location="bottom right"
     >
       {{ snackbar.message }}
-      <template v-slot:actions>
+      <template #actions>
         <v-btn
           icon="mdi-close"
           variant="text"
@@ -459,9 +472,13 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { validateWorkflow, exportWorkflowToJSON, importWorkflowFromJSON } from '@/utils/layoutUtils'
 import { useAutomationsStore } from '@/stores/automations'
+import { apiErrorMessage } from '@/utils/apiError'
 import WorkflowCanvas from '@/components/automations/WorkflowCanvas.vue'
 import NodeToolbar from '@/components/automations/NodeToolbar.vue'
 import NodeConfigDialog from '@/components/automations/NodeConfigDialog.vue'
+
+// vue-flow edges carry a type too ('smoothstep'); an edge is what has source and target.
+const isEdge = (el) => !!(el.source && el.target)
 
 const router = useRouter()
 const route = useRoute()
@@ -538,8 +555,8 @@ const workflowStatusIcon = computed(() => {
 })
 
 const validationResult = computed(() => {
-  const nodes = workflowElements.value.filter(el => el.type)
-  const edges = workflowElements.value.filter(el => !el.type)
+  const nodes = workflowElements.value.filter(el => !isEdge(el))
+  const edges = workflowElements.value.filter(isEdge)
   return validateWorkflow(nodes, edges)
 })
 
@@ -599,8 +616,8 @@ const undo = () => {
     
     // Update the canvas with restored elements
     if (canvas.value) {
-      const nodes = restoredElements.filter(el => el.type)
-      const edges = restoredElements.filter(el => !el.type)
+      const nodes = restoredElements.filter(el => !isEdge(el))
+      const edges = restoredElements.filter(isEdge)
       canvas.value.importWorkflow({ nodes, edges })
     }
     
@@ -622,8 +639,8 @@ const redo = () => {
     
     // Update the canvas with restored elements
     if (canvas.value) {
-      const nodes = restoredElements.filter(el => el.type)
-      const edges = restoredElements.filter(el => !el.type)
+      const nodes = restoredElements.filter(el => !isEdge(el))
+      const edges = restoredElements.filter(isEdge)
       canvas.value.importWorkflow({ nodes, edges })
     }
     
@@ -710,8 +727,8 @@ const saveWorkflow = async () => {
   saving.value = true
   
   try {
-    const nodes = workflowElements.value.filter(el => el.type)
-    const edges = workflowElements.value.filter(el => !el.type)
+    const nodes = workflowElements.value.filter(el => !isEdge(el))
+    const edges = workflowElements.value.filter(isEdge)
     
     const workflowData = {
       name: workflowMetadata.value.name,
@@ -757,10 +774,11 @@ const saveWorkflow = async () => {
     }
     
     showSnackbar('Workflow saved successfully', 'success')
-    
+    return true
   } catch (error) {
     console.error('Failed to save workflow:', error)
-    showSnackbar('Failed to save workflow', 'error')
+    showSnackbar(apiErrorMessage(error), 'error')
+    return false
   } finally {
     saving.value = false
   }
@@ -795,22 +813,32 @@ const deployWorkflow = async () => {
     
   } catch (error) {
     console.error('Failed to deploy workflow:', error)
-    showSnackbar('Failed to deploy workflow', 'error')
+    showSnackbar(apiErrorMessage(error), 'error')
   } finally {
     deploying.value = false
   }
 }
 
-const testWorkflow = () => {
+const running = ref(false)
+
+// Save, then queue one run now; results appear in Run History.
+const testWorkflow = async () => {
   if (!canTestWorkflow.value) return
-  
-  showSnackbar('Starting workflow test...', 'info')
-  // Implement test logic here
+  running.value = true
+  try {
+    if (!(await saveWorkflow())) return // the save failed and said why
+    const result = await automationsStore.executeAutomation(workflowId.value)
+    showSnackbar(`${result?.message || 'Automation queued'}. See Runs for the results.`, 'info')
+  } catch (error) {
+    showSnackbar(apiErrorMessage(error), 'error')
+  } finally {
+    running.value = false
+  }
 }
 
 const exportWorkflow = () => {
-  const nodes = workflowElements.value.filter(el => el.type)
-  const edges = workflowElements.value.filter(el => !el.type)
+  const nodes = workflowElements.value.filter(el => !isEdge(el))
+  const edges = workflowElements.value.filter(isEdge)
   
   const exportData = exportWorkflowToJSON(nodes, edges, workflowMetadata.value)
   
@@ -830,16 +858,16 @@ const exportWorkflow = () => {
   showSnackbar('Workflow exported successfully', 'success')
 }
 
-const handleImport = () => {
+const handleImport = async () => {
   try {
     let jsonData
     
     if (importJson.value) {
       jsonData = JSON.parse(importJson.value)
     } else if (importFile.value) {
-      // Handle file import (would need FileReader in real implementation)
-      showSnackbar('File import not implemented in demo', 'warning')
-      return
+      // v-file-input yields a File, or a File[] in some Vuetify versions
+      const file = Array.isArray(importFile.value) ? importFile.value[0] : importFile.value
+      jsonData = JSON.parse(await file.text())
     } else {
       showSnackbar('Please provide JSON data or select a file', 'warning')
       return
@@ -931,8 +959,8 @@ const loadExistingAutomation = async () => {
         workflowElements.value = automation.elements
         
         if (canvas.value) {
-          const nodes = automation.elements.filter(el => el.type)
-          const edges = automation.elements.filter(el => !el.type)
+          const nodes = automation.elements.filter(el => !isEdge(el))
+          const edges = automation.elements.filter(isEdge)
           
           canvas.value.importWorkflow({ nodes, edges })
         }
@@ -1040,18 +1068,18 @@ onUnmounted(() => {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #fafafa;
+  background-color: rgb(var(--v-theme-background));
 }
 
 .builder-header {
-  background: white;
-  border-bottom: 1px solid #e0e0e0;
+  background: rgb(var(--v-theme-surface));
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   z-index: 10;
 }
 
 .builder-toolbar {
   padding: 8px 0;
-  background: rgba(0, 0, 0, 0.02);
+  background: rgba(var(--v-theme-on-surface), 0.03);
   border-radius: 6px;
 }
 
@@ -1064,8 +1092,8 @@ onUnmounted(() => {
 .node-palette {
   width: 280px;
   flex-shrink: 0;
-  background: white;
-  border-right: 1px solid #e0e0e0;
+  background: rgb(var(--v-theme-surface));
+  border-right: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 
 .workflow-canvas-container {
@@ -1076,8 +1104,8 @@ onUnmounted(() => {
 .properties-panel {
   width: 300px;
   flex-shrink: 0;
-  background: white;
-  border-left: 1px solid #e0e0e0;
+  background: rgb(var(--v-theme-surface));
+  border-left: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   padding: 16px;
 }
 
@@ -1087,7 +1115,7 @@ onUnmounted(() => {
 }
 
 .configuration-info {
-  background: #f5f5f5;
+  background: rgba(var(--v-theme-on-surface), 0.05);
   border-radius: 4px;
   padding: 8px;
   max-height: 200px;
@@ -1103,7 +1131,7 @@ onUnmounted(() => {
 .help-content h3 {
   margin-top: 16px;
   margin-bottom: 8px;
-  color: #333;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
 }
 
 .help-content ul {

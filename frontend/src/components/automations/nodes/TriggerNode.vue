@@ -23,7 +23,10 @@ import { computed } from 'vue'
 import BaseNode from './BaseNode.vue'
 
 const props = defineProps({
-  id: String,
+  id: {
+    type: String,
+    default: ''
+  },
   data: {
     type: Object,
     default: () => ({})
@@ -37,6 +40,7 @@ const nodeLabel = computed(() => {
   if (!props.data?.triggerType) return 'Trigger'
   
   const triggerTypes = {
+    'alert': 'Alert',
     'device-status': 'Device Status Change',
     'schedule': 'Scheduled Event',
     'threshold': 'Threshold Alert',
@@ -61,6 +65,8 @@ const nodeSubtitle = computed(() => {
       return props.data.config.endpoint || 'Configure webhook'
     case 'manual':
       return 'Manual execution'
+    case 'alert':
+      return props.data.config.event === 'resolved' ? 'When an alert resolves' : 'When an alert opens'
     default:
       return 'Configure trigger'
   }
@@ -78,6 +84,8 @@ const nodeDescription = computed(() => {
       return `When ${props.data.config.metric} ${props.data.config.operator} ${props.data.config.value}`
     case 'webhook':
       return `HTTP ${props.data.config.method} to ${props.data.config.endpoint}`
+    case 'alert':
+      return props.data.config.rules?.length ? props.data.config.rules.join(', ') : 'Any alert rule'
     default:
       return ''
   }
@@ -87,6 +95,7 @@ const nodeIcon = computed(() => {
   if (!props.data?.triggerType) return 'mdi-play'
   
   const triggerIcons = {
+    'alert': 'mdi-bell-alert',
     'device-status': 'mdi-router-wireless',
     'schedule': 'mdi-clock',
     'threshold': 'mdi-chart-line',

@@ -38,7 +38,7 @@
             :to="`/devices/${device.id}`"
             class="device-item"
           >
-            <template v-slot:prepend>
+            <template #prepend>
               <v-avatar :color="getDeviceTypeColor(device.type)" variant="tonal">
                 <v-icon :icon="getDeviceIcon(device.type)"></v-icon>
               </v-avatar>
@@ -52,7 +52,7 @@
               {{ device.location }} " {{ device.ipAddress }}
             </v-list-item-subtitle>
             
-            <template v-slot:append>
+            <template #append>
               <div class="text-right">
                 <v-chip 
                   :color="getStatusColor(device.status)" 
@@ -81,8 +81,8 @@
         size="small" 
         color="primary"
         prepend-icon="mdi-refresh"
-        @click="refreshDevices"
         :loading="refreshing"
+        @click="refreshDevices"
       >
         Refresh
       </v-btn>

@@ -1,14 +1,37 @@
 require('dotenv').config();
+
+// Validate configuration before any module reads process.env at load time.
+const { validateEnv } = require('./src/config/env');
+try {
+  const warnings = validateEnv();
+  for (const warning of warnings) {
+    console.warn(`[config] WARNING: ${warning} (fatal when NODE_ENV=production)`);
+  }
+} catch (error) {
+  console.error(`[config] ${error.message}`);
+  process.exit(1);
+}
+
 const http = require('http');
 const app = require('./src/app');
 const { initializeSocket } = require('./src/websocket/socket.handler');
 const logger = require('./src/utils/logger');
 const { connectDatabase, disconnectDatabase } = require('./src/config/database');
 const { connectRedis, disconnectRedis } = require('./src/config/redis');
-const { initializeQueues } = require('./src/config/bull');
-const pingMonitorService = require('./src/services/ping-monitor.service');
+const { initializeQueues, closeQueues } = require('./src/config/bull');
+const stateMonitorService = require('./src/services/live/state-monitor.service');
+const cloudStreamService = require('./src/services/cloud/cloud-stream.service');
+const deviceEvents = require('./src/services/device-events.service');
+const liveViewService = require('./src/services/live/live-view.service');
+const alertService = require('./src/services/alert.service');
+const automationTriggers = require('./src/services/automation/trigger.service');
+const automationSchedules = require('./src/services/automation/schedule.service');
+const { version } = require('./package.json');
 
 const PORT = process.env.PORT || 3000;
+// 127.0.0.1 when nginx runs on the same host, so the API isn't reachable around it.
+const BIND_ADDRESS = process.env.BIND_ADDRESS || '0.0.0.0';
+const SHUTDOWN_TIMEOUT_MS = 10000;
 
 async function startServer() {
   try {
@@ -28,37 +51,74 @@ async function startServer() {
     const configBackupService = require('./src/services/config-backup.service');
     await configBackupService.syncSchedules();
 
+    // Re-derive automation cron schedules from their Schedule triggers
+    await automationSchedules.syncAll().catch((error) => {
+      logger.error(`Automation schedule sync failed: ${error.message}`);
+    });
+
     // Create HTTP server
     const server = http.createServer(app);
 
     // Initialize WebSocket
-    initializeSocket(server);
+    const io = initializeSocket(server);
     logger.info('WebSocket server initialized');
 
-    // Start ping monitoring
-    pingMonitorService.startMonitoring();
-    logger.info('Ping monitoring service started');
+    // Live port/PoE state for devices with liveMonitoring on. Connects are
+    // staggered in the background; a slow switch doesn't delay startup.
+    stateMonitorService.start().catch((error) => {
+      logger.error(`Live state monitoring failed to start: ${error.message}`);
+    });
+
+    // Push streams from the clouds (Mist), in the background like the above.
+    cloudStreamService.start().catch((error) => {
+      logger.error(`Cloud event streams failed to start: ${error.message}`);
+    });
+    deviceEvents.startPruning();
+
+    // Daily prune of old resolved alerts; automations with an Alert trigger
+    alertService.start();
+    automationTriggers.start();
+    automationSchedules.start();
 
     // Start server
-    server.listen(PORT, '0.0.0.0', () => {
-      logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
+    server.listen(PORT, BIND_ADDRESS, () => {
+      logger.info(`NetHelper ${version} listening on ${BIND_ADDRESS}:${PORT} in ${process.env.NODE_ENV} mode`);
     });
 
-    // Graceful shutdown
-    process.on('SIGTERM', async () => {
-      logger.info('SIGTERM signal received: closing HTTP server');
+    // Graceful shutdown. Runs once even if several signals arrive: under
+    // systemd + npm + nodemon every process in the group gets the signal, so
+    // node commonly sees it twice.
+    let shuttingDown = false;
+    const shutdown = async (signal) => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      logger.info(`${signal} received: shutting down`);
 
-      // Stop ping monitoring
-      pingMonitorService.stopMonitoring();
-      logger.info('Ping monitoring stopped');
+      // Don't hang forever on a stuck connection or job.
+      setTimeout(() => {
+        logger.error('Graceful shutdown timed out; forcing exit');
+        process.exit(1);
+      }, SHUTDOWN_TIMEOUT_MS).unref();
 
-      server.close(async () => {
-        logger.info('HTTP server closed');
-        await disconnectDatabase();
-        await disconnectRedis();
-        process.exit(0);
-      });
-    });
+      await liveViewService.stop();
+      await stateMonitorService.stop(); // logs out of device sessions
+      cloudStreamService.stop();
+      deviceEvents.stopPruning();
+      automationTriggers.stop();
+      automationSchedules.stop();
+      alertService.stop();
+      // io.close() disconnects WebSocket clients and closes the HTTP server;
+      // plain server.close() would wait on those long-lived connections.
+      await new Promise((resolve) => io.close(() => resolve()));
+      server.closeAllConnections?.(); // idle keep-alive HTTP sockets
+      logger.info('HTTP and WebSocket servers closed');
+      await closeQueues();
+      await disconnectDatabase();
+      await disconnectRedis();
+      process.exit(0);
+    };
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
 
   } catch (error) {
     logger.error('Failed to start server:', error);

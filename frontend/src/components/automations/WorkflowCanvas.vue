@@ -17,6 +17,7 @@
       :delete-key-code="'Delete'"
       :connection-line-style="connectionLineStyle"
       :default-edge-options="defaultEdgeOptions"
+      class="vue-flow-container"
       @node-click="onNodeClick"
       @node-double-click="onNodeDoubleClick"
       @edge-click="onEdgeClick"
@@ -28,11 +29,10 @@
       @dragover="onDragOver"
       @selection-change="onSelectionChange"
       @pane-click="onPaneClick"
-      class="vue-flow-container"
     >
       <!-- Background -->
       <Background 
-        :pattern-color="'#e2e8f0'"
+        :pattern-color="canvasColors.pattern"
         :gap="16"
         variant="dots"
       />
@@ -67,6 +67,7 @@
         :pannable="true"
         :zoomable="true"
         :node-color="getNodeColor"
+        :mask-color="canvasColors.minimapMask"
       />
       
       <!-- Selection Box -->
@@ -131,6 +132,7 @@
 
 <script setup>
 import { ref, computed, nextTick, onMounted } from 'vue'
+import { useTheme } from 'vuetify'
 import {
   VueFlow,
   useVueFlow,
@@ -140,6 +142,13 @@ import {
 import { Background } from '@vue-flow/background'
 import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
+// vue-flow ships its layout (pane, viewport, node positioning, handles, panels)
+// as CSS that must be imported; theme-default adds colors, remapped to the
+// Vuetify theme in the style block below.
+import '@vue-flow/core/dist/style.css'
+import '@vue-flow/core/dist/theme-default.css'
+import '@vue-flow/controls/dist/style.css'
+import '@vue-flow/minimap/dist/style.css'
 import { getLayoutedElements } from '@/utils/layoutUtils'
 
 // Import custom node components
@@ -176,10 +185,8 @@ const {
   removeNodes, 
   removeEdges,
   findNode,
-  findEdge,
   getConnectedEdges,
   fitView,
-  setViewport,
   toObject
 } = useVueFlow()
 
@@ -211,12 +218,20 @@ const nodeTypes = {
 }
 
 // Edge types configuration
+const theme = useTheme()
+
+// vue-flow writes these into SVG fill attributes, where CSS variables don't
+// resolve, so they're picked per theme here instead.
+const canvasColors = computed(() => theme.current.value.dark
+  ? { pattern: '#3a3f47', minimapMask: 'rgba(0, 0, 0, 0.55)' }
+  : { pattern: '#e2e8f0', minimapMask: 'rgba(240, 240, 240, 0.6)' })
+
 const edgeTypes = {}
 
 // Style configurations
 const connectionLineStyle = {
   strokeWidth: 2,
-  stroke: '#FF8300'
+  stroke: 'rgb(var(--v-theme-primary-text))'
 }
 
 const defaultEdgeOptions = {
@@ -245,8 +260,8 @@ const selectionBoxStyle = computed(() => {
     top: `${top}px`,
     width: `${width}px`,
     height: `${height}px`,
-    border: '2px dashed #FF8300',
-    backgroundColor: 'rgba(255, 131, 0, 0.1)',
+    border: '2px dashed rgb(var(--v-theme-primary-text))',
+    backgroundColor: 'rgba(var(--v-theme-primary), 0.1)',
     pointerEvents: 'none',
     zIndex: 1000
   }
@@ -393,13 +408,13 @@ const onEdgeUpdate = ({ edge, connection }) => {
   }
 }
 
-const onNodesChange = (changes) => {
+const onNodesChange = () => {
   // Handle node position changes, deletions, etc.
   elements.value = [...nodes.value, ...edges.value]
   emit('elements-change', elements.value)
 }
 
-const onEdgesChange = (changes) => {
+const onEdgesChange = () => {
   // Handle edge changes
   elements.value = [...nodes.value, ...edges.value]
   emit('elements-change', elements.value)
@@ -574,13 +589,37 @@ onMounted(() => {
 }
 
 .vue-flow-container {
-  background-color: #fafafa;
+  background-color: rgb(var(--v-theme-background));
+
+  /* vue-flow's theme-default.css colors, pointed at the Vuetify theme. */
+  --vf-node-bg: rgb(var(--v-theme-surface));
+  --vf-node-text: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  --vf-connection-path: rgba(var(--v-theme-on-surface), 0.4);
+  --vf-handle: rgba(var(--v-theme-on-surface), 0.6);
+}
+
+:deep(.vue-flow__handle) {
+  border-color: rgb(var(--v-theme-surface));
+}
+
+:deep(.vue-flow__edge-textbg) {
+  fill: rgb(var(--v-theme-surface));
+}
+
+:deep(.vue-flow__edge-text) {
+  fill: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+}
+
+:deep(.vue-flow__selection),
+:deep(.vue-flow__nodesselection-rect) {
+  background: rgba(var(--v-theme-primary), 0.08);
+  border: 1px dotted rgb(var(--v-theme-primary-text));
 }
 
 .selection-box {
   position: absolute;
-  border: 2px dashed #FF8300;
-  background-color: rgba(255, 131, 0, 0.1);
+  border: 2px dashed rgb(var(--v-theme-primary));
+  background-color: rgba(var(--v-theme-primary), 0.1);
   pointer-events: none;
   z-index: 1000;
 }
@@ -595,11 +634,11 @@ onMounted(() => {
 }
 
 :deep(.vue-flow__edge:hover) {
-  stroke: #FF8300;
+  stroke: rgb(var(--v-theme-primary));
 }
 
 :deep(.vue-flow__edge.selected) {
-  stroke: #FF8300;
+  stroke: rgb(var(--v-theme-primary));
 }
 
 :deep(.vue-flow__controls) {
@@ -608,5 +647,18 @@ onMounted(() => {
 
 :deep(.vue-flow__minimap) {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  background-color: rgb(var(--v-theme-surface));
+}
+
+:deep(.vue-flow__controls-button) {
+  background: rgb(var(--v-theme-surface));
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  fill: currentColor;
+  border: none;
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+:deep(.vue-flow__controls-button:hover) {
+  background: rgba(var(--v-theme-on-surface), 0.08);
 }
 </style>

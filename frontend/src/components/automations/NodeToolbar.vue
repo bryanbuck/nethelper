@@ -22,7 +22,8 @@
               <div 
                 v-for="trigger in triggerNodes" 
                 :key="trigger.type"
-                class="node-item"
+                :class="['node-item', { 'node-item--later': !isRunnable('trigger', trigger.type) }]"
+                :title="isRunnable('trigger', trigger.type) ? undefined : 'Not runnable yet: a workflow using this can be saved but not run or activated'"
                 :draggable="true"
                 @dragstart="onDragStart($event, 'trigger', trigger)"
                 @click="addNode('trigger', trigger)"
@@ -35,6 +36,7 @@
                 <div class="node-item-content">
                   <div class="node-item-title">{{ trigger.label }}</div>
                   <div class="node-item-description">{{ trigger.description }}</div>
+                  <div v-if="!isRunnable('trigger', trigger.type)" class="node-item-later">Not runnable yet</div>
                 </div>
               </div>
             </div>
@@ -54,7 +56,8 @@
               <div 
                 v-for="condition in conditionNodes" 
                 :key="condition.type"
-                class="node-item"
+                :class="['node-item', { 'node-item--later': !isRunnable('condition', condition.type) }]"
+                :title="isRunnable('condition', condition.type) ? undefined : 'Not runnable yet: a workflow using this can be saved but not run or activated'"
                 :draggable="true"
                 @dragstart="onDragStart($event, 'condition', condition)"
                 @click="addNode('condition', condition)"
@@ -67,6 +70,7 @@
                 <div class="node-item-content">
                   <div class="node-item-title">{{ condition.label }}</div>
                   <div class="node-item-description">{{ condition.description }}</div>
+                  <div v-if="!isRunnable('condition', condition.type)" class="node-item-later">Not runnable yet</div>
                 </div>
               </div>
             </div>
@@ -86,7 +90,8 @@
               <div 
                 v-for="action in actionNodes" 
                 :key="action.type"
-                class="node-item"
+                :class="['node-item', { 'node-item--later': !isRunnable('action', action.type) }]"
+                :title="isRunnable('action', action.type) ? undefined : 'Not runnable yet: a workflow using this can be saved but not run or activated'"
                 :draggable="true"
                 @dragstart="onDragStart($event, 'action', action)"
                 @click="addNode('action', action)"
@@ -99,6 +104,7 @@
                 <div class="node-item-content">
                   <div class="node-item-title">{{ action.label }}</div>
                   <div class="node-item-description">{{ action.description }}</div>
+                  <div v-if="!isRunnable('action', action.type)" class="node-item-later">Not runnable yet</div>
                 </div>
               </div>
             </div>
@@ -118,7 +124,8 @@
               <div 
                 v-for="notification in notificationNodes" 
                 :key="notification.type"
-                class="node-item"
+                :class="['node-item', { 'node-item--later': !isRunnable('notification', notification.type) }]"
+                :title="isRunnable('notification', notification.type) ? undefined : 'Not runnable yet: a workflow using this can be saved but not run or activated'"
                 :draggable="true"
                 @dragstart="onDragStart($event, 'notification', notification)"
                 @click="addNode('notification', notification)"
@@ -131,6 +138,7 @@
                 <div class="node-item-content">
                   <div class="node-item-title">{{ notification.label }}</div>
                   <div class="node-item-description">{{ notification.description }}</div>
+                  <div v-if="!isRunnable('notification', notification.type)" class="node-item-later">Not runnable yet</div>
                 </div>
               </div>
             </div>
@@ -146,8 +154,8 @@
         variant="outlined" 
         size="small" 
         prepend-icon="mdi-help-circle"
-        @click="showHelp = true"
         class="text-none"
+        @click="showHelp = true"
       >
         Help
       </v-btn>
@@ -199,8 +207,9 @@
 
 <script setup>
 import { ref } from 'vue'
+import { isRunnable } from '@/models/automation-nodes'
 
-const props = defineProps({
+defineProps({
   collapsed: {
     type: Boolean,
     default: false
@@ -214,6 +223,13 @@ const showHelp = ref(false)
 
 // Node definitions
 const triggerNodes = [
+  {
+    type: 'alert',
+    label: 'Alert',
+    description: 'When an alert opens or resolves',
+    icon: 'mdi-bell-alert',
+    color: 'success'
+  },
   {
     type: 'device-status',
     label: 'Device Status',
@@ -253,6 +269,13 @@ const triggerNodes = [
 
 const conditionNodes = [
   {
+    type: 'alert-severity',
+    label: 'Alert Severity',
+    description: 'Check the triggering alert\'s severity',
+    icon: 'mdi-alert',
+    color: 'warning'
+  },
+  {
     type: 'device-property',
     label: 'Device Property',
     description: 'Check device properties',
@@ -290,6 +313,27 @@ const conditionNodes = [
 ]
 
 const actionNodes = [
+  {
+    type: 'raise-alert',
+    label: 'Raise Alert',
+    description: 'Open an alert (or count it again)',
+    icon: 'mdi-bell-plus',
+    color: 'primary'
+  },
+  {
+    type: 'clear-alert',
+    label: 'Clear Alert',
+    description: 'Resolve an alert an automation raised',
+    icon: 'mdi-bell-check',
+    color: 'primary'
+  },
+  {
+    type: 'acknowledge-alert',
+    label: 'Acknowledge Alert',
+    description: 'Acknowledge the triggering alert',
+    icon: 'mdi-bell-ring',
+    color: 'primary'
+  },
   {
     type: 'device-reboot',
     label: 'Reboot Device',
@@ -437,15 +481,15 @@ const addNode = (category, nodeData) => {
   align-items: center;
   gap: 12px;
   padding: 8px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
-  background: white;
+  background: rgb(var(--v-theme-surface));
 }
 
 .node-item:hover {
-  border-color: #FF8300;
+  border-color: rgb(var(--v-theme-primary-text));
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   transform: translateY(-1px);
 }
@@ -473,15 +517,26 @@ const addNode = (category, nodeData) => {
 .node-item-title {
   font-weight: 600;
   font-size: 13px;
-  color: #333;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
   line-height: 1.2;
   margin-bottom: 2px;
 }
 
 .node-item-description {
   font-size: 11px;
-  color: #666;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   line-height: 1.2;
+}
+
+.node-item--later {
+  opacity: 0.6;
+}
+
+.node-item-later {
+  font-size: 10px;
+  font-weight: 500;
+  color: rgb(var(--v-theme-warning));
+  margin-top: 2px;
 }
 
 .help-content {
@@ -491,7 +546,7 @@ const addNode = (category, nodeData) => {
 
 .help-content h3 {
   margin-bottom: 12px;
-  color: #333;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
 }
 
 .help-content ul {

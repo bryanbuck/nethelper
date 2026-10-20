@@ -120,7 +120,7 @@
           </v-card-title>
 
           <v-card-text>
-            <v-list density="compact" v-if="!loadingSupportedTypes">
+            <v-list v-if="!loadingSupportedTypes" density="compact">
               <v-list-item
                 v-for="type in supportedTypes"
                 :key="type.type"
@@ -157,35 +157,35 @@
             <v-list density="compact">
               <v-list-item>
                 <v-list-item-title>Total Tests</v-list-item-title>
-                <template v-slot:append>
+                <template #append>
                   <v-chip size="small">{{ stats.total }}</v-chip>
                 </template>
               </v-list-item>
 
               <v-list-item>
                 <v-list-item-title>Successful</v-list-item-title>
-                <template v-slot:append>
+                <template #append>
                   <v-chip size="small" color="success">{{ stats.successful }}</v-chip>
                 </template>
               </v-list-item>
 
               <v-list-item>
                 <v-list-item-title>Failed</v-list-item-title>
-                <template v-slot:append>
+                <template #append>
                   <v-chip size="small" color="error">{{ stats.failed }}</v-chip>
                 </template>
               </v-list-item>
 
               <v-list-item v-if="stats.avgResponseTime">
                 <v-list-item-title>Avg Response Time</v-list-item-title>
-                <template v-slot:append>
+                <template #append>
                   <v-chip size="small" color="info">{{ stats.avgResponseTime }}ms</v-chip>
                 </template>
               </v-list-item>
 
               <v-list-item v-if="stats.successRate !== null">
                 <v-list-item-title>Success Rate</v-list-item-title>
-                <template v-slot:append>
+                <template #append>
                   <v-chip
                     size="small"
                     :color="stats.successRate >= 80 ? 'success' : stats.successRate >= 50 ? 'warning' : 'error'"

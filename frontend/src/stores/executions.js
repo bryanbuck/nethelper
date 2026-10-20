@@ -1,158 +1,57 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import { Execution, ExecutionStatus } from '@/models'
+import { ref } from 'vue'
+import executionsService from '@/services/executions.service'
 
+/**
+ * Automation run history, owned by the server. Socket events
+ * (automation:started / automation:completed) patch loaded rows; a run not
+ * on the current page marks the list stale so the view can refetch.
+ */
 export const useExecutionsStore = defineStore('executions', () => {
-  const executions = ref([])
-  const activeExecutions = ref([])
-  const recentExecutions = ref([])
+  const items = ref([])
+  const total = ref(0)
   const loading = ref(false)
-  const stats = ref({
-    total: 0,
-    running: 0,
-    success: 0,
-    failed: 0,
-    pending: 0
-  })
+  const staleAt = ref(0)
 
-  // Computed properties
-  const runningExecutions = computed(() => 
-    executions.value.filter(exec => exec.status === ExecutionStatus.RUNNING)
-  )
-
-  const pendingExecutions = computed(() => 
-    executions.value.filter(exec => exec.status === ExecutionStatus.PENDING)
-  )
-
-  const completedExecutions = computed(() => 
-    executions.value.filter(exec => 
-      [ExecutionStatus.SUCCESS, ExecutionStatus.FAILED, ExecutionStatus.CANCELLED].includes(exec.status)
-    )
-  )
-
-  const successfulExecutions = computed(() => 
-    executions.value.filter(exec => exec.status === ExecutionStatus.SUCCESS)
-  )
-
-  const failedExecutions = computed(() => 
-    executions.value.filter(exec => exec.status === ExecutionStatus.FAILED)
-  )
-
-  // Actions
-  function addExecution(executionData) {
-    const execution = executionData instanceof Execution 
-      ? executionData 
-      : Execution.fromApiResponse(executionData)
-    
-    executions.value.unshift(execution)
-    updateActiveExecutions()
-    updateStats()
-  }
-
-  function updateExecution(executionId, updates) {
-    const index = executions.value.findIndex(exec => exec.id === executionId)
-    if (index > -1) {
-      const currentExecution = executions.value[index]
-      const updatedExecution = currentExecution.update(updates)
-      executions.value[index] = updatedExecution
-      updateActiveExecutions()
-      updateStats()
+  async function fetch(query = {}) {
+    loading.value = true
+    try {
+      const params = Object.fromEntries(Object.entries(query).filter(([, v]) => v != null && v !== ''))
+      const { executions, pagination } = await executionsService.list(params)
+      items.value = executions
+      total.value = pagination.total
+    } finally {
+      loading.value = false
     }
   }
 
-  function updateExecutionStatus(executionId, status, additionalData = {}) {
-    const execution = executions.value.find(exec => exec.id === executionId)
-    if (execution) {
-      const updates = { status, ...additionalData }
-      
-      // Set timestamps based on status
-      if (status === ExecutionStatus.RUNNING && !execution.startedAt) {
-        updates.startedAt = new Date()
-      } else if ([ExecutionStatus.SUCCESS, ExecutionStatus.FAILED, ExecutionStatus.CANCELLED].includes(status)) {
-        updates.completedAt = new Date()
-        
-        // Calculate duration if we have start time
-        if (execution.startedAt) {
-          updates.duration = new Date() - new Date(execution.startedAt)
-        }
-      }
-      
-      updateExecution(executionId, updates)
-    }
+  function fetchOne(id) {
+    return executionsService.get(id)
   }
 
-  function updateExecutionProgress(executionId, progressData) {
-    const execution = executions.value.find(exec => exec.id === executionId)
-    if (execution) {
-      const output = execution.output || {}
-      output.progress = progressData.progress
-      output.currentStep = progressData.currentStep
-      output.totalSteps = progressData.totalSteps
-      output.message = progressData.message
-      
-      updateExecution(executionId, { output })
-    }
+  async function cancel(id) {
+    const row = await executionsService.cancel(id)
+    patchRow(id, { status: row.status, completedAt: row.completedAt, duration: row.duration })
+    return row
   }
 
-  function removeExecution(executionId) {
-    const index = executions.value.findIndex(exec => exec.id === executionId)
-    if (index > -1) {
-      executions.value.splice(index, 1)
-      updateActiveExecutions()
-      updateStats()
-    }
+  function patchRow(id, patch) {
+    const row = items.value.find((r) => r.id === id)
+    if (row) Object.assign(row, patch)
+    return !!row
   }
 
-  function updateActiveExecutions() {
-    activeExecutions.value = executions.value.filter(exec => 
-      [ExecutionStatus.PENDING, ExecutionStatus.RUNNING].includes(exec.status)
-    )
+  function handleStarted({ executionId }) {
+    if (!patchRow(executionId, { status: 'running', startedAt: new Date().toISOString() })) staleAt.value = Date.now()
   }
 
-  function updateStats() {
-    stats.value = {
-      total: executions.value.length,
-      running: runningExecutions.value.length,
-      success: successfulExecutions.value.length,
-      failed: failedExecutions.value.length,
-      pending: pendingExecutions.value.length
-    }
+  function handleCompleted({ executionId, status, error, duration, output }) {
+    const patch = { status, completedAt: new Date().toISOString() }
+    if (error !== undefined) patch.error = error
+    if (duration !== undefined) patch.duration = duration
+    if (output !== undefined) patch.output = output
+    if (!patchRow(executionId, patch)) staleAt.value = Date.now()
   }
 
-  function getExecutionsByAutomation(automationId) {
-    return executions.value.filter(exec => exec.automationId === automationId)
-  }
-
-  function getExecutionsByDevice(deviceId) {
-    return executions.value.filter(exec => exec.deviceId === deviceId)
-  }
-
-  function clearCompletedExecutions() {
-    executions.value = executions.value.filter(exec => 
-      ![ExecutionStatus.SUCCESS, ExecutionStatus.FAILED, ExecutionStatus.CANCELLED].includes(exec.status)
-    )
-    updateActiveExecutions()
-    updateStats()
-  }
-
-  return {
-    executions,
-    activeExecutions,
-    recentExecutions,
-    loading,
-    stats,
-    runningExecutions,
-    pendingExecutions,
-    completedExecutions,
-    successfulExecutions,
-    failedExecutions,
-    addExecution,
-    updateExecution,
-    updateExecutionStatus,
-    updateExecutionProgress,
-    removeExecution,
-    getExecutionsByAutomation,
-    getExecutionsByDevice,
-    clearCompletedExecutions
-  }
+  return { items, total, loading, staleAt, fetch, fetchOne, cancel, handleStarted, handleCompleted }
 })

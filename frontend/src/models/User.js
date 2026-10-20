@@ -167,16 +167,6 @@ export class User {
       errors.push('Invalid user role')
     }
 
-    // Password validation (only if password is provided)
-    if (this.password) {
-      if (this.password.length < 8) {
-        errors.push('Password must be at least 8 characters long')
-      }
-      if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(this.password)) {
-        errors.push('Password must contain at least one lowercase letter, one uppercase letter, and one number')
-      }
-    }
-
     return {
       isValid: errors.length === 0,
       errors

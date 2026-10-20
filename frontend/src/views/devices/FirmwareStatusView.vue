@@ -9,9 +9,9 @@
             <v-spacer></v-spacer>
             <v-btn
               color="primary"
-              @click="pollFirmware"
               :loading="loading"
               :disabled="loading"
+              @click="pollFirmware"
             >
               <v-icon left>mdi-refresh</v-icon>
               Poll All Switches
@@ -24,8 +24,8 @@
               v-if="firmwareError"
               type="error"
               dismissible
-              @click:close="firmwareError = null"
               class="mb-4"
+              @click:close="firmwareError = null"
             >
               {{ firmwareError }}
             </v-alert>
@@ -75,7 +75,7 @@
               class="elevation-1"
               item-value="deviceId"
             >
-              <template v-slot:top>
+              <template #top>
                 <v-toolbar flat>
                   <v-text-field
                     v-model="search"
@@ -90,8 +90,8 @@
                   <v-btn
                     color="primary"
                     variant="text"
-                    @click="exportToCSV"
                     :disabled="firmwareData.length === 0"
+                    @click="exportToCSV"
                   >
                     <v-icon left>mdi-download</v-icon>
                     Export CSV
@@ -99,7 +99,7 @@
                 </v-toolbar>
               </template>
 
-              <template v-slot:item.deviceName="{ item }">
+              <template #item.deviceName="{ item }">
                 <router-link
                   :to="`/devices/${item.deviceId}`"
                   class="text-decoration-none"
@@ -108,7 +108,7 @@
                 </router-link>
               </template>
 
-              <template v-slot:item.success="{ item }">
+              <template #item.success="{ item }">
                 <v-chip
                   :color="item.success ? 'success' : 'error'"
                   size="small"
@@ -118,7 +118,7 @@
                 </v-chip>
               </template>
 
-              <template v-slot:item.booted="{ item }">
+              <template #item.booted="{ item }">
                 <v-chip
                   v-if="item.success && item.booted"
                   :color="item.booted === 'primary' ? 'primary' : 'secondary'"
@@ -130,7 +130,7 @@
                 <span v-else class="text-grey">{{ item.error ? 'N/A' : '-' }}</span>
               </template>
 
-              <template v-slot:item.current="{ item }">
+              <template #item.current="{ item }">
                 <v-chip
                   v-if="item.success && item.current"
                   :color="item.current === 'primary' ? 'primary' : 'secondary'"
@@ -142,7 +142,7 @@
                 <span v-else class="text-grey">{{ item.error ? 'N/A' : '-' }}</span>
               </template>
 
-              <template v-slot:item.default="{ item }">
+              <template #item.default="{ item }">
                 <v-chip
                   v-if="item.success && item.default"
                   :color="item.default === 'primary' ? 'primary' : 'secondary'"
@@ -154,19 +154,19 @@
                 <span v-else class="text-grey">{{ item.error ? 'N/A' : '-' }}</span>
               </template>
 
-              <template v-slot:item.primary="{ item }">
+              <template #item.primary="{ item }">
                 <span v-if="item.success && item.primary">{{ item.primary }}</span>
                 <span v-else class="text-grey">{{ item.error ? 'N/A' : '-' }}</span>
               </template>
 
-              <template v-slot:item.secondary="{ item }">
+              <template #item.secondary="{ item }">
                 <span v-if="item.success && item.secondary">{{ item.secondary }}</span>
                 <span v-else class="text-grey">{{ item.error ? 'N/A' : '-' }}</span>
               </template>
 
-              <template v-slot:item.error="{ item }">
+              <template #item.error="{ item }">
                 <v-tooltip v-if="item.error" location="top">
-                  <template v-slot:activator="{ props }">
+                  <template #activator="{ props }">
                     <v-icon v-bind="props" color="error" size="small">
                       mdi-alert-circle
                     </v-icon>
@@ -176,7 +176,7 @@
                 <span v-else>-</span>
               </template>
 
-              <template v-slot:no-data>
+              <template #no-data>
                 <v-container class="text-center py-8">
                   <v-icon size="64" color="grey-lighten-1">mdi-chip</v-icon>
                   <div class="text-h6 mt-4 mb-2">No Firmware Data Available</div>

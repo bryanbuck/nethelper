@@ -5,6 +5,15 @@ import { handleApiError } from '@/utils/apiError'
  * Device API Testing Service
  * Handles testing device API connectivity and retrieving device information
  */
+/**
+ * The result inside a /device-api/test reply. A test that ran comes back as
+ * { success: true, data: { success: <pass/fail>, ... } }; a test that couldn't
+ * start (no credential) as { success: false, error, message } with no data.
+ */
+export function connectionTestResult(body) {
+  return body?.data ?? body ?? { success: false, message: 'No test result' }
+}
+
 class DeviceApiService {
   /**
    * Test manual connection with provided credentials
@@ -33,12 +42,15 @@ class DeviceApiService {
   /**
    * Test device connection using stored credentials
    * @param {string} deviceId - Device ID
-   * @returns {Promise<Object>} Test result
+   * @returns {Promise<Object>} The test's own result ({ success, message,
+   *   transport, cloudStatus, ... }), never the HTTP envelope: the envelope's
+   *   `success` only says the test ran, which once made a failed test read
+   *   as "Connection Successful".
    */
   async testDeviceConnection(deviceId) {
     try {
       const response = await api.post(`/device-api/test/${deviceId}`)
-      return response.data
+      return connectionTestResult(response.data)
     } catch (error) {
       console.error('Error testing device connection:', error)
       throw handleApiError(error, 'testing device connection')

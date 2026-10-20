@@ -1,6 +1,11 @@
 const { Client } = require('ssh2');
 const { detectPlatform } = require('../utils/device-platform');
 const { debugLog, Services } = require('../utils/debug-logger');
+const aosSTopology = require('./topology/parsers/aos-s');
+const junosTopology = require('./topology/parsers/junos');
+const iosTopology = require('./topology/parsers/ios');
+const { normalizePortName } = require('./topology/neighbor');
+const { assertJunosConfigReadable, assertCliConfigReadable } = require('../utils/config-format');
 
 const logger = debugLog.createLogger(Services.DEVICE);
 
@@ -19,16 +24,24 @@ const logger = debugLog.createLogger(Services.DEVICE);
 
 // Per-platform command profiles. `paging` runs first to disable the pager so
 // `config` returns in one shot. `config`/`version` are the data commands.
+// `configHeader` (optional) matches a banner line the CLI prints before the
+// config, which is dropped so the text can be pasted back.
+// `neighbors` (optional) lists the LLDP/CDP commands and parsers behind
+// getNeighbors(); `identity` reads the device's own LLDP chassis id/name.
 const PLATFORM_PROFILES = {
   'aos-s': {
     paging: 'no page',
     config: 'show running-config',
     version: 'show version',
+    neighbors: [{ command: 'show lldp info remote-device detail', parse: aosSTopology.parseRemoteDetail }],
+    identity: { command: 'show lldp info local-device', parse: aosSTopology.parseLocalDevice },
   },
   'aos-cx': {
     paging: 'no page',
     config: 'show running-config',
     version: 'show version',
+    // Printed before the config; not config, and not pasteable.
+    configHeader: /^Current configuration:\s*$/,
   },
   // Junos (Juniper EX/SRX/MX). `| display set` yields flat, diffable
   // set-statements rather than the nested brace format.
@@ -36,12 +49,19 @@ const PLATFORM_PROFILES = {
     paging: 'set cli screen-length 0',
     config: 'show configuration | display set',
     version: 'show version',
+    neighbors: [{ command: 'show lldp neighbors', parse: junosTopology.parseLldpNeighborsCli }],
+    identity: { command: 'show lldp local-information', parse: junosTopology.parseLocalInfoCli },
   },
-  // Cisco IOS / IOS-XE (Catalyst)
+  // Cisco IOS / IOS-XE (Catalyst). CDP is on by default, LLDP often is not;
+  // read both and keep whichever answers.
   'ios-xe': {
     paging: 'terminal length 0',
     config: 'show running-config',
     version: 'show version',
+    neighbors: [
+      { command: 'show cdp neighbors detail', parse: iosTopology.parseCdpDetail },
+      { command: 'show lldp neighbors detail', parse: iosTopology.parseLldpDetail },
+    ],
   },
   // Generic IOS-like fallback (CLI gear we could not classify)
   generic: {
@@ -51,8 +71,151 @@ const PLATFORM_PROFILES = {
   },
 };
 
-// Prompt at end of a command's output: hostname followed by '#', '>', or '$'.
-const PROMPT_REGEX = /[\r\n][^\r\n]*[#>$]\s?$/;
+// A prompt: the last line of output, ending in '#', '>' or '$' (hostname#,
+// user@host>, ...). Only used to recognise the device's FIRST prompt; after
+// that we wait for that exact prompt text.
+const PROMPT_LINE_REGEX = /(?:^|[\r\n])([^\r\n]*[#>$])[ \t]*$/;
+// AOS-S (and some others) hold the login banner until a key is pressed.
+const PRESS_ANY_KEY_REGEX = /press any key/i;
+// ANSI escape sequences some CLIs emit around prompts (cursor moves aside).
+// eslint-disable-next-line no-control-regex
+const ANSI_EXCEPT_CURSOR_REGEX = /\x1b\[[0-9;?]*[A-GI-Za-eg-z]/g;
+// eslint-disable-next-line no-control-regex
+const CURSOR_MOVES_REGEX = /(?:\x1b\[[0-9;]*[Hf])+/g;
+
+/**
+ * Terminal output as plain lines. AOS-S (2930F, WC.16.11) draws a VT100
+ * screen: its prompt and command echo arrive between cursor moves
+ * (ESC[24;1H), with no newline, and it wraps a long echo into pieces the
+ * same way. A cursor move therefore starts a new line, unless the text is
+ * already at the start of one: the switch also repositions after ordinary
+ * line breaks at its 24-line screen boundary, and a newline there would
+ * scatter blank lines through a config.
+ */
+function cleanTerminal(text) {
+  return text
+    .replace(ANSI_EXCEPT_CURSOR_REGEX, '')
+    .replace(CURSOR_MOVES_REGEX, (m, offset, str) => {
+      // A move at the very end only parks the cursor (e.g. after the prompt);
+      // the caller cleans the whole buffer again when more text arrives.
+      if (offset + m.length === str.length) return '';
+      return offset > 0 && str[offset - 1] === '\n' ? '' : '\n';
+    });
+}
+
+/**
+ * Run commands over an open interactive shell, one at a time.
+ *
+ * Nothing is typed until the device shows its first prompt, and each command
+ * is complete only when the output ends in that same prompt. Typing earlier
+ * is what broke AOS-CX: its shell takes several seconds to present a prompt,
+ * the pty echoes early input straight away, and the late login prompt was
+ * then mistaken for the end of the paging command, so every output shifted
+ * by one (the "config" came back as the `no page` echo).
+ *
+ * @param {Object} stream - shell stream (EventEmitter with write())
+ * @param {Array<{label:string, command:string}>} queue
+ * @param {Function} done - (err, outputs) called once, after the last prompt
+ *   or when the stream closes
+ * @param {Object} [timing] - settleMs: quiet time before the first prompt is
+ *   trusted (a banner line of '#'s can look like one); nudgeMs: send one
+ *   newline if no prompt has appeared by then
+ */
+function driveShell(stream, queue, done, { settleMs = 300, nudgeMs = 8000 } = {}) {
+  const outputs = {};
+  let buffer = '';
+  let prompt = null; // learned from the first prompt, without trailing space
+  let index = -1;
+  let finished = false;
+  let keyPressed = false;
+  let settleTimer = null;
+  const nudgeTimer = setTimeout(() => {
+    if (prompt === null && !finished) stream.write('\n');
+  }, nudgeMs);
+
+  const finish = (err) => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(settleTimer);
+    clearTimeout(nudgeTimer);
+    done(err, outputs);
+  };
+
+  const sendNext = () => {
+    index++;
+    buffer = '';
+    if (index >= queue.length) return finish(null);
+    stream.write(queue[index].command + '\n');
+  };
+
+  const endsWithPrompt = (text) => {
+    const clean = cleanTerminal(text).replace(/\s+$/, '');
+    return clean.endsWith(prompt) &&
+      /[\r\n]/.test(clean.slice(0, clean.length - prompt.length));
+  };
+
+  stream.on('data', (data) => {
+    if (finished) return;
+    buffer += data.toString('utf8');
+
+    if (prompt === null) {
+      clearTimeout(settleTimer);
+      const clean = cleanTerminal(buffer);
+      if (!keyPressed && PRESS_ANY_KEY_REGEX.test(clean)) {
+        keyPressed = true;
+        buffer = '';
+        stream.write('\n');
+        return;
+      }
+      const match = clean.match(PROMPT_LINE_REGEX);
+      if (!match) return;
+      settleTimer = setTimeout(() => {
+        if (finished) return;
+        prompt = match[1].trim();
+        clearTimeout(nudgeTimer);
+        sendNext();
+      }, settleMs);
+      return;
+    }
+
+    if (endsWithPrompt(buffer)) {
+      const current = queue[index];
+      outputs[current.label] = stripEcho(cleanTerminal(buffer), current.command, prompt);
+      sendNext();
+    }
+  });
+
+  stream.on('close', () => finish(null));
+}
+
+/**
+ * Remove the echoed command line and the trailing prompt line from raw
+ * shell output, leaving just the command result.
+ */
+function stripEcho(raw, command, prompt = null) {
+  const lines = raw.replace(/\r\n/g, '\n').replace(/\r/g, '').split('\n');
+  while (lines.length && lines[0].trim() === '') lines.shift();
+  while (lines.length && lines[lines.length - 1].trim() === '') lines.pop();
+  // Drop the echoed command: one line, or (AOS-S) the pieces it was wrapped into.
+  if (lines.length && lines[0].includes(command)) {
+    lines.shift();
+  } else {
+    const target = command.replace(/\s+/g, '');
+    let echoed = '';
+    let count = 0;
+    while (count < lines.length && echoed.length < target.length) {
+      const next = echoed + lines[count].replace(/\s+/g, '');
+      if (!target.startsWith(next)) break;
+      echoed = next;
+      count++;
+    }
+    if (echoed === target && target) lines.splice(0, count);
+  }
+  // Drop the trailing prompt line.
+  const last = lines.length ? lines[lines.length - 1].trim() : '';
+  if (prompt ? last === prompt : /[#>$]$/.test(last)) lines.pop();
+  return lines.join('\n').trim();
+}
 
 class SshDeviceService {
   constructor() {
@@ -114,59 +277,29 @@ class SshDeviceService {
           }
 
           const profile = this.resolveProfile(device);
-          // Queue: disable paging first, then each requested command.
+          // Disable paging first, then each requested command.
           const queue = [
             { label: '_paging', command: profile.paging },
             ...commands,
           ];
-          const outputs = {};
-          let buffer = '';
-          let index = -1;
-          let waitingForPrompt = false;
 
-          const sendNext = () => {
-            index++;
-            if (index >= queue.length) {
-              clearTimeout(overallTimer);
-              // Strip internal paging step before returning
-              delete outputs._paging;
-              return finish(null, outputs);
-            }
-            buffer = '';
-            waitingForPrompt = true;
-            stream.write(queue[index].command + '\n');
-          };
-
-          stream.on('data', (data) => {
-            buffer += data.toString('utf8');
-            if (waitingForPrompt && PROMPT_REGEX.test(buffer)) {
-              waitingForPrompt = false;
-              const current = queue[index];
-              outputs[current.label] = this.stripEcho(buffer, current.command);
-              sendNext();
-            }
-          });
-
-          stream.on('close', () => {
+          driveShell(stream, queue, (shellErr, outputs) => {
             clearTimeout(overallTimer);
-            if (!settled) {
-              delete outputs._paging;
-              finish(null, outputs);
-            }
+            delete outputs._paging;
+            finish(shellErr, outputs);
           });
 
           stream.stderr.on('data', (data) => {
             logger.debug(`SSH stderr from ${device.name}: ${data.toString('utf8').trim()}`);
           });
-
-          // Kick off once the initial banner/prompt settles.
-          setTimeout(sendNext, 600);
         });
       });
 
       conn.on('error', (err) => {
         clearTimeout(overallTimer);
-        finish(new Error(`SSH connection failed: ${err.message}`));
+        finish(new Error(err.level === 'client-authentication'
+          ? `SSH connection failed: the device rejected the username or password (${err.message})`
+          : `SSH connection failed: ${err.message}`));
       });
 
       conn.connect({
@@ -193,31 +326,57 @@ class SshDeviceService {
   }
 
   /**
-   * Remove the echoed command line and the trailing prompt line from raw
-   * shell output, leaving just the command result.
-   */
-  stripEcho(raw, command) {
-    let text = raw.replace(/\r\n/g, '\n');
-    const lines = text.split('\n');
-    // Drop the first line if it echoes the command we sent.
-    if (lines.length && lines[0].includes(command)) lines.shift();
-    // Drop the trailing prompt line.
-    if (lines.length && /[#>$]\s*$/.test(lines[lines.length - 1])) lines.pop();
-    return lines.join('\n').trim();
-  }
-
-  /**
    * Pull the running configuration as text.
    */
   async getRunningConfig(device, credentials) {
+    const profile = this.resolveProfile(device);
     const outputs = await this.runCommands(device, credentials, [
-      { label: 'config', command: this.resolveProfile(device).config },
+      { label: 'config', command: profile.config },
     ]);
-    const config = outputs.config;
+    let config = outputs.config;
+    if (config && profile.configHeader) {
+      const lines = config.split('\n');
+      if (profile.configHeader.test(lines[0])) config = lines.slice(1).join('\n').trim();
+    }
     if (!config || config.length === 0) {
       throw new Error('SSH returned an empty running configuration');
     }
+    assertCliConfigReadable(config, detectPlatform(device));
+    if (profile === PLATFORM_PROFILES.junos) assertJunosConfigReadable(config);
     return config;
+  }
+
+  /**
+   * LLDP/CDP neighbors over the CLI, plus the device's own LLDP identity when
+   * the profile can read it. One SSH session for all of it.
+   * @returns {Promise<{neighbors: Object[], identity: {chassisId, sysName}}>}
+   */
+  async getNeighbors(device, credentials) {
+    const profile = this.resolveProfile(device);
+    if (!profile.neighbors) {
+      throw new Error('No neighbor commands for this CLI platform');
+    }
+    const commands = profile.neighbors.map((n, i) => ({ label: `n${i}`, command: n.command }));
+    if (profile.identity) commands.push({ label: 'identity', command: profile.identity.command });
+    const outputs = await this.runCommands(device, credentials, commands);
+
+    // The same neighbor can appear in both CDP and LLDP: keep the first seen
+    // per local port + remote name (CDP is listed first, and names the far end
+    // the way Cisco does).
+    const seen = new Set();
+    const neighbors = [];
+    profile.neighbors.forEach((n, i) => {
+      for (const neighbor of n.parse(outputs[`n${i}`] || '')) {
+        const key = `${normalizePortName(neighbor.localPort)}|${(neighbor.sysName || neighbor.chassisId).toLowerCase().split('.')[0]}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        neighbors.push(neighbor);
+      }
+    });
+    const identity = profile.identity
+      ? profile.identity.parse(outputs.identity || '')
+      : { chassisId: null, sysName: null };
+    return { neighbors, identity };
   }
 
   /**
@@ -259,3 +418,6 @@ class SshDeviceService {
 }
 
 module.exports = new SshDeviceService();
+module.exports.driveShell = driveShell;
+module.exports.stripEcho = stripEcho;
+module.exports.cleanTerminal = cleanTerminal;

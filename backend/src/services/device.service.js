@@ -1,27 +1,32 @@
 const { getPrisma } = require('../config/database');
+const { normalizeSerial, normalizeMac } = require('../utils/device-key');
+const { effectiveStatus, statusWhere } = require('../utils/device-status');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const { ENV_ARUBA_INTEGRATION_ID } = require('./cloud-providers/cloud-provider-factory');
+const alertService = require('./alert.service');
 const { debugLog, Services } = require('../utils/debug-logger');
 
 // Create service-specific logger
 const logger = debugLog.createLogger(Services.DEVICE);
 
+const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
 class DeviceService {
   async getDevices(filters = {}) {
     try {
       const prisma = getPrisma();
-      const { type, status, location, search } = filters;
+      const { type, status, location, search, platform, credential } = filters;
 
       const where = {};
 
       if (type) where.type = type;
-      // Filter by pingStatus as primary status, fallback to cloudStatus
-      if (status) {
-        where.OR = [
-          { pingStatus: status },
-          { AND: [{ pingStatus: null }, { cloudStatus: status }] }
-        ];
-      }
+      if (platform) where.platform = platform;
+      // credential: 'none' | 'any' | an ApiCredential id
+      if (credential === 'none') where.apiCredentialId = null;
+      else if (credential === 'any') where.apiCredentialId = { not: null };
+      else if (credential) where.apiCredentialId = credential;
+      // The same status the list shows (ping first, then the cloud; see utils/device-status.js)
+      if (status) where.OR = statusWhere(status).OR;
       if (location) where.location = { contains: location, mode: 'insensitive' };
 
       if (search) {
@@ -61,6 +66,10 @@ class DeviceService {
               name: true,
             },
           },
+          // The table and device page label the cloud plane ("Central", "Mist").
+          cloudIntegration: {
+            select: { id: true, name: true, provider: true },
+          },
           _count: {
             select: {
               executions: true,
@@ -76,8 +85,8 @@ class DeviceService {
       // Map pingStatus to status field for frontend compatibility
       return devices.map(device => ({
         ...device,
-        // Use pingStatus as primary, fallback to cloudStatus
-        status: device.pingStatus || device.cloudStatus || 'offline',
+        // Ping first, then the cloud; warning when only ping says it's down
+        status: effectiveStatus(device),
         // Include both statuses for frontend display
         pingStatus: device.pingStatus,
         cloudStatus: device.cloudStatus,
@@ -111,6 +120,9 @@ class DeviceService {
               description: true,
             },
           },
+          cloudIntegration: {
+            select: { id: true, name: true, provider: true },
+          },
           executions: {
             take: 10,
             orderBy: { createdAt: 'desc' },
@@ -119,7 +131,7 @@ class DeviceService {
                 select: {
                   id: true,
                   name: true,
-                  type: true,
+                  category: true,
                 },
               },
             },
@@ -127,7 +139,8 @@ class DeviceService {
         },
       });
 
-      return device;
+      // Same status mapping as getDevices(), so a fetched row matches a listed one.
+      return device && { ...device, status: effectiveStatus(device) };
     } catch (error) {
       logger.error('Get device error', { error: error.message, stack: error.stack });
       throw error;
@@ -140,12 +153,13 @@ class DeviceService {
 
       const device = await prisma.device.create({
         data: {
-          serial: deviceData.serial,
+          serial: normalizeSerial(deviceData.serial) ?? null,
           name: deviceData.name,
           type: deviceData.type,
           vendor: deviceData.vendor || 'aruba',
           platform: deviceData.platform || null,
-          model: deviceData.model,
+          // Required column; the API treats it as optional (same default as a discovery import).
+          model: deviceData.model || 'Unknown',
           ipAddress: deviceData.ipAddress,
           macAddress: deviceData.macAddress,
           location: deviceData.location,
@@ -170,15 +184,25 @@ class DeviceService {
     try {
       const prisma = getPrisma();
 
+      const data = { ...updateData };
+      if ('serial' in data) data.serial = normalizeSerial(data.serial);
+      // Toggled only via PATCH /devices/:id/live-monitoring, which checks the
+      // device can actually be watched and starts/stops the monitor.
+      delete data.liveMonitoring;
+
       const device = await prisma.device.update({
         where: { id: deviceId },
         data: {
-          ...updateData,
+          ...data,
           updatedAt: new Date(),
         },
       });
 
       logger.success('Device updated', { deviceId, changes: Object.keys(updateData) });
+      // A watched device may have a new IP, platform, or credential.
+      require('./live/state-monitor.service').refresh(device).catch((error) => {
+        logger.warn('Live monitor refresh failed', { deviceId, error: error.message });
+      });
       return device;
     } catch (error) {
       logger.error('Update device error', { error: error.message, stack: error.stack });
@@ -190,9 +214,13 @@ class DeviceService {
     try {
       const prisma = getPrisma();
 
+      await require('./live/state-monitor.service').forget(deviceId);
+      alertService.forgetDevice(deviceId);
       await prisma.device.delete({
         where: { id: deviceId },
       });
+      // Its alerts cascaded with it; refresh everyone's counts.
+      alertService.emitUpdated([]).catch(() => {});
 
       logger.success('Device deleted', { deviceId });
     } catch (error) {
@@ -221,10 +249,10 @@ class DeviceService {
       throw new Error('No active cloud integrations configured. Add one in Settings.');
     }
 
-    const totals = { created: 0, updated: 0, total: 0, integrations: [] };
+    const totals = { created: 0, updated: 0, adopted: 0, total: 0, integrations: [] };
 
     for (const provider of providers) {
-      const summary = { integrationId: provider.id, name: provider.label, created: 0, updated: 0, total: 0, error: null };
+      const summary = { integrationId: provider.id, name: provider.label, created: 0, updated: 0, adopted: 0, total: 0, error: null };
       try {
         const devices = await provider.listInventory();
         summary.total = devices.length;
@@ -235,18 +263,27 @@ class DeviceService {
             const result = await this.upsertCloudDevice(normalized, ownerId);
             if (result === 'created') summary.created++;
             else summary.updated++;
+            if (result === 'adopted') summary.adopted++;
           } catch (deviceError) {
             logger.error('Error processing device', { error: deviceError.message, serial: normalized.serial });
           }
         }
         logger.success(`Device sync completed for ${provider.label}`, summary);
+        alertService.clear('sync.failed', { subjectKey: provider.id });
       } catch (error) {
         summary.error = error.message;
         logger.error(`Device sync failed for ${provider.label}`, { error: error.message });
+        alertService.raise('sync.failed', {
+          subjectKey: provider.id,
+          title: `Device sync failed for ${provider.label}`,
+          message: error.message,
+          data: { integrationId: provider.id },
+        });
         // Keep syncing the remaining integrations; report per-integration errors.
       }
       totals.created += summary.created;
       totals.updated += summary.updated;
+      totals.adopted += summary.adopted;
       totals.total += summary.total;
       totals.integrations.push(summary);
     }
@@ -255,6 +292,15 @@ class DeviceService {
     // case: if every integration failed, surface the first failure.
     if (totals.integrations.length > 0 && totals.integrations.every((s) => s.error)) {
       throw new Error(totals.integrations[0].error);
+    }
+
+    // Rows sync couldn't prove are the same device (IP match only, or an
+    // ambiguous MAC) are left for a person to merge; tell the UI how many.
+    try {
+      const deviceMerge = require('./device-merge.service');
+      totals.possibleDuplicates = (await deviceMerge.findDuplicateGroups()).length;
+    } catch (error) {
+      logger.warn('Duplicate check after sync failed', { error: error.message });
     }
 
     return totals;
@@ -267,34 +313,136 @@ class DeviceService {
 
   /** Upsert one NormalizedCloudDevice, stamping its owning integration. */
   async upsertCloudDevice(normalized, cloudIntegrationId) {
+    if (!normalized.serial) {
+      // Cloud devices are matched by serial; without one there is nothing to key on.
+      throw new Error(`Cloud device "${normalized.name || 'unnamed'}" has no serial; skipped`);
+    }
     const prisma = getPrisma();
     const existingDevice = await prisma.device.findUnique({
       where: { serial: normalized.serial },
     });
+    // A device added by hand (no serial) that this cloud now reports: adopt
+    // it rather than create a duplicate, but only on proof, i.e. exactly one
+    // serial-less row with the same MAC. Weaker matches (IP, name) are left
+    // to findDuplicateGroups() and a person.
+    const adoptable = existingDevice ? null : await this.findAdoptableDevice(normalized.macAddress);
 
+    const current = existingDevice || adoptable;
     const deviceData = {
       name: normalized.name,
       type: normalized.type,
       vendor: normalized.vendor,
       platform: normalized.platform,
       model: normalized.model,
-      ipAddress: normalized.ipAddress,
       macAddress: normalized.macAddress,
       location: normalized.site || null,
       cloudStatus: normalized.status,
       managementMode: 'cloud',
       cloudIntegrationId,
-      firmwareVersion: normalized.firmwareVersion,
-      lastSeen: normalized.lastSeen,
-      metadata: normalized.metadata || {},
+      // A provider that couldn't read live stats this time reports no IP or
+      // firmware; keep the known values (losing the IP would also cut off
+      // local reads such as NETCONF backups).
+      ...(normalized.ipAddress && { ipAddress: normalized.ipAddress }),
+      ...(normalized.firmwareVersion && { firmwareVersion: normalized.firmwareVersion }),
+      // Never clear a lastSeen that ping or the live monitor recorded.
+      ...(normalized.lastSeen && { lastSeen: normalized.lastSeen }),
+      ...this.cloudManagedFields(normalized, current),
+      // Merged, so keys other writers keep in metadata survive a sync.
+      metadata: { ...(isPlainObject(current?.metadata) ? current.metadata : {}), ...(normalized.metadata || {}) },
     };
 
     if (existingDevice) {
       await this.updateDevice(existingDevice.id, deviceData);
+      this.alertCloudStatus(existingDevice.id, existingDevice.name, normalized);
+      this.alertCloudConfig(existingDevice.id, existingDevice.name, normalized);
       return 'updated';
     }
-    await this.createDevice({ serial: normalized.serial, ...deviceData });
+    if (adoptable) {
+      // Keep the name the user gave it; everything else comes from the cloud.
+      const { name: _cloudName, ...adopted } = deviceData;
+      await this.updateDevice(adoptable.id, { serial: normalized.serial, ...adopted });
+      this.alertCloudStatus(adoptable.id, adoptable.name, normalized);
+      this.alertCloudConfig(adoptable.id, adoptable.name, normalized);
+      logger.info('Cloud sync adopted an existing device by MAC', {
+        deviceId: adoptable.id, serial: normalized.serial, mac: normalizeMac(normalized.macAddress),
+      });
+      return 'adopted';
+    }
+    const created = await this.createDevice({ serial: normalized.serial, ...deviceData });
+    if (created?.id) {
+      this.alertCloudStatus(created.id, created.name, normalized);
+      this.alertCloudConfig(created.id, created.name, normalized);
+    }
     return 'created';
+  }
+
+  /**
+   * Cloud-ownership fields a provider reported, if any. A switch's own answer
+   * (the AOS-CX Central probe, source switch-rest) outranks the cloud's
+   * inventory, so sync never overwrites it.
+   */
+  cloudManagedFields(normalized, current) {
+    const fields = {};
+    if (normalized.cloudConnectionStatus && current?.cloudManagedSource !== 'switch-rest') {
+      fields.cloudConnectionStatus = normalized.cloudConnectionStatus;
+    }
+    if (typeof normalized.cloudManaged === 'boolean' && current?.cloudManagedSource !== 'switch-rest') {
+      fields.cloudManaged = normalized.cloudManaged;
+      fields.cloudManagedSource = normalized.cloudManagedSource || 'cloud-inventory';
+      fields.cloudManagedCheckedAt = new Date();
+    }
+    return fields;
+  }
+
+  /**
+   * Open or clear device.cloud-offline from the status sync just saw. Called
+   * on every sync, so a device that stays offline doesn't count again.
+   */
+  alertCloudStatus(deviceId, name, normalized) {
+    const subject = { subjectKey: deviceId, deviceId };
+    if (normalized.status === 'offline') {
+      alertService.raise('device.cloud-offline', {
+        ...subject,
+        title: `${name || normalized.name} is offline in the cloud`,
+        message: 'Its cloud management plane reports the device offline.',
+        data: { serial: normalized.serial },
+      }, { bump: false });
+    } else {
+      alertService.clear('device.cloud-offline', subject);
+    }
+  }
+
+  /**
+   * Open or clear device.cloud-config from the cloud's config sync state.
+   * Only an online device opens one (an offline device's config can't be in
+   * sync); a state that means neither (`configInSync: null`) changes nothing.
+   * @param {{ status, configInSync, configStatus?, metadata?, serial? }} report
+   */
+  alertCloudConfig(deviceId, name, report) {
+    const subject = { subjectKey: deviceId, deviceId };
+    if (report.configInSync === true) {
+      alertService.clear('device.cloud-config', subject);
+    } else if (report.configInSync === false && report.status === 'online') {
+      const state = report.configStatus ?? report.metadata?.configStatus;
+      alertService.raise('device.cloud-config', {
+        ...subject,
+        title: `${name || report.name} config is out of sync`,
+        message: `Its cloud reports the device is not running the config the cloud intends${state ? ` ("${state}")` : ''}.`,
+        data: { serial: report.serial, configStatus: state || null },
+      }, { bump: false });
+    }
+  }
+
+  /** The single serial-less device with this MAC, or null (none, or ambiguous). */
+  async findAdoptableDevice(macAddress) {
+    const mac = normalizeMac(macAddress);
+    if (!mac) return null;
+    const candidates = await getPrisma().device.findMany({
+      where: { serial: null, macAddress: { not: null } },
+      select: { id: true, name: true, macAddress: true, metadata: true, cloudManagedSource: true },
+    });
+    const matches = candidates.filter((d) => normalizeMac(d.macAddress) === mac);
+    return matches.length === 1 ? matches[0] : null;
   }
 
   /**
@@ -336,6 +484,7 @@ class DeviceService {
               type: true,
               pingStatus: true,
               cloudStatus: true,
+              managementMode: true,
             },
           },
           _count: {
@@ -353,7 +502,7 @@ class DeviceService {
         ...group,
         devices: group.devices.map(device => ({
           ...device,
-          status: device.pingStatus || device.cloudStatus || 'offline',
+          status: effectiveStatus(device),
         })),
       }));
     } catch (error) {

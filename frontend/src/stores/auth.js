@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import router from '@/router'
 import { authService } from '@/services/auth.service'
+import { useNotificationsStore } from '@/stores/notifications'
 import debugLog, { DebugCategory } from '@/utils/debug'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -16,6 +17,7 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => !!token.value && !!user.value)
   const userRole = computed(() => user.value?.role || null)
   const userName = computed(() => user.value?.name || user.value?.email || '')
+  const isAdmin = computed(() => user.value?.role === 'admin')
 
   // Actions
   const login = async (credentials) => {
@@ -43,6 +45,8 @@ export const useAuthStore = defineStore('auth', () => {
       token.value = responseData.accessToken
       refreshToken.value = responseData.refreshToken
       user.value = responseData.user
+      // A fresh sign-in starts a fresh activity log (the status bar's history).
+      useNotificationsStore().clearHistory()
 
       debugLog.progress(DebugCategory.AUTH, 'Storing tokens and user data in state')
       debugLog.progress(DebugCategory.AUTH, 'Token stored:', token.value ? 'yes' : 'no')
@@ -114,34 +118,14 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  const forgotPassword = async (email) => {
-    try {
-      isLoading.value = true
-      error.value = null
-      
-      const response = await authService.forgotPassword(email)
-      return response.data
-    } catch (err) {
-      error.value = err.response?.data?.message || 'Failed to send reset email'
-      throw err
-    } finally {
-      isLoading.value = false
-    }
-  }
-
-  const resetPassword = async (token, password) => {
-    try {
-      isLoading.value = true
-      error.value = null
-      
-      const response = await authService.resetPassword(token, password)
-      return response.data
-    } catch (err) {
-      error.value = err.response?.data?.message || 'Password reset failed'
-      throw err
-    } finally {
-      isLoading.value = false
-    }
+  // Change the signed-in user's password; keep this session on the new tokens.
+  const changePassword = async (currentPassword, newPassword) => {
+    const response = await authService.changePassword({ currentPassword, newPassword })
+    const { accessToken, refreshToken: newRefreshToken } = response.data.data
+    token.value = accessToken
+    refreshToken.value = newRefreshToken
+    localStorage.setItem('access_token', accessToken)
+    localStorage.setItem('refresh_token', newRefreshToken)
   }
 
   const clearAuthData = () => {
@@ -153,6 +137,7 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
     localStorage.removeItem('user')
+    useNotificationsStore().clearHistory()
   }
 
   const initializeAuth = () => {
@@ -205,13 +190,13 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     userRole,
     userName,
+    isAdmin,
     
     // Actions
     login,
     logout,
     refreshAccessToken,
-    forgotPassword,
-    resetPassword,
+    changePassword,
     clearAuthData,
     initializeAuth,
     checkTokenExpiry,

@@ -1,0 +1,38 @@
+# Optional override: run the backend (and the nginx in front of it) on the
+# host's network stack, so discovery sees the host's L2 neighbours and can
+# report MAC addresses and vendors. Without it discovery still finds hosts on
+# routed subnets, but MACs come back empty.
+#
+# Turn it on in deploy/.env so every compose command loads it (a command
+# without it recreates postgres/redis without the ports below):
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.host-network.yml
+# Add :docker-compose.override.yml if you have one; COMPOSE_FILE stops Compose
+# loading it by itself.
+#
+# Needs Docker Compose 2.24+ (for !reset). On the host:
+#   - the UI listens on HTTP_PORT (default 8080) on every interface,
+#   - the API listens on 127.0.0.1:3000 only (reached through nginx),
+#   - Postgres and Redis are published on 127.0.0.1 only.
+# Ports 3000, 5432, and 6379 must be free on the host's loopback.
+
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  backend:
+    network_mode: host
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-nethelper}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB:-nethelper}?schema=public
+      REDIS_HOST: 127.0.0.1
+      BIND_ADDRESS: 127.0.0.1
+
+  frontend:
+    network_mode: host
+    ports: !reset []
+    environment:
+      BACKEND_UPSTREAM: 127.0.0.1:3000

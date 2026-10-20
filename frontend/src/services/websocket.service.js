@@ -10,18 +10,33 @@ import { useNotificationsStore } from '@/stores/notifications'
 import { useAutomationsStore } from '@/stores/automations'
 import { useDiscoveryStore } from '@/stores/discovery'
 import { useBackupsStore } from '@/stores/backups'
-import { Device, Execution, ExecutionStatus } from '@/models'
+import { useTopologyStore } from '@/stores/topology'
+import { useAlertsStore } from '@/stores/alerts'
+import { Device } from '@/models'
+
+// One activity-log slot for the socket state: lost/restored/failed replace each other.
+const CONNECTION_ENTRY_ID = 'socket-connection'
 
 class WebSocketService {
   constructor() {
+    // Exactly one socket at a time. Connection state is read from it, never
+    // cached: a cached flag outlived replaced sockets and left `connected`
+    // true with no socket.
     this.socket = null
-    this.connected = false
-    this.connecting = false
     this.reconnectAttempts = 0
     this.maxReconnectAttempts = 5
     this.reconnectDelay = 1000
     this.eventHandlers = new Map()
     this.stores = {}
+  }
+
+  get connected() {
+    return Boolean(this.socket?.connected)
+  }
+
+  /** A socket exists and is trying to (re)connect. */
+  get connecting() {
+    return Boolean(this.socket && !this.socket.connected && this.socket.active)
   }
 
   /**
@@ -35,7 +50,9 @@ class WebSocketService {
         notifications: useNotificationsStore(),
         automations: useAutomationsStore(),
         discovery: useDiscoveryStore(),
-        backups: useBackupsStore()
+        backups: useBackupsStore(),
+        topology: useTopologyStore(),
+        alerts: useAlertsStore()
       }
     }
   }
@@ -46,12 +63,14 @@ class WebSocketService {
    * @param {Object} options - Connection options
    */
   async connect(url, options = {}) {
-    if (this.connecting || this.connected) return
-
-    this.connecting = true
+    // A live socket (connected, or reconnecting on its own) is reused.
+    // Socket.io's built-in reconnection is the only retry path.
+    if (this.socket?.active) return
+    this.closeSocket()
     this.initializeStores()
 
-    const wsUrl = url || import.meta.env.VITE_WS_URL || 'ws://localhost:3000'
+    // Same origin by default: nginx (prod) or the Vite proxy (dev) forwards /socket.io
+    const wsUrl = url || import.meta.env.VITE_WS_URL || window.location.origin
     
     const defaultOptions = {
       transports: ['websocket', 'polling'],
@@ -69,7 +88,7 @@ class WebSocketService {
       this.setupEventHandlers()
       
     } catch (error) {
-      this.connecting = false
+      this.closeSocket()
       console.error('WebSocket connection setup failed:', error)
       throw error
     }
@@ -79,55 +98,53 @@ class WebSocketService {
    * Setup connection event handlers
    */
   setupConnectionHandlers() {
-    this.socket.on('connect', () => {
-      this.connected = true
-      this.connecting = false
+    const socket = this.socket
+
+    socket.on('connect', () => {
       this.reconnectAttempts = 0
       console.log('WebSocket connected')
-      
-      this.stores.notifications.addNotification({
-        type: 'success',
-        title: 'Connection Established',
-        message: 'Real-time updates are now active',
-        timeout: 3000
-      })
+
+      // The first connect only lights the status bar; a reconnect replaces the
+      // pinned "Connection Lost" entry (same id) so the log doesn't stack them.
+      const notifications = this.stores.notifications
+      if (notifications.connection !== 'idle' && notifications.connection !== 'connected') {
+        notifications.addNotification({
+          id: CONNECTION_ENTRY_ID,
+          type: 'success',
+          title: 'Connection Restored',
+          message: 'Real-time updates are active again',
+          timeout: 3000
+        })
+      }
+      notifications.setConnection('connected')
     })
 
-    this.socket.on('disconnect', (reason) => {
-      this.connected = false
-      this.connecting = false
+    socket.on('disconnect', (reason) => {
       console.log('WebSocket disconnected:', reason)
       
+      this.stores.notifications.setConnection('reconnecting')
       this.stores.notifications.addNotification({
+        id: CONNECTION_ENTRY_ID,
         type: 'warning',
         title: 'Connection Lost',
         message: 'Attempting to reconnect...',
         persistent: true
       })
       
-      // Handle reconnection
-      if (reason === 'io server disconnect') {
-        this.scheduleReconnect()
-      }
+      // The one case Socket.io doesn't retry by itself.
+      if (reason === 'io server disconnect') socket.connect()
     })
 
-    this.socket.on('connect_error', (error) => {
-      this.connected = false
-      this.connecting = false
+    // Built-in reconnection gave up (reconnectionAttempts exhausted).
+    socket.io.on('reconnect_failed', () => this.notifyConnectionFailed())
+
+    socket.on('connect_error', (error) => {
       this.reconnectAttempts++
-      
       console.error('WebSocket connection error:', error)
-      
-      if (this.reconnectAttempts <= this.maxReconnectAttempts) {
-        this.scheduleReconnect()
-      } else {
-        this.stores.notifications.addNotification({
-          type: 'error',
-          title: 'Connection Failed',
-          message: 'Unable to establish real-time connection. Please refresh the page.',
-          persistent: true
-        })
-      }
+
+      // socket.active is false when the server refused the handshake (e.g. a
+      // bad token); the next connect() starts a new socket.
+      if (!socket.active) this.notifyConnectionFailed()
     })
   }
 
@@ -139,10 +156,11 @@ class WebSocketService {
     this.socket.on('device:update', (data) => this.handleDeviceUpdate(data))
     this.socket.on('device:status:update', (data) => this.handleDeviceStatusUpdate(data))
     this.socket.on('device:api:status', (data) => this.handleDeviceApiStatus(data))
+    this.socket.on('device:sync:completed', (data) => this.handleDeviceSyncCompleted(data))
+    this.socket.on('device:sync:failed', (data) => this.handleDeviceSyncFailed(data))
 
     // Automation lifecycle events
     this.socket.on('automation:started', (data) => this.handleAutomationStarted(data))
-    this.socket.on('automation:progress', (data) => this.handleAutomationProgress(data))
     this.socket.on('automation:completed', (data) => this.handleAutomationCompleted(data))
 
     // Discovery scan events
@@ -155,8 +173,13 @@ class WebSocketService {
     this.socket.on('backup:failed', (data) => this.handleBackupFailed(data))
     this.socket.on('backup:run:completed', (data) => this.handleBackupRunCompleted(data))
 
+    // Network Map neighbor collection
+    this.socket.on('topology:progress', (data) => this.stores.topology?.handleProgress(data))
+    this.socket.on('topology:updated', (data) => this.stores.topology?.handleUpdated(data))
+
     // Alert events
     this.socket.on('alert:new', (data) => this.handleNewAlert(data))
+    this.socket.on('alert:updated', (data) => this.handleAlertUpdated(data))
 
     // Additional system events
     this.socket.on('metrics:update', (data) => this.handleMetricsUpdate(data))
@@ -179,18 +202,6 @@ class WebSocketService {
         // Full device update
         const deviceInstance = Device.fromApiResponse(device)
         this.stores.devices.updateDevice(deviceId, deviceInstance.toJSON())
-
-        // Add notification for significant status changes
-        if (changes?.status) {
-          this.stores.notifications.addDeviceAlert({
-            id: deviceId,
-            name: device.name,
-            status: device.status,
-            previousStatus: changes.status.from,
-            type: device.type,
-            location: device.location
-          })
-        }
       } else if (changes) {
         // Partial update
         this.stores.devices.updateDevice(deviceId, changes)
@@ -211,26 +222,48 @@ class WebSocketService {
    * @param {Object} data - Ping status data
    */
   handleDeviceStatusUpdate(data) {
-    console.log('Device ping status update:', data)
-
     try {
-      const { deviceId, status, pingStatus, pingResponseTime, pingLastChecked } = data
+      // From the ping monitor (pingStatus, ...) or the cloud status refresh
+      // (cloudStatus, lastSeen). `status` is the displayed one (it accounts
+      // for both). Patch only what the event carries.
+      const { deviceId } = data
+      const fields = ['status', 'pingStatus', 'pingResponseTime', 'pingLastChecked', 'cloudStatus', 'lastSeen']
+      const patch = Object.fromEntries(fields.filter((key) => data[key] !== undefined).map((key) => [key, data[key]]))
+      if (!patch.status && patch.pingStatus) patch.status = patch.pingStatus
 
-      // Use local update (no API call) to avoid unnecessary requests
-      this.stores.devices.updateDeviceLocally(deviceId, {
-        status: pingStatus || status,
-        pingStatus,
-        pingResponseTime,
-        pingLastChecked
-      })
-
-      // Optionally show notification for offline status
-      if (status === 'offline' || pingStatus === 'offline') {
-        // Could add a notification here if desired
-      }
-
+      // Use local update (no API call) to avoid unnecessary requests.
+      this.stores.devices.updateDeviceLocally(deviceId, patch)
+      const mapPatch = Object.fromEntries(['pingStatus', 'cloudStatus'].filter((key) => key in patch).map((key) => [key, patch[key]]))
+      if (Object.keys(mapPatch).length) this.stores.topology?.applyDeviceStatus(deviceId, mapPatch)
     } catch (error) {
       console.error('Error handling device status update:', error)
+    }
+  }
+
+  handleDeviceSyncCompleted(data) {
+    try {
+      this.stores.devices.applySyncResult(data)
+      const parts = [`${data.total ?? 0} device(s)`, `${data.created ?? 0} new`]
+      if (data.adopted) parts.push(`${data.adopted} matched to existing devices by MAC`)
+      const failed = (data.integrations || []).filter((i) => i.error)
+      // The hourly sync is unattended: only a failure is worth a status bar entry.
+      if (data.trigger === 'scheduled' && !failed.length) return
+      const message = `Cloud sync finished: ${parts.join(', ')}.`
+        + (data.possibleDuplicates ? ` ${data.possibleDuplicates} possible duplicate(s) to review on the Devices page.` : '')
+        + (failed.length ? ` Failed: ${failed.map((i) => i.name).join(', ')}.` : '')
+      if (data.possibleDuplicates || failed.length) this.stores.notifications.showWarning(message, 'Device Sync')
+      else this.stores.notifications.showSuccess(message, 'Device Sync')
+    } catch (error) {
+      console.error('Error handling device sync completed:', error)
+    }
+  }
+
+  handleDeviceSyncFailed(data) {
+    try {
+      const what = data.trigger === 'scheduled' ? 'Scheduled cloud sync' : 'Cloud sync'
+      this.stores.notifications.showError(`${what} failed: ${data.error || 'Unknown error'}`, 'Device Sync')
+    } catch (error) {
+      console.error('Error handling device sync failed:', error)
     }
   }
 
@@ -283,18 +316,18 @@ class WebSocketService {
 
   /**
    * Handle discovery scan completed events
-   * @param {Object} data - { scanId, totalHosts, arubaHosts }
+   * @param {Object} data - { scanId, totalHosts, vendorHosts }
    */
   handleDiscoveryCompleted(data) {
     console.log('Discovery completed:', data)
 
     try {
-      const { totalHosts, arubaHosts } = data
+      const { totalHosts, vendorHosts } = data
 
       this.stores.discovery.handleScanCompleted(data)
 
       this.stores.notifications.showSuccess(
-        `Found ${totalHosts} host(s), ${arubaHosts} Aruba device(s)`,
+        `Found ${totalHosts} host(s), ${vendorHosts} from a known vendor`,
         'Discovery Scan Complete'
       )
     } catch (error) {
@@ -321,22 +354,29 @@ class WebSocketService {
     }
   }
 
+  /** What a backup event is about: a device, or a cloud scope (a Mist org/site, a Central scope). */
+  backupSubject(data) {
+    return data.scope ? `${data.scopeType} "${data.scopeName}"` : `"${data.deviceName}"`
+  }
+
   /**
-   * Handle config backup completed events (per device)
+   * Handle config backup completed events (per device or cloud scope)
    * @param {Object} data - { backupId, deviceId, deviceName, hasChanges }
    */
   handleBackupCompleted(data) {
     console.log('Backup completed:', data)
 
     try {
-      const { deviceName, hasChanges } = data
+      const { hasChanges, warning } = data
 
       this.stores.backups.applyBackupEvent(data)
 
-      this.stores.notifications.showSuccess(
-        `Configuration backup for "${deviceName}" completed${hasChanges ? ' (configuration changed)' : ''}`,
-        'Backup Complete'
-      )
+      const message = `Configuration backup for ${this.backupSubject(data)} completed${hasChanges ? ' (configuration changed)' : ''}`
+      if (warning) {
+        this.stores.notifications.showWarning(`${message}. ${warning}`, 'Backup Incomplete')
+      } else {
+        this.stores.notifications.showSuccess(message, 'Backup Complete')
+      }
     } catch (error) {
       console.error('Error handling backup completed:', error)
     }
@@ -350,12 +390,12 @@ class WebSocketService {
     console.log('Backup failed:', data)
 
     try {
-      const { deviceName, error: errorMessage } = data
+      const { error: errorMessage } = data
 
       this.stores.backups.applyBackupEvent(data)
 
       this.stores.notifications.showError(
-        `Configuration backup for "${deviceName}" failed: ${errorMessage || 'Unknown error'}`,
+        `Configuration backup for ${this.backupSubject(data)} failed: ${errorMessage || 'Unknown error'}`,
         'Backup Failed'
       )
     } catch (error) {
@@ -382,7 +422,7 @@ class WebSocketService {
         )
       } else {
         this.stores.notifications.showSuccess(
-          `Backup run finished: ${succeeded}/${total} device(s) backed up`,
+          `Backup run finished: ${succeeded}/${total} ${data.scope ? 'cloud scope(s)' : 'device(s)'} backed up`,
           'Backup Run Complete'
         )
       }
@@ -392,188 +432,84 @@ class WebSocketService {
   }
 
   /**
-   * Handle automation started events
-   * @param {Object} data - Automation start data
+   * An automation run started (backend jobs/automation.job.js).
+   * @param {Object} data - { executionId, automationId, automation, deviceId, trigger }
    */
   handleAutomationStarted(data) {
-    console.log('Automation started:', data)
-    
     try {
-      const { executionId, automationId, automation, execution, deviceId } = data
-      
-      // Add execution to store
-      if (execution) {
-        const executionInstance = Execution.fromApiResponse(execution)
-        this.stores.executions.addExecution(executionInstance)
-      } else {
-        // Create basic execution record
-        const newExecution = new Execution({
-          id: executionId,
-          automationId,
-          deviceId,
-          status: ExecutionStatus.RUNNING,
-          startedAt: new Date()
+      this.stores.executions.handleStarted(data)
+      // Only runs someone started by hand announce themselves; schedules and
+      // alert triggers run unattended and speak up only when they fail.
+      if (data.trigger === 'manual') {
+        this.stores.notifications.addAutomationNotification('started', {
+          id: data.automationId,
+          name: data.automation?.name || 'Automation',
+          executionId: data.executionId
         })
-        this.stores.executions.addExecution(newExecution)
       }
-      
-      // Add notification
-      this.stores.notifications.addAutomationNotification('started', {
-        id: automationId,
-        name: automation?.name || 'Unknown Automation',
-        executionId
-      })
-      
     } catch (error) {
       console.error('Error handling automation started:', error)
     }
   }
 
   /**
-   * Handle automation progress events
-   * @param {Object} data - Automation progress data
-   */
-  handleAutomationProgress(data) {
-    console.log('Automation progress:', data)
-    
-    try {
-      const { 
-        executionId, 
-        automationId, 
-        progress, 
-        currentStep, 
-        totalSteps, 
-        message,
-        automation 
-      } = data
-      
-      // Update execution progress
-      this.stores.executions.updateExecutionProgress(executionId, {
-        progress,
-        currentStep,
-        totalSteps,
-        message
-      })
-      
-      // Add progress notification for significant milestones
-      if (progress && (progress % 25 === 0 || progress === 100)) {
-        this.stores.notifications.addAutomationNotification('progress', {
-          id: automationId,
-          name: automation?.name || 'Unknown Automation',
-          executionId,
-          progress
-        })
-      }
-      
-    } catch (error) {
-      console.error('Error handling automation progress:', error)
-    }
-  }
-
-  /**
-   * Handle automation completed events
-   * @param {Object} data - Automation completion data
+   * An automation run finished: success, failed or cancelled.
+   * @param {Object} data - { executionId, automationId, automation, status, output, error, duration, trigger }
    */
   handleAutomationCompleted(data) {
-    console.log('Automation completed:', data)
-    
     try {
-      const { 
-        executionId, 
-        automationId, 
-        status, 
-        output, 
-        error, 
-        duration,
-        automation 
-      } = data
-      
-      // Update execution status
-      this.stores.executions.updateExecutionStatus(executionId, status, {
-        output,
-        error,
-        duration,
-        completedAt: new Date()
-      })
-      
-      // Add completion notification
-      const notificationType = status === ExecutionStatus.SUCCESS ? 'completed' : 'failed'
-      this.stores.notifications.addAutomationNotification(notificationType, {
-        id: automationId,
-        name: automation?.name || 'Unknown Automation',
-        executionId,
-        status,
-        error
-      })
-      
-      // Add alert for failed automations
-      if (status === ExecutionStatus.FAILED) {
-        this.stores.notifications.addAlert({
-          type: 'automation',
-          severity: 'high',
-          title: 'Automation Failed',
-          message: `Automation "${automation?.name || automationId}" failed: ${error || 'Unknown error'}`,
-          automationId,
-          metadata: {
-            executionId,
-            duration,
-            output
-          }
+      this.stores.executions.handleCompleted(data)
+      if (data.status === 'cancelled') return
+      if (data.status === 'failed' || data.trigger === 'manual') {
+        this.stores.notifications.addAutomationNotification(data.status === 'success' ? 'completed' : 'failed', {
+          id: data.automationId,
+          name: data.automation?.name || 'Automation',
+          executionId: data.executionId,
+          status: data.status,
+          error: data.error
         })
       }
-      
     } catch (error) {
       console.error('Error handling automation completed:', error)
     }
   }
 
   /**
-   * Handle new alert events
-   * @param {Object} data - Alert data
+   * A server-side alert opened (services/alert.service.js on the backend).
+   * @param {Object} data - { alert, summary }
    */
   handleNewAlert(data) {
-    console.log('New alert received:', data)
-    
     try {
-      const { 
-        id,
-        type,
-        severity,
-        title,
-        message,
-        source,
-        deviceId,
-        automationId,
-        metadata 
-      } = data
-      
-      // Add alert to notifications store
-      this.stores.notifications.addAlert({
-        id,
-        type,
-        severity,
-        title,
-        message,
-        source,
-        deviceId,
-        automationId,
-        metadata
+      const { alert } = data
+      this.stores.alerts.handleNew(data)
+      if (!alert) return
+
+      this.stores.notifications.addNotification({
+        id: `alert_${alert.id}`,
+        type: alert.severity === 'critical' ? 'error' : alert.severity === 'warning' ? 'warning' : 'info',
+        title: alert.title,
+        message: alert.message,
+        persistent: alert.severity === 'critical',
+        popup: alert.severity === 'critical',
+        timeout: 8000,
+        actions: [{ label: 'View', to: '/alerts' }]
       })
-      
-      // For critical alerts, also show browser notification if permitted
-      if (severity === 'critical' && 'Notification' in window) {
-        if (Notification.permission === 'granted') {
-          new Notification(title, {
-            body: message,
-            icon: '/favicon.ico',
-            tag: `alert-${id}`
-          })
-        }
+
+      // Critical alerts also raise a browser notification when permitted
+      if (alert.severity === 'critical' && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification(alert.title, { body: alert.message, tag: `alert-${alert.id}` })
       }
-      
     } catch (error) {
       console.error('Error handling new alert:', error)
     }
+  }
+
+  /**
+   * Alerts changed (bumped, acknowledged, resolved, or removed with a device).
+   * @param {Object} data - { alerts, summary }
+   */
+  handleAlertUpdated(data) {
+    this.stores.alerts.handleUpdated(data)
   }
 
   /**
@@ -627,16 +563,15 @@ class WebSocketService {
     }
   }
 
-  /**
-   * Schedule reconnection attempt
-   */
-  scheduleReconnect() {
-    setTimeout(() => {
-      if (!this.connected && this.reconnectAttempts <= this.maxReconnectAttempts) {
-        console.log(`Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`)
-        this.connect()
-      }
-    }, this.reconnectDelay * this.reconnectAttempts)
+  notifyConnectionFailed() {
+    this.stores.notifications.setConnection('failed')
+    this.stores.notifications.addNotification({
+      id: CONNECTION_ENTRY_ID,
+      type: 'error',
+      title: 'Connection Failed',
+      message: 'Unable to establish real-time connection. Please refresh the page.',
+      persistent: true
+    })
   }
 
   /**
@@ -652,6 +587,22 @@ class WebSocketService {
     }
     console.warn('Cannot emit event - WebSocket not connected:', event)
     return false
+  }
+
+  /**
+   * Emit and wait for the server's acknowledgement.
+   * @returns {Promise<*>} the ack payload; rejects when not connected or on timeout
+   */
+  request(event, data, timeoutMs = 15000) {
+    if (!this.socket || !this.connected) {
+      return Promise.reject(new Error('Real-time connection is not available'))
+    }
+    return new Promise((resolve, reject) => {
+      this.socket.timeout(timeoutMs).emit(event, data, (err, response) => {
+        if (err) reject(new Error('The server did not respond in time'))
+        else resolve(response)
+      })
+    })
   }
 
   /**
@@ -682,12 +633,17 @@ class WebSocketService {
    * Disconnect WebSocket
    */
   disconnect() {
-    if (this.socket) {
-      this.socket.disconnect()
-      this.socket = null
-    }
-    this.connected = false
-    this.connecting = false
+    this.closeSocket()
+  }
+
+  /** Close the current socket for good: no listeners left behind, no retries. */
+  closeSocket() {
+    if (!this.socket) return
+    this.socket.io.removeAllListeners()
+    this.socket.removeAllListeners()
+    this.socket.disconnect()
+    this.socket = null
+    this.stores.notifications?.setConnection('idle')
   }
 
   /**

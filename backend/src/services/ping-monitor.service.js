@@ -1,6 +1,8 @@
 const ping = require('ping');
 const { getPrisma } = require('../config/database');
 const logger = require('../utils/logger');
+const alertService = require('./alert.service');
+const { effectiveStatus } = require('../utils/device-status');
 
 class PingMonitorService {
   constructor() {
@@ -11,8 +13,9 @@ class PingMonitorService {
       batchSize: parseInt(process.env.PING_MONITOR_BATCH_SIZE) || 20, // devices to check concurrently
       failureThreshold: parseInt(process.env.PING_MONITOR_FAILURE_THRESHOLD) || 3, // consecutive failures before marking offline
     };
-    this.monitoringInterval = null;
-    this.isMonitoring = false;
+    // Sweeps are scheduled only by the Bull repeatable job (jobs/ping-monitor.job.js).
+    // A second scheduler here once pinged every device twice a minute, with the
+    // two sweeps sharing these stats and both counting consecutive failures.
     this.lastCheckStats = {
       total: 0,
       successful: 0,
@@ -93,6 +96,10 @@ class PingMonitorService {
           ipAddress: true,
           consecutiveFailures: true,
           pingStatus: true,
+          // The cloud's view, so a device it reports online reads as "unreachable from here"
+          managementMode: true,
+          cloudStatus: true,
+          cloudIntegration: { select: { name: true } },
         },
       });
 
@@ -119,7 +126,7 @@ class PingMonitorService {
           batch.map(async (device) => {
             try {
               const result = await this.pingDeviceWithRetries(device.ipAddress);
-              await this.updateDeviceStatus(device.id, device.name, result.alive, result.time, device.consecutiveFailures, device.pingStatus);
+              await this.updateDeviceStatus(device.id, device.name, result.alive, result.time, device.consecutiveFailures, device.pingStatus, device);
 
               if (result.alive) {
                 this.lastCheckStats.successful++;
@@ -154,8 +161,9 @@ class PingMonitorService {
    * @param {number|null} responseTime - Response time in ms
    * @param {number} currentFailures - Current consecutive failures count
    * @param {string|null} currentStatus - Current ping status
+   * @param {Object} [cloud] - { managementMode, cloudStatus, cloudIntegration: { name } }
    */
-  async updateDeviceStatus(deviceId, deviceName, alive, responseTime, currentFailures, currentStatus) {
+  async updateDeviceStatus(deviceId, deviceName, alive, responseTime, currentFailures, currentStatus, cloud = {}) {
     const prisma = getPrisma();
 
     try {
@@ -201,7 +209,28 @@ class PingMonitorService {
         logger.info(`Device ${deviceName} status changed: ${currentStatus || 'unknown'} -> ${newStatus}`);
 
         // Emit WebSocket event for real-time UI updates
-        this.emitStatusUpdate(deviceId, deviceName, newStatus, responseTime);
+        this.emitStatusUpdate(deviceId, deviceName, newStatus, responseTime, cloud);
+
+        if (newStatus === 'online') alertService.clear('device.offline', { subjectKey: deviceId, deviceId });
+      }
+
+      // Every offline check, not only the transition, so a device that was
+      // already offline when alerting started still gets an alert. Repeats
+      // of an open one are no-ops.
+      if (newStatus === 'offline') {
+        // Its cloud still hearing from it means the device is up and
+        // NetHelper can't reach it (no route, ICMP filtered): say so.
+        const cloudUp = effectiveStatus({ ...cloud, pingStatus: newStatus }) === 'warning';
+        const cloudName = cloud.cloudIntegration?.name || 'Its cloud';
+        alertService.raise('device.offline', {
+          subjectKey: deviceId,
+          deviceId,
+          title: cloudUp ? `${deviceName} is not answering ping` : `${deviceName} is offline`,
+          message: cloudUp
+            ? `Stopped answering ping from NetHelper, but ${cloudName} reports it online. NetHelper probably has no route to it, or ICMP is filtered.`
+            : `Stopped answering ping (${this.config.failureThreshold} or more missed checks in a row).`,
+          data: { consecutiveFailures: newConsecutiveFailures, ...(cloudUp && { cloudStatus: 'online' }) },
+        }, { bump: currentStatus !== 'offline' });
       }
     } catch (error) {
       logger.error(`Error updating device status for ${deviceName}:`, error);
@@ -234,8 +263,9 @@ class PingMonitorService {
    * @param {string} deviceName - Device name
    * @param {string} status - New status
    * @param {number|null} responseTime - Response time
+   * @param {Object} [cloud] - { managementMode, cloudStatus }, for the displayed status
    */
-  emitStatusUpdate(deviceId, deviceName, status, responseTime) {
+  emitStatusUpdate(deviceId, deviceName, status, responseTime, cloud = {}) {
     try {
       // Lazy load socket to avoid circular dependency issues
       const { getIO } = require('../websocket/socket.handler');
@@ -245,7 +275,8 @@ class PingMonitorService {
         io.emit('device:status:update', {
           deviceId,
           deviceName,
-          status,
+          // What the device list shows (utils/device-status.js); pingStatus is the raw result.
+          status: effectiveStatus({ ...cloud, pingStatus: status }),
           pingStatus: status,
           pingResponseTime: responseTime,
           pingLastChecked: new Date(),
@@ -258,69 +289,12 @@ class PingMonitorService {
   }
 
   /**
-   * Start continuous monitoring
-   */
-  startMonitoring() {
-    if (this.isMonitoring) {
-      logger.warn('Ping monitoring is already running');
-      return;
-    }
-
-    const enabled = process.env.PING_MONITOR_ENABLED !== 'false';
-    if (!enabled) {
-      logger.info('Ping monitoring is disabled via PING_MONITOR_ENABLED environment variable');
-      return;
-    }
-
-    logger.info(`Starting ping monitoring (interval: ${this.config.interval}ms, timeout: ${this.config.timeout}s, batch size: ${this.config.batchSize})`);
-
-    this.isMonitoring = true;
-
-    // Run initial check immediately
-    this.checkAllDevices().catch(error => {
-      logger.error('Error in initial ping check:', error);
-    });
-
-    // Set up recurring interval
-    this.monitoringInterval = setInterval(() => {
-      if (this.isMonitoring) {
-        this.checkAllDevices().catch(error => {
-          logger.error('Error in scheduled ping check:', error);
-        });
-      }
-    }, this.config.interval);
-
-    logger.info('Ping monitoring started successfully');
-  }
-
-  /**
-   * Stop monitoring
-   */
-  stopMonitoring() {
-    if (!this.isMonitoring) {
-      logger.warn('Ping monitoring is not running');
-      return;
-    }
-
-    logger.info('Stopping ping monitoring...');
-
-    this.isMonitoring = false;
-
-    if (this.monitoringInterval) {
-      clearInterval(this.monitoringInterval);
-      this.monitoringInterval = null;
-    }
-
-    logger.info('Ping monitoring stopped');
-  }
-
-  /**
    * Get monitoring statistics
    * @returns {Object} Monitoring stats
    */
   getStats() {
     return {
-      isMonitoring: this.isMonitoring,
+      isMonitoring: process.env.PING_MONITOR_ENABLED !== 'false',
       config: this.config,
       lastCheck: this.lastCheckStats,
     };

@@ -17,7 +17,7 @@ Node.js backend for NetHelper, a **multi-vendor** network automation and monitor
 
 ## Prerequisites
 
-- Node.js 18+
+- Node.js 22+
 - PostgreSQL 15+
 - Redis 7+
 - `nmap` on the host (device discovery)
@@ -29,12 +29,14 @@ Node.js backend for NetHelper, a **multi-vendor** network automation and monitor
 2. Install dependencies: `npm install`
 3. Copy `.env.example` to `.env` and configure
 4. Run database migrations: `npm run db:migrate`
-5. Seed initial data: `npm run db:seed`
+5. Create the first admin: `npm run user:manage`
 6. Start development server: `npm run dev`
 
-## API Documentation
+For production deployment (Docker Compose or systemd + nginx), see [`../deploy/README.md`](../deploy/README.md).
 
-API documentation is available at `/api-docs` when running in development mode.
+## API
+
+REST under `/api/v1` (routes in `src/routes/`); a Postman collection is in `NetHelper_API_Collection.postman_collection.json`, generated from the route tables by `npm run postman:generate` (a unit test fails when it is out of date; set its `email`/`password` variables, then run Login). Probes: `GET /health` (liveness) and `GET /health/ready` (database + Redis).
 
 ## Project Structure
 
@@ -57,17 +59,10 @@ The server will start on `http://localhost:3000` (or the port specified in `.env
 
 ## Testing
 
-Run tests with: `npm test`
-Run tests in watch mode: `npm run test:watch`
+Run tests with: `npm test` (watch mode: `npm run test:watch`; lint + tests: `npm run ci`). The suite mocks Prisma, Redis, and every device transport, so it needs no database or network.
 
-### Authentication Testing
-
-Test login functionality: `npm run test:login user@example.com password`
-
-For the (historical) login testing guide, see [../docs/archive/LOGIN_TESTING.md](../docs/archive/LOGIN_TESTING.md)
+Account problems (locked out, forgotten password, wrong role): `npm run user:manage`.
 
 ## Deployment
 
-1. Build for production: `npm run build`
-2. Start production server: `npm start`
-3. User management interface: `npm run user:manage`
+Docker Compose or systemd + nginx: see [`../deploy/README.md`](../deploy/README.md). In short, production runs `npm run db:deploy` (apply migrations) then `npm start` with `NODE_ENV=production`; `npm run user:manage` administers users from the server.

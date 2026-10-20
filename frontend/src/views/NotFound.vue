@@ -24,8 +24,8 @@
             <v-btn
               color="primary"
               size="large"
-              @click="goHome"
               class="mr-4"
+              @click="goHome"
             >
               <v-icon left>mdi-home</v-icon>
               Go Home
@@ -63,7 +63,11 @@ const goBack = () => {
 <style scoped>
 .fill-height {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(
+    135deg,
+    rgb(var(--v-theme-primary)) 0%,
+    color-mix(in srgb, rgb(var(--v-theme-primary)) 80%, black) 100%
+  );
 }
 
 .v-card {

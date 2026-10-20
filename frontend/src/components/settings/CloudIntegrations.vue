@@ -59,6 +59,49 @@
                 {{ integration.lastTested ? `Last tested ${formatDate(integration.lastTested)}` : 'Never tested' }}
               </span>
             </div>
+
+            <!-- Push stream from the cloud (Mist): status changes arrive within a minute -->
+            <div v-if="integration.eventStream" class="d-flex align-center mt-1">
+              <v-icon size="small" class="mr-1" :color="streamInfo(integration.eventStream).color">
+                {{ streamInfo(integration.eventStream).icon }}
+              </v-icon>
+              <span class="text-body-2">{{ streamInfo(integration.eventStream).label }}</span>
+            </div>
+
+            <!-- Result of a test run in this session, with the provider's own
+                 error details rather than just the summary toast. -->
+            <v-alert
+              v-if="testResults[integration.id]"
+              :type="testResults[integration.id].success ? 'success' : 'error'"
+              variant="tonal"
+              density="compact"
+              class="mt-3"
+              closable
+              @click:close="delete testResults[integration.id]"
+            >
+              <div class="text-body-2 font-weight-medium">{{ testResults[integration.id].message }}</div>
+              <template v-if="testResults[integration.id].details">
+                <div v-if="testResults[integration.id].details.explanation" class="text-body-2 mt-1">
+                  {{ testResults[integration.id].details.explanation }}
+                </div>
+                <dl class="test-details text-caption mt-2">
+                  <template v-for="row in detailRows(testResults[integration.id].details)" :key="row.label">
+                    <dt>{{ row.label }}</dt>
+                    <dd>{{ row.value }}</dd>
+                  </template>
+                </dl>
+                <ul v-if="testResults[integration.id].details.actions?.length" class="text-body-2 mt-2 pl-4">
+                  <li v-for="action in testResults[integration.id].details.actions" :key="action">{{ action }}</li>
+                </ul>
+                <a
+                  v-if="testResults[integration.id].details.documentation"
+                  :href="testResults[integration.id].details.documentation"
+                  target="_blank"
+                  rel="noopener"
+                  class="text-body-2 d-inline-block mt-2"
+                >Provider documentation</a>
+              </template>
+            </v-alert>
           </v-card-text>
 
           <v-card-actions>
@@ -67,6 +110,9 @@
             </v-btn>
             <v-btn size="small" variant="text" :loading="syncingId === integration.id" @click="syncIntegration(integration)">
               Sync devices
+            </v-btn>
+            <v-btn size="small" variant="text" :loading="scopeBackupId === integration.id" @click="backUpScopes(integration)">
+              Back up scopes
             </v-btn>
             <v-spacer />
             <v-btn size="small" variant="text" icon="mdi-pencil" @click="openEdit(integration)" />
@@ -104,16 +150,16 @@
               :rules="[v => !!v || 'A name is required']"
             />
 
-            <!-- Providers whose orgs live in a specific regional cloud (Mist)
-                 get a picker; everyone else types a base URL. -->
+            <!-- Providers whose tenants live in a specific regional cloud
+                 (Mist, Central) get a picker; everyone else types a base URL. -->
             <v-select
               v-if="regions.length"
               v-model="form.baseUrl"
               :items="regions"
               item-title="label"
               item-value="baseUrl"
-              label="Regional Cloud"
-              hint="Your org lives in exactly one region — using the wrong one fails to authenticate. Check the address bar of your Mist portal."
+              label="Region / Cluster"
+              :hint="selectedProvider?.regionHint"
               persistent-hint
               class="mb-3"
             />
@@ -135,9 +181,9 @@
               :label="field.label"
               :type="field.secret && !revealed[field.key] ? 'password' : 'text'"
               :append-inner-icon="field.secret ? (revealed[field.key] ? 'mdi-eye-off' : 'mdi-eye') : undefined"
-              :hint="field.secret && editing ? 'Leave blank to keep the stored value' : undefined"
-              :persistent-hint="field.secret && editing"
-              :rules="field.secret && editing ? [] : [v => !!v || `${field.label} is required`]"
+              :hint="field.secret && editing ? 'Leave blank to keep the stored value' : field.hint"
+              :persistent-hint="(field.secret && editing) || !!field.hint"
+              :rules="(field.secret && editing) || field.optional ? [] : [v => !!v || `${field.label} is required`]"
               class="mb-3"
               @click:append-inner="revealed[field.key] = !revealed[field.key]"
             />
@@ -182,10 +228,12 @@ import { ref, computed, reactive, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSettingsStore } from '@/stores/settings'
 import { useDevicesStore } from '@/stores/devices'
+import { useBackupsStore } from '@/stores/backups'
 import { CloudProviderInfo } from '@/models/vendors'
 
 const settingsStore = useSettingsStore()
 const devicesStore = useDevicesStore()
+const backupsStore = useBackupsStore()
 const { cloudIntegrations: integrations, cloudProviders, loading, error } = storeToRefs(settingsStore)
 
 const dialog = ref(false)
@@ -196,7 +244,11 @@ const saving = ref(false)
 const deleting = ref(false)
 const testingId = ref(null)
 const syncingId = ref(null)
+const scopeBackupId = ref(null)
 const revealed = reactive({})
+// Latest test result per integration id (this session only; the persisted
+// lastTestStatus is the summary).
+const testResults = reactive({})
 const snackbar = reactive({ show: false, message: '', color: 'success' })
 
 const form = reactive({
@@ -229,7 +281,38 @@ const providerLabel = (id) =>
 
 const providerColor = (id) => CloudProviderInfo[id]?.color || 'grey'
 
+// Key facts of a test, in the order an operator reads them: who the
+// credential authenticated as on success, the failed call otherwise.
+const detailRows = (details) => [
+  { label: 'Account', value: details.email },
+  { label: 'Org ID', value: details.orgId },
+  { label: 'Access', value: details.role },
+  { label: 'Request', value: [details.method, details.endpoint].filter(Boolean).join(' ') },
+  { label: 'HTTP status', value: details.statusCode },
+  { label: 'Provider error', value: details.providerError },
+  { label: 'Provider message', value: details.providerMessage },
+  { label: 'Response time', value: details.responseTime },
+].filter(row => row.value)
+
 const formatDate = (value) => (value ? new Date(value).toLocaleString() : '')
+
+// integration.eventStream: { state, connectedAt, lastMessageAt, lastError } (backend cloud-stream.service).
+function streamInfo(stream) {
+  if (stream.state === 'connected') {
+    return {
+      icon: 'mdi-access-point',
+      color: 'success',
+      label: stream.lastMessageAt
+        ? `Event stream connected, last report ${formatDate(stream.lastMessageAt)}`
+        : 'Event stream connected, no reports yet',
+    }
+  }
+  if (stream.state === 'disconnected') {
+    return { icon: 'mdi-access-point-off', color: 'warning', label: `Event stream down (${stream.lastError || 'disconnected'}), retrying` }
+  }
+  if (stream.state === 'connecting') return { icon: 'mdi-progress-clock', color: 'info', label: 'Event stream connecting' }
+  return { icon: 'mdi-access-point-off', color: 'grey', label: 'Event stream stopped' }
+}
 
 const resetForm = (provider = null) => {
   form.provider = provider
@@ -277,11 +360,13 @@ const save = async () => {
   saving.value = true
   try {
     if (editing.value) {
-      // Drop blank secrets so the backend keeps the stored value.
+      // Drop blank secrets so the backend keeps the stored value. Blank
+      // non-secret fields are sent, so an optional one can be cleared.
       const credentials = {}
       for (const field of credentialFields.value) {
-        const value = form.credentials[field.key]
-        if (value !== '' && value !== null && value !== undefined) credentials[field.key] = value
+        const value = form.credentials[field.key] ?? ''
+        if (field.secret && value === '') continue
+        credentials[field.key] = value
       }
       await settingsStore.updateCloudIntegration(editing.value.id, {
         name: form.name,
@@ -312,11 +397,28 @@ const testIntegration = async (integration) => {
   testingId.value = integration.id
   try {
     const result = await settingsStore.testCloudIntegration(integration.id)
-    notify(result.message, result.success ? 'success' : 'error')
+    testResults[integration.id] = result
+    notify(
+      result.success ? result.message : `${result.message} (details on the integration card)`,
+      result.success ? 'success' : 'error'
+    )
   } catch (err) {
     notify(err.message || 'Test failed', 'error')
   } finally {
     testingId.value = null
+  }
+}
+
+// The integration's org/site (Mist) or scope (Central) configuration.
+const backUpScopes = async (integration) => {
+  scopeBackupId.value = integration.id
+  try {
+    await backupsStore.runScopeBackup(integration.id)
+    notify(`Scope backup started for ${integration.name}`)
+  } catch (err) {
+    notify(err.userMessage || err.message || 'Scope backup failed', 'error')
+  } finally {
+    scopeBackupId.value = null
   }
 }
 
@@ -352,3 +454,21 @@ const doDelete = async () => {
 
 onMounted(() => settingsStore.fetchCloudIntegrations())
 </script>
+
+<style scoped>
+.test-details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 12px;
+  row-gap: 2px;
+}
+
+.test-details dt {
+  font-weight: 500;
+}
+
+.test-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+</style>

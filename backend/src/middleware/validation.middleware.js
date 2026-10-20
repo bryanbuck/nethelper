@@ -1,9 +1,15 @@
 const { body, param, query, validationResult } = require('express-validator');
 const { VENDORS, PLATFORMS } = require('../constants/vendors');
+const { ALERT_RULES, SEVERITIES, MAX_SETTLE_SECONDS } = require('../constants/alert-rules');
 
 const DEVICE_TYPES = ['access_point', 'switch', 'gateway', 'controller', 'other'];
 const VENDOR_IDS = Object.keys(VENDORS);
 const PLATFORM_IDS = Object.keys(PLATFORMS);
+
+// Separated (aa:bb:.., aa-bb-.., aabb.ccdd.eeff) or bare hex: Mist reports
+// MACs as bare hex, and the edit form sends them back unchanged.
+const MAC_PATTERN = /^(?:[0-9a-f]{2}([:-])(?:[0-9a-f]{2}\1){4}[0-9a-f]{2}|[0-9a-f]{4}\.[0-9a-f]{4}\.[0-9a-f]{4}|[0-9a-f]{12})$/i;
+const isMac = (value) => typeof value === 'string' && MAC_PATTERN.test(value);
 
 // Handle validation errors
 const handleValidationErrors = (req, res, next) => {
@@ -11,6 +17,7 @@ const handleValidationErrors = (req, res, next) => {
   if (!errors.isEmpty()) {
     return res.status(400).json({
       success: false,
+      error: errors.array().map((e) => e.msg).join('; '),
       errors: errors.array(),
     });
   }
@@ -31,15 +38,30 @@ const validateDevice = {
     handleValidationErrors,
   ],
 
+  merge: [
+    body('targetId').isUUID().withMessage('Invalid device ID to keep'),
+    body('sourceIds').isArray({ min: 1, max: 20 }).withMessage('sourceIds must list the devices to merge'),
+    body('sourceIds.*').isUUID().withMessage('Invalid device ID to merge'),
+    body('identityFrom').optional({ values: 'null' }).isUUID().withMessage('Invalid identityFrom device ID'),
+    handleValidationErrors,
+  ],
+
+  assignCredential: [
+    body('deviceIds').isArray({ min: 1, max: 500 }).withMessage('deviceIds must list 1 to 500 devices'),
+    body('deviceIds.*').isUUID().withMessage('Invalid device ID'),
+    body('apiCredentialId').optional({ values: 'null' }).isUUID().withMessage('Invalid credential ID'),
+    handleValidationErrors,
+  ],
+
   create: [
     body('name').trim().isLength({ min: 1 }).withMessage('Device name is required'),
     body('type').isIn(DEVICE_TYPES).withMessage('Invalid device type'),
     body('vendor').optional().isIn(VENDOR_IDS).withMessage('Invalid vendor'),
     body('platform').optional({ nullable: true }).isIn(PLATFORM_IDS).withMessage('Invalid platform'),
     body('ipAddress').trim().isIP().withMessage('IP address is required and must be valid'),
-    body('serial').optional().trim(),
+    body('serial').optional({ values: 'null' }).trim(),
     body('model').optional().trim(),
-    body('macAddress').optional().isMACAddress().withMessage('Invalid MAC address'),
+    body('macAddress').optional({ values: 'falsy' }).custom(isMac).withMessage('Invalid MAC address'),
     body('location').optional().trim(),
     body('managementMode').optional().isIn(['cloud', 'direct']).withMessage('Invalid management mode'),
     body('cloudIntegrationId').optional({ nullable: true }).isUUID().withMessage('Invalid cloud integration ID'),
@@ -55,7 +77,7 @@ const validateDevice = {
     body('platform').optional({ nullable: true }).isIn(PLATFORM_IDS).withMessage('Invalid platform'),
     body('model').optional().trim(),
     body('ipAddress').optional().isIP(),
-    body('macAddress').optional().isMACAddress(),
+    body('macAddress').optional({ values: 'falsy' }).custom(isMac).withMessage('Invalid MAC address'),
     body('location').optional().trim(),
     body('status').optional().isIn(['online', 'offline', 'warning', 'maintenance']),
     body('managementMode').optional().isIn(['cloud', 'direct']).withMessage('Invalid management mode'),
@@ -237,14 +259,50 @@ const validateBackup = {
     handleValidationErrors,
   ],
 
+  // content / download: optional artifact kind (default: the primary)
+  content: [
+    param('backupId').isUUID().withMessage('Invalid backup ID'),
+    query('kind').optional().isIn(['cli', 'structured']).withMessage('kind must be cli or structured'),
+    handleValidationErrors,
+  ],
+
   diff: [
     param('backupId').isUUID().withMessage('Invalid backup ID'),
     param('otherId').isUUID().withMessage('Invalid backup ID'),
+    query('kind').optional().isIn(['cli', 'structured']).withMessage('kind must be cli or structured'),
     handleValidationErrors,
   ],
 
   scheduleId: [
     param('scheduleId').isUUID().withMessage('Invalid schedule ID'),
+    handleValidationErrors,
+  ],
+
+  // Cloud-scope backups. integrationId is not always a UUID (the env-backed
+  // Central integration is "env:aruba_central").
+  scopeList: [
+    query('integrationId').optional().isString().isLength({ min: 1, max: 100 }),
+    query('scopeType').optional().isIn(['org', 'site', 'group']),
+    query('scopeId').optional().isString().isLength({ min: 1, max: 200 }),
+    query('status').optional().isIn(['pending', 'running', 'success', 'failed']),
+    query('limit').optional().isInt({ min: 1, max: 200 }).toInt(),
+    query('offset').optional().isInt({ min: 0 }).toInt(),
+    handleValidationErrors,
+  ],
+
+  scopeRun: [
+    body('integrationId').optional({ values: 'null' }).isString().isLength({ min: 1, max: 100 }),
+    handleValidationErrors,
+  ],
+
+  scopeBackupId: [
+    param('scopeBackupId').isUUID().withMessage('Invalid scope backup ID'),
+    handleValidationErrors,
+  ],
+
+  scopeDiff: [
+    param('scopeBackupId').isUUID().withMessage('Invalid scope backup ID'),
+    param('otherId').isUUID().withMessage('Invalid scope backup ID'),
     handleValidationErrors,
   ],
 
@@ -257,6 +315,7 @@ const validateBackup = {
     body('deviceSelection.mode').optional().isIn(['all', 'types', 'devices']),
     body('retentionDays').optional().isInt({ min: 0, max: 3650 }).toInt(),
     body('retentionMaxCount').optional().isInt({ min: 0, max: 1000 }).toInt(),
+    body('includeScopes').optional().isBoolean().toBoolean(),
     handleValidationErrors,
   ],
 
@@ -270,6 +329,7 @@ const validateBackup = {
     body('deviceSelection.mode').optional().isIn(['all', 'types', 'devices']),
     body('retentionDays').optional().isInt({ min: 0, max: 3650 }).toInt(),
     body('retentionMaxCount').optional().isInt({ min: 0, max: 1000 }).toInt(),
+    body('includeScopes').optional().isBoolean().toBoolean(),
     handleValidationErrors,
   ],
 };
@@ -279,6 +339,67 @@ const validateUUID = (paramName) => [
   param(paramName).isUUID().withMessage(`Invalid ${paramName}`),
   handleValidationErrors,
 ];
+
+// Network Map (services/topology/)
+const validateTopology = {
+  graph: [
+    query('site').optional().isString().isLength({ min: 1, max: 200 }),
+    query('includeDiscovered').optional().isBoolean().toBoolean(),
+    handleValidationErrors,
+  ],
+
+  changes: [
+    query('since').optional().isISO8601().withMessage('since must be an ISO timestamp'),
+    query('deviceId').optional().isUUID(),
+    query('limit').optional().isInt({ min: 1, max: 500 }).toInt(),
+    handleValidationErrors,
+  ],
+
+  collect: [
+    body('deviceIds').optional().isArray({ max: 1000 }).withMessage('deviceIds must be an array'),
+    body('deviceIds.*').optional().isUUID().withMessage('deviceIds must be device IDs'),
+    handleValidationErrors,
+  ],
+
+  layoutScope: [
+    param('scope').matches(/^(all|site:.{1,200})$/).withMessage('scope must be "all" or "site:<location>"'),
+    handleValidationErrors,
+  ],
+
+  saveLayout: [
+    param('scope').matches(/^(all|site:.{1,200})$/).withMessage('scope must be "all" or "site:<location>"'),
+    body('positions').isObject().withMessage('positions must be an object of { x, y } by node id'),
+    handleValidationErrors,
+  ],
+};
+
+const validateAlerts = {
+  list: [
+    query('status').optional().isIn(['active', 'open', 'acknowledged', 'resolved', 'all']),
+    query('severity').optional().custom((value) => String(value).split(',').every((s) => SEVERITIES.includes(s.trim())))
+      .withMessage(`severity must be one or more of ${SEVERITIES.join(', ')}`),
+    query('rule').optional().isIn(Object.keys(ALERT_RULES)),
+    query('deviceId').optional().isUUID(),
+    query('q').optional().isString().isLength({ max: 200 }),
+    query('page').optional().isInt({ min: 1 }).toInt(),
+    query('limit').optional().isInt({ min: 1, max: 200 }).toInt(),
+    handleValidationErrors,
+  ],
+
+  ids: [
+    body('ids').isArray({ min: 1, max: 1000 }).withMessage('ids must be a non-empty array'),
+    body('ids.*').isUUID().withMessage('ids must be alert IDs'),
+    handleValidationErrors,
+  ],
+
+  updateRule: [
+    param('key').isIn(Object.keys(ALERT_RULES)).withMessage('Unknown alert rule'),
+    body('enabled').optional().isBoolean().toBoolean(),
+    body('severity').optional().isIn(SEVERITIES),
+    body('settleSeconds').optional().isInt({ min: 0, max: MAX_SETTLE_SECONDS }).toInt(),
+    handleValidationErrors,
+  ],
+};
 
 const validateOptionalUUID = (paramName) => [
   param(paramName).optional().isUUID().withMessage(`Invalid ${paramName}`),
@@ -294,6 +415,8 @@ module.exports = {
   validateApiCredential,
   validateDiscovery,
   validateBackup,
+  validateTopology,
+  validateAlerts,
   validateQuery,
   validateUUID,
   validateOptionalUUID,

@@ -1,8 +1,10 @@
-const axios = require('axios');
-const https = require('https');
+const CXSwitchAPI = require('./device-api/cx-switch-api');
 const settingsService = require('./settings.service');
 const sshDeviceService = require('./ssh-device.service');
-const { isCxRestCapable } = require('../utils/device-platform');
+const JunosAPI = require('./device-api/junos-api');
+const NetconfClient = require('./device-api/netconf-client');
+const { isCxRestCapable, detectPlatform } = require('../utils/device-platform');
+const { resolveTransport } = require('../utils/transport-router');
 const { getPrisma } = require('../config/database');
 const { debugLog, Services } = require('../utils/debug-logger');
 
@@ -135,59 +137,52 @@ class DevicePollerService {
   }
 
   /**
-   * Make an authenticated API request to a device
-   * @param {string} baseUrl - Device base URL
-   * @param {string} path - API path
-   * @param {Object} credentials - Device credentials
-   * @param {Object} options - Additional axios options
-   * @returns {Promise<Object>} API response data
+   * Run fn(api) inside one AOS-CX REST session, then log out. AOS-CX REST
+   * only accepts cookie sessions (HTTP Basic is refused with 401 on 10.16),
+   * and sessions per user are few, so every call logs out when done.
+   * @param {Object} device - Device row
+   * @param {Object} credentials - Decrypted credentials
+   * @param {Function} fn - async (api: CXSwitchAPI) => result
    */
-  async makeDeviceRequest(baseUrl, path, credentials, options = {}) {
+  async withCxSession(device, credentials, fn) {
+    const api = new CXSwitchAPI(device, credentials);
     try {
-      const url = `${baseUrl}${path}`;
+      await api.login();
+      return await fn(api);
+    } finally {
+      await api.logout().catch(() => {});
+    }
+  }
 
-      // Create axios config with authentication
-      const config = {
-        method: options.method || 'GET',
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
-        timeout: options.timeout || 15000,
-        // Accept self-signed certificates (common with network devices)
-        httpsAgent: new https.Agent({
-          rejectUnauthorized: false,
-        }),
-      };
-
-      // Add authentication
-      if (credentials.username && credentials.password) {
-        config.auth = {
-          username: credentials.username,
-          password: credentials.password,
-        };
-      } else if (credentials.apiKey) {
-        config.headers['Authorization'] = `Bearer ${credentials.apiKey}`;
-      }
-
-      // Add request body if provided
-      if (options.data) {
-        config.data = options.data;
-      }
-
-      const response = await axios(config);
-
-      return response.data;
-    } catch (error) {
-      if (error.response) {
-        throw new Error(`Device API error (${error.response.status}): ${error.response.data?.message || error.message}`);
-      } else if (error.request) {
-        throw new Error(`Device unreachable: ${error.message}`);
-      } else {
-        throw new Error(`Request error: ${error.message}`);
+  /**
+   * Where a firmware/system poll reads from, per the transport router's
+   * 'poll' order: { transport: 'cx-rest' } (the caller reads over its CX
+   * session), { transport: 'netconf', info } (Junos), or { transport: 'ssh',
+   * text } (`show version`). A cloud-managed device is never SSHed; when no
+   * local read is possible its versions come from cloud sync instead.
+   */
+  async readVersion(device, credentials) {
+    const tried = [];
+    for (const transport of resolveTransport(device, 'poll')) {
+      if (transport === 'device-rest') {
+        if (isCxRestCapable(device)) return { transport: 'cx-rest' };
+        if (detectPlatform(device) === 'junos') {
+          try {
+            return { transport: 'netconf', info: await new JunosAPI(device, credentials).getDeviceInfo() };
+          } catch (error) {
+            if (error.code !== NetconfClient.NETCONF_UNAVAILABLE) throw error;
+            tried.push('NETCONF (not enabled on the device)');
+            continue;
+          }
+        }
+        tried.push(`device API (no client for platform "${detectPlatform(device)}")`);
+      } else if (transport === 'ssh') {
+        return { transport: 'ssh', text: await sshDeviceService.getVersion(device, credentials) };
+      } else if (transport === 'cloud') {
+        tried.push('cloud (versions come from cloud sync)');
       }
     }
+    throw new Error(`No local transport can poll "${device.name}"${tried.length ? `: ${tried.join('; ')}` : ''}`);
   }
 
   /**
@@ -202,22 +197,22 @@ class DevicePollerService {
     try {
       logger.progress(`Polling firmware info from ${device.name} (${device.ipAddress})`);
 
-      if (!isCxRestCapable(device)) {
-        // SSH fallback: return the raw `show version` text for CLI-only devices.
-        const versionText = await sshDeviceService.getVersion(device, credentials);
+      const version = await this.readVersion(device, credentials);
+      if (version.transport === 'netconf') {
+        const { info } = version;
+        return { transport: 'netconf', primary_version: info.version, model: info.model, hostname: info.hostname };
+      }
+      if (version.transport === 'ssh') {
+        // The raw `show version` text for CLI-only devices.
         return {
           transport: 'ssh',
-          raw_version: versionText,
-          primary_version: this.parseVersionFromText(versionText),
+          raw_version: version.text,
+          primary_version: this.parseVersionFromText(version.text),
         };
       }
 
-      // AOS-CX switch - use REST API v10.15
-      const baseUrl = `https://${device.ipAddress}/rest/v10.15`;
-      const apiPath = '/firmware';
-
-      // Make API request
-      const firmwareData = await this.makeDeviceRequest(baseUrl, apiPath, credentials);
+      const firmwareData = await this.withCxSession(device, credentials,
+        (api) => api.makeAuthenticatedRequest('GET', '/firmware'));
 
       // Extract relevant fields
       const result = {
@@ -252,25 +247,23 @@ class DevicePollerService {
     try {
       logger.progress(`Polling system info from ${device.name} (${device.ipAddress})`);
 
-      if (!isCxRestCapable(device)) {
-        // SSH fallback for CLI-only devices: return raw `show version` text.
-        const versionText = await sshDeviceService.getVersion(device, credentials);
+      const version = await this.readVersion(device, credentials);
+      if (version.transport === 'netconf') {
+        const { info } = version;
+        return { transport: 'netconf', hostname: info.hostname, platform_name: info.model, software_version: info.version };
+      }
+      if (version.transport === 'ssh') {
+        // CLI-only devices: the raw `show version` text.
         return {
           transport: 'ssh',
           hostname: null,
-          software_version: this.parseVersionFromText(versionText),
-          raw_version: versionText,
+          software_version: this.parseVersionFromText(version.text),
+          raw_version: version.text,
         };
       }
 
-      // AOS-CX switch - use REST API v10.15
-      const baseUrl = `https://${device.ipAddress}/rest/v10.15`;
-      const apiPath = '/system';
-
-      // Make API request with depth=1 to get basic system info
-      const systemData = await this.makeDeviceRequest(baseUrl, apiPath, credentials, {
-        headers: { 'Depth': '1' }
-      });
+      const systemData = await this.withCxSession(device, credentials,
+        (api) => api.makeAuthenticatedRequest('GET', '/system?depth=1'));
 
       // Extract relevant fields (common fields returned by /system endpoint)
       const result = {
@@ -311,40 +304,47 @@ class DevicePollerService {
     try {
       logger.progress(`Polling configuration backup from ${device.name} (${device.ipAddress})`);
 
-      // Determine base URL based on device type
-      let baseUrl, runningConfigPath, startupConfigPath;
-
-      switch (device.type) {
-        case 'switch':
-          // AOS-CX switch - use REST API v10.15
-          baseUrl = `https://${device.ipAddress}/rest/v10.15`;
-          runningConfigPath = '/fullconfigs/running-config';
-          startupConfigPath = '/fullconfigs/startup-config';
-          break;
-
-        case 'ap':
-        case 'gateway':
-          throw new Error(`Backup polling not yet implemented for device type: ${device.type}`);
-
-        default:
-          throw new Error(`Unsupported device type: ${device.type}`);
+      if (!this.isCxRestSwitch(device)) {
+        throw new Error(`Backup polling reads AOS-CX switches over REST only; use a config backup for ${device.name}`);
       }
 
-      // Get both running and startup configurations
-      // Note: These can be large, so we're being careful with parallel requests
-      const [runningConfig, startupConfig] = await Promise.all([
-        this.makeDeviceRequest(baseUrl, runningConfigPath, credentials, { timeout: 30000 }),
-        this.makeDeviceRequest(baseUrl, startupConfigPath, credentials, { timeout: 30000 })
-      ]);
+      // The REST config database (running + startup JSON), and the running
+      // config as CLI text: /configs/running-config with Accept: text/plain
+      // returns exactly what `show running-config` prints (verified on
+      // ML.10.16). The CLI form is what a person can paste back; the JSON is
+      // what REST can restore. The CLI read is best-effort so a firmware that
+      // lacks it still yields the JSON backup.
+      const [runningConfig, startupConfig, cli] = await this.withCxSession(device, credentials, (api) => Promise.all([
+        api.makeAuthenticatedRequest('GET', '/fullconfigs/running-config'),
+        api.makeAuthenticatedRequest('GET', '/fullconfigs/startup-config'),
+        api.makeAuthenticatedRequest('GET', '/configs/running-config', null, { accept: 'text/plain' })
+          .then((text) => ({ text }), (error) => ({ error })),
+      ]));
+
+      let runningConfigCli = null;
+      let runningConfigCliError = null;
+      if (cli.error) {
+        runningConfigCliError = cli.error.message;
+      } else if (typeof cli.text === 'string' && cli.text.trim()) {
+        runningConfigCli = cli.text;
+      } else {
+        runningConfigCliError = 'the switch did not return CLI text';
+      }
+      if (runningConfigCliError) {
+        logger.warn(`CLI running-config unavailable from ${device.name}: ${runningConfigCliError}`);
+      }
 
       const result = {
         running_config: runningConfig,
+        running_config_cli: runningConfigCli,
+        running_config_cli_error: runningConfigCliError,
         startup_config: startupConfig,
         backed_up_at: new Date().toISOString(),
       };
 
       logger.success(`Configuration backup retrieved from ${device.name}`, {
         running_config_size: JSON.stringify(runningConfig).length,
+        running_config_cli_size: runningConfigCli ? runningConfigCli.length : 0,
         startup_config_size: JSON.stringify(startupConfig).length,
       });
 
@@ -366,31 +366,14 @@ class DevicePollerService {
     try {
       logger.progress(`Polling login sessions from ${device.name} (${device.ipAddress})`);
 
-      // Determine base URL based on device type
-      let baseUrl, apiPath;
-
-      switch (device.type) {
-        case 'switch':
-          // AOS-CX switch - use REST API v10.15
-          baseUrl = `https://${device.ipAddress}/rest/v10.15`;
-          // Get system resource which contains session information
-          // Note: Direct /login-sessions may not exist, using /system/users or similar
-          apiPath = '/system/users';
-          break;
-
-        case 'ap':
-        case 'gateway':
-          throw new Error(`Login sessions polling not yet implemented for device type: ${device.type}`);
-
-        default:
-          throw new Error(`Unsupported device type: ${device.type}`);
+      if (!this.isCxRestSwitch(device)) {
+        throw new Error(`Login sessions polling reads AOS-CX switches over REST only (${device.name} is not one)`);
       }
 
       try {
         // Try to get login sessions - the exact endpoint may vary by firmware version
-        const sessionsData = await this.makeDeviceRequest(baseUrl, apiPath, credentials, {
-          headers: { 'Depth': '2' }
-        });
+        const sessionsData = await this.withCxSession(device, credentials,
+          (api) => api.makeAuthenticatedRequest('GET', '/system/users?depth=2'));
 
         const result = {
           users: sessionsData,
@@ -432,29 +415,8 @@ class DevicePollerService {
     }
 
     logger.progress(`Polling Aruba Central status from ${device.name} (${device.ipAddress})`);
-    const baseUrl = `https://${device.ipAddress}/rest/v10.15`;
-
-    let raw;
-    try {
-      try {
-        raw = await this.makeDeviceRequest(baseUrl, '/system/aruba_central', credentials);
-      } catch (error) {
-        if (!error.message.includes('404')) throw error;
-        // Legacy resource missing: try the 10.15+ naming before giving up.
-        raw = await this.makeDeviceRequest(baseUrl, '/system/hpe_anw_central', credentials);
-      }
-    } catch (error) {
-      // Some firmware only accepts session (cookie) auth for REST, not basic
-      // auth - fall back to the cookie-login CX API client.
-      if (!error.message.includes('401')) throw error;
-      const CXSwitchAPI = require('./device-api/cx-switch-api');
-      const api = new CXSwitchAPI(device, credentials);
-      try {
-        raw = await api.getCentralStatus();
-      } finally {
-        await api.logout().catch(() => {});
-      }
-    }
+    // getCentralStatus() tries aruba_central, then the 10.15+ hpe_anw_central.
+    const raw = await this.withCxSession(device, credentials, (api) => api.getCentralStatus());
 
     const result = this.normalizeCentralStatus(raw);
     logger.success(`Central status retrieved from ${device.name}`, {
@@ -466,15 +428,25 @@ class DevicePollerService {
   }
 
   /**
-   * Can we read Central status from this device over CX REST? True for
-   * classified AOS-CX switches and for unclassified switches (which this
-   * codebase keeps on REST transport by default); false for AOS-S and
-   * non-switch devices.
+   * Can we read Central status from this device over CX REST? Same test as
+   * isCxRestSwitch.
    */
   canProbeCentralStatus(device) {
-    const { detectPlatform } = require('../utils/device-platform');
+    return this.isCxRestSwitch(device);
+  }
+
+  /**
+   * Is this a switch we may log in to over AOS-CX REST? True for classified
+   * AOS-CX switches and for unclassified Aruba switches (which this codebase
+   * keeps on REST transport by default); false for AOS-S, other vendors'
+   * switches, and non-switch devices.
+   */
+  isCxRestSwitch(device) {
     if (device?.type !== 'switch') return false;
-    return detectPlatform(device) !== 'aos-s';
+    // Vendor-aware: a Junos or IOS-XE switch never gets a CX REST login,
+    // whatever its model string looks like.
+    const platform = detectPlatform(device);
+    return platform === 'aos-cx' || (platform === 'unknown' && (device.vendor || 'aruba') === 'aruba');
   }
 
   /**
@@ -569,17 +541,20 @@ class DevicePollerService {
 
   /**
    * Best-effort extraction of a version string from `show version` output
-   * across AOS-S / AOS-CX / IOS-like formats.
+   * across AOS-S / AOS-CX / IOS-like formats. Boot ROM lines are skipped: a
+   * real 2930F prints "Boot ROM Version: WC.16.01.0010" after its firmware.
    */
   parseVersionFromText(text) {
     if (!text) return null;
+    const body = text.split('\n').filter((line) => !/boot\s*rom/i.test(line)).join('\n');
     const patterns = [
-      /Version[:\s]+([A-Za-z0-9._-]+)/i,      // AOS-S: "Software revision : WC.16.11.x"
+      /\b([A-Z]{2}\.\d{2}\.\d{2}\.\d{4})\b/,   // HPE: WC.16.11.0015, FL.10.16.1006
+      /Version[:\s]+([A-Za-z0-9._-]+)/i,
       /revision\s*:\s*([A-Za-z0-9._-]+)/i,
       /\b(\d+\.\d+\.\d+[A-Za-z0-9._-]*)\b/,   // generic semver-ish
     ];
     for (const re of patterns) {
-      const match = re.exec(text);
+      const match = re.exec(body);
       if (match) return match[1];
     }
     return null;

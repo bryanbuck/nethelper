@@ -18,7 +18,7 @@
       </div>
     </v-alert>
 
-    <v-card elevation="2">
+    <v-card elevation="2" class="device-table-card">
       <v-card-title class="d-flex align-center justify-space-between">
         <div class="d-flex align-center">
           <v-icon class="mr-2" color="primary">mdi-devices</v-icon>
@@ -71,7 +71,7 @@
           </v-btn>
           
           <v-menu>
-            <template v-slot:activator="{ props }">
+            <template #activator="{ props }">
               <v-btn
                 variant="outlined"
                 prepend-icon="mdi-dots-vertical"
@@ -142,14 +142,14 @@
                   clearable
                   @update:model-value="applyFilters"
                 >
-                  <template v-slot:selection="{ item }">
+                  <template #selection="{ item }">
                     <v-chip :color="getStatusColor(item.value)" size="small">
                       {{ item.title }}
                     </v-chip>
                   </template>
-                  <template v-slot:item="{ props, item }">
+                  <template #item="{ props, item }">
                     <v-list-item v-bind="props">
-                      <template v-slot:prepend>
+                      <template #prepend>
                         <v-chip :color="getStatusColor(item.value)" size="small">
                           {{ item.title }}
                         </v-chip>
@@ -172,7 +172,7 @@
               </v-col>
               
               <v-col cols="12" sm="6" md="3">
-                <v-select
+                <v-combobox
                   v-model="filters.location"
                   label="Location"
                   :items="locationOptions"
@@ -183,12 +183,36 @@
                 />
               </v-col>
               
+              <v-col cols="12" sm="6" md="3">
+                <v-select
+                  v-model="filters.platform"
+                  label="Platform"
+                  :items="platformFilterOptions"
+                  variant="outlined"
+                  density="compact"
+                  clearable
+                  @update:model-value="applyFilters"
+                />
+              </v-col>
+
+              <v-col cols="12" sm="6" md="3">
+                <v-select
+                  v-model="filters.credential"
+                  label="Credential"
+                  :items="credentialFilterOptions"
+                  variant="outlined"
+                  density="compact"
+                  clearable
+                  @update:model-value="applyFilters"
+                />
+              </v-col>
+
               <v-col cols="12" sm="6" md="3" class="d-flex align-center">
                 <v-btn
                   variant="outlined"
                   prepend-icon="mdi-filter-remove"
-                  @click="clearFilters"
                   :disabled="activeFiltersCount === 0"
+                  @click="clearFilters"
                 >
                   Clear Filters
                 </v-btn>
@@ -199,6 +223,80 @@
         </div>
       </v-expand-transition>
       
+      <!-- Bulk Actions Bar: above the table, pinned under the app bar while the page scrolls -->
+      <v-slide-y-transition>
+        <v-card-actions v-if="selectedItems.length > 0" class="bulk-actions-bar">
+          <div class="d-flex align-center justify-space-between w-100">
+            <div class="d-flex align-center">
+              <v-icon class="mr-2" color="primary">mdi-checkbox-marked</v-icon>
+              <span class="font-weight-medium">{{ selectedItems.length }} devices selected</span>
+            </div>
+            
+            <div class="d-flex align-center ga-2">
+              <v-menu v-if="canEdit">
+                <template #activator="{ props }">
+                  <v-btn
+                    v-bind="props"
+                    variant="outlined"
+                    size="small"
+                    prepend-icon="mdi-access-point"
+                    :loading="bulkLiveBusy"
+                  >
+                    Live Monitoring
+                  </v-btn>
+                </template>
+                <v-list density="compact">
+                  <v-list-item prepend-icon="mdi-access-point" title="Turn on" @click="bulkLiveMonitoring(true)" />
+                  <v-list-item prepend-icon="mdi-access-point-off" title="Turn off" @click="bulkLiveMonitoring(false)" />
+                </v-list>
+              </v-menu>
+              <v-btn
+                v-if="canEdit"
+                variant="outlined"
+                size="small"
+                prepend-icon="mdi-key-variant"
+                @click="credentialDialog = true"
+              >
+                Credential
+              </v-btn>
+              <v-btn
+                v-if="canEdit && selectedItems.length >= 2"
+                variant="outlined"
+                size="small"
+                prepend-icon="mdi-call-merge"
+                :loading="mergeLoading"
+                @click="openMerge"
+              >
+                Merge
+              </v-btn>
+              <v-btn
+                variant="outlined"
+                size="small"
+                prepend-icon="mdi-restart"
+                @click="bulkReboot"
+              >
+                Reboot Selected
+              </v-btn>
+              <v-btn
+                variant="outlined"
+                size="small"
+                prepend-icon="mdi-download"
+                @click="exportSelected"
+              >
+                Export Selected
+              </v-btn>
+              <v-btn
+                variant="text"
+                size="small"
+                @click="selectedItems = []"
+              >
+                Clear Selection
+              </v-btn>
+            </div>
+          </div>
+        </v-card-actions>
+      </v-slide-y-transition>
+
       <!-- Data Table -->
       <v-data-table-server
         v-model="selectedItems"
@@ -209,11 +307,11 @@
         :loading="devicesStore.tableLoading"
         item-value="id"
         show-select
+        class="device-data-table"
         @update:options="loadItems"
         @click:row="handleRowClick"
-        class="device-data-table"
       >
-        <template v-slot:item.name="{ item }">
+        <template #item.name="{ item }">
           <div class="d-flex align-center">
             <v-avatar 
               :color="getDeviceTypeColor(item.type)" 
@@ -223,15 +321,23 @@
               <v-icon :icon="getDeviceIcon(item.type)" color="white" size="small"></v-icon>
             </v-avatar>
             <div>
-              <div class="font-weight-medium">{{ item.name }}</div>
+              <div class="font-weight-medium">
+                {{ item.name }}
+                <v-tooltip v-if="item.liveMonitoring" location="top">
+                  <template #activator="{ props }">
+                    <v-icon v-bind="props" icon="mdi-access-point" size="x-small" color="primary" class="ml-1" />
+                  </template>
+                  Live monitoring: link and PoE changes are recorded
+                </v-tooltip>
+              </div>
               <div class="text-caption text-medium-emphasis">{{ item.model }}</div>
             </div>
           </div>
         </template>
         
-        <template v-slot:item.status="{ item }">
+        <template #item.status="{ item }">
           <v-tooltip location="bottom">
-            <template v-slot:activator="{ props }">
+            <template #activator="{ props }">
               <v-chip
                 v-bind="props"
                 :color="getStatusColor(item.status)"
@@ -247,8 +353,18 @@
               </v-chip>
             </template>
             <div class="text-caption">
+              <div v-if="unreachableFromHere(item)" class="mb-1">
+                {{ cloudPlaneName(item) }} reports it online, but it doesn't answer ping from NetHelper
+                (no route, or ICMP filtered).
+              </div>
+              <div v-else-if="answersPingButCloudOffline(item)" class="mb-1">
+                {{ cloudPlaneName(item) }} reports it offline, but its address answers ping
+                (another device may now use this IP).
+              </div>
               <div v-if="item.pingLastChecked">
-                <strong>Ping Status:</strong> {{ item.status }}<br>
+                <strong>Ping Status:</strong> {{ item.pingStatus || 'unknown' }}<br>
+                <strong v-if="item.managementMode === 'cloud'">Cloud Status:</strong>
+                <template v-if="item.managementMode === 'cloud'"> {{ item.cloudStatus }}<br></template>
                 <strong>Last Checked:</strong> {{ formatLastSeen(item.pingLastChecked) }}<br>
                 <span v-if="item.pingResponseTime">
                   <strong>Response Time:</strong> {{ item.pingResponseTime }}ms
@@ -261,7 +377,7 @@
           </v-tooltip>
         </template>
         
-        <template v-slot:item.type="{ item }">
+        <template #item.type="{ item }">
           <div class="d-flex align-center">
             <v-icon
               :color="getDeviceTypeColor(item.type)"
@@ -269,11 +385,11 @@
               size="small"
               class="mr-2"
             ></v-icon>
-            {{ item.type }}
+            {{ getDeviceTypeLabel(item.type) }}
           </div>
         </template>
 
-        <template v-slot:item.managementMode="{ item }">
+        <template #item.managementMode="{ item }">
           <div class="d-flex align-center">
             <v-chip
               :color="getManagementChip(item).color"
@@ -288,7 +404,7 @@
               {{ getManagementChip(item).label }}
             </v-chip>
             <v-tooltip v-if="getManagementMismatch(item)" location="top">
-              <template v-slot:activator="{ props }">
+              <template #activator="{ props }">
                 <v-icon
                   v-bind="props"
                   color="warning"
@@ -303,9 +419,9 @@
           </div>
         </template>
 
-        <template v-slot:item.cloudStatus="{ item }">
+        <template #item.cloudStatus="{ item }">
           <v-tooltip location="bottom">
-            <template v-slot:activator="{ props }">
+            <template #activator="{ props }">
               <v-chip
                 v-if="item.cloudStatus"
                 v-bind="props"
@@ -338,7 +454,7 @@
           </v-tooltip>
         </template>
 
-        <template v-slot:item.apiStatus="{ item }">
+        <template #item.apiStatus="{ item }">
           <ConnectionStatusBadge
             :status="getApiConnectionStatus(item)"
             :last-tested="item.apiCredential?.lastTested || item.apiLastTested"
@@ -347,14 +463,14 @@
           />
         </template>
 
-        <template v-slot:item.lastSeen="{ item }">
+        <template #item.lastSeen="{ item }">
           <div>
             <div class="text-body-2">{{ formatLastSeen(item.lastSeen) }}</div>
             <div class="text-caption text-medium-emphasis">{{ formatUptime(item.uptime) }}</div>
           </div>
         </template>
         
-        <template v-slot:item.performance="{ item }">
+        <template #item.performance="{ item }">
           <div v-if="item.type === 'Access Point'">
             <div class="text-body-2">{{ item.clients }} clients</div>
             <div class="text-caption text-medium-emphasis">{{ item.bandwidth }}</div>
@@ -372,7 +488,7 @@
           </div>
         </template>
         
-        <template v-slot:item.actions="{ item }">
+        <template #item.actions="{ item }">
           <v-btn
             variant="text"
             size="small"
@@ -386,7 +502,7 @@
             @click.stop="editDevice(item)"
           ></v-btn>
           <v-menu>
-            <template v-slot:activator="{ props }">
+            <template #activator="{ props }">
               <v-btn
                 variant="text"
                 size="small"
@@ -417,11 +533,11 @@
           </v-menu>
         </template>
         
-        <template v-slot:loading>
+        <template #loading>
           <v-skeleton-loader type="table-row@10"></v-skeleton-loader>
         </template>
         
-        <template v-slot:no-data>
+        <template #no-data>
           <div class="text-center pa-8">
             <v-icon size="64" color="grey-lighten-1" class="mb-4">
               mdi-server-off
@@ -436,45 +552,19 @@
           </div>
         </template>
       </v-data-table-server>
-      
-      <!-- Bulk Actions Bar -->
-      <v-slide-y-transition>
-        <v-card-actions v-if="selectedItems.length > 0" class="bulk-actions-bar">
-          <div class="d-flex align-center justify-space-between w-100">
-            <div class="d-flex align-center">
-              <v-icon class="mr-2" color="primary">mdi-checkbox-marked</v-icon>
-              <span class="font-weight-medium">{{ selectedItems.length }} devices selected</span>
-            </div>
-            
-            <div class="d-flex align-center ga-2">
-              <v-btn
-                variant="outlined"
-                size="small"
-                prepend-icon="mdi-restart"
-                @click="bulkReboot"
-              >
-                Reboot Selected
-              </v-btn>
-              <v-btn
-                variant="outlined"
-                size="small"
-                prepend-icon="mdi-download"
-                @click="exportSelected"
-              >
-                Export Selected
-              </v-btn>
-              <v-btn
-                variant="text"
-                size="small"
-                @click="selectedItems = []"
-              >
-                Clear Selection
-              </v-btn>
-            </div>
-          </div>
-        </v-card-actions>
-      </v-slide-y-transition>
     </v-card>
+
+    <DeviceMergeDialog
+      v-model="mergeDialog"
+      :devices="mergeCandidates"
+      @merged="onMerged"
+    />
+
+    <DeviceCredentialDialog
+      v-model="credentialDialog"
+      :device-ids="selectedItems"
+      @assigned="refreshTable"
+    />
   </div>
 </template>
 
@@ -482,11 +572,18 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
+import { useAuthStore } from '@/stores/auth'
+import { useNotificationsStore } from '@/stores/notifications'
+import deviceService from '@/services/device.service'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { formatDistanceToNow } from 'date-fns'
 import { debounce } from 'lodash-es'
 import ConnectionStatusBadge from './ConnectionStatusBadge.vue'
-import { cloudProviderLabel } from '@/models/vendors'
+import DeviceMergeDialog from './DeviceMergeDialog.vue'
+import DeviceCredentialDialog from './DeviceCredentialDialog.vue'
+import { cloudProviderLabel, platformOptions } from '@/models/vendors'
+import { unreachableFromHere, answersPingButCloudOffline } from '@/models/Device'
+import { useSettingsStore } from '@/stores/settings'
 
 const router = useRouter()
 const devicesStore = useDevicesStore()
@@ -504,7 +601,9 @@ const searchInput = ref('')
 const filters = ref({
   status: null,
   type: null,
-  location: null
+  location: null,
+  platform: null,
+  credential: null
 })
 
 // Table options
@@ -596,21 +695,35 @@ const statusOptions = [
   { title: 'Maintenance', value: 'maintenance' }
 ]
 
-const typeOptions = [
-  { title: 'Access Point', value: 'Access Point' },
-  { title: 'Switch', value: 'Switch' },
-  { title: 'Gateway', value: 'Gateway' }
-]
+// Keyed by the backend DeviceType enum values.
+const deviceTypeInfo = {
+  access_point: { label: 'Access Point', icon: 'mdi-wifi', color: 'blue' },
+  switch: { label: 'Switch', icon: 'mdi-switch', color: 'green' },
+  gateway: { label: 'Gateway', icon: 'mdi-router-wireless', color: 'orange' },
+  controller: { label: 'Controller', icon: 'mdi-server', color: 'purple' },
+  other: { label: 'Other', icon: 'mdi-help-circle', color: 'grey' }
+}
 
-const locationOptions = [
-  { title: 'Main Office', value: 'Main Office' },
-  { title: 'Server Room', value: 'Server Room' },
-  { title: 'Conference Room A', value: 'Conference Room A' },
-  { title: 'Conference Room B', value: 'Conference Room B' },
-  { title: 'Floor 1 IDF', value: 'Floor 1 IDF' },
-  { title: 'Floor 2 IDF', value: 'Floor 2 IDF' },
-  { title: 'Floor 3 IDF', value: 'Floor 3 IDF' }
-]
+const typeOptions = Object.entries(deviceTypeInfo).map(([value, info]) => ({ title: info.label, value }))
+
+const platformFilterOptions = platformOptions()
+
+// Credential filter: 'none' / 'any' or a specific credential. "No credential"
+// plus a platform, then select-all, is the quick way to link a fleet.
+const settingsStore = useSettingsStore()
+const credentialFilterOptions = computed(() => [
+  { title: 'No credential', value: 'none' },
+  { title: 'Any credential', value: 'any' },
+  ...(settingsStore.apiCredentials || []).map((c) => ({ title: c.name, value: c.id }))
+])
+
+// Locations seen on loaded rows (the backend matches "contains", so a typed
+// value works too). Remembered across loads so filtering doesn't shrink the list.
+const knownLocations = ref(new Set())
+watch(() => devicesStore.devices, (rows) => {
+  for (const d of rows || []) if (d.location) knownLocations.value.add(d.location)
+}, { immediate: true })
+const locationOptions = computed(() => [...knownLocations.value].sort((a, b) => a.localeCompare(b)))
 
 // Computed properties
 const activeFiltersCount = computed(() => {
@@ -648,7 +761,9 @@ const clearFilters = () => {
   filters.value = {
     status: null,
     type: null,
-    location: null
+    location: null,
+    platform: null,
+    credential: null
   }
   searchInput.value = ''
   loadItems({
@@ -699,6 +814,64 @@ const showDeviceInfo = (device) => {
 }
 
 // Bulk actions
+const authStore = useAuthStore()
+const notifications = useNotificationsStore()
+const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole))
+const bulkLiveBusy = ref(false)
+
+// Each device is checked server-side (platform, IP, credential); report the
+// ones that couldn't be changed by name and reason instead of failing silently.
+const bulkLiveMonitoring = async (enabled) => {
+  bulkLiveBusy.value = true
+  const failures = []
+  let changed = 0
+  for (const id of selectedItems.value) {
+    const device = devicesStore.devices.find((d) => d.id === id)
+    try {
+      await deviceService.setLiveMonitoring(id, enabled)
+      devicesStore.updateDeviceLocally(id, { liveMonitoring: enabled })
+      changed += 1
+    } catch (err) {
+      failures.push(`${device?.name || id}: ${err.userMessage || err.message}`)
+    }
+  }
+  bulkLiveBusy.value = false
+  const verb = enabled ? 'on' : 'off'
+  if (changed) notifications.showSuccess(`Live monitoring turned ${verb} for ${changed} device(s)`)
+  if (failures.length) {
+    notifications.showWarning(failures.join('\n'), `${failures.length} device(s) not changed`)
+  }
+}
+
+// Merge: the selection can span table pages, so fetch rows not on this one.
+const credentialDialog = ref(false)
+const mergeDialog = ref(false)
+const mergeCandidates = ref([])
+const mergeLoading = ref(false)
+
+const openMerge = async () => {
+  mergeLoading.value = true
+  try {
+    mergeCandidates.value = await Promise.all(selectedItems.value.map(async (id) =>
+      devicesStore.devices.find((d) => d.id === id) || (await deviceService.getDevice(id)).data
+    ))
+    mergeDialog.value = true
+  } catch (err) {
+    notifications.showError(err.userMessage || err.message || 'Could not load the selected devices')
+  } finally {
+    mergeLoading.value = false
+  }
+}
+
+const onMerged = () => {
+  mergeDialog.value = false
+  selectedItems.value = []
+  refreshTable()
+}
+
+// A cloud sync job finished (device:sync:completed): show what it changed.
+watch(() => devicesStore.lastSyncResult, () => refreshTable())
+
 const bulkReboot = () => {
   console.log('Bulk rebooting devices:', selectedItems.value)
 }
@@ -732,15 +905,9 @@ const getStatusIcon = (status) => {
   return icons[status] || 'mdi-help-circle'
 }
 
-const getDeviceIcon = (type) => {
-  const icons = {
-    'Access Point': 'mdi-wifi',
-    'Switch': 'mdi-switch',
-    'Gateway': 'mdi-router-wireless',
-    'Controller': 'mdi-server'
-  }
-  return icons[type] || 'mdi-help-circle'
-}
+const getDeviceIcon = (type) => deviceTypeInfo[type]?.icon || 'mdi-help-circle'
+
+const getDeviceTypeLabel = (type) => deviceTypeInfo[type]?.label || type || 'Unknown'
 
 // Name of the cloud plane managing a device ("Central", "Mist", ...), for
 // labels and tooltips. Falls back to the generic "Cloud" when unknown.
@@ -778,15 +945,7 @@ const getManagementMismatch = (item) => {
   return null
 }
 
-const getDeviceTypeColor = (type) => {
-  const colors = {
-    'Access Point': 'blue',
-    'Switch': 'green',
-    'Gateway': 'orange',
-    'Controller': 'purple'
-  }
-  return colors[type] || 'grey'
-}
+const getDeviceTypeColor = (type) => deviceTypeInfo[type]?.color || 'grey'
 
 const formatLastSeen = (lastSeen) => {
   if (!lastSeen) return 'Unknown'
@@ -853,12 +1012,18 @@ const retryLoad = () => {
 
 // Initialize table
 onMounted(() => {
+  if (canEdit.value && !settingsStore.apiCredentials?.length) {
+    settingsStore.fetchApiCredentials().catch(() => {})
+  }
   loadItems({
     page: 1,
     itemsPerPage: 10,
     sortBy: []
   })
 })
+
+// DevicesView refreshes the table after merging from its duplicate prompt.
+defineExpose({ refreshTable })
 </script>
 
 <style scoped>
@@ -871,9 +1036,20 @@ onMounted(() => {
   min-height: 400px;
 }
 
+/* v-card's overflow: hidden would make the card the sticky container; clip keeps the rounded corners without that. */
+.device-table-card {
+  overflow: clip;
+}
+
 .bulk-actions-bar {
-  background-color: rgba(var(--v-theme-primary), 0.1);
-  border-top: 1px solid rgba(var(--v-theme-primary), 0.2);
+  position: sticky;
+  top: var(--v-layout-top);
+  z-index: 2;
+  /* Opaque so rows don't show through while it's pinned. */
+  background:
+    linear-gradient(rgba(var(--v-theme-primary), 0.1), rgba(var(--v-theme-primary), 0.1)),
+    rgb(var(--v-theme-surface));
+  border-bottom: 1px solid rgba(var(--v-theme-primary), 0.2);
 }
 
 .device-data-table :deep(.v-data-table__tr:hover) {

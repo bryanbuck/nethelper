@@ -5,38 +5,73 @@ const { getPrisma } = require('../config/database');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const { getIO } = require('../websocket/socket.handler');
 const logger = require('../utils/logger');
+const { normalizeMac, normalizeSerial } = require('../utils/device-key');
+const { VENDORS } = require('../constants/vendors');
 
 const execFileAsync = promisify(execFile);
 
-// Curated OUI prefixes for Aruba Networks and HPE (switch/AP hardware).
-// Extend this list as new hardware generations appear on the network.
+const VENDOR_LABELS = Object.fromEntries(Object.values(VENDORS).map((v) => [v.id, v.label]));
+
+// Curated OUI prefixes of the network vendors NetHelper manages, mapped to
+// the vendor's label and its Vendor enum value. Extend as new hardware
+// generations appear on the network. A cloud inventory match outranks this.
 const KNOWN_OUIS = {
-  '00:0b:86': 'Aruba Networks (HPE)',
-  '00:1a:1e': 'Aruba Networks (HPE)',
-  '00:24:6c': 'Aruba Networks (HPE)',
-  '04:bd:88': 'Aruba Networks (HPE)',
-  '18:64:72': 'Aruba Networks (HPE)',
-  '20:4c:03': 'Aruba Networks (HPE)',
-  '24:de:c6': 'Aruba Networks (HPE)',
-  '38:17:c3': 'Aruba Networks (HPE)',
-  '40:e3:d6': 'Aruba Networks (HPE)',
-  '6c:f3:7f': 'Aruba Networks (HPE)',
-  '70:3a:0e': 'Aruba Networks (HPE)',
-  '84:d4:7e': 'Aruba Networks (HPE)',
-  '94:b4:0f': 'Aruba Networks (HPE)',
-  '9c:1c:12': 'Aruba Networks (HPE)',
-  'ac:a3:1e': 'Aruba Networks (HPE)',
-  'b4:5d:50': 'Aruba Networks (HPE)',
-  'bc:9f:e4': 'Aruba Networks (HPE)',
-  'cc:88:c7': 'Aruba Networks (HPE)',
-  'd8:c7:c8': 'Aruba Networks (HPE)',
-  'f0:5c:19': 'Aruba Networks (HPE)',
-  'f4:2e:7f': 'Aruba Networks (HPE)',
-  '3c:a8:2a': 'Hewlett Packard Enterprise',
-  '5c:b9:01': 'Hewlett Packard Enterprise',
-  '94:f1:28': 'Hewlett Packard Enterprise',
-  '98:f2:b3': 'Hewlett Packard Enterprise',
-  'ec:eb:b8': 'Hewlett Packard Enterprise',
+  '00:0b:86': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  '00:1a:1e': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  '00:24:6c': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  '04:bd:88': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  '18:64:72': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  '20:4c:03': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  '24:de:c6': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  '38:17:c3': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  '40:e3:d6': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  '6c:f3:7f': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  '70:3a:0e': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  '84:d4:7e': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  '94:b4:0f': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  '9c:1c:12': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  'ac:a3:1e': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  'b4:5d:50': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  'bc:9f:e4': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  'cc:88:c7': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  'd8:c7:c8': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  'f0:5c:19': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  'f4:2e:7f': { label: 'Aruba Networks (HPE)', vendor: 'aruba' },
+  '3c:a8:2a': { label: 'Hewlett Packard Enterprise', vendor: 'aruba' },
+  '5c:b9:01': { label: 'Hewlett Packard Enterprise', vendor: 'aruba' },
+  '94:f1:28': { label: 'Hewlett Packard Enterprise', vendor: 'aruba' },
+  '98:f2:b3': { label: 'Hewlett Packard Enterprise', vendor: 'aruba' },
+  'ec:eb:b8': { label: 'Hewlett Packard Enterprise', vendor: 'aruba' },
+  // Juniper Networks (EX/QFX/SRX). 4c:4a:b4 seen on a live EX4000 (2026-10-19).
+  '00:05:85': { label: 'Juniper Networks', vendor: 'juniper' },
+  '00:10:db': { label: 'Juniper Networks', vendor: 'juniper' },
+  '00:12:1e': { label: 'Juniper Networks', vendor: 'juniper' },
+  '00:19:e2': { label: 'Juniper Networks', vendor: 'juniper' },
+  '00:1f:12': { label: 'Juniper Networks', vendor: 'juniper' },
+  '00:21:59': { label: 'Juniper Networks', vendor: 'juniper' },
+  '00:23:9c': { label: 'Juniper Networks', vendor: 'juniper' },
+  '00:26:88': { label: 'Juniper Networks', vendor: 'juniper' },
+  '28:8a:1c': { label: 'Juniper Networks', vendor: 'juniper' },
+  '2c:6b:f5': { label: 'Juniper Networks', vendor: 'juniper' },
+  '3c:61:04': { label: 'Juniper Networks', vendor: 'juniper' },
+  '40:b4:f0': { label: 'Juniper Networks', vendor: 'juniper' },
+  '4c:4a:b4': { label: 'Juniper Networks', vendor: 'juniper' },
+  '54:e0:32': { label: 'Juniper Networks', vendor: 'juniper' },
+  '5c:5e:ab': { label: 'Juniper Networks', vendor: 'juniper' },
+  '64:87:88': { label: 'Juniper Networks', vendor: 'juniper' },
+  '78:19:f7': { label: 'Juniper Networks', vendor: 'juniper' },
+  '80:71:1f': { label: 'Juniper Networks', vendor: 'juniper' },
+  '84:b5:9c': { label: 'Juniper Networks', vendor: 'juniper' },
+  '88:e0:f3': { label: 'Juniper Networks', vendor: 'juniper' },
+  'a8:d0:e5': { label: 'Juniper Networks', vendor: 'juniper' },
+  'b0:c6:9a': { label: 'Juniper Networks', vendor: 'juniper' },
+  'cc:e1:7f': { label: 'Juniper Networks', vendor: 'juniper' },
+  'f0:1c:2d': { label: 'Juniper Networks', vendor: 'juniper' },
+  'f4:a7:39': { label: 'Juniper Networks', vendor: 'juniper' },
+  // Mist Systems (Juniper Mist APs). a8:f7:d9 seen on a live AP33 (2026-10-19).
+  '5c:5b:35': { label: 'Juniper Mist', vendor: 'juniper' },
+  'a8:f7:d9': { label: 'Juniper Mist', vendor: 'juniper' },
+  'd4:20:b0': { label: 'Juniper Mist', vendor: 'juniper' },
 };
 
 // Ports probed on responsive hosts for best-effort type detection
@@ -84,16 +119,20 @@ class DiscoveryService {
   }
 
   normalizeMac(mac) {
-    if (!mac) return null;
-    const hex = mac.toLowerCase().replace(/[^0-9a-f]/g, '');
-    if (hex.length !== 12) return null;
-    return hex.match(/.{2}/g).join(':');
+    return normalizeMac(mac);
   }
 
   lookupVendor(mac) {
     const normalized = this.normalizeMac(mac);
     if (!normalized) return null;
-    return KNOWN_OUIS[normalized.slice(0, 8)] || null;
+    return KNOWN_OUIS[normalized.slice(0, 8)]?.label || null;
+  }
+
+  /** The Vendor enum value a MAC's OUI belongs to, or null. */
+  lookupVendorId(mac) {
+    const normalized = this.normalizeMac(mac);
+    if (!normalized) return null;
+    return KNOWN_OUIS[normalized.slice(0, 8)]?.vendor || null;
   }
 
   emitProgress(scanId, progress, phase, message) {
@@ -159,7 +198,7 @@ class DiscoveryService {
         const subnet = subnets[i];
         this.emitProgress(scanId, 5 + Math.round((i / subnets.length) * 45), 'sweep', `Sweeping ${subnet}`);
         const swept = await this.sweepSubnet(subnet);
-        for (const host of swept) hosts.set(host.ipAddress, host);
+        for (const host of swept) hosts.set(host.ipAddress, { ...host, subnet });
         const progress = 5 + Math.round(((i + 1) / subnets.length) * 45);
         await prisma.discoveryScan.update({ where: { id: scanId }, data: { progress } });
       }
@@ -168,7 +207,7 @@ class DiscoveryService {
       await this.enrichFromNeighborTable(hosts);
       for (const host of hosts.values()) {
         host.vendor = host.vendor || this.lookupVendor(host.macAddress);
-        host.isArubaVendor = !!(host.macAddress && KNOWN_OUIS[this.normalizeMac(host.macAddress)?.slice(0, 8)]);
+        host.matchedVendor = this.lookupVendorId(host.macAddress);
       }
 
       // Phase 3: port fingerprint responsive hosts (50-70%)
@@ -176,9 +215,10 @@ class DiscoveryService {
       await this.fingerprintHosts(hosts);
       await prisma.discoveryScan.update({ where: { id: scanId }, data: { progress: 70 } });
 
-      // Phase 4: cross-check Aruba Central inventory by MAC (70-85%)
-      this.emitProgress(scanId, 75, 'central', 'Cross-checking Aruba Central inventory');
-      const centralByMac = await this.getCentralInventoryByMac();
+      // Phase 4: cross-check every cloud's inventory by MAC, or by IP for a
+      // routed host that came back without one (70-85%)
+      this.emitProgress(scanId, 75, 'central', 'Cross-checking cloud inventories');
+      const { byMac: cloudByMac, byIp: cloudByIp } = await this.getCloudInventory();
       await prisma.discoveryScan.update({ where: { id: scanId }, data: { progress: 85 } });
 
       // Phase 5: conflict detection against local inventory and persistence (85-100%)
@@ -194,13 +234,14 @@ class DiscoveryService {
       );
       const localBySerial = new Map(localDevices.map((d) => [d.serial, d]));
 
-      let arubaCount = 0;
+      let vendorCount = 0;
       const records = [];
       for (const host of hosts.values()) {
         const mac = this.normalizeMac(host.macAddress);
-        const central = mac ? centralByMac.get(mac) : null;
-        const isAruba = host.isArubaVendor || !!central;
-        if (isAruba) arubaCount++;
+        const central = mac ? cloudByMac.get(mac) : cloudByIp.get(host.ipAddress) || null;
+        // A cloud's inventory names the vendor outright; the OUI is a guess.
+        const matchedVendor = central?.vendor || host.matchedVendor || null;
+        if (matchedVendor) vendorCount++;
 
         let existing = null;
         let conflictType = null;
@@ -218,10 +259,11 @@ class DiscoveryService {
         records.push({
           scanId,
           ipAddress: host.ipAddress,
+          subnet: host.subnet || null,
           macAddress: mac,
-          vendor: central ? 'Aruba Networks (HPE)' : host.vendor,
+          vendor: (central && VENDOR_LABELS[central.vendor]) || host.vendor,
           hostname: host.hostname || null,
-          isArubaVendor: isAruba,
+          matchedVendor,
           openPorts: host.openPorts || [],
           suggestedType: this.suggestType(host, central),
           suggestedName: central?.deviceName || host.hostname || null,
@@ -243,7 +285,7 @@ class DiscoveryService {
           completedAt: new Date(),
           progress: 100,
           totalHosts: hosts.size,
-          arubaHosts: arubaCount,
+          vendorHosts: vendorCount,
         },
       });
 
@@ -251,13 +293,13 @@ class DiscoveryService {
         getIO().emit('discovery:completed', {
           scanId,
           totalHosts: completed.totalHosts,
-          arubaHosts: completed.arubaHosts,
+          vendorHosts: completed.vendorHosts,
         });
       } catch (e) { /* socket not initialized */ }
 
       logger.info(`Discovery scan ${scanId} completed`, {
         totalHosts: hosts.size,
-        arubaHosts: arubaCount,
+        vendorHosts: vendorCount,
       });
       return completed;
     } catch (error) {
@@ -365,11 +407,10 @@ class DiscoveryService {
    * authoritative; otherwise fall back to port heuristics.
    */
   suggestType(host, central) {
-    if (central?.deviceType) {
-      const map = { ACCESS_POINT: 'access_point', SWITCH: 'switch', GATEWAY: 'gateway' };
-      return map[central.deviceType] || null;
-    }
-    if (!host.isArubaVendor) return null;
+    // Cloud inventories are already normalized to DeviceType values.
+    if (central?.deviceType) return central.deviceType;
+    // The port heuristics below are Aruba's (4343 is its AP/controller UI).
+    if (host.matchedVendor !== 'aruba') return null;
     const ports = host.openPorts || [];
     if (ports.includes(4343)) return 'access_point'; // Aruba AP/controller web UI
     if (ports.includes(22) && ports.includes(443)) return 'switch';
@@ -378,11 +419,17 @@ class DiscoveryService {
 
   /**
    * Fetch the inventory of every active cloud integration and index it by
-   * normalized MAC. An integration that is unconfigured or unreachable is
-   * skipped so the scan still completes with whatever data is available.
+   * normalized MAC, and by IP for hosts on routed subnets (no MAC). An IP two
+   * cloud devices report (a stale address, e.g. Central keeping an offline
+   * switch's old IP) matches neither. An integration that is unconfigured or
+   * unreachable is skipped so the scan still completes with whatever data is
+   * available.
+   * @returns {Promise<{byMac: Map, byIp: Map}>}
    */
-  async getCentralInventoryByMac() {
+  async getCloudInventory() {
     const byMac = new Map();
+    const byIp = new Map();
+    const sharedIps = new Set();
     const providers = await CloudProviderFactory.activeProviders().catch((error) => {
       logger.warn('Cloud inventory cross-check skipped:', error.message);
       return [];
@@ -392,22 +439,30 @@ class DiscoveryService {
       try {
         for (const device of await provider.listInventory()) {
           const mac = this.normalizeMac(device.macAddress);
-          if (!mac) continue;
-          byMac.set(mac, {
+          const entry = {
             serial: device.serial,
             deviceName: device.name,
             deviceType: device.type,
             model: device.model,
             status: device.status,
+            vendor: device.vendor,
+            platform: device.platform || null,
+            provider: provider.providerType,
             integrationId: provider.id,
-            integrationName: provider.label,
-          });
+            integrationName: provider.integration?.name || provider.label,
+          };
+          if (mac) byMac.set(mac, entry);
+          if (device.ipAddress) {
+            if (byIp.has(device.ipAddress)) sharedIps.add(device.ipAddress);
+            else byIp.set(device.ipAddress, entry);
+          }
         }
       } catch (error) {
         logger.warn(`Cloud inventory cross-check skipped for ${provider.label}:`, error.message);
       }
     }
-    return byMac;
+    for (const ip of sharedIps) byIp.delete(ip);
+    return { byMac, byIp };
   }
 
   async getScans(limit = 20) {
@@ -425,7 +480,7 @@ class DiscoveryService {
       where: { id: scanId },
       include: {
         discoveredDevices: {
-          orderBy: [{ isArubaVendor: 'desc' }, { ipAddress: 'asc' }],
+          orderBy: [{ matchedVendor: { sort: 'asc', nulls: 'last' } }, { ipAddress: 'asc' }],
         },
       },
     });
@@ -484,12 +539,9 @@ class DiscoveryService {
       return { device: updated, merged: true };
     }
 
-    const serial = overrides.serial || discovered.centralSerial || discovered.macAddress?.toUpperCase();
-    if (!serial) {
-      const error = new Error('A serial number is required to import this device (none detected)');
-      error.statusCode = 400;
-      throw error;
-    }
+    // No serial when none is known (serials are optional): using the MAC here
+    // made a later cloud sync, which knows the real serial, add a duplicate.
+    const serial = normalizeSerial(overrides.serial) || normalizeSerial(discovered.centralSerial) || null;
     const type = overrides.type || discovered.suggestedType;
     if (!type) {
       const error = new Error('A device type is required to import this device (none detected)');
@@ -502,8 +554,8 @@ class DiscoveryService {
         serial,
         name: overrides.name || discovered.suggestedName || discovered.ipAddress,
         type,
-        vendor: overrides.vendor || 'aruba',
-        platform: overrides.platform || null,
+        vendor: overrides.vendor || discovered.centralMatch?.vendor || discovered.matchedVendor || 'aruba',
+        platform: overrides.platform || discovered.centralMatch?.platform || null,
         model: overrides.model || discovered.centralMatch?.model || 'Unknown',
         ipAddress: discovered.ipAddress,
         macAddress: discovered.macAddress,

@@ -57,6 +57,7 @@ async function initializeQueues() {
   queues.pingMonitor = createQueue('ping-monitor');
   queues.discovery = createQueue('discovery');
   queues.configBackup = createQueue('config-backup');
+  queues.topology = createQueue('topology');
 
   // Import and initialize job processors
   require('../jobs/automation.job')(queues.automation);
@@ -64,6 +65,7 @@ async function initializeQueues() {
   require('../jobs/ping-monitor.job')(queues.pingMonitor);
   require('../jobs/discovery.job')(queues.discovery);
   require('../jobs/config-backup.job')(queues.configBackup);
+  require('../jobs/topology.job')(queues.topology);
 
   logger.info('All job queues initialized');
 }
@@ -84,7 +86,17 @@ function getQueue(name) {
   return queues[name];
 }
 
+/**
+ * Close every queue (stops workers taking new jobs, releases Redis connections).
+ * Called during graceful shutdown.
+ */
+async function closeQueues() {
+  await Promise.allSettled(Object.values(queues).map((q) => q.close()));
+  logger.info('Job queues closed');
+}
+
 module.exports = {
   initializeQueues,
   getQueue,
+  closeQueues,
 };

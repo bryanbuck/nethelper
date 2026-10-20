@@ -1,6 +1,7 @@
 const logger = require('../utils/logger');
 
-function errorMiddleware(err, req, res, next) {
+// Express identifies error handlers by arity, so the 4th param must stay.
+function errorMiddleware(err, req, res, _next) {
   logger.error('Error caught by middleware:', {
     error: err.message,
     stack: err.stack,
@@ -50,7 +51,11 @@ function errorMiddleware(err, req, res, next) {
 
   // Default error
   const statusCode = err.statusCode || 500;
-  const message = err.message || 'Internal server error';
+  // 5xx messages can carry internals (SQL, paths, upstream errors); only
+  // expose them outside production. 4xx messages are meant for the client.
+  const message = statusCode >= 500 && process.env.NODE_ENV === 'production'
+    ? 'Internal server error'
+    : err.message || 'Internal server error';
 
   res.status(statusCode).json({
     success: false,

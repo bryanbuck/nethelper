@@ -1,0 +1,46 @@
+{
+  "1/1/1": {
+    "name": "1/1/1",
+    "type": "system",
+    "statistics": {
+      "rx_bytes": 49426966318,
+      "tx_bytes": 559070255936,
+      "rx_packets": 242935716,
+      "tx_packets": 517502763,
+      "if_hc_in_bytes": 49426966318,
+      "if_hc_out_bytes": 559070255936,
+      "fe_if_in_discard_packets": 31988,
+      "ethernet_stats_rx_no_errors": 242935716,
+      "total_packets_no_errors": 760438479
+    }
+  },
+  "1/1/4": {
+    "name": "1/1/4",
+    "type": "system",
+    "statistics": {
+      "rx_bytes": 53369253776,
+      "tx_bytes": 350941286845,
+      "rx_packets": 214953293,
+      "tx_packets": 397391299,
+      "if_hc_in_bytes": 53369253776,
+      "if_hc_out_bytes": 350941286845,
+      "fe_if_in_discard_packets": 498595,
+      "ethernet_stats_rx_no_errors": 214953293,
+      "total_packets_no_errors": 612344592
+    }
+  },
+  "1/1/5": {
+    "name": "1/1/5",
+    "type": "system",
+    "statistics": {}
+  },
+  "lag1": {
+    "name": "lag1",
+    "type": "lag"
+  },
+  "vlan1": {
+    "name": "vlan1",
+    "type": "vlan",
+    "statistics": {}
+  }
+}

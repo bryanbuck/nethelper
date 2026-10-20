@@ -1,0 +1,19 @@
+{
+  "_note": "Spec-derived (mistsys/mist_openapi), not a live capture. Trimmed to the fields that matter for a scope backup.",
+  "org": { "id": "org-1", "name": "Acme Networks" },
+  "sites": [
+    { "id": "site-b", "name": "Warehouse", "org_id": "org-1" },
+    { "id": "site-a", "name": "HQ", "org_id": "org-1", "rftemplate_id": "rf-1", "networktemplate_id": null }
+  ],
+  "orgSetting": { "id": "os-1", "password_policy": { "enabled": true, "min_length": 12 } },
+  "orgWlans": [
+    { "id": "w-2", "ssid": "Guest", "auth": { "type": "open" }, "template_id": "t-1" },
+    { "id": "w-1", "ssid": "Corp", "auth": { "type": "psk", "psk": "redacted-psk" }, "template_id": "t-1" }
+  ],
+  "templates": [{ "id": "t-1", "name": "Default WLANs", "applies": { "site_ids": ["site-a", "site-b"] } }],
+  "rftemplates": [{ "id": "rf-1", "name": "Office RF", "band_5": { "power_min": 8, "power_max": 17 } }],
+  "deviceprofiles": [{ "id": "dp-1", "name": "Lobby APs", "type": "ap", "led": { "enabled": false } }],
+  "siteSetting": { "id": "ss-a", "site_id": "site-a", "auto_upgrade": { "enabled": true, "day_of_week": "sun" } },
+  "siteWlans": [{ "id": "sw-1", "ssid": "HQ-IoT", "site_id": "site-a", "auth": { "type": "psk" } }],
+  "siteA": { "id": "site-a", "name": "HQ", "org_id": "org-1", "rftemplate_id": "rf-1", "timezone": "America/Chicago" }
+}

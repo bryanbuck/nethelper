@@ -2,23 +2,27 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
+const { normalizeEmail } = require('../utils/email');
 const { getPrisma } = require('../config/database');
-const { authenticate } = require('../middleware/auth.middleware');
+const { authenticate, authorize } = require('../middleware/auth.middleware');
 const logger = require('../utils/logger');
 
 const router = express.Router();
 
+// Hash of a random string, used to equalize login timing for unknown users.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(require('crypto').randomBytes(16).toString('hex'), 12);
+
 // Register validation rules
 const registerValidation = [
-  body('email').isEmail().normalizeEmail(),
-  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('email').trim().isEmail().customSanitizer(normalizeEmail),
+  body('password').isLength({ min: 12 }).withMessage('Password must be at least 12 characters'),
   body('name').trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
   body('role').optional().isIn(['admin', 'operator', 'viewer']).withMessage('Invalid role'),
 ];
 
 // Login validation rules
 const loginValidation = [
-  body('email').isEmail().normalizeEmail(),
+  body('email').trim().isEmail().customSanitizer(normalizeEmail),
   body('password').notEmpty().withMessage('Password is required'),
 ];
 
@@ -54,8 +58,10 @@ function generateTokens(userId) {
   }
 }
 
-// Register endpoint
-router.post('/register', registerValidation, async (req, res) => {
+// Register endpoint — admin-only. There is no self-signup; the first admin is
+// created with `npm run user:manage`. The new user signs in separately, so no
+// tokens are issued here (that would hand the admin the new user's session).
+router.post('/register', authenticate, authorize('admin'), registerValidation, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -100,24 +106,16 @@ router.post('/register', registerValidation, async (req, res) => {
       },
     });
 
-    // Generate tokens
-    const { accessToken, refreshToken } = generateTokens(user.id);
-
-    // Store refresh token
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { refreshToken },
+    logger.info('User registered successfully', {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      createdBy: req.user.id,
     });
-
-    logger.info('User registered successfully', { userId: user.id, email: user.email });
 
     res.status(201).json({
       success: true,
-      data: {
-        user,
-        accessToken,
-        refreshToken,
-      },
+      data: { user },
     });
   } catch (error) {
     logger.error('Registration error:', error);
@@ -164,6 +162,9 @@ router.post('/login', loginValidation, async (req, res) => {
 
     if (!user) {
       logger.debug(`[${requestId}] User not found`, { email });
+      // Compare against a dummy hash so unknown emails take as long as wrong
+      // passwords, and response timing doesn't reveal which accounts exist.
+      await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
       return res.status(401).json({
         success: false,
         error: 'Invalid credentials',
@@ -320,16 +321,13 @@ router.post('/refresh', async (req, res) => {
 // Logout endpoint
 router.post('/logout', authenticate, async (req, res) => {
   try {
-    const { refreshToken } = req.body;
     const prisma = getPrisma();
 
-    if (refreshToken) {
-      // Clear refresh token from user
-      await prisma.user.update({
-        where: { id: req.user.id },
-        data: { refreshToken: null },
-      });
-    }
+    // Always revoke the stored refresh token, even if the client didn't send it.
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { refreshToken: null },
+    });
 
     logger.info('User logged out successfully', { userId: req.user.id });
 
@@ -367,7 +365,7 @@ router.get('/me', authenticate, async (req, res) => {
 // Update user profile
 router.put('/me', authenticate, [
   body('name').optional().trim().isLength({ min: 2 }),
-  body('email').optional().isEmail().normalizeEmail(),
+  body('email').optional().trim().isEmail().customSanitizer(normalizeEmail),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -425,6 +423,46 @@ router.put('/me', authenticate, [
       success: false,
       error: 'Failed to update profile',
     });
+  }
+});
+
+// Change your own password. Requires the current one. Issues a fresh token
+// pair for this session; the stored refresh token is replaced, so any other
+// session is signed out when its access token expires.
+router.post('/change-password', authenticate, [
+  body('currentPassword').notEmpty().withMessage('Current password is required'),
+  body('newPassword').isLength({ min: 12 }).withMessage('New password must be at least 12 characters'),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+    const prisma = getPrisma();
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+
+    // 400, not 401: the session is valid, and a 401 would make the SPA's
+    // interceptor try a token refresh. The auth rate limiter still counts it.
+    if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
+      return res.status(400).json({ success: false, error: 'Current password is incorrect' });
+    }
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ success: false, error: 'New password must differ from the current one' });
+    }
+
+    const { accessToken, refreshToken } = generateTokens(user.id);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: await bcrypt.hash(newPassword, 12), refreshToken },
+    });
+
+    logger.info('User changed their password', { userId: user.id });
+    res.json({ success: true, data: { accessToken, refreshToken } });
+  } catch (error) {
+    logger.error('Change password error:', error);
+    res.status(500).json({ success: false, error: 'Failed to change password' });
   }
 });
 

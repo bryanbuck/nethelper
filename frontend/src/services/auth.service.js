@@ -74,68 +74,29 @@ export const authService = {
   },
 
   /**
-   * Request password reset
-   * @param {string} email - User email
-   * @returns {Promise} API response
-   */
-  async forgotPassword(email) {
-    return await api.post('/auth/forgot-password', {
-      email
-    })
-  },
-
-  /**
-   * Reset password with token
-   * @param {string} token - Reset token from email
-   * @param {string} password - New password
-   * @returns {Promise} API response
-   */
-  async resetPassword(token, password) {
-    return await api.post('/auth/reset-password', {
-      token,
-      password
-    })
-  },
-
-  /**
-   * Get current user profile
+   * Get the signed-in user's profile
    * @returns {Promise} API response
    */
   async getProfile() {
-    return await api.get('/auth/profile')
+    return await api.get('/auth/me')
   },
 
   /**
-   * Update user profile
-   * @param {Object} profileData - Profile update data
+   * Update the signed-in user's name or email
+   * @param {Object} profileData - { name?, email? }
    * @returns {Promise} API response
    */
   async updateProfile(profileData) {
-    return await api.put('/auth/profile', profileData)
+    return await api.put('/auth/me', profileData)
   },
 
   /**
-   * Change user password
-   * @param {Object} passwordData - Password change data
-   * @param {string} passwordData.currentPassword - Current password
-   * @param {string} passwordData.newPassword - New password
-   * @returns {Promise} API response
+   * Change the signed-in user's password. The response carries a fresh token
+   * pair for this session.
+   * @param {Object} passwordData - { currentPassword, newPassword }
+   * @returns {Promise} API response ({ data: { accessToken, refreshToken } })
    */
-  async changePassword(passwordData) {
-    return await api.put('/auth/change-password', {
-      current_password: passwordData.currentPassword,
-      new_password: passwordData.newPassword
-    })
-  },
-
-  /**
-   * Verify email address
-   * @param {string} token - Email verification token
-   * @returns {Promise} API response
-   */
-  async verifyEmail(token) {
-    return await api.post('/auth/verify-email', {
-      token
-    })
+  async changePassword({ currentPassword, newPassword }) {
+    return await api.post('/auth/change-password', { currentPassword, newPassword })
   }
 }

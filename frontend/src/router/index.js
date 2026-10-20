@@ -4,19 +4,16 @@ import debugLog, { DebugCategory } from '@/utils/debug'
 
 // Lazy load components for better performance
 const LoginView = () => import('@/views/auth/LoginView.vue')
-const ForgotPasswordView = () => import('@/views/auth/ForgotPasswordView.vue')
 const DashboardView = () => import('@/views/dashboard/DashboardView.vue')
 const DevicesView = () => import('@/views/devices/DevicesView.vue')
 const DeviceDetailView = () => import('@/views/devices/DeviceDetailView.vue')
 const FirmwareStatusView = () => import('@/views/devices/FirmwareStatusView.vue')
 const DeviceDiscoveryView = () => import('@/views/devices/DeviceDiscoveryView.vue')
 const ConfigBackupsView = () => import('@/views/devices/ConfigBackupsView.vue')
+const NetworkMapView = () => import('@/views/topology/NetworkMapView.vue')
 const AutomationsView = () => import('@/views/automations/AutomationsView.vue')
 const AutomationBuilderView = () => import('@/views/automations/AutomationBuilderView.vue')
-const AutomationDetailView = () => import('@/views/automations/AutomationDetailView.vue')
-const ScheduleView = () => import('@/views/schedule/ScheduleView.vue')
-const ExecutionsView = () => import('@/views/executions/ExecutionsView.vue')
-const ExecutionDetailView = () => import('@/views/executions/ExecutionDetailView.vue')
+const ExecutionsView = () => import('@/views/automations/ExecutionsView.vue')
 const SettingsView = () => import('@/views/settings/SettingsView.vue')
 const DeviceApiTestingView = () => import('@/views/settings/DeviceApiTestingView.vue')
 
@@ -36,16 +33,6 @@ const routes = [
       requiresAuth: false,
       hideForAuth: true, // Hide from authenticated users
       title: 'Sign In'
-    }
-  },
-  {
-    path: '/forgot-password',
-    name: 'ForgotPassword',
-    component: ForgotPasswordView,
-    meta: { 
-      requiresAuth: false,
-      hideForAuth: true,
-      title: 'Reset Password'
     }
   },
 
@@ -68,6 +55,26 @@ const routes = [
       requiresAuth: true,
       title: 'Devices',
       icon: 'mdi-router-wireless'
+    }
+  },
+  {
+    path: '/map',
+    name: 'NetworkMap',
+    component: NetworkMapView,
+    meta: {
+      requiresAuth: true,
+      title: 'Network Map',
+      icon: 'mdi-graph-outline'
+    }
+  },
+  {
+    path: '/alerts',
+    name: 'Alerts',
+    component: () => import('@/views/alerts/AlertsView.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Alerts',
+      icon: 'mdi-bell'
     }
   },
   {
@@ -136,7 +143,20 @@ const routes = [
     }
   },
   {
-    path: '/automations/builder',
+    path: '/automations/executions',
+    name: 'AutomationExecutions',
+    component: ExecutionsView,
+    meta: {
+      requiresAuth: true,
+      title: 'Run History',
+      breadcrumb: [
+        { text: 'Automations', to: '/automations' },
+        { text: 'Run History', disabled: true }
+      ]
+    }
+  },
+  {
+    path: '/automations/builder/:id?',
     name: 'AutomationBuilder',
     component: AutomationBuilderView,
     meta: { 
@@ -149,52 +169,6 @@ const routes = [
     }
   },
   {
-    path: '/automations/:id',
-    name: 'AutomationDetail',
-    component: AutomationDetailView,
-    meta: { 
-      requiresAuth: true,
-      title: 'Automation Details',
-      breadcrumb: [
-        { text: 'Automations', to: '/automations' },
-        { text: 'Details', disabled: true }
-      ]
-    }
-  },
-  {
-    path: '/schedule',
-    name: 'Schedule',
-    component: ScheduleView,
-    meta: { 
-      requiresAuth: true,
-      title: 'Schedule',
-      icon: 'mdi-calendar-clock'
-    }
-  },
-  {
-    path: '/executions',
-    name: 'Executions',
-    component: ExecutionsView,
-    meta: { 
-      requiresAuth: true,
-      title: 'Execution History',
-      icon: 'mdi-history'
-    }
-  },
-  {
-    path: '/executions/:id',
-    name: 'ExecutionDetail',
-    component: ExecutionDetailView,
-    meta: {
-      requiresAuth: true,
-      title: 'Execution Details',
-      breadcrumb: [
-        { text: 'Executions', to: '/executions' },
-        { text: 'Details', disabled: true }
-      ]
-    }
-  },
-  {
     path: '/settings',
     name: 'Settings',
     component: SettingsView,
@@ -202,6 +176,17 @@ const routes = [
       requiresAuth: true,
       title: 'Settings',
       icon: 'mdi-cog'
+    }
+  },
+  {
+    path: '/users',
+    name: 'Users',
+    component: () => import('@/views/users/UsersView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresRole: 'admin',
+      title: 'Users',
+      icon: 'mdi-account-multiple'
     }
   },
   {
@@ -220,6 +205,10 @@ const routes = [
   },
 
   // 404 catch-all
+  // Automation scheduling/execution pages are not built yet (automation is
+  // experimental for the beta); send old bookmarks to the automations list.
+  { path: '/schedule', redirect: '/automations' },
+  { path: '/executions/:pathMatch(.*)*', redirect: '/automations/executions' },
   {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
@@ -286,6 +275,14 @@ router.beforeEach(async (to, from, next) => {
     }
   }
 
+  // Role-restricted pages. The API enforces roles regardless; this only keeps
+  // people off pages whose every request would be refused.
+  if (to.meta.requiresRole && authStore.user?.role !== to.meta.requiresRole) {
+    debugLog.warn(DebugCategory.ROUTER, `Route requires role ${to.meta.requiresRole}, redirecting to dashboard`)
+    next({ name: 'Dashboard' })
+    return
+  }
+
   // Redirect authenticated users away from auth pages
   if (to.meta.hideForAuth && authStore.isAuthenticated) {
     debugLog.progress(DebugCategory.ROUTER, 'Authenticated user accessing auth page, redirecting to dashboard')
@@ -295,7 +292,7 @@ router.beforeEach(async (to, from, next) => {
 
   // Set page title
   if (to.meta.title) {
-    document.title = `${to.meta.title} - Aruba Central Automation`
+    document.title = `${to.meta.title} - NetHelper`
   }
 
   debugLog.success(DebugCategory.ROUTER, 'Navigation allowed')

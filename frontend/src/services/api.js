@@ -1,14 +1,26 @@
 import axios from 'axios'
 import router from '@/router'
+import { THEME_STORAGE_KEY } from '@/utils/theme-preference'
+import { clearActivityLog } from '@/utils/activity-log-storage'
 
 // Create axios instance with base configuration
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1',
+  baseURL: import.meta.env.VITE_API_URL || '/api/v1',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
 })
+
+// On an unrecoverable auth failure, drop everything stored for the session but
+// keep the viewer's theme choice (a display preference, not session data). The
+// status bar's activity log (sessionStorage) belongs to the session too.
+const clearSessionStorage = () => {
+  const theme = localStorage.getItem(THEME_STORAGE_KEY)
+  localStorage.clear()
+  if (theme) localStorage.setItem(THEME_STORAGE_KEY, theme)
+  clearActivityLog()
+}
 
 // Flag to prevent multiple token refresh attempts
 let isRefreshing = false
@@ -48,8 +60,12 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config
 
+    // A 401 from login/refresh means bad credentials or a dead refresh token,
+    // not an expired session, so it must not enter the refresh flow.
+    const isAuthEndpoint = /\/auth\/(login|refresh)$/.test(originalRequest?.url || '')
+
     // Handle 401 Unauthorized errors
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !isAuthEndpoint && !originalRequest._retry) {
       if (isRefreshing) {
         // If already refreshing, queue the request
         return new Promise((resolve, reject) => {
@@ -68,8 +84,12 @@ api.interceptors.response.use(
       const refreshToken = localStorage.getItem('refresh_token')
       
       if (!refreshToken) {
-        // No refresh token, redirect to login
-        localStorage.clear()
+        // No refresh token, redirect to login. Reset the flag here too: this
+        // early return skips the finally below, and a stuck flag would park
+        // every later 401 in failedQueue forever.
+        isRefreshing = false
+        processQueue(error, null)
+        clearSessionStorage()
         router.push('/login')
         return Promise.reject(error)
       }
@@ -101,7 +121,7 @@ api.interceptors.response.use(
       } catch (refreshError) {
         // Refresh failed, clear auth data and redirect
         processQueue(refreshError, null)
-        localStorage.clear()
+        clearSessionStorage()
         router.push('/login')
         return Promise.reject(refreshError)
       } finally {

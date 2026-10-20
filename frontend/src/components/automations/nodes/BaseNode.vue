@@ -14,7 +14,7 @@
       v-if="!isStartNode" 
       type="target" 
       :position="Position.Left" 
-      :style="{ background: '#555' }"
+      :style="{ background: 'rgba(var(--v-theme-on-surface), 0.6)' }"
     />
     
     <div class="node-header">
@@ -65,9 +65,9 @@
     
     <div v-if="hasValidationErrors" class="node-errors">
       <v-tooltip location="bottom">
-        <template v-slot:activator="{ props }">
+        <template #activator="{ props: tooltipProps }">
           <v-icon 
-            v-bind="props"
+            v-bind="tooltipProps"
             color="error" 
             size="small"
             class="error-icon"
@@ -85,7 +85,7 @@
       v-if="!isEndNode" 
       type="source" 
       :position="Position.Right" 
-      :style="{ background: '#555' }"
+      :style="{ background: 'rgba(var(--v-theme-on-surface), 0.6)' }"
     />
   </div>
 </template>
@@ -206,8 +206,8 @@ const handleDelete = (event) => {
 
 <style scoped>
 .base-node {
-  background: white;
-  border: 2px solid #e0e0e0;
+  background: rgb(var(--v-theme-surface));
+  border: 2px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: 8px;
   min-width: 180px;
   max-width: 250px;
@@ -219,14 +219,14 @@ const handleDelete = (event) => {
 }
 
 .base-node:hover {
-  border-color: #FF8300;
+  border-color: rgb(var(--v-theme-primary-text));
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
   transform: translateY(-1px);
 }
 
 .node-selected {
-  border-color: #FF8300;
-  box-shadow: 0 0 0 3px rgba(255, 131, 0, 0.2);
+  border-color: rgb(var(--v-theme-primary-text));
+  box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.2);
 }
 
 .node-error {
@@ -273,14 +273,14 @@ const handleDelete = (event) => {
 .node-label {
   font-weight: 600;
   font-size: 14px;
-  color: #333;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
   line-height: 1.2;
   word-break: break-word;
 }
 
 .node-subtitle {
   font-size: 11px;
-  color: #666;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   margin-top: 2px;
   line-height: 1.2;
 }
@@ -297,7 +297,7 @@ const handleDelete = (event) => {
 
 .node-description {
   font-size: 12px;
-  color: #777;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   margin-bottom: 8px;
   line-height: 1.3;
 }

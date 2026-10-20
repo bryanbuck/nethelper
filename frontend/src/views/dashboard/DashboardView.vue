@@ -94,7 +94,7 @@
 
       <v-row class="mt-4">
         <v-col cols="12" lg="8">
-          <NetworkHealthChart />
+          <DeviceStatusChart />
         </v-col>
         
         <v-col cols="12" lg="4">
@@ -105,7 +105,7 @@
         </v-col>
       </v-row>
 
-      <v-row class="mt-4" v-if="quickActions.length > 0">
+      <v-row v-if="quickActions.length > 0" class="mt-4">
         <v-col cols="12">
           <v-card elevation="2">
             <v-card-title>
@@ -160,7 +160,7 @@
       location="bottom right"
     >
       {{ snackbar.message }}
-      <template v-slot:actions>
+      <template #actions>
         <v-btn
           icon="mdi-close"
           variant="text"
@@ -173,12 +173,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
+import { useAlertsStore } from '@/stores/alerts'
 import { useWebSocket } from '@/composables/useWebSocket'
 import StatsCard from '@/components/dashboard/StatsCard.vue'
-import NetworkHealthChart from '@/components/dashboard/NetworkHealthChart.vue'
+import DeviceStatusChart from '@/components/dashboard/DeviceStatusChart.vue'
 import RecentDevicesList from '@/components/dashboard/RecentDevicesList.vue'
 
 const router = useRouter()
@@ -257,11 +258,13 @@ const warningDevicesTrend = computed(() => {
   return { direction: 'neutral', value: 0 }
 })
 
-const quickActions = ref([
+const alertsStore = useAlertsStore()
+
+const quickActions = computed(() => [
   {
     id: 'sync-devices',
     title: 'Sync All Devices',
-    description: 'Update device information from Aruba Central',
+    description: 'Update device information from every cloud integration',
     icon: 'mdi-sync',
     color: 'primary'
   },
@@ -275,8 +278,10 @@ const quickActions = ref([
   {
     id: 'view-alerts',
     title: 'View Alerts',
-    description: 'Check recent network alerts and notifications',
-    icon: 'mdi-bell',
+    description: alertsStore.unresolvedCount
+      ? `${alertsStore.unresolvedCount} unresolved alert${alertsStore.unresolvedCount === 1 ? '' : 's'}`
+      : 'No unresolved alerts',
+    icon: alertsStore.badgeCount ? 'mdi-bell-alert' : 'mdi-bell',
     color: 'warning'
   }
 ])
@@ -284,7 +289,8 @@ const quickActions = ref([
 const syncAllDevices = async () => {
   try {
     await devicesStore.syncDevices()
-    showSnackbar('Devices synced successfully', 'success')
+    showSnackbar('Device sync started', 'success')
+    // Results arrive as device:sync:completed (see the watch on lastSyncResult).
   } catch (error) {
     showSnackbar('Failed to sync devices', 'error')
   }
@@ -333,6 +339,11 @@ const startAutoRefresh = () => {
     }
   }, 30000)
 }
+
+// A cloud sync job finished: show its additions now rather than at the next tick.
+watch(() => devicesStore.lastSyncResult, () => {
+  devicesStore.fetchDevices().catch(() => {})
+})
 
 const stopAutoRefresh = () => {
   if (refreshInterval.value) {

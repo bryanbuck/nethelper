@@ -1,14 +1,31 @@
 #!/usr/bin/env node
+/**
+ * NetHelper user administration.
+ *
+ *   npm run user:manage
+ *       Interactive menu: list, create, edit, reset password, delete.
+ *
+ *   npm run user:manage -- create-admin --email <email> --name "<name>"
+ *       Non-interactive, for first-run bootstrap and scripted installs. The
+ *       password comes from NETHELPER_ADMIN_PASSWORD (min 12 characters); if
+ *       that is unset, a random one is generated and printed once.
+ */
+require('dotenv').config();
+const crypto = require('crypto');
 const readline = require('readline');
 const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
+const { deleteUserPreservingData } = require('../src/services/user-lifecycle');
+const { normalizeEmail } = require('../src/utils/email');
 
 const prisma = new PrismaClient();
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
+// Created on first use, so the non-interactive command never holds stdin open.
+let rl;
+function getReadline() {
+  if (!rl) rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return rl;
+}
 
 // ANSI color codes for better output
 const colors = {
@@ -30,7 +47,7 @@ function colorize(text, color) {
 
 function question(prompt) {
   return new Promise((resolve) => {
-    rl.question(prompt, resolve);
+    getReadline().question(prompt, resolve);
   });
 }
 
@@ -79,8 +96,8 @@ async function createUser() {
     // Get email
     let email;
     while (true) {
-      email = await question('Email: ');
-      if (!email.trim()) {
+      email = normalizeEmail(await question('Email: '));
+      if (!email) {
         console.log(colorize('Email is required.', 'red'));
         continue;
       }
@@ -112,13 +129,13 @@ async function createUser() {
     // Get password
     let password;
     while (true) {
-      password = await question('Password (min 6 characters): ');
+      password = await question('Password (min 12 characters): ');
       if (!password) {
         console.log(colorize('Password is required.', 'red'));
         continue;
       }
-      if (password.length < 6) {
-        console.log(colorize('Password must be at least 6 characters.', 'red'));
+      if (password.length < 12) {
+        console.log(colorize('Password must be at least 12 characters.', 'red'));
         continue;
       }
       break;
@@ -149,7 +166,7 @@ async function createUser() {
     // Create user
     const user = await prisma.user.create({
       data: {
-        email: email.trim(),
+        email,
         name: name.trim(),
         password: hashedPassword,
         role: role.toLowerCase()
@@ -224,8 +241,8 @@ async function updateUser(user) {
 
   try {
     // Update email
-    let newEmail = await question(`New email [${user.email}]: `);
-    if (newEmail.trim() && newEmail !== user.email) {
+    let newEmail = normalizeEmail(await question(`New email [${user.email}]: `));
+    if (newEmail && newEmail !== user.email) {
       if (!validateEmail(newEmail)) {
         console.log(colorize('Invalid email format.', 'red'));
         return user;
@@ -292,13 +309,13 @@ async function changePassword(user) {
   try {
     let newPassword;
     while (true) {
-      newPassword = await question('New password (min 6 characters): ');
+      newPassword = await question('New password (min 12 characters): ');
       if (!newPassword) {
         console.log(colorize('Password is required.', 'red'));
         continue;
       }
-      if (newPassword.length < 6) {
-        console.log(colorize('Password must be at least 6 characters.', 'red'));
+      if (newPassword.length < 12) {
+        console.log(colorize('Password must be at least 12 characters.', 'red'));
         continue;
       }
       break;
@@ -342,11 +359,23 @@ async function deleteUser(user) {
   }
 
   try {
-    await prisma.user.delete({
-      where: { id: user.id }
+    // Shared records the user created (cloud integrations, credentials, the
+    // Git mirror config, automations) go to the longest-standing other admin
+    // rather than being cascade-deleted with the account.
+    const newOwner = await prisma.user.findFirst({
+      where: { role: 'admin', id: { not: user.id } },
+      orderBy: { createdAt: 'asc' },
     });
+    if (!newOwner) {
+      console.log(colorize('Cannot delete the only admin. Create or promote another admin first.', 'red'));
+      return false;
+    }
 
+    const reassigned = await deleteUserPreservingData(prisma, user.id, newOwner.id);
     console.log(colorize('\n✓ User deleted successfully!', 'green'));
+    if (Object.keys(reassigned).length) {
+      console.log(`Records transferred to ${newOwner.email}: ${JSON.stringify(reassigned)}`);
+    }
     return true;
 
   } catch (error) {
@@ -383,7 +412,7 @@ async function mainMenu() {
       case '4':
         console.log(colorize('\nGoodbye!', 'green'));
         await prisma.$disconnect();
-        rl.close();
+        rl?.close();
         process.exit(0);
         break;
       default:
@@ -396,16 +425,72 @@ async function mainMenu() {
 process.on('SIGINT', async () => {
   console.log(colorize('\n\nShutting down...', 'yellow'));
   await prisma.$disconnect();
-  rl.close();
+  rl?.close();
   process.exit(0);
 });
 
-// Start the application
-console.log(colorize('Welcome to the User Management Console!', 'bright'));
-console.log(colorize('Press Ctrl+C at any time to exit.', 'yellow'));
+function parseFlags(args) {
+  const flags = {};
+  for (let i = 0; i < args.length; i++) {
+    const match = /^--([a-z-]+)(?:=(.*))?$/.exec(args[i]);
+    if (!match) throw new Error(`Unexpected argument: ${args[i]}`);
+    flags[match[1]] = match[2] !== undefined ? match[2] : args[++i];
+  }
+  return flags;
+}
 
-mainMenu().catch(async (error) => {
-  console.error(colorize(`Fatal error: ${error.message}`, 'red'));
-  await prisma.$disconnect();
-  process.exit(1);
-});
+async function createAdminCommand(args) {
+  const { email, name } = parseFlags(args);
+  if (!email) throw new Error('--email <address> is required');
+  if (!validateEmail(email)) throw new Error(`Not a valid email address: ${email}`);
+  if (!name || name.trim().length < 2) throw new Error('--name "<full name>" is required');
+
+  const provided = process.env.NETHELPER_ADMIN_PASSWORD;
+  if (provided !== undefined && provided.length < 12) {
+    throw new Error('NETHELPER_ADMIN_PASSWORD must be at least 12 characters');
+  }
+  const password = provided || crypto.randomBytes(18).toString('base64url');
+
+  const normalizedEmail = normalizeEmail(email);
+  if (await prisma.user.findUnique({ where: { email: normalizedEmail } })) {
+    throw new Error(`A user with email ${normalizedEmail} already exists`);
+  }
+
+  await prisma.user.create({
+    data: {
+      email: normalizedEmail,
+      name: name.trim(),
+      role: 'admin',
+      password: await bcrypt.hash(password, 12),
+    },
+  });
+
+  console.log(`Created admin ${normalizedEmail}.`);
+  if (!provided) {
+    console.log(`Generated password (shown once; change it after signing in): ${password}`);
+  }
+}
+
+const [command, ...commandArgs] = process.argv.slice(2);
+
+if (command === 'create-admin') {
+  createAdminCommand(commandArgs)
+    .then(() => prisma.$disconnect())
+    .catch(async (error) => {
+      console.error(colorize(error.message, 'red'));
+      await prisma.$disconnect();
+      process.exit(1);
+    });
+} else if (command) {
+  console.error(`Unknown command "${command}". Run with no arguments for the interactive menu, or use create-admin.`);
+  process.exit(2);
+} else {
+  console.log(colorize('Welcome to the User Management Console!', 'bright'));
+  console.log(colorize('Press Ctrl+C at any time to exit.', 'yellow'));
+
+  mainMenu().catch(async (error) => {
+    console.error(colorize(`Fatal error: ${error.message}`, 'red'));
+    await prisma.$disconnect();
+    process.exit(1);
+  });
+}

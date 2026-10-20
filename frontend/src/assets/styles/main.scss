@@ -1,6 +1,7 @@
 // Main SCSS file for NetHelper Automation Platform
 @import 'variables';
 @import 'utilities';
+@import 'themes/classic';
 
 // Global styles
 * {
@@ -11,4 +12,11 @@ body {
   margin: 0;
   padding: 0;
   font-family: 'Roboto', sans-serif;
+}
+
+// Primary as a foreground (color="primary" on text, icons, and text/outlined/
+// tonal buttons and chips) uses primary-text, which stays readable on a dark
+// background (plugins/themes.js). :root outranks Vuetify's own .text-primary.
+:root .text-primary {
+  color: rgb(var(--v-theme-primary-text)) !important;
 }

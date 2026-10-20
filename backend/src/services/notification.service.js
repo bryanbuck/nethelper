@@ -37,7 +37,7 @@ class NotificationService {
       }
 
       const mailOptions = {
-        from: process.env.SMTP_FROM || 'noreply@aruba-automation.com',
+        from: process.env.SMTP_FROM || 'nethelper@localhost',
         to,
         subject,
         text,
@@ -114,7 +114,7 @@ class NotificationService {
       const subject = `Device Alert: ${device.name} is Offline`;
       
       let text = `Device Alert\n\n`;
-      text += `Device "${device.name}" (${device.serial}) has gone offline.\n\n`;
+      text += `Device "${device.name}"${device.serial ? ` (${device.serial})` : ''} has gone offline.\n\n`;
       text += `Device details:\n`;
       text += `- Type: ${device.type}\n`;
       text += `- Model: ${device.model}\n`;

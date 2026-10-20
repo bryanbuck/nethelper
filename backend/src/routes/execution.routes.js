@@ -16,6 +16,7 @@ router.get('/', [
   query('status').optional().isIn(['pending', 'running', 'success', 'failed', 'cancelled']),
   query('automationId').optional().isUUID(),
   query('deviceId').optional().isUUID(),
+  query('trigger').optional().isIn(['manual', 'schedule', 'alert']),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -32,6 +33,7 @@ router.get('/', [
       status,
       automationId,
       deviceId,
+      trigger,
     } = req.query;
 
     const prisma = getPrisma();
@@ -42,6 +44,7 @@ router.get('/', [
     if (status) where.status = status;
     if (automationId) where.automationId = automationId;
     if (deviceId) where.deviceId = deviceId;
+    if (trigger) where.trigger = trigger === 'alert' ? { startsWith: 'alert:' } : trigger;
 
     const [executions, total] = await Promise.all([
       prisma.execution.findMany({
@@ -53,7 +56,7 @@ router.get('/', [
             select: {
               id: true,
               name: true,
-              type: true,
+              category: true,
             },
           },
           device: {
@@ -115,8 +118,7 @@ router.get('/:id', async (req, res) => {
           select: {
             id: true,
             name: true,
-            type: true,
-            workflow: true,
+            category: true,
           },
         },
         device: {
@@ -184,6 +186,8 @@ router.patch('/:id/cancel', authorize('admin', 'operator'), async (req, res) => 
       });
     }
 
+    const wasPending = execution.status === 'pending';
+
     // Update execution status
     const updatedExecution = await prisma.execution.update({
       where: { id },
@@ -199,7 +203,7 @@ router.patch('/:id/cancel', authorize('admin', 'operator'), async (req, res) => 
           select: {
             id: true,
             name: true,
-            type: true,
+            category: true,
           },
         },
         device: {
@@ -212,6 +216,21 @@ router.patch('/:id/cancel', authorize('admin', 'operator'), async (req, res) => 
       },
     });
 
+    // A pending run never starts now; a running one stops before its next
+    // step and reports its own completion.
+    if (wasPending) {
+      try {
+        require('../websocket/socket.handler').getIO().emit('automation:completed', {
+          executionId: id,
+          automationId: execution.automationId,
+          automation: updatedExecution.automation,
+          status: 'cancelled',
+          trigger: execution.trigger,
+        });
+      } catch {
+        // Socket.io not initialised (tests).
+      }
+    }
     logger.info('Execution cancelled', { executionId: id, userId: req.user.id });
 
     res.json({
@@ -388,7 +407,7 @@ router.get('/device/:deviceId', [
             select: {
               id: true,
               name: true,
-              type: true,
+              category: true,
             },
           },
           triggeredBy: {

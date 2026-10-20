@@ -18,11 +18,11 @@
 const { TRANSPORT_MATRIX, TRANSPORT_FALLBACKS } = require('../constants/vendors');
 const { detectPlatform, detectVendor } = require('./device-platform');
 
-const OPERATIONS = ['config', 'test', 'poll'];
+const OPERATIONS = ['config', 'test', 'poll', 'live', 'topology'];
 
 /**
  * @param {Object} device - Device row (managementMode, vendor, platform, type, ...)
- * @param {string} operation - 'config' | 'test' | 'poll'
+ * @param {string} operation - 'config' | 'test' | 'poll' | 'live' | 'topology'
  * @returns {string[]} Ordered transports to attempt (may be empty = unsupported)
  */
 function resolveTransport(device, operation) {
@@ -41,6 +41,24 @@ function resolveTransport(device, operation) {
   const row = TRANSPORT_MATRIX[key]
     || (device?.type === 'switch' ? TRANSPORT_FALLBACKS['unknown-switch'] : TRANSPORT_FALLBACKS.default);
   const transports = row[operation] || [];
+
+  // Live state is a read-only local watch. Cloud planes aren't a live source,
+  // so a cloud-managed device gets only its direct device-rest transport (an
+  // AOS-CX switch under Central still serves local REST reads and
+  // notifications), and nothing when it has no reachable IP.
+  if (operation === 'live') {
+    if (device?.managementMode === 'cloud') {
+      return device.ipAddress ? transports.filter((t) => t === 'device-rest') : [];
+    }
+    return [...transports];
+  }
+
+  // Topology is a read-only neighbor read: local REST when the device has an
+  // IP, then the cloud plane (a provider capability, which may be unsupported).
+  if (operation === 'topology' && device?.managementMode === 'cloud') {
+    const direct = device.ipAddress ? transports.filter((t) => t === 'device-rest') : [];
+    return [...direct, 'cloud'];
+  }
 
   if (device?.managementMode === 'cloud') {
     // device-rest survives ahead of the cloud plane (AOS-CX case above);

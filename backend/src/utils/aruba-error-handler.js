@@ -12,25 +12,23 @@ const ERROR_TRANSLATIONS = {
   'unsupported_grant_type': {
     type: 'AUTH_CONFIG',
     message: 'OAuth2 authentication method not supported',
-    explanation: 'Your Aruba Central application is not configured for client credentials flow',
+    explanation: 'The token endpoint does not accept the client_credentials grant. Classic Central API gateway apps (apigw-* hosts) cannot be used; NetHelper needs a GreenLake API client for New Central',
     actions: [
-      'Check your Aruba Central application configuration',
-      'Ensure your app supports "client_credentials" grant type',
-      'Consider using authorization_code flow instead',
-      'Verify you have the correct API permissions'
+      'Create an API client in HPE GreenLake for Central and use its Client ID/Secret',
+      'Pick your New Central cluster as the base URL (not an apigw-* host)'
     ],
-    documentation: 'https://developer.arubanetworks.com/aruba-central/docs/api-oauth-access-token'
+    documentation: 'https://developer.arubanetworks.com/new-central/docs/generating-and-managing-access-tokens'
   },
   'invalid_client': {
     type: 'AUTH_CREDENTIALS',
     message: 'Invalid client credentials',
-    explanation: 'Your client ID or client secret is incorrect',
+    explanation: 'HPE SSO did not recognise this Client ID/Secret pair',
     actions: [
-      'Verify ARUBA_CENTRAL_CLIENT_ID in your .env file',
-      'Verify ARUBA_CENTRAL_CLIENT_SECRET in your .env file',
-      'Check for extra spaces or special characters',
-      'Regenerate credentials in Aruba Central if needed'
-    ]
+      'Verify the Client ID and Client Secret in Settings → Cloud Integrations (no extra spaces)',
+      'A GreenLake-platform API client also needs its Workspace ID; a Central API client must leave it blank',
+      'Regenerate the client secret in HPE GreenLake if needed'
+    ],
+    documentation: 'https://developer.arubanetworks.com/new-central/docs/generating-and-managing-access-tokens'
   },
   'invalid_scope': {
     type: 'AUTH_PERMISSIONS',
@@ -78,7 +76,7 @@ const ERROR_TRANSLATIONS = {
     message: 'Invalid customer ID',
     explanation: 'The customer_id parameter is incorrect or missing',
     actions: [
-      'Verify ARUBA_CENTRAL_CUSTOMER_ID in your .env file',
+      'Verify the Customer ID in Settings → Cloud Integrations',
       'Check your Aruba Central account settings for the correct customer ID'
     ]
   }
@@ -201,6 +199,8 @@ class ArubaErrorHandler {
       }
     }
 
+    enhancedError.errorCode = errorCode;
+
     // Look up known error patterns
     if (errorCode && ERROR_TRANSLATIONS[errorCode]) {
       const translation = ERROR_TRANSLATIONS[errorCode];
@@ -250,11 +250,11 @@ class ArubaErrorHandler {
    * Add context-specific troubleshooting actions
    */
   static addContextualActions(enhancedError, context) {
-    let actions = [...(enhancedError.actions || [])];
+    const actions = [...(enhancedError.actions || [])];
 
-    if (context === 'authentication' && enhancedError.category === 'auth_error') {
-      actions.push('Check your .env file configuration');
-      actions.push('Verify your Aruba Central application settings');
+    // A token that the API gateway then rejects usually means the wrong cluster.
+    if (context === 'device_list' && [401, 403].includes(enhancedError.details.statusCode)) {
+      actions.push('Check that the base URL is the cluster your Central account lives on');
     }
 
     if (context === 'device_sync' && enhancedError.category === 'permission_error') {
@@ -263,6 +263,30 @@ class ArubaErrorHandler {
     }
 
     return actions;
+  }
+
+  /**
+   * The parts of an enhanced error worth showing an operator: what was
+   * called, what the provider answered, and what to try. No headers or
+   * request bodies.
+   */
+  static diagnostics(enhancedError) {
+    const { details = {} } = enhancedError;
+    const result = {
+      context: enhancedError.context,
+      ...(details.method && { method: details.method }),
+      ...(details.endpoint && { endpoint: details.endpoint }),
+      ...(details.statusCode && { statusCode: details.statusCode }),
+      ...(enhancedError.errorCode && { providerError: enhancedError.errorCode }),
+      ...(enhancedError.explanation && { explanation: enhancedError.explanation }),
+      actions: enhancedError.actions || [],
+      ...(enhancedError.documentation && { documentation: enhancedError.documentation }),
+    };
+    // technicalMessage is the provider's own description when it sent one.
+    if (enhancedError.technicalMessage && enhancedError.technicalMessage !== enhancedError.userMessage) {
+      result.providerMessage = enhancedError.technicalMessage;
+    }
+    return result;
   }
 
   /**

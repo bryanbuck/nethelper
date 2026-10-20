@@ -1,198 +1,124 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { readActivityLog, writeActivityLog, clearActivityLog } from '@/utils/activity-log-storage'
 
 // Notification types
 export const NotificationType = {
   SUCCESS: 'success',
   ERROR: 'error',
   WARNING: 'warning',
-  INFO: 'info',
-  ALERT: 'alert'
+  INFO: 'info'
 }
 
-// Alert severity levels
-export const AlertSeverity = {
-  LOW: 'low',
-  MEDIUM: 'medium',
-  HIGH: 'high',
-  CRITICAL: 'critical'
-}
+export const MAX_ENTRIES = 200
+const DEFAULT_TIMEOUT = 5000
+const PROBLEM_TYPES = [NotificationType.WARNING, NotificationType.ERROR]
 
+let idCounter = 0
+const newId = () => globalThis.crypto?.randomUUID?.() ?? `n${Date.now()}_${++idCounter}`
+
+// The session's activity log, shown by the status bar (components/common/StatusBar.vue).
+// Every message stays in the history; `timeout` is only how long it holds the
+// bar. Persistent messages are pinned: the bar falls back to the newest pinned
+// one until it is dismissed. Only `popup: true` messages overlay the page.
 export const useNotificationsStore = defineStore('notifications', () => {
-  const notifications = ref([])
-  const alerts = ref([])
-  const unreadCount = ref(0)
-  const maxNotifications = ref(100) // Limit to prevent memory issues
+  // A pin is about this page load (a lost connection, an unread critical alert);
+  // after a reload the entry is history only.
+  const entries = ref(readActivityLog().map((e) => ({ ...e, pinned: false })))
+  const flashId = ref(null)
+  const popup = ref(null)
+  // Real-time socket state for the status bar: idle | connected | reconnecting | failed
+  const connection = ref('idle')
 
-  // Computed properties
-  const unreadNotifications = computed(() => 
-    notifications.value.filter(notification => !notification.read)
+  let flashTimer = null
+  let popupTimer = null
+
+  const current = computed(() =>
+    entries.value.find((e) => e.id === flashId.value) || entries.value.find((e) => e.pinned) || null
+  )
+  const unseenCount = computed(() => entries.value.filter((e) => !e.seen).length)
+  const unseenProblemCount = computed(() =>
+    entries.value.filter((e) => !e.seen && PROBLEM_TYPES.includes(e.type)).length
   )
 
-  const criticalAlerts = computed(() => 
-    alerts.value.filter(alert => alert.severity === AlertSeverity.CRITICAL)
-  )
-
-  const recentAlerts = computed(() => 
-    alerts.value
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .slice(0, 10)
-  )
+  const persist = () => writeActivityLog(entries.value)
 
   // Actions
   function addNotification(notification) {
-    const newNotification = {
-      id: notification.id || Date.now().toString(),
-      type: notification.type || NotificationType.INFO,
-      title: notification.title || '',
-      message: notification.message || '',
-      read: false,
-      persistent: notification.persistent || false,
-      timeout: notification.timeout || 5000,
-      actions: notification.actions || [],
-      createdAt: new Date(),
-      ...notification
+    const { popup: wantsPopup, ...fields } = notification
+    const entry = {
+      type: NotificationType.INFO,
+      title: '',
+      message: '',
+      persistent: false,
+      actions: [],
+      ...fields,
+      id: notification.id || newId(),
+      timeout: notification.timeout || DEFAULT_TIMEOUT,
+      createdAt: new Date().toISOString(),
+      seen: false
+    }
+    entry.pinned = entry.persistent
+
+    // Re-adding an id (an alert, the socket state) replaces the old entry.
+    entries.value = [entry, ...entries.value.filter((e) => e.id !== entry.id)].slice(0, MAX_ENTRIES)
+    persist()
+
+    clearTimeout(flashTimer)
+    flashId.value = entry.id
+    if (!entry.persistent) {
+      flashTimer = setTimeout(() => {
+        if (flashId.value === entry.id) flashId.value = null
+      }, entry.timeout)
     }
 
-    notifications.value.unshift(newNotification)
-    
-    // Limit notifications to prevent memory issues
-    if (notifications.value.length > maxNotifications.value) {
-      notifications.value = notifications.value.slice(0, maxNotifications.value)
-    }
-    
-    updateUnreadCount()
-
-    // Auto-remove non-persistent notifications
-    if (!newNotification.persistent && newNotification.timeout > 0) {
-      setTimeout(() => {
-        removeNotification(newNotification.id)
-      }, newNotification.timeout)
+    if (wantsPopup) {
+      clearTimeout(popupTimer)
+      popup.value = entry
+      popupTimer = setTimeout(() => { popup.value = null }, entry.timeout)
     }
 
-    return newNotification.id
+    return entry.id
   }
 
-  function addAlert(alertData) {
-    const alert = {
-      id: alertData.id || Date.now().toString(),
-      type: alertData.type || 'system',
-      severity: alertData.severity || AlertSeverity.MEDIUM,
-      title: alertData.title || 'System Alert',
-      message: alertData.message || '',
-      source: alertData.source || 'system',
-      deviceId: alertData.deviceId || null,
-      automationId: alertData.automationId || null,
-      acknowledged: false,
-      read: false,
-      metadata: alertData.metadata || {},
-      createdAt: new Date(),
-      ...alertData
-    }
-
-    alerts.value.unshift(alert)
-    
-    // Also add as notification for UI display
-    const notificationId = addNotification({
-      id: `alert_${alert.id}`,
-      type: getNotificationTypeFromSeverity(alert.severity),
-      title: `${alert.severity.toUpperCase()}: ${alert.title}`,
-      message: alert.message,
-      persistent: alert.severity === AlertSeverity.CRITICAL,
-      actions: [
-        {
-          label: 'View Details',
-          action: () => viewAlertDetails(alert.id)
-        },
-        {
-          label: 'Acknowledge',
-          action: () => acknowledgeAlert(alert.id)
-        }
-      ]
-    })
-
-    return alert.id
+  // Unpin (and stop showing) the message in the bar; it stays in the history.
+  function dismissCurrent() {
+    const entry = current.value
+    if (!entry) return
+    entry.pinned = false
+    entry.seen = true
+    if (flashId.value === entry.id) flashId.value = null
+    persist()
   }
 
-  function removeNotification(notificationId) {
-    const index = notifications.value.findIndex(n => n.id === notificationId)
-    if (index > -1) {
-      notifications.value.splice(index, 1)
-      updateUnreadCount()
-    }
+  function dismissPopup() {
+    clearTimeout(popupTimer)
+    popup.value = null
   }
 
-  function markAsRead(notificationId) {
-    const notification = notifications.value.find(n => n.id === notificationId)
-    if (notification && !notification.read) {
-      notification.read = true
-      updateUnreadCount()
-    }
+  function remove(id) {
+    entries.value = entries.value.filter((e) => e.id !== id)
+    if (flashId.value === id) flashId.value = null
+    persist()
   }
 
-  function markAllAsRead() {
-    notifications.value.forEach(notification => {
-      notification.read = true
-    })
-    updateUnreadCount()
+  function markAllSeen() {
+    if (!unseenCount.value) return
+    entries.value.forEach((e) => { e.seen = true })
+    persist()
   }
 
-  function acknowledgeAlert(alertId) {
-    const alert = alerts.value.find(a => a.id === alertId)
-    if (alert) {
-      alert.acknowledged = true
-      alert.acknowledgedAt = new Date()
-    }
+  // Sign-out: the next user on this tab starts with an empty log.
+  function clearHistory() {
+    clearTimeout(flashTimer)
+    entries.value = []
+    flashId.value = null
+    dismissPopup()
+    clearActivityLog()
   }
 
-  function viewAlertDetails(alertId) {
-    const alert = alerts.value.find(a => a.id === alertId)
-    if (alert) {
-      alert.read = true
-      // Emit event or navigate to alert details
-      // This would be handled by the component using this store
-    }
-  }
-
-  function clearNotifications() {
-    notifications.value = []
-    updateUnreadCount()
-  }
-
-  function clearReadNotifications() {
-    notifications.value = notifications.value.filter(n => !n.read)
-    updateUnreadCount()
-  }
-
-  function updateUnreadCount() {
-    unreadCount.value = unreadNotifications.value.length
-  }
-
-  function getNotificationTypeFromSeverity(severity) {
-    const typeMap = {
-      [AlertSeverity.LOW]: NotificationType.INFO,
-      [AlertSeverity.MEDIUM]: NotificationType.WARNING,
-      [AlertSeverity.HIGH]: NotificationType.WARNING,
-      [AlertSeverity.CRITICAL]: NotificationType.ERROR
-    }
-    return typeMap[severity] || NotificationType.INFO
-  }
-
-  // Device-related notifications
-  function addDeviceAlert(deviceData) {
-    return addAlert({
-      type: 'device',
-      title: 'Device Status Change',
-      message: `Device ${deviceData.name || deviceData.id} is now ${deviceData.status}`,
-      severity: deviceData.status === 'offline' ? AlertSeverity.HIGH : AlertSeverity.MEDIUM,
-      deviceId: deviceData.id,
-      source: 'device_monitor',
-      metadata: {
-        previousStatus: deviceData.previousStatus,
-        deviceType: deviceData.type,
-        location: deviceData.location
-      }
-    })
+  function setConnection(state) {
+    connection.value = state
   }
 
   // Automation-related notifications
@@ -262,28 +188,24 @@ export const useNotificationsStore = defineStore('notifications', () => {
   }
 
   return {
-    notifications,
-    alerts,
-    unreadCount,
-    unreadNotifications,
-    criticalAlerts,
-    recentAlerts,
+    entries,
+    current,
+    popup,
+    connection,
+    unseenCount,
+    unseenProblemCount,
     addNotification,
-    addAlert,
-    removeNotification,
-    markAsRead,
-    markAllAsRead,
-    acknowledgeAlert,
-    viewAlertDetails,
-    clearNotifications,
-    clearReadNotifications,
-    addDeviceAlert,
+    dismissCurrent,
+    dismissPopup,
+    remove,
+    markAllSeen,
+    clearHistory,
+    setConnection,
     addAutomationNotification,
     showSuccess,
     showError,
     showWarning,
     showInfo,
-    NotificationType,
-    AlertSeverity
+    NotificationType
   }
 })

@@ -266,20 +266,18 @@ class SettingsService {
       let testResult;
 
       try {
-        // Decrypt credentials
-        const decryptedCreds = {
-          username: credential.username ? credential.username : null,
-          password: credential.password ? encryption.decrypt(credential.password) : null,
-          apiKey: credential.apiKey ? encryption.decrypt(credential.apiKey) : null,
-          apiSecret: credential.apiSecret ? encryption.decrypt(credential.apiSecret) : null,
-        };
+        if (!device) {
+          throw new Error('Link this credential to a device (or pick one) to test it');
+        }
+        if (!device.ipAddress) {
+          throw new Error(`Device "${device.name}" has no IP address`);
+        }
 
-        // Attempt connection based on device type
-        testResult = await this.testDeviceConnection(
-          credential.type,
-          device,
-          decryptedCreds
-        );
+        // A real connection attempt, routed like any other operation. Lazy
+        // require: connection-test pulls in device-poller, which requires this
+        // module.
+        const { testDeviceConnection } = require('./connection-test.service');
+        testResult = await testDeviceConnection(device, this.decryptCredential(credential));
 
         // Update credential with test results
         await prisma.apiCredential.update({
@@ -314,125 +312,6 @@ class SettingsService {
     } catch (error) {
       logger.error('Test API credential error:', error);
       throw error;
-    }
-  }
-
-  /**
-   * Test device connection based on type
-   * @param {string} type - Credential type
-   * @param {Object} device - Device object
-   * @param {Object} credentials - Decrypted credentials
-   * @returns {Promise<Object>} Test result
-   */
-  async testDeviceConnection(type, device, credentials) {
-    // This is a basic implementation - expand based on actual device APIs
-    // For now, we'll do a simple validation and mock response
-
-    if (!device || !device.ipAddress) {
-      throw new Error('Device IP address not configured');
-    }
-
-    // Basic timeout for connection test
-    const timeout = 10000; // 10 seconds
-
-    // Different connection logic based on device type
-    switch (type) {
-      case 'switch':
-      case 'ap':
-      case 'gateway':
-        return this.testNetworkDeviceConnection(device, credentials, timeout);
-
-      case 'controller':
-        return this.testControllerConnection(device, credentials, timeout);
-
-      default:
-        return this.testGenericConnection(device, credentials, timeout);
-    }
-  }
-
-  /**
-   * Test network device connection (switch, AP, gateway)
-   * @param {Object} device - Device object
-   * @param {Object} credentials - Decrypted credentials
-   * @param {number} timeout - Connection timeout
-   * @returns {Promise<Object>} Test result
-   */
-  async testNetworkDeviceConnection(device, credentials, timeout) {
-    // This is a placeholder implementation
-    // In production, you would:
-    // 1. Use SSH for switches/APs with username/password
-    // 2. Use REST API if device supports it with API keys
-    // 3. Use SNMP for basic connectivity
-
-    // For now, just validate that credentials are provided
-    if (credentials.username && credentials.password) {
-      return {
-        success: true,
-        message: 'Credentials validated successfully',
-        testedAt: new Date().toISOString(),
-        deviceInfo: {
-          type: device.type,
-          model: device.model,
-          ipAddress: device.ipAddress,
-        },
-      };
-    } else if (credentials.apiKey) {
-      return {
-        success: true,
-        message: 'API key validated successfully',
-        testedAt: new Date().toISOString(),
-        deviceInfo: {
-          type: device.type,
-          model: device.model,
-          ipAddress: device.ipAddress,
-        },
-      };
-    } else {
-      throw new Error('No valid credentials provided');
-    }
-  }
-
-  /**
-   * Test controller connection
-   * @param {Object} device - Device object
-   * @param {Object} credentials - Decrypted credentials
-   * @param {number} timeout - Connection timeout
-   * @returns {Promise<Object>} Test result
-   */
-  async testControllerConnection(device, credentials, timeout) {
-    // Placeholder for controller-specific connection testing
-    if (credentials.apiKey && credentials.apiSecret) {
-      return {
-        success: true,
-        message: 'Controller API credentials validated',
-        testedAt: new Date().toISOString(),
-        deviceInfo: {
-          type: device.type,
-          model: device.model,
-        },
-      };
-    } else {
-      throw new Error('API key and secret required for controller');
-    }
-  }
-
-  /**
-   * Test generic connection
-   * @param {Object} device - Device object
-   * @param {Object} credentials - Decrypted credentials
-   * @param {number} timeout - Connection timeout
-   * @returns {Promise<Object>} Test result
-   */
-  async testGenericConnection(device, credentials, timeout) {
-    // Basic validation for generic devices
-    if (credentials.username || credentials.apiKey) {
-      return {
-        success: true,
-        message: 'Credentials validated',
-        testedAt: new Date().toISOString(),
-      };
-    } else {
-      throw new Error('No credentials provided');
     }
   }
 
@@ -525,12 +404,15 @@ class SettingsService {
     for (const field of spec.credentialFields) {
       const value = credentials[field.key];
       if (value === undefined || value === null || value === '') {
+        // An optional, non-secret field sent as '' is being cleared.
+        if (field.optional && !field.secret && value === '') continue;
         // Preserve the existing value (secrets are never echoed back to the
         // client, so a blank secret on update means "unchanged").
         if (existing[field.key] !== undefined) {
           stored[field.key] = existing[field.key];
           continue;
         }
+        if (field.optional) continue;
         throw new Error(`Missing required field "${field.key}" for ${spec.label}`);
       }
       stored[field.key] = field.secret ? encryption.encrypt(String(value)) : String(value);
@@ -554,18 +436,39 @@ class SettingsService {
   }
 
   /**
-   * List every cloud integration for a user (secrets masked).
-   * @param {string} userId
+   * List every cloud integration (secrets masked). Integrations act
+   * system-wide (sync, status, streams), so every admin manages all of them;
+   * userId (the creator) only matters when that user is deleted.
    * @returns {Promise<Array>}
    */
-  async getCloudIntegrations(userId) {
+  async getCloudIntegrations() {
     const prisma = getPrisma();
     const integrations = await prisma.cloudIntegration.findMany({
-      where: { userId },
       orderBy: [{ provider: 'asc' }, { createdAt: 'asc' }],
       include: { _count: { select: { devices: true } } },
     });
     return integrations.map((integration) => this.sanitizeIntegration(integration));
+  }
+
+  /**
+   * An integration's base URL without trailing slashes (providers append
+   * paths that start with one). Only http(s) URLs are accepted.
+   */
+  normalizeBaseUrl(baseUrl) {
+    if (!baseUrl) return null;
+    const trimmed = String(baseUrl).trim().replace(/\/+$/, '');
+    let url;
+    try {
+      url = new URL(trimmed);
+    } catch {
+      url = null;
+    }
+    if (!url || !['http:', 'https:'].includes(url.protocol)) {
+      const error = new Error(`"${baseUrl}" is not an http(s) URL`);
+      error.statusCode = 400;
+      throw error;
+    }
+    return trimmed;
   }
 
   /**
@@ -584,7 +487,7 @@ class SettingsService {
       data: {
         provider: data.provider,
         name: data.name,
-        baseUrl: data.baseUrl || spec.defaultBaseUrl,
+        baseUrl: this.normalizeBaseUrl(data.baseUrl) || spec.defaultBaseUrl,
         credentials: this.encryptCredentials(data.provider, data.credentials),
         isActive: data.isActive !== false,
         notes: data.notes || null,
@@ -592,16 +495,27 @@ class SettingsService {
       },
     });
 
+    this.integrationsChanged();
     return this.sanitizeIntegration(integration);
+  }
+
+  /** Open, close or reconnect cloud event streams to match (best-effort, not awaited). */
+  integrationsChanged() {
+    try {
+      // Lazy: the stream service pulls in the provider factory, which needs this module.
+      require('./cloud/cloud-stream.service').reconcile().catch(() => {});
+    } catch (error) {
+      logger.warn(`Cloud event streams not reconciled: ${error.message}`);
+    }
   }
 
   /**
    * Update a cloud integration. Blank secret fields keep their stored value.
    */
-  async updateCloudIntegration(integrationId, userId, data) {
+  async updateCloudIntegration(integrationId, data) {
     const prisma = getPrisma();
     const existing = await prisma.cloudIntegration.findFirst({
-      where: { id: integrationId, userId },
+      where: { id: integrationId },
     });
     if (!existing) {
       const error = new Error('Cloud integration not found');
@@ -613,7 +527,7 @@ class SettingsService {
       where: { id: integrationId },
       data: {
         name: data.name ?? undefined,
-        baseUrl: data.baseUrl ?? undefined,
+        baseUrl: data.baseUrl ? this.normalizeBaseUrl(data.baseUrl) : undefined,
         credentials: data.credentials
           ? this.encryptCredentials(existing.provider, data.credentials, existing.credentials)
           : undefined,
@@ -624,6 +538,7 @@ class SettingsService {
 
     // Credentials or base URL may have changed - drop the cached OAuth token.
     await this.clearIntegrationCache(integration);
+    this.integrationsChanged();
     return this.sanitizeIntegration(integration);
   }
 
@@ -631,10 +546,10 @@ class SettingsService {
    * Test a cloud integration's credentials against its provider.
    * Persists lastTested / lastTestStatus.
    */
-  async testCloudIntegration(integrationId, userId) {
+  async testCloudIntegration(integrationId) {
     const prisma = getPrisma();
     const row = await prisma.cloudIntegration.findFirst({
-      where: { id: integrationId, userId },
+      where: { id: integrationId },
     });
     if (!row) {
       const error = new Error('Cloud integration not found');
@@ -665,10 +580,10 @@ class SettingsService {
    * Delete a cloud integration. Devices that referenced it keep their rows
    * (the FK is SetNull) but lose their cloud attribution.
    */
-  async deleteCloudIntegration(integrationId, userId) {
+  async deleteCloudIntegration(integrationId) {
     const prisma = getPrisma();
     const integration = await prisma.cloudIntegration.findFirst({
-      where: { id: integrationId, userId },
+      where: { id: integrationId },
     });
     if (!integration) {
       const error = new Error('Cloud integration not found');
@@ -678,6 +593,7 @@ class SettingsService {
 
     await this.clearIntegrationCache(integration);
     await prisma.cloudIntegration.delete({ where: { id: integrationId } });
+    this.integrationsChanged();
   }
 
   /** Drop any provider-side cached token for an integration (best-effort). */
@@ -700,10 +616,10 @@ class SettingsService {
   // ---------------------------------------------------------------------
 
   /** @deprecated Use getCloudIntegrations(). */
-  async getArubaCentralConfig(userId) {
+  async getArubaCentralConfig() {
     const prisma = getPrisma();
     const integration = await prisma.cloudIntegration.findFirst({
-      where: { userId, provider: 'aruba_central', isActive: true },
+      where: { provider: 'aruba_central', isActive: true },
       orderBy: { updatedAt: 'desc' },
     });
     if (!integration) return null;
@@ -725,8 +641,8 @@ class SettingsService {
   /** @deprecated Use createCloudIntegration()/updateCloudIntegration(). */
   async saveArubaCentralConfig(userId, configData) {
     const prisma = getPrisma();
-    if (!configData.baseUrl || !configData.clientId || !configData.clientSecret || !configData.customerId) {
-      throw new Error('Missing required fields: baseUrl, clientId, clientSecret, and customerId are required');
+    if (!configData.baseUrl || !configData.clientId || !configData.clientSecret) {
+      throw new Error('Missing required fields: baseUrl, clientId, and clientSecret are required');
     }
 
     const credentials = {
@@ -736,16 +652,16 @@ class SettingsService {
     };
 
     const existing = await prisma.cloudIntegration.findFirst({
-      where: { userId, provider: 'aruba_central', isActive: true },
+      where: { provider: 'aruba_central', isActive: true },
     });
 
     if (existing) {
-      const updated = await this.updateCloudIntegration(existing.id, userId, {
+      const updated = await this.updateCloudIntegration(existing.id, {
         baseUrl: configData.baseUrl,
         credentials,
         notes: configData.notes,
       });
-      return { data: await this.getArubaCentralConfig(userId), isNew: false, integration: updated };
+      return { data: await this.getArubaCentralConfig(), isNew: false, integration: updated };
     }
 
     const created = await this.createCloudIntegration(userId, {
@@ -755,32 +671,32 @@ class SettingsService {
       credentials,
       notes: configData.notes,
     });
-    return { data: await this.getArubaCentralConfig(userId), isNew: true, integration: created };
+    return { data: await this.getArubaCentralConfig(), isNew: true, integration: created };
   }
 
   /** @deprecated Use testCloudIntegration(). */
-  async testArubaCentralConfig(userId, configId) {
+  async testArubaCentralConfig(configId) {
     const prisma = getPrisma();
     const integration = configId
-      ? await prisma.cloudIntegration.findFirst({ where: { id: configId, userId, provider: 'aruba_central' } })
-      : await prisma.cloudIntegration.findFirst({ where: { userId, provider: 'aruba_central', isActive: true } });
+      ? await prisma.cloudIntegration.findFirst({ where: { id: configId, provider: 'aruba_central' } })
+      : await prisma.cloudIntegration.findFirst({ where: { provider: 'aruba_central', isActive: true } });
 
     if (!integration) {
       throw new Error('Aruba Central configuration not found');
     }
-    return this.testCloudIntegration(integration.id, userId);
+    return this.testCloudIntegration(integration.id);
   }
 
   /** @deprecated Use deleteCloudIntegration(). */
-  async deleteArubaCentralConfig(configId, userId) {
+  async deleteArubaCentralConfig(configId) {
     const prisma = getPrisma();
     const integration = await prisma.cloudIntegration.findFirst({
-      where: { id: configId, userId, provider: 'aruba_central' },
+      where: { id: configId, provider: 'aruba_central' },
     });
     if (!integration) {
       throw new Error('Aruba Central configuration not found');
     }
-    return this.deleteCloudIntegration(configId, userId);
+    return this.deleteCloudIntegration(configId);
   }
 
   // ---------------------------------------------------------------------
@@ -857,6 +773,8 @@ class SettingsService {
       isActive: data.isActive ?? existing?.isActive ?? false,
       notes: data.notes ?? existing?.notes ?? null,
     };
+
+    gitBackupService.validateMirrorSettings({ ...fields, sshKeyPath: credentials?.sshKeyPath });
 
     const row = existing
       ? await prisma.gitBackupConfig.update({ where: { id: existing.id }, data: fields })

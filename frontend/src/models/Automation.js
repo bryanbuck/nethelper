@@ -211,7 +211,6 @@ export class Automation {
    */
   getComplexityScore() {
     const nodeCount = this.workflow.nodes?.length || 0
-    const edgeCount = this.workflow.edges?.length || 0
     
     if (nodeCount <= 3) return 1
     if (nodeCount <= 5) return 3
@@ -234,7 +233,7 @@ export class Automation {
 
     if (this.workflow.nodes) {
       this.workflow.nodes.forEach(node => {
-        if (counts.hasOwnProperty(node.type)) {
+        if (Object.hasOwn(counts, node.type)) {
           counts[node.type]++
         }
       })

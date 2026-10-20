@@ -1,0 +1,41 @@
+{
+  "page1": {
+    "count": 2,
+    "total": 4,
+    "items": [
+      {
+        "type": "network-monitoring/device-monitoring", "id": "SG30KW0001", "serialNumber": "SG30KW0001",
+        "deviceName": "core-cx-1", "model": "CX-6300F", "partNumber": "JL665A", "macAddress": "aa:bb:cc:00:00:01",
+        "ipv4": "10.0.0.2", "ipv6": "", "deviceType": "SWITCH", "status": "ONLINE", "deployment": "Standalone",
+        "firmwareVersion": "FL.10.16.1010", "softwareVersion": "FL.10.16.1010", "siteId": "100001", "siteName": "HQ",
+        "lastSeenAt": null, "uptimeInMillis": 14791955848, "configStatus": "Synchronized", "persona": "-", "role": null
+      },
+      {
+        "type": "network-monitoring/device-monitoring", "id": "SG30KW0002", "serialNumber": "SG30KW0002",
+        "deviceName": "edge-aoss-1", "model": "AS-2930F", "macAddress": "aa:bb:cc:00:00:02",
+        "ipv4": "10.0.0.3", "ipv6": "", "deviceType": "SWITCH", "status": "OFFLINE", "deployment": "Standalone",
+        "firmwareVersion": "WC.16.11.0012", "siteId": "100001", "siteName": "HQ",
+        "lastSeenAt": "2026-10-01T12:00:00Z", "configStatus": "Out of sync"
+      }
+    ],
+    "next": "cursor-2"
+  },
+  "page2": {
+    "count": 2,
+    "total": 4,
+    "items": [
+      {
+        "type": "network-monitoring/device-monitoring", "id": "CNKL0003", "serialNumber": "CNKL0003",
+        "deviceName": null, "model": "AP-515", "macAddress": "aa:bb:cc:00:00:03",
+        "ipv4": "", "ipv6": "fd00::3", "deviceType": "ACCESS_POINT", "status": "ONLINE", "deployment": "Cluster",
+        "siteId": "100002", "siteName": null, "lastSeenAt": null
+      },
+      {
+        "type": "network-monitoring/device-monitoring", "id": "GW0004", "serialNumber": "GW0004",
+        "deviceName": "branch-gw", "model": "9004", "deviceType": "GATEWAY", "status": "OFFLINE",
+        "lastSeenAt": null
+      }
+    ],
+    "next": null
+  }
+}

@@ -24,7 +24,12 @@ const { CapabilityError } = require('./errors');
  *     platform,        // constants/vendors.js platform id or null
  *     status,          // Prisma DeviceStatus value
  *     firmwareVersion, site, lastSeen,   // nullable extras
- *     metadata }       // provider-specific leftovers, persisted to Device.metadata
+ *     metadata,        // provider-specific leftovers, merged into Device.metadata
+ *     // optional, when the plane knows who owns the device's config:
+ *     cloudManaged, cloudManagedSource, cloudConnectionStatus,
+ *     // optional: true/false when the device runs the config the cloud
+ *     // intends, null when the cloud's answer means neither
+ *     configInSync }
  */
 class BaseCloudProvider {
   /**
@@ -70,13 +75,143 @@ class BaseCloudProvider {
     this.unsupported('config-backup');
   }
 
+  /** Push config to a device through the cloud plane. No provider does this yet. */
+  async updateDeviceConfiguration(serial, configuration) { // eslint-disable-line no-unused-vars
+    this.unsupported('config-write');
+  }
+
+  /** Ask the cloud plane to take a config backup of its own. */
+  async backupConfiguration(serial) { // eslint-disable-line no-unused-vars
+    this.unsupported('config-backup');
+  }
+
+  /** Run a CLI command on a device through the cloud plane. */
+  async executeCommand(serial, command) { // eslint-disable-line no-unused-vars
+    this.unsupported('command-execution');
+  }
+
+  /** Time-series stats for one device. */
+  async getDeviceStats(serial, metric, duration) { // eslint-disable-line no-unused-vars
+    this.unsupported('stats');
+  }
+
+  /**
+   * Configuration scopes above the device that this plane holds config for
+   * (a Mist org and its sites; Central's global scope, site collections,
+   * sites and device groups). Access points are configured here rather than
+   * per device, so this is where their config is backed up.
+   * @returns {Promise<Array<{ scopeType: 'org'|'site-collection'|'site'|'device-group', scopeId: string, name: string }>>}
+   */
+  async listConfigScopes() {
+    this.unsupported('scope-backup');
+  }
+
+  /**
+   * Snapshot one scope's configuration (see listConfigScopes).
+   * @param {{ scopeType, scopeId, name }} scope
+   * @returns {Promise<{text, format, source}>}
+   */
+  async getScopeConfiguration(scope) { // eslint-disable-line no-unused-vars
+    this.unsupported('scope-backup');
+  }
+
+  /**
+   * Every neighbor the cloud plane knows, for all of its devices in one pass:
+   * a few org- or site-wide reads rather than a call per device (Mist allows
+   * 5,000 requests/hour per org). Neighbors are normalized as in
+   * services/topology/neighbor.js. topology.service reads this once per
+   * collection run and per integration.
+   * @returns {Promise<Map<string, {neighbors: Object[], identity: {chassisId, sysName}, online: boolean}>>}
+   *   by device serial; a device the cloud has no neighbor data for is absent
+   */
+  async listNeighbors() {
+    this.unsupported('topology');
+  }
+
+  /**
+   * Current status of every device, for the cloud status refresh
+   * (services/cloud-status.service.js), which only updates rows sync made.
+   * Defaults to a full inventory read; a provider with a cheaper read
+   * overrides it.
+   * @returns {Promise<Map<string, CloudDeviceStatus>>} by serial, where
+   *   CloudDeviceStatus = { status, lastSeen, ipAddress, firmwareVersion,
+   *   cloudConnectionStatus, configInSync, configStatus }
+   */
+  async listStatuses() {
+    const devices = await this.listInventory();
+    return new Map(devices.filter((d) => d.serial).map((d) => [d.serial, this.statusOf(d)]));
+  }
+
+  /**
+   * Channels for openEventStream(), e.g. one per site. Read again when the
+   * stream reconnects and periodically, so new sites are picked up.
+   * @returns {Promise<string[]>}
+   */
+  async listEventChannels() {
+    this.unsupported('events');
+  }
+
+  /**
+   * An unopened push stream from the cloud plane (services/cloud/): an
+   * EventEmitter with open(), close(), subscribe(), unsubscribe() and the
+   * events `open`, `data` ({ channel, data }) and `close` ({ code, error }).
+   * The stream is read-only; services/cloud/cloud-stream.service.js owns
+   * reconnects and what the data means.
+   */
+  openEventStream(channels) { // eslint-disable-line no-unused-vars
+    this.unsupported('events');
+  }
+
+  /** The status fields of a NormalizedCloudDevice. */
+  statusOf(device) {
+    return {
+      status: device.status,
+      lastSeen: device.lastSeen || null,
+      ipAddress: device.ipAddress || null,
+      firmwareVersion: device.firmwareVersion || null,
+      cloudConnectionStatus: device.cloudConnectionStatus || null,
+      configInSync: typeof device.configInSync === 'boolean' ? device.configInSync : null,
+      configStatus: device.metadata?.configStatus ?? null,
+    };
+  }
+
   /**
    * Capability probe used by transport routing and the UI.
-   * @param {string} capability - 'inventory' | 'status' | 'config-backup' | 'test'
+   * @param {string} capability - 'inventory' | 'status' | 'config-backup' | 'scope-backup' | 'topology' | 'events' | 'test'
    * @returns {boolean}
    */
   supports(capability) { // eslint-disable-line no-unused-vars
     return false;
+  }
+
+  /**
+   * Helper for subclasses: a failed testConnection() result that keeps the
+   * diagnostics (endpoint, status, provider error, suggested actions) the
+   * error carries in `details`, so the settings UI can show more than a toast.
+   */
+  testFailure(error) {
+    return {
+      success: false,
+      message: error.message,
+      ...(error.details && { details: error.details }),
+    };
+  }
+
+  /** Stable JSON: sorted keys, so diffs show real changes, not key reordering. */
+  canonicalJson(value) {
+    const sortKeys = (node) => {
+      if (Array.isArray(node)) return node.map(sortKeys);
+      if (node && typeof node === 'object') {
+        return Object.keys(node)
+          .sort()
+          .reduce((acc, key) => {
+            acc[key] = sortKeys(node[key]);
+            return acc;
+          }, {});
+      }
+      return node;
+    };
+    return JSON.stringify(sortKeys(value), null, 2);
   }
 
   /** Helper for subclasses: throw a typed unsupported-capability error. */

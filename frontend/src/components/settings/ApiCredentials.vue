@@ -59,7 +59,7 @@
         class="elevation-0"
       >
         <!-- Name Column -->
-        <template v-slot:item.name="{ item }">
+        <template #item.name="{ item }">
           <div class="d-flex align-center">
             <v-icon :color="getTypeColor(item.type)" size="small" class="mr-2">
               {{ getTypeIcon(item.type) }}
@@ -69,19 +69,19 @@
         </template>
 
         <!-- Type Column -->
-        <template v-slot:item.type="{ item }">
+        <template #item.type="{ item }">
           <v-chip :color="getTypeColor(item.type)" size="small" variant="tonal">
             {{ formatType(item.type) }}
           </v-chip>
         </template>
 
         <!-- Username Column -->
-        <template v-slot:item.username="{ item }">
+        <template #item.username="{ item }">
           <span>{{ item.username || '-' }}</span>
         </template>
 
         <!-- Last Tested Column -->
-        <template v-slot:item.lastTested="{ item }">
+        <template #item.lastTested="{ item }">
           <div v-if="item.lastTested">
             <div class="text-caption">{{ formatDate(item.lastTested) }}</div>
             <v-chip
@@ -97,23 +97,23 @@
         </template>
 
         <!-- Actions Column -->
-        <template v-slot:item.actions="{ item }">
+        <template #item.actions="{ item }">
           <div class="d-flex gap-1">
             <v-tooltip text="Test Connection">
-              <template v-slot:activator="{ props }">
+              <template #activator="{ props }">
                 <v-btn
                   v-bind="props"
                   icon="mdi-test-tube"
                   size="small"
                   variant="text"
-                  @click="testCredential(item)"
                   :loading="testingId === item.id"
+                  @click="testCredential(item)"
                 ></v-btn>
               </template>
             </v-tooltip>
 
             <v-tooltip text="Edit">
-              <template v-slot:activator="{ props }">
+              <template #activator="{ props }">
                 <v-btn
                   v-bind="props"
                   icon="mdi-pencil"
@@ -125,7 +125,7 @@
             </v-tooltip>
 
             <v-tooltip text="Delete">
-              <template v-slot:activator="{ props }">
+              <template #activator="{ props }">
                 <v-btn
                   v-bind="props"
                   icon="mdi-delete"
@@ -184,8 +184,8 @@
               variant="outlined"
               prepend-inner-icon="mdi-lock"
               :append-inner-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'"
-              @click:append-inner="showPassword = !showPassword"
               class="mb-2"
+              @click:append-inner="showPassword = !showPassword"
             ></v-text-field>
 
             <v-text-field
@@ -203,8 +203,8 @@
               variant="outlined"
               prepend-inner-icon="mdi-key-variant"
               :append-inner-icon="showSecret ? 'mdi-eye' : 'mdi-eye-off'"
-              @click:append-inner="showSecret = !showSecret"
               class="mb-2"
+              @click:append-inner="showSecret = !showSecret"
             ></v-text-field>
 
             <v-textarea
@@ -288,7 +288,7 @@
             :disabled="loadingDevicesForTest"
             class="mb-4"
           >
-            <template v-slot:item="{ props, item }">
+            <template #item="{ props, item }">
               <v-list-item
                 v-bind="props"
                 :subtitle="`${item.raw.type} - ${item.raw.ipAddress}`"
@@ -296,7 +296,7 @@
               </v-list-item>
             </template>
 
-            <template v-slot:no-data>
+            <template #no-data>
               <v-list-item>
                 <v-list-item-title>No devices using this credential</v-list-item-title>
                 <v-list-item-subtitle>Assign this credential to a device first</v-list-item-subtitle>
@@ -365,7 +365,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useDevicesStore } from '@/stores/devices'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -433,20 +433,6 @@ const rules = {
 }
 
 // Computed
-const devicesList = computed(() => devicesStore.devices || [])
-
-// Map credential type to device type
-const getDeviceType = (credType) => {
-  const typeMap = {
-    'switch': 'cx_switch',
-    'ap': 'instant_ap',
-    'gateway': 'aruba_controller',
-    'controller': 'aruba_controller',
-    'other': 'cx_switch'
-  }
-  return typeMap[credType] || 'cx_switch'
-}
-
 // Methods
 const getTypeColor = (type) => {
   const colors = {
@@ -472,11 +458,6 @@ const getTypeIcon = (type) => {
 
 const formatType = (type) => {
   return type.charAt(0).toUpperCase() + type.slice(1)
-}
-
-const getDeviceName = (deviceId) => {
-  const device = devicesStore.devices.find(d => d.id === deviceId)
-  return device ? device.name : 'Unknown Device'
 }
 
 const formatDate = (date) => {
@@ -628,11 +609,11 @@ const executeCredentialTest = async () => {
 
     if (result.success) {
       notificationStore.showSuccess('Connection test successful')
-      // Update the credential's last tested status
-      await settingsStore.fetchApiCredentials()
     } else {
       notificationStore.showWarning('Connection test failed')
     }
+    // The test records its outcome on the credential either way
+    await settingsStore.fetchApiCredentials()
   } catch (error) {
     debugLog.error(DebugCategory.SETTINGS, 'Failed to test credential:', error)
     testResult.value = {

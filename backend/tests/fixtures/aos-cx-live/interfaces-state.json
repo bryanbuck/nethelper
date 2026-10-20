@@ -1,0 +1,334 @@
+{
+  "1/1/1": {
+    "description": "Workstation",
+    "duplex": "full",
+    "link_speed": 1000000000,
+    "link_state": "up",
+    "name": "1/1/1",
+    "type": "system",
+    "user_config": {
+      "eee": false,
+      "error_control": "auto",
+      "link_clock_tolerance": "wide",
+      "link_state_snmp_if_mib_trap": true,
+      "link_state_snmp_trap": true,
+      "speed_downshift": false,
+      "split_count": "4"
+    }
+  },
+  "1/1/10": {
+    "description": null,
+    "duplex": "full",
+    "link_speed": 0,
+    "link_state": "down",
+    "name": "1/1/10",
+    "type": "system",
+    "user_config": {
+      "eee": false,
+      "error_control": "auto",
+      "link_clock_tolerance": "wide",
+      "link_state_snmp_if_mib_trap": true,
+      "link_state_snmp_trap": true,
+      "speed_downshift": false,
+      "split_count": "4"
+    }
+  },
+  "1/1/11": {
+    "description": null,
+    "duplex": "full",
+    "link_speed": 0,
+    "link_state": "down",
+    "name": "1/1/11",
+    "type": "system",
+    "user_config": {
+      "eee": false,
+      "error_control": "auto",
+      "link_clock_tolerance": "wide",
+      "link_state_snmp_if_mib_trap": true,
+      "link_state_snmp_trap": true,
+      "speed_downshift": false,
+      "split_count": "4"
+    }
+  },
+  "1/1/12": {
+    "description": null,
+    "duplex": "full",
+    "link_speed": 0,
+    "link_state": "down",
+    "name": "1/1/12",
+    "type": "system",
+    "user_config": {
+      "eee": false,
+      "error_control": "auto",
+      "link_clock_tolerance": "wide",
+      "link_state_snmp_if_mib_trap": true,
+      "link_state_snmp_trap": true,
+      "speed_downshift": false,
+      "split_count": "4"
+    }
+  },
+  "1/1/13": {
+    "description": "Uplink to core",
+    "duplex": "full",
+    "link_speed": 1000000000,
+    "link_state": "up",
+    "name": "1/1/13",
+    "type": "system",
+    "user_config": {
+      "eee": false,
+      "error_control": "auto",
+      "link_clock_tolerance": "wide",
+      "link_state_snmp_if_mib_trap": true,
+      "link_state_snmp_trap": true,
+      "speed_downshift": false,
+      "split_count": "4"
+    }
+  },
+  "1/1/14": {
+    "description": null,
+    "duplex": "full",
+    "link_speed": 0,
+    "link_state": "down",
+    "name": "1/1/14",
+    "type": "system",
+    "user_config": {
+      "eee": false,
+      "error_control": "auto",
+      "link_clock_tolerance": "wide",
+      "link_state_snmp_if_mib_trap": true,
+      "link_state_snmp_trap": true,
+      "speed_downshift": false,
+      "split_count": "4"
+    }
+  },
+  "1/1/15": {
+    "description": null,
+    "duplex": "full",
+    "link_speed": 0,
+    "link_state": "down",
+    "name": "1/1/15",
+    "type": "system",
+    "user_config": {
+      "eee": false,
+      "error_control": "auto",
+      "link_clock_tolerance": "wide",
+      "link_state_snmp_if_mib_trap": true,
+      "link_state_snmp_trap": true,
+      "speed_downshift": false,
+      "split_count": "4"
+    }
+  },
+  "1/1/16": {
+    "description": null,
+    "duplex": "full",
+    "link_speed": 0,
+    "link_state": "down",
+    "name": "1/1/16",
+    "type": "system",
+    "user_config": {
+      "eee": false,
+      "error_control": "auto",
+      "link_clock_tolerance": "wide",
+      "link_state_snmp_if_mib_trap": true,
+      "link_state_snmp_trap": true,
+      "speed_downshift": false,
+      "split_count": "4"
+    }
+  },
+  "1/1/2": {
+    "description": null,
+    "duplex": "full",
+    "link_speed": 0,
+    "link_state": "down",
+    "name": "1/1/2",
+    "type": "system",
+    "user_config": {
+      "eee": false,
+      "error_control": "auto",
+      "link_clock_tolerance": "wide",
+      "link_state_snmp_if_mib_trap": true,
+      "link_state_snmp_trap": true,
+      "speed_downshift": false,
+      "split_count": "4"
+    }
+  },
+  "1/1/3": {
+    "description": null,
+    "duplex": "full",
+    "link_speed": 0,
+    "link_state": "down",
+    "name": "1/1/3",
+    "type": "system",
+    "user_config": {
+      "eee": false,
+      "error_control": "auto",
+      "link_clock_tolerance": "wide",
+      "link_state_snmp_if_mib_trap": true,
+      "link_state_snmp_trap": true,
+      "speed_downshift": false,
+      "split_count": "4"
+    }
+  },
+  "1/1/4": {
+    "description": "Desk phone",
+    "duplex": "full",
+    "link_speed": 1000000000,
+    "link_state": "up",
+    "name": "1/1/4",
+    "type": "system",
+    "user_config": {
+      "eee": false,
+      "error_control": "auto",
+      "link_clock_tolerance": "wide",
+      "link_state_snmp_if_mib_trap": true,
+      "link_state_snmp_trap": true,
+      "speed_downshift": false,
+      "split_count": "4"
+    }
+  },
+  "1/1/5": {
+    "description": null,
+    "duplex": "full",
+    "link_speed": 0,
+    "link_state": "down",
+    "name": "1/1/5",
+    "type": "system",
+    "user_config": {
+      "eee": false,
+      "error_control": "auto",
+      "link_clock_tolerance": "wide",
+      "link_state_snmp_if_mib_trap": true,
+      "link_state_snmp_trap": true,
+      "speed_downshift": false,
+      "split_count": "4"
+    }
+  },
+  "1/1/6": {
+    "description": null,
+    "duplex": "full",
+    "link_speed": 0,
+    "link_state": "down",
+    "name": "1/1/6",
+    "type": "system",
+    "user_config": {
+      "eee": false,
+      "error_control": "auto",
+      "link_clock_tolerance": "wide",
+      "link_state_snmp_if_mib_trap": true,
+      "link_state_snmp_trap": true,
+      "speed_downshift": false,
+      "split_count": "4"
+    }
+  },
+  "1/1/7": {
+    "description": "Lab uplink",
+    "duplex": "full",
+    "link_speed": 0,
+    "link_state": "down",
+    "name": "1/1/7",
+    "type": "system",
+    "user_config": {
+      "eee": false,
+      "error_control": "auto",
+      "link_clock_tolerance": "wide",
+      "link_state_snmp_if_mib_trap": true,
+      "link_state_snmp_trap": true,
+      "speed_downshift": false,
+      "split_count": "4"
+    }
+  },
+  "1/1/8": {
+    "description": null,
+    "duplex": "full",
+    "link_speed": 0,
+    "link_state": "down",
+    "name": "1/1/8",
+    "type": "system",
+    "user_config": {
+      "eee": false,
+      "error_control": "auto",
+      "link_clock_tolerance": "wide",
+      "link_state_snmp_if_mib_trap": true,
+      "link_state_snmp_trap": true,
+      "speed_downshift": false,
+      "split_count": "4"
+    }
+  },
+  "1/1/9": {
+    "description": null,
+    "duplex": "full",
+    "link_speed": 0,
+    "link_state": "down",
+    "name": "1/1/9",
+    "type": "system",
+    "user_config": {
+      "eee": false,
+      "error_control": "auto",
+      "link_clock_tolerance": "wide",
+      "link_state_snmp_if_mib_trap": true,
+      "link_state_snmp_trap": true,
+      "speed_downshift": false,
+      "split_count": "4"
+    }
+  },
+  "lag1": {
+    "description": "Port",
+    "duplex": null,
+    "link_speed": null,
+    "link_state": null,
+    "name": "lag1",
+    "type": "lag",
+    "user_config": null
+  },
+  "ubt": {
+    "description": null,
+    "duplex": null,
+    "link_speed": null,
+    "link_state": null,
+    "name": "ubt",
+    "type": "ubt",
+    "user_config": {
+      "eee": false,
+      "error_control": "auto",
+      "link_clock_tolerance": "wide",
+      "link_state_snmp_if_mib_trap": true,
+      "link_state_snmp_trap": true,
+      "speed_downshift": false,
+      "split_count": "4"
+    }
+  },
+  "vlan1": {
+    "description": null,
+    "duplex": null,
+    "link_speed": null,
+    "link_state": "up",
+    "name": "vlan1",
+    "type": "vlan",
+    "user_config": {
+      "eee": false,
+      "error_control": "auto",
+      "link_clock_tolerance": "wide",
+      "link_state_snmp_if_mib_trap": true,
+      "link_state_snmp_trap": true,
+      "speed_downshift": false,
+      "split_count": "4"
+    }
+  },
+  "vlan10": {
+    "description": null,
+    "duplex": null,
+    "link_speed": null,
+    "link_state": "up",
+    "name": "vlan10",
+    "type": "vlan",
+    "user_config": {
+      "eee": false,
+      "error_control": "auto",
+      "link_clock_tolerance": "wide",
+      "link_state_snmp_if_mib_trap": true,
+      "link_state_snmp_trap": true,
+      "speed_downshift": false,
+      "split_count": "4"
+    }
+  }
+}

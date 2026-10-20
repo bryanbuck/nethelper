@@ -14,7 +14,7 @@
         <v-card-text>
           <v-list density="compact">
             <v-list-item v-if="deviceInfo.hostname">
-              <template v-slot:prepend>
+              <template #prepend>
                 <v-icon icon="mdi-server" />
               </template>
               <v-list-item-title>Hostname</v-list-item-title>
@@ -22,7 +22,7 @@
             </v-list-item>
 
             <v-list-item v-if="deviceInfo.model">
-              <template v-slot:prepend>
+              <template #prepend>
                 <v-icon icon="mdi-router-network" />
               </template>
               <v-list-item-title>Model</v-list-item-title>
@@ -30,7 +30,7 @@
             </v-list-item>
 
             <v-list-item v-if="deviceInfo.version">
-              <template v-slot:prepend>
+              <template #prepend>
                 <v-icon icon="mdi-code-tags" />
               </template>
               <v-list-item-title>Software Version</v-list-item-title>
@@ -38,7 +38,7 @@
             </v-list-item>
 
             <v-list-item v-if="deviceInfo.serialNumber">
-              <template v-slot:prepend>
+              <template #prepend>
                 <v-icon icon="mdi-barcode" />
               </template>
               <v-list-item-title>Serial Number</v-list-item-title>
@@ -46,7 +46,7 @@
             </v-list-item>
 
             <v-list-item v-if="deviceInfo.macAddress">
-              <template v-slot:prepend>
+              <template #prepend>
                 <v-icon icon="mdi-network" />
               </template>
               <v-list-item-title>MAC Address</v-list-item-title>
@@ -54,7 +54,7 @@
             </v-list-item>
 
             <v-list-item v-if="deviceInfo.uptime">
-              <template v-slot:prepend>
+              <template #prepend>
                 <v-icon icon="mdi-clock-outline" />
               </template>
               <v-list-item-title>Uptime</v-list-item-title>
@@ -62,7 +62,7 @@
             </v-list-item>
 
             <v-list-item v-if="deviceInfo.timezone">
-              <template v-slot:prepend>
+              <template #prepend>
                 <v-icon icon="mdi-earth" />
               </template>
               <v-list-item-title>Timezone</v-list-item-title>
@@ -95,7 +95,7 @@
         <v-card-text>
           <v-list density="compact">
             <v-list-item v-if="firmwareInfo.currentVersion">
-              <template v-slot:prepend>
+              <template #prepend>
                 <v-icon icon="mdi-application-cog" />
               </template>
               <v-list-item-title>Current Version</v-list-item-title>
@@ -103,7 +103,7 @@
             </v-list-item>
 
             <v-list-item v-if="firmwareInfo.primaryVersion">
-              <template v-slot:prepend>
+              <template #prepend>
                 <v-icon icon="mdi-numeric-1-circle" />
               </template>
               <v-list-item-title>Primary Partition</v-list-item-title>
@@ -121,7 +121,7 @@
             </v-list-item>
 
             <v-list-item v-if="firmwareInfo.secondaryVersion">
-              <template v-slot:prepend>
+              <template #prepend>
                 <v-icon icon="mdi-numeric-2-circle" />
               </template>
               <v-list-item-title>Secondary Partition</v-list-item-title>
@@ -139,7 +139,7 @@
             </v-list-item>
 
             <v-list-item v-if="firmwareInfo.bootedImage">
-              <template v-slot:prepend>
+              <template #prepend>
                 <v-icon icon="mdi-restart" />
               </template>
               <v-list-item-title>Booted From</v-list-item-title>
@@ -173,7 +173,7 @@
 </template>
 
 <script setup>
-const props = defineProps({
+defineProps({
   deviceInfo: {
     type: Object,
     default: null
@@ -199,16 +199,11 @@ const props = defineProps({
 }
 
 .raw-data-pre {
-  background-color: #f5f5f5;
+  background-color: rgba(var(--v-theme-on-surface), 0.05);
   padding: 12px;
   border-radius: 4px;
   overflow-x: auto;
   font-size: 12px;
   line-height: 1.4;
-}
-
-.v-theme--dark .raw-data-pre {
-  background-color: #1e1e1e;
-  color: #d4d4d4;
 }
 </style>

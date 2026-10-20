@@ -1,0 +1,8 @@
+{
+  "isolatedHealth": "Poor",
+  "id": "linkTopology",
+  "devices": [],
+  "isolatedDevicesCount": 1,
+  "type": "Topology",
+  "links": []
+}

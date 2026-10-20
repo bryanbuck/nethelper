@@ -4,7 +4,7 @@
       <v-col cols="12" sm="8" md="6" lg="4" xl="3">
         <v-card class="elevation-8 rounded-lg">
           <v-card-title class="text-center py-8">
-            <div class="text-h4 font-weight-bold primary--text">
+            <div class="text-h4 font-weight-bold text-primary">
               NetHelper
             </div>
             <div class="text-subtitle-1 text-medium-emphasis mt-2">
@@ -16,7 +16,7 @@
             <Form v-slot="{ handleSubmit, isSubmitting }" :validation-schema="validationSchema">
               <form @submit.prevent="handleSubmit(onSubmit)">
                 <!-- Email Field -->
-                <Field name="email" v-slot="{ field, errors }">
+                <Field v-slot="{ field, errors }" name="email">
                   <v-text-field
                     v-bind="field"
                     label="Email Address"
@@ -32,7 +32,7 @@
                 </Field>
 
                 <!-- Password Field -->
-                <Field name="password" v-slot="{ field, errors }">
+                <Field v-slot="{ field, errors }" name="password">
                   <v-text-field
                     ref="passwordField"
                     v-bind="field"
@@ -85,14 +85,9 @@
                 </v-btn>
 
 
-                <!-- Forgot Password Link -->
-                <div class="text-center">
-                  <router-link
-                    to="/forgot-password"
-                    class="text-primary text-decoration-none"
-                  >
-                    Forgot your password?
-                  </router-link>
+                <!-- No self-service reset: accounts are managed by an admin -->
+                <div class="text-center text-body-2 text-medium-emphasis">
+                  Forgot your password? Ask a NetHelper administrator to reset it.
                 </div>
               </form>
             </Form>
@@ -141,7 +136,6 @@ const validationSchema = yup.object({
   password: yup
     .string()
     .required('Password is required')
-    .min(6, 'Password must be at least 6 characters')
 })
 
 // Focus password field when Enter is pressed in email field
@@ -192,22 +186,15 @@ authStore.clearError()
 <style scoped>
 .fill-height {
   min-height: 100vh;
-  background: linear-gradient(135deg, #FF8300 0%, #cc6900 100%);
+  background: linear-gradient(
+    135deg,
+    rgb(var(--v-theme-primary)) 0%,
+    color-mix(in srgb, rgb(var(--v-theme-primary)) 80%, black) 100%
+  );
 }
 
 .v-card {
   border-radius: 16px !important;
-}
-
-.v-card-title {
-  background: linear-gradient(45deg, #FF8300, #cc6900);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.primary--text {
-  color: #FF8300 !important;
 }
 
 /* Custom input styling */
@@ -216,7 +203,7 @@ authStore.clearError()
 }
 
 :deep(.v-field--focused .v-field__outline) {
-  --v-field-border-color: rgb(var(--v-theme-primary));
+  --v-field-border-color: rgb(var(--v-theme-primary-text));
 }
 
 /* Loading animation */

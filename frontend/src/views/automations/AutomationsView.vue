@@ -5,20 +5,33 @@
       <v-container fluid>
         <div class="d-flex align-center justify-space-between mb-4">
           <div>
-            <h1 class="text-h4 font-weight-bold mb-1">Automations</h1>
+            <h1 class="text-h4 font-weight-bold mb-1">
+              Automations
+              <v-chip size="small" color="warning" variant="tonal" label class="ml-2 align-middle">Experimental</v-chip>
+            </h1>
             <p class="text-body-1 text-medium-emphasis">
               Create and manage your network automation workflows
             </p>
           </div>
           
-          <v-btn
-            color="primary"
-            prepend-icon="mdi-plus"
-            size="large"
-            @click="createNewAutomation"
-          >
-            Create Automation
-          </v-btn>
+          <div class="d-flex ga-2">
+            <v-btn
+              variant="outlined"
+              prepend-icon="mdi-history"
+              size="large"
+              to="/automations/executions"
+            >
+              Run History
+            </v-btn>
+            <v-btn
+              color="primary"
+              prepend-icon="mdi-plus"
+              size="large"
+              @click="createNewAutomation"
+            >
+              Create Automation
+            </v-btn>
+          </div>
         </div>
         
         <!-- Stats Cards -->
@@ -186,7 +199,7 @@
               @click:row="handleRowClick"
             >
               <!-- Name column -->
-              <template v-slot:item.name="{ item }">
+              <template #item.name="{ item }">
                 <div class="d-flex align-center">
                   <v-avatar
                     :color="getAutomationColor(item)"
@@ -208,7 +221,7 @@
               </template>
               
               <!-- Status column -->
-              <template v-slot:item.status="{ item }">
+              <template #item.status="{ item }">
                 <v-chip
                   :color="item.active ? 'success' : 'grey'"
                   variant="flat"
@@ -222,7 +235,7 @@
               </template>
               
               <!-- Category column -->
-              <template v-slot:item.category="{ item }">
+              <template #item.category="{ item }">
                 <v-chip
                   variant="outlined"
                   size="small"
@@ -233,7 +246,7 @@
               </template>
               
               <!-- Last run column -->
-              <template v-slot:item.lastRun="{ item }">
+              <template #item.lastRun="{ item }">
                 <div v-if="item.lastRun">
                   <div class="text-body-2">{{ formatDate(item.lastRun) }}</div>
                   <div class="text-caption text-medium-emphasis">
@@ -241,10 +254,14 @@
                   </div>
                 </div>
                 <span v-else class="text-medium-emphasis">Never</span>
+                <div v-if="item.active && item.schedules?.[0]?.nextRun" class="text-caption text-medium-emphasis">
+                  <v-icon size="x-small">mdi-clock-outline</v-icon>
+                  next {{ formatDate(item.schedules[0].nextRun) }}
+                </div>
               </template>
               
               <!-- Actions column -->
-              <template v-slot:item.actions="{ item }">
+              <template #item.actions="{ item }">
                 <div class="d-flex align-center ga-1">
                   <!-- Toggle Status -->
                   <v-btn
@@ -252,8 +269,8 @@
                     size="small"
                     variant="text"
                     :color="item.active ? 'warning' : 'success'"
-                    @click.stop="toggleAutomationStatus(item)"
                     :title="item.active ? 'Pause Automation' : 'Start Automation'"
+                    @click.stop="toggleAutomationStatus(item)"
                   />
                   
                   <!-- Run Now -->
@@ -262,9 +279,18 @@
                     size="small"
                     variant="text"
                     color="primary"
-                    @click.stop="executeAutomation(item)"
                     title="Run Now"
-                    :disabled="!item.active"
+                    @click.stop="executeAutomation(item)"
+                  />
+
+                  <!-- Run history -->
+                  <v-btn
+                    icon="mdi-history"
+                    size="small"
+                    variant="text"
+                    title="Run History"
+                    :to="{ path: '/automations/executions', query: { automationId: item.id } }"
+                    @click.stop
                   />
                   
                   <!-- Edit -->
@@ -273,13 +299,13 @@
                     size="small"
                     variant="text"
                     color="primary"
-                    @click.stop="editAutomation(item)"
                     title="Edit Automation"
+                    @click.stop="editAutomation(item)"
                   />
                   
                   <!-- More actions -->
                   <v-menu>
-                    <template v-slot:activator="{ props }">
+                    <template #activator="{ props }">
                       <v-btn
                         icon="mdi-dots-vertical"
                         size="small"
@@ -342,15 +368,15 @@
         <v-card-actions>
           <v-spacer />
           <v-btn
-            @click="deleteDialog.show = false"
             variant="text"
+            @click="deleteDialog.show = false"
           >
             Cancel
           </v-btn>
           <v-btn
             color="error"
-            @click="confirmDelete"
             :loading="deleteDialog.loading"
+            @click="confirmDelete"
           >
             Delete
           </v-btn>
@@ -366,7 +392,7 @@
       location="bottom right"
     >
       {{ snackbar.message }}
-      <template v-slot:actions>
+      <template #actions>
         <v-btn
           icon="mdi-close"
           variant="text"
@@ -382,6 +408,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAutomationsStore } from '@/stores/automations'
+import { apiErrorMessage } from '@/utils/apiError'
 import { formatDistanceToNow, format } from 'date-fns'
 
 const router = useRouter()
@@ -499,7 +526,7 @@ const toggleAutomationStatus = async (automation) => {
       'success'
     )
   } catch (error) {
-    showSnackbar('Failed to update automation status', 'error')
+    showSnackbar(apiErrorMessage(error), 'error')
   }
 }
 
@@ -508,7 +535,7 @@ const executeAutomation = async (automation) => {
     await automationsStore.executeAutomation(automation.id)
     showSnackbar(`Automation "${automation.name}" execution started`, 'info')
   } catch (error) {
-    showSnackbar('Failed to execute automation', 'error')
+    showSnackbar(apiErrorMessage(error), 'error')
   }
 }
 
@@ -642,14 +669,14 @@ onMounted(async () => {
 
 <style scoped>
 .automations-view {
-  background-color: #fafafa;
+  background-color: rgb(var(--v-theme-background));
   min-height: 100vh;
 }
 
 .automations-header {
-  background: white;
+  background: rgb(var(--v-theme-surface));
   padding: 24px 0;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 
 .stats-card {
@@ -670,7 +697,7 @@ onMounted(async () => {
 }
 
 .automations-table :deep(.v-data-table__tr:hover) {
-  background-color: rgba(0, 0, 0, 0.02);
+  background-color: rgba(var(--v-theme-on-surface), 0.03);
 }
 
 .empty-state {

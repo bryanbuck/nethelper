@@ -1,10 +1,7 @@
 const DeviceAPIFactory = require('../services/device-api/device-api-factory');
 const settingsService = require('../services/settings.service');
-const sshDeviceService = require('../services/ssh-device.service');
-const devicePollerService = require('../services/device-poller.service');
-const NetconfClient = require('../services/device-api/netconf-client');
-const { isCxRestCapable } = require('../utils/device-platform');
-const { resolveTransport } = require('../utils/transport-router');
+const { testDeviceConnection, cloudView } = require('../services/connection-test.service');
+const { usesDeviceCredential } = require('../services/device-credential.service');
 const { getPrisma } = require('../config/database');
 const logger = require('../utils/logger');
 
@@ -43,6 +40,26 @@ class DeviceAPITestController {
         });
       }
 
+      // Nothing reaches a cloud-only device directly (a Mist or Central AP), so
+      // no credential can help: say so and show the cloud's view instead of
+      // asking for one. Not a pass: NetHelper didn't contact the device.
+      if (!usesDeviceCredential(device)) {
+        const cloudStatus = await cloudView(device);
+        const via = cloudStatus?.provider || 'its cloud';
+        return res.json({
+          success: true,
+          data: {
+            success: false,
+            cloudOnly: true,
+            transport: 'cloud',
+            message: `NetHelper reaches ${device.name} only through ${via}, so there is no direct connection to test.`
+              + (cloudStatus ? ` ${cloudStatus.provider} reports it ${cloudStatus.status}.` : ''),
+            ...(cloudStatus && { cloudStatus }),
+            testedAt: new Date(),
+          },
+        });
+      }
+
       // Get credentials for the device
       const credentials = await settingsService.getDeviceCredentialsForUse(deviceId);
 
@@ -54,63 +71,8 @@ class DeviceAPITestController {
         });
       }
 
-      // Route the test the same way a real operation would: through the
-      // transport matrix. AOS-CX has a REST API and Junos has NETCONF (both the
-      // 'device-rest' slot, dispatched by the factory); everything else is
-      // tested over the SSH CLI. Junos additionally falls back to SSH when the
-      // device has not enabled the NETCONF subsystem.
-      let result;
-      const transports = resolveTransport(device, 'test');
-
-      for (const transport of transports) {
-        if (transport === 'device-rest') {
-          let deviceAPI;
-          try {
-            deviceAPI = DeviceAPIFactory.createDeviceAPI(device, credentials);
-          } catch (error) {
-            // No device API client for this platform — try the next transport.
-            logger.debug(`No device API for ${device.name}: ${error.message}`);
-            continue;
-          }
-
-          result = await deviceAPI.testConnection();
-
-          // NETCONF is off on this Junos device: not a failure, just means the
-          // CLI is the way in. Try the next transport instead of reporting it.
-          if (!result.success && result.code === NetconfClient.NETCONF_UNAVAILABLE) {
-            logger.info(`NETCONF unavailable on ${device.name}; testing over the SSH CLI instead`);
-            result = null;
-            continue;
-          }
-
-          // While we have working REST access to a CX switch, refresh its
-          // switch-reported Central state (best-effort, never fails the test).
-          if (result.success && isCxRestCapable(device)) {
-            const centralStatus = await devicePollerService.refreshCentralStatus(device, credentials);
-            if (centralStatus) {
-              result.centralStatus = {
-                centralManaged: centralStatus.centralManaged,
-                connectionStatus: centralStatus.connectionStatus,
-                mode: centralStatus.mode,
-              };
-            }
-          }
-          break;
-        }
-
-        if (transport === 'ssh') {
-          result = await sshDeviceService.testConnection(device, credentials);
-          break;
-        }
-      }
-
-      if (!result) {
-        result = {
-          success: false,
-          message: `No usable transport for "${device.name}" (tried: ${transports.join(', ') || 'none'})`,
-          testedAt: new Date().toISOString(),
-        };
-      }
+      // Same transport routing as a real operation (connection-test.service).
+      const result = await testDeviceConnection(device, credentials);
 
       // Update credential test status
       if (device.apiCredentialId) {
@@ -306,7 +268,7 @@ class DeviceAPITestController {
    *   deviceType: "cx_switch" (optional)
    * }
    */
-  async testManualConnection(req, res, next) {
+  async testManualConnection(req, res, _next) {
     try {
       const { deviceIp, username, password, deviceType } = req.body;
 
