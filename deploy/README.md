@@ -92,6 +92,46 @@ With the override, the backend and nginx share the host's network. The API liste
 - If a TLS-terminating reverse proxy (host nginx, Caddy, Traefik, a load balancer) runs in front, set `TRUST_PROXY=2` so rate limiting sees real client IPs.
 - Bind the UI to loopback when the proxy runs on the same host: `HTTP_BIND=127.0.0.1`.
 
+A minimal same-host setup with the host's nginx in front: in `deploy/.env` set
+`HTTP_BIND=127.0.0.1` and `TRUST_PROXY=2` (two proxies: the host nginx, then
+the bundled one), run `docker compose up -d`, and add a site like this to the
+host's nginx (certificates from certbot or your own CA):
+
+```nginx
+map $http_upgrade $connection_upgrade { default upgrade; '' close; }
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name nethelper.example.com;
+    ssl_certificate     /etc/letsencrypt/live/nethelper.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/nethelper.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    client_max_body_size 2m;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;   # the bundled UI (HTTP_PORT)
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;          # Socket.io
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 1h;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+    }
+}
+```
+
+The bundled nginx already adds the security headers and proxies `/api`,
+`/socket.io` and `/health` to the backend. With the host-network override the
+UI listens on every interface regardless of `HTTP_BIND`; firewall `HTTP_PORT`
+so only the host nginx reaches it.
+
+Without TLS, sign-in passwords and the device and cloud credentials you enter
+cross the network in clear text: run plain HTTP only on a trusted management
+network.
+
 **Where data lives** (named volumes):
 
 | Volume | Contents |
@@ -265,12 +305,21 @@ The backup rows store absolute file paths. Restore the files to the same locatio
 
 ## Device accounts and live monitoring
 
-Give NetHelper its own account on each switch rather than reusing an admin's.
+Give NetHelper its own account on each device rather than reusing a person's.
+NetHelper only reads from devices, but some platforms need more than a basic
+read-only login to read the configuration:
+
+| Platform | Account |
+|---|---|
+| AOS-CX | A dedicated local user; tested with an administrator account. REST must be on (`https-server rest access-mode read-write`, `https-server vrf <vrf>`) |
+| AOS-S | **Manager** level: an operator login can't read `running-config` |
+| Junos | A login class with `view` and `view-configuration` (without it, config reads come back as `/* ACCESS-DENIED */`); NETCONF on with `set system services netconf ssh` |
+
 Live monitoring (the **Always monitor** switch on a device's Live tab) keeps
 one REST session open per monitored switch, and AOS-CX allows only 6 REST
 sessions per user by default; backups and polls open short-lived sessions on
-top of that. Monitoring and backups only read from the switch, so a read-only
-account should be enough; so far it has been tested with a read-write one.
+top of that. Details: [`docs/hardware/`](../docs/hardware/). What to do after
+the install, step by step: [`docs/GETTING_STARTED.md`](../docs/GETTING_STARTED.md).
 
 Run **one** backend instance. Each backend process watches every device with
 live monitoring turned on, so two replicas would open duplicate sessions and

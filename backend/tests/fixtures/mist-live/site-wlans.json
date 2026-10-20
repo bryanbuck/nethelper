@@ -1,6 +1,6 @@
 [
   {
-    "ssid": "El Red de Enebro",
+    "ssid": "Home-WLAN",
     "enabled": true,
     "hide_ssid": false,
     "hostname_ie": false,

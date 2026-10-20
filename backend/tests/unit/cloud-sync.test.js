@@ -17,7 +17,7 @@ const BaseCloudProvider = require('../../src/services/cloud-providers/base-cloud
 
 const mistSwitch = {
   serial: 'SN2', name: 'JNEX-01', type: 'switch', vendor: 'juniper', platform: 'junos', model: 'EX4000-12MP',
-  macAddress: '4c4ab43b7980', ipAddress: null, firmwareVersion: null, status: 'offline', site: 'Primary Site',
+  macAddress: '4c4ab4004080', ipAddress: null, firmwareVersion: null, status: 'offline', site: 'Primary Site',
   lastSeen: null, cloudConnectionStatus: 'not_reachable',
   metadata: { mistId: 'm-2', siteId: 's-1', siteName: 'Primary Site', hostname: 'JNEX-01' },
 };

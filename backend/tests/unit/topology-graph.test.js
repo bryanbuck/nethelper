@@ -91,8 +91,8 @@ describe('buildGraph', () => {
     id: 'd-gw', name: 'gw1', type: 'gateway', vendor: 'aruba', ipAddress: '192.168.255.1', location: 'DC',
   };
   const states = [
-    { deviceId: 'd-studio', status: 'ok', chassisId: 'ec:67:94:d1:a8:00', sysName: 'Sw-Studio' },
-    { deviceId: 'd-core', status: 'ok', chassisId: '14:ab:ec:c2:0e:00', sysName: 'Sw-CoreB' },
+    { deviceId: 'd-studio', status: 'ok', chassisId: 'ec:67:94:00:20:00', sysName: 'Sw-Studio' },
+    { deviceId: 'd-core', status: 'ok', chassisId: '14:ab:ec:00:10:00', sysName: 'Sw-CoreB' },
   ];
   const link = (deviceId, localPort, chassis, port, extra = {}) => ({
     deviceId,
@@ -106,17 +106,17 @@ describe('buildGraph', () => {
   });
   const links = [
     // Studio 1/1/13 ↔ CoreB 1/1/6, reported from both ends
-    link('d-studio', '1/1/13', '14:ab:ec:c2:0e:00', '1/1/6', { remoteSysName: 'Sw-CoreB' }),
-    link('d-core', '1/1/6', 'ec:67:94:d1:a8:00', '1/1/13', { remoteSysName: 'Sw-Studio' }),
+    link('d-studio', '1/1/13', '14:ab:ec:00:10:00', '1/1/6', { remoteSysName: 'Sw-CoreB' }),
+    link('d-core', '1/1/6', 'ec:67:94:00:20:00', '1/1/13', { remoteSysName: 'Sw-Studio' }),
     // The phone on Studio 1/1/4: no Device; matches a discovery host by MAC
-    link('d-studio', '1/1/4', '192.168.18.140', '042AE270CB4E:P1', {
-      remoteMac: '04:2a:e2:70:cb:4e', remoteSysName: 'SEP042AE270CB4E', remoteCapabilities: ['bridge', 'telephone'],
+    link('d-studio', '1/1/4', '192.168.18.140', '042AE200304E:P1', {
+      remoteMac: '04:2a:e2:00:30:4e', remoteSysName: 'SEP042AE200304E', remoteCapabilities: ['bridge', 'telephone'],
     }),
     // CoreB uplink to the gateway, matched by management IP only
     link('d-core', '1/1/1', 'gw-chassis', 'eth0', { remoteMgmtIp: '192.168.255.1', remoteCapabilities: ['router'] }),
   ];
   const discovered = [
-    { id: 'h-phone', ipAddress: '192.168.18.140', macAddress: '04:2a:e2:70:cb:4e', subnet: '192.168.18.0/24' },
+    { id: 'h-phone', ipAddress: '192.168.18.140', macAddress: '04:2a:e2:00:30:4e', subnet: '192.168.18.0/24' },
     { id: 'h-printer', ipAddress: '192.168.18.50', macAddress: '00:00:5e:00:53:01', subnet: '192.168.18.0/24' },
     { id: 'h-other', ipAddress: '10.9.9.9', macAddress: null, subnet: null },
   ];
@@ -136,7 +136,7 @@ describe('buildGraph', () => {
   test('a neighbor with no Device is a ghost carrying its discovery host', () => {
     const graph = buildGraph(input);
     const ghost = graph.nodes.find((n) => n.kind === 'ghost');
-    expect(ghost.id).toBe('ghost:04:2a:e2:70:cb:4e');
+    expect(ghost.id).toBe('ghost:04:2a:e2:00:30:4e');
     expect(ghost.data).toMatchObject({ guessedType: 'phone', discovered: { id: 'h-phone' } });
   });
 
@@ -158,7 +158,7 @@ describe('buildGraph', () => {
   test('a site scope keeps linked devices from other sites, marked out of scope', () => {
     const graph = buildGraph({ ...input, site: 'HQ' });
     const ids = graph.nodes.map((n) => n.id).sort();
-    expect(ids).toEqual(['device:d-core', 'device:d-studio', 'ghost:04:2a:e2:70:cb:4e']);
+    expect(ids).toEqual(['device:d-core', 'device:d-studio', 'ghost:04:2a:e2:00:30:4e']);
     expect(graph.nodes.find((n) => n.id === 'device:d-core').data.outOfScope).toBe(true);
     expect(graph.stats.devices).toBe(1);
     expect(graph.sites).toEqual(['DC', 'HQ']);

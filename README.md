@@ -6,7 +6,18 @@ Multi-vendor network inventory, monitoring, and configuration backup. NetHelper 
 
 ## Running it
 
+You need:
+
+- a Linux host with Docker Compose, or Node 22+, PostgreSQL 15+ and Redis 7+ (Debian 13 is tested);
+- network reach from that host to your devices' management addresses (ICMP, plus HTTPS or SSH);
+- a NetHelper account on each directly managed device, with the rights listed in the getting-started guide;
+- API credentials for Aruba Central (New Central, via HPE GreenLake) or Juniper Mist, if you use them.
+
+Then:
+
 - **Install** (Docker Compose or systemd + nginx), first admin, backups, and upgrades: [`deploy/README.md`](deploy/README.md)
+- **First steps** after the install (clouds, credentials, backups, users): [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md)
+- **Security model** and how to report a vulnerability: [`SECURITY.md`](SECURITY.md)
 - **Every setting**: [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)
 - **Changes**: [`CHANGELOG.md`](CHANGELOG.md)
 

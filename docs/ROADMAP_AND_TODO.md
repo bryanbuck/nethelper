@@ -52,10 +52,21 @@ Preparing the dev-environment build for a private, in-house beta. Deploy targets
     - The `CLAUDE.md` commit trailer is updated.
     - `backend/ARCHITECTURE.md` was deleted. It described the pre-multi-vendor design: a deleted Central service, node-cron, and horizontal scaling.
     - `backend/DEVICE_POLLING_API.md` was rewritten against the current pollers. Writing it turned up a bug, now fixed: the `backup` and `login-sessions` pollers tried an AOS-CX REST login on any switch, including Junos and IOS.
-    - The Postman collection (39 requests, some for removed routes) is now generated from the route tables by `npm run postman:generate`, covering 119 requests. A unit test fails when the collection is stale or carries a credential. Both Postman files were checked for secrets: neither holds a real one. `docs/MRT_postman.json` is HPE's public Central MRT collection and holds only `{{client_id}}`/`{{client_secret}}` placeholders.
+    - The Postman collection (39 requests, some for removed routes) is now generated from the route tables by `npm run postman:generate`, covering 119 requests. A unit test fails when the collection is stale or carries a credential. It was checked for secrets and holds none. HPE's own New Central (MRT) collection, once copied to `docs/`, was removed on 2026-10-20 (it is HPE's content); get it from the HPE Aruba Networking developer hub (https://developer.arubanetworks.com).
     - The Git mirror's SSH host key now lives on the data volume (`BACKUP_GIT_KNOWN_HOSTS`, default `git-known_hosts` next to the repo), so recreating the container no longer re-trusts the remote.
 - ✅ History purge (2026-10-19): `git filter-repo` removed `backend/.env`, `backend/node_modules/`, `backend/logs/` and the `CLAUDE.md` files from every commit, and GitHub `master` was force-pushed (every commit ID changed). The real values in that `.env` were the database password and the Aruba Central client ID/secret; the JWT and SMTP entries were placeholders.
 - ⏸ Deferred to the going-public review: rotating the secrets that were in the tracked `.env`. Optional: ask GitHub Support to purge cached views of the old commits.
+- ✅ Pre-release audit (2026-10-20): every tracked file and the full history checked for credentials, keys, personal data and environment-specific values. No keys or secrets found. Scrubbed from the current files: a real SSID and real switch MACs/serial left in fixtures and tests (OUIs kept). Removed HPE's MRT Postman collection and two pre-beta debug scripts (`test-login.js` printed passwords). Production dependency advisories fixed, except `uuid` inside `bull` (moderate; needs a breaking bull major and bull doesn't pass the affected buffer argument). Remaining dev-only advisories (jest, vitest, eslint chains) need breaking majors and never reach the images. Added `docs/GETTING_STARTED.md`, `SECURITY.md`, the device-account table and a TLS recipe in `deploy/README.md`.
+- [ ] **Before making the repo public** (the beta stays private):
+  - Publish with a fresh, squashed history, or `git filter-repo` with a mailmap. The current history carries two author addresses (a work address and a local hostname) and older fixture versions with the real SSID and switch MACs.
+  - Rotate the deferred secrets (above).
+  - Re-run the audit: secret patterns over files and history, personal data, private addresses in fixtures, third-party content.
+  - Confirm the license (AGPL-3.0-or-later is provisional).
+  - Enable GitHub private vulnerability reporting (`SECURITY.md` points to it), CI (`npm run ci` in both tiers) and Dependabot.
+- ⏳ Post-beta hardening (from the audit):
+  - Tokens are kept in `localStorage`, so an XSS would expose them; the CSP is the guard. Consider an httpOnly, SameSite refresh-token cookie.
+  - After a password change or an admin reset, access tokens already issued keep working until they expire (`JWT_EXPIRES_IN`, 1 h); only the refresh token is revoked. Role changes and deletions already apply on the next request (`authenticate` reloads the user). Add a `tokenVersion` claim that `authenticate` checks.
+  - Upgrade the test toolchain majors (jest 30, vitest 5, the eslint config) to clear the dev-only advisories.
 
 ---
 

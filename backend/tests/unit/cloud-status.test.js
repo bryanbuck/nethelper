@@ -84,7 +84,7 @@ describe('provider status reads (live captures)', () => {
   test('Mist: one stats read, by serial', async () => {
     axios.mockResolvedValue({ data: mistStatsOnline });
     const provider = new MistProvider({
-      id: 'int-mist', provider: 'juniper_mist', name: 'Buck Home', baseUrl: 'https://api.ac2.mist.com', credentials: { apiToken: 't', orgId: 'o' },
+      id: 'int-mist', provider: 'juniper_mist', name: 'My Mist', baseUrl: 'https://api.ac2.mist.com', credentials: { apiToken: 't', orgId: 'o' },
     });
 
     const statuses = await provider.listStatuses();
@@ -112,7 +112,7 @@ describe('provider status reads (live captures)', () => {
 });
 
 describe('refreshProvider', () => {
-  const provider = (statuses) => ({ id: 'int-mist', label: 'Buck Home (juniper_mist)', providerType: 'juniper_mist', listStatuses: jest.fn(async () => statuses) });
+  const provider = (statuses) => ({ id: 'int-mist', label: 'My Mist (juniper_mist)', providerType: 'juniper_mist', listStatuses: jest.fn(async () => statuses) });
 
   test('only devices that sync made and this integration owns are read, and nothing is created', async () => {
     mockPrisma.device.findMany.mockResolvedValue([]);

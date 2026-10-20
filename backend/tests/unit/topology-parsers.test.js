@@ -13,8 +13,8 @@ const fixture = JSON.parse(
 
 describe('normalizeMac', () => {
   test.each([
-    ['14:ab:ec:c2:0e:00', '14:ab:ec:c2:0e:00'],
-    ['14-AB-EC-C2-0E-00', '14:ab:ec:c2:0e:00'],
+    ['14:ab:ec:00:10:00', '14:ab:ec:00:10:00'],
+    ['14-AB-EC-00-10-00', '14:ab:ec:00:10:00'],
     ['0011.2233.4455', '00:11:22:33:44:55'],
     ['001a1e-000000', '00:1a:1e:00:00:00'],
     ['00 1a 1e 00 00 00', '00:1a:1e:00:00:00'],
@@ -62,8 +62,8 @@ describe('AOS-CX REST (live capture, 6200F ML.10.16)', () => {
   test('a switch neighbor: chassis id is its system MAC', () => {
     const core = neighbors.find((n) => n.localPort === '1/1/13');
     expect(core).toMatchObject({
-      chassisId: '14:ab:ec:c2:0e:00',
-      mac: '14:ab:ec:c2:0e:00',
+      chassisId: '14:ab:ec:00:10:00',
+      mac: '14:ab:ec:00:10:00',
       portId: '1/1/6',
       sysName: 'Sw-CoreB',
       mgmtIp: '192.168.255.2',
@@ -77,15 +77,15 @@ describe('AOS-CX REST (live capture, 6200F ML.10.16)', () => {
     const phone = neighbors.find((n) => n.localPort === '1/1/4');
     expect(phone).toMatchObject({
       chassisId: '192.168.18.140',
-      mac: '04:2a:e2:70:cb:4e',
-      portId: '042AE270CB4E:P1',
+      mac: '04:2a:e2:00:30:4e',
+      portId: '042AE200304E:P1',
       mgmtIp: '192.168.18.140',
       capabilities: ['bridge', 'telephone'],
     });
   });
 
   test('identity from /system', () => {
-    expect(cx.parseIdentity(fixture.system)).toEqual({ chassisId: 'ec:67:94:d1:a8:00', sysName: 'Sw-Studio' });
+    expect(cx.parseIdentity(fixture.system)).toEqual({ chassisId: 'ec:67:94:00:20:00', sysName: 'Sw-Studio' });
   });
 
   test('URI strings (depth too shallow) and empty responses are ignored', () => {

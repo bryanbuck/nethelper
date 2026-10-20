@@ -19,5 +19,5 @@ Observed on an Aruba 2930F (JL258A), firmware WC.16.11.0015, directly managed (n
 ## Output formats
 
 - `show version` puts the firmware on its own line after the image stamp, and then prints `Boot ROM Version: WC.16.01.0010`. The version parser skips Boot ROM lines and prefers the `XX.nn.nn.nnnn` pattern.
-- LLDP chassis IDs and MACs print as `e4de40-aabc80`, not the spaced form the management guide shows. `normalizeMac` handles both.
+- LLDP chassis IDs and MACs print as `e4de40-008080`, not the spaced form the management guide shows. `normalizeMac` handles both.
 - `show lldp info remote-device detail` matches the guide's block layout (`Local Port :`, `ChassisId :`, `PortId :`, `SysName :`, …), and the parser reads it unchanged. It lists LLDP neighbors of every vendor: AOS-CX (`1/1/4`), and Junos (`ge-0/0/11`, with a MAC as its management address).

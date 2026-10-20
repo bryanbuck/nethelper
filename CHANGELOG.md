@@ -21,6 +21,13 @@ First packaged release, for a private in-house beta. Covers everything built so 
 - CORS from configuration, not hardcoded hosts; `TRUST_PROXY`; smaller body limit; 5xx details hidden in production.
 - Backup contents (full device configs) restricted to admins and operators; log redaction of secret-looking fields; Git mirror settings validated against command injection.
 - Deleting a user no longer cascade-deletes the cloud integrations, credentials, and Git mirror config they created; ownership moves to another admin.
+- Dependency updates for advisories in production packages: `proxy-addr` (client IP spoofing behind a trusted proxy, which the login rate limit relies on), `compression` (denial of service), `follow-redirects` (credential headers kept across redirects), and `vue`.
+- Removed `scripts/test-login.js` (printed the password it tested and part of the stored hash) and the obsolete `scripts/test-cx-api.js`; `npm run user:manage` covers account problems and **Test Direct Connection** covers switches.
+- `SECURITY.md`: how to report a vulnerability, and the security model.
+
+### Documentation
+- `docs/GETTING_STARTED.md`: the first hour after an install (clouds, devices, credentials, backups, status, users), with the account rights each platform needs.
+- `deploy/README.md`: a per-platform device-account table and a same-host TLS recipe for the Docker install.
 
 ### Deployment
 - Docker images for backend and frontend, Docker Compose stack (with a host-network option for L2 discovery), and a sandboxed systemd unit plus TLS nginx site for bare metal. Runbook: [`deploy/README.md`](deploy/README.md).

@@ -22,7 +22,7 @@ describe('config/cors allowedOrigins', () => {
       'http://10.0.0.5:5173',
       'http://172.20.1.1',
       'http://192.168.1.10:5173',
-      'http://dev-nethelper.buck.local:5173',
+      'http://nethelper-dev.local:5173',
     ]) {
       expect(allows(origins, origin)).toBe(true);
     }

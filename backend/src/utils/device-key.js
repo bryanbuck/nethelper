@@ -19,7 +19,7 @@ function normalizeSerial(serial) {
 
 /**
  * Canonical lower-case colon form (aa:bb:cc:dd:ee:ff), or null if not a MAC.
- * Accepts the shapes network gear prints: `14:ab:ec:c2:0e:00`, `001a1e-000000`,
+ * Accepts the shapes network gear prints: `14:ab:ec:00:10:00`, `001a1e-000000`,
  * `00 1a 1e 00 00 00`, `0011.2233.4455`. Rejects strings that only reach 12 hex
  * digits once stripped, such as an IPv4 address used as an LLDP chassis id
  * ("10.100.200.250").

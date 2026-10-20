@@ -61,9 +61,7 @@ The server will start on `http://localhost:3000` (or the port specified in `.env
 
 Run tests with: `npm test` (watch mode: `npm run test:watch`; lint + tests: `npm run ci`). The suite mocks Prisma, Redis, and every device transport, so it needs no database or network.
 
-### Authentication Testing
-
-Test login functionality: `npm run test:login user@example.com password`
+Account problems (locked out, forgotten password, wrong role): `npm run user:manage`.
 
 ## Deployment
 

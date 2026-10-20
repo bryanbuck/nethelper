@@ -117,7 +117,7 @@ describe('provider bulk reads', () => {
   beforeEach(() => axios.mockReset());
 
   const mistProvider = () => new MistProvider({
-    id: 'int-mist', provider: 'juniper_mist', name: 'Buck Home', baseUrl: 'https://api.ac2.mist.com', credentials: { apiToken: 't', orgId: 'o' },
+    id: 'int-mist', provider: 'juniper_mist', name: 'My Mist', baseUrl: 'https://api.ac2.mist.com', credentials: { apiToken: 't', orgId: 'o' },
   });
 
   test('Mist: two org-wide reads, following the search `next` link', async () => {
@@ -172,7 +172,7 @@ describe('topology.service cloud path', () => {
   const entry = (online) => ({ neighbors: [{ localPort: 'eth0', chassisId: 'x' }], identity: { chassisId: 'aa', sysName: 'n' }, online });
 
   function cloud(table) {
-    const provider = new BaseCloudProvider({ id: 'int-mist', provider: 'juniper_mist', name: 'Buck Home', baseUrl: 'https://x', credentials: {} });
+    const provider = new BaseCloudProvider({ id: 'int-mist', provider: 'juniper_mist', name: 'My Mist', baseUrl: 'https://x', credentials: {} });
     provider.listNeighbors = jest.fn(async () => table);
     CloudProviderFactory.forDevice.mockResolvedValue(provider);
     return provider;
