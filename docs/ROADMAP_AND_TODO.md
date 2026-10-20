@@ -44,7 +44,7 @@ Preparing the dev-environment build for a private, in-house beta. Deploy targets
   - ✅ Per platform: Central (sync, status refresh, config-sync alert, 7 scope backups), Mist (sync, NETCONF + cloud backups, offline/recovery of an unplugged AP with alerts closing themselves), Junos NETCONF, AOS-CX REST and AOS-S SSH (connection test, polls, LLDP, backup, config change, diff). Also discovery with MACs, the Git mirror to a private GitHub repo, an in-place upgrade, a bare-metal reboot.
   - ✅ Bare-metal install: systemd unit, nginx with TLS (lab self-signed), `nginx -t` (only the predicted `listen … http2` deprecation on nginx 1.26).
   - ✅ Fixed what the run found (merged into `release/beta` 2026-10-20, `c3b89f7`; see `CHANGELOG.md`): runbook bugs (`.env.example` overriding the unit, `COMPOSE_FILE` for the host-network override and the Git key override, Docker install and code steps, Node 22, health probes through nginx, Prisma/npm notices); AOS-S VT100 screen handling; CLI errors stored as backups; Boot ROM version; the credential test dialog's false success; per-admin cloud integrations; email normalization; auth-failure messages; cloud-only AP tests; discovery serials and IP matching; `POST /devices` 500.
-  - [ ] Browser click-through by the user (Users page, change-password dialog, less-used pages after the Vuetify 3.13 upgrade, Network Map with cloud + LLDP links).
+  - ✅ Browser click-through by the user (2026-10-20): Users page, change-password dialog, less-used pages after the Vuetify 3.13 upgrade, Network Map with cloud + LLDP links.
   - ✅ A cloud-managed device its cloud reports offline but whose IP answers ping showed `online` (Central kept an offline switch's old IP, now another switch's). The user chose `warning` (2026-10-20), the mirror of the cloud-online/no-ping rule; `utils/device-status.js` and `models/Device.js`, parity-tested.
   - Not run on hardware: the Junos SSH fallback.
   - [ ] Release (only after phase 7 passes): `npm run ci` in both tiers; set the date in `CHANGELOG.md`; merge `release/beta` into `master`; tag `v0.9.0-beta.1`; delete `release/beta`; mark this section shipped and move deferred items to a post-beta list.
@@ -112,7 +112,7 @@ Next: **notification channels** (phase 7 of the cloud plan, branch `feature/aler
 Also open from the cloud plan (2026-10-19), to check on hardware:
 - ✅ Mist stream: JNAP-01 unplug/replug confirmed on 2026-10-20 (phase 7). JNEX-01 port events confirmed too (above).
 - ✅ "Config out of sync" alerts opened for Sw-CoreA/Sw-CoreB (confirmed 2026-10-20).
-- [ ] View `/map` in a browser with the cloud links (Mist and Central). The API returns 21 nodes and 14 edges; this is part of the user's click-through.
+- ✅ `/map` viewed in a browser with the cloud links (Mist and Central), 2026-10-20.
 - ✅ CX credentials for Sw-CoreA, Sw-CoreB and Sw-Studio fixed; connection tests, polls, LLDP and backups pass (2026-10-20).
 
 Deferred:
