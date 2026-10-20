@@ -43,7 +43,7 @@ Preparing the dev-environment build for a private, in-house beta. Deploy targets
   - ✅ Docker Compose install from `deploy/README.md` only (host-network override), `create-admin`, integrations and credentials entered in the UI.
   - ✅ Per platform: Central (sync, status refresh, config-sync alert, 7 scope backups), Mist (sync, NETCONF + cloud backups, offline/recovery of an unplugged AP with alerts closing themselves), Junos NETCONF, AOS-CX REST and AOS-S SSH (connection test, polls, LLDP, backup, config change, diff). Also discovery with MACs, the Git mirror to a private GitHub repo, an in-place upgrade, a bare-metal reboot.
   - ✅ Bare-metal install: systemd unit, nginx with TLS (lab self-signed), `nginx -t` (only the predicted `listen … http2` deprecation on nginx 1.26).
-  - ✅ Fixed what the run found (branch `fix/phase7-findings`; see `CHANGELOG.md`): runbook bugs (`.env.example` overriding the unit, `COMPOSE_FILE` for the host-network override and the Git key override, Docker install and code steps, Node 22, health probes through nginx, Prisma/npm notices); AOS-S VT100 screen handling; CLI errors stored as backups; Boot ROM version; the credential test dialog's false success; per-admin cloud integrations; email normalization; auth-failure messages; cloud-only AP tests; discovery serials and IP matching; `POST /devices` 500.
+  - ✅ Fixed what the run found (merged into `release/beta` 2026-10-20, `c3b89f7`; see `CHANGELOG.md`): runbook bugs (`.env.example` overriding the unit, `COMPOSE_FILE` for the host-network override and the Git key override, Docker install and code steps, Node 22, health probes through nginx, Prisma/npm notices); AOS-S VT100 screen handling; CLI errors stored as backups; Boot ROM version; the credential test dialog's false success; per-admin cloud integrations; email normalization; auth-failure messages; cloud-only AP tests; discovery serials and IP matching; `POST /devices` 500.
   - [ ] Browser click-through by the user (Users page, change-password dialog, less-used pages after the Vuetify 3.13 upgrade, Network Map with cloud + LLDP links).
   - ✅ A cloud-managed device its cloud reports offline but whose IP answers ping showed `online` (Central kept an offline switch's old IP, now another switch's). The user chose `warning` (2026-10-20), the mirror of the cloud-online/no-ping rule; `utils/device-status.js` and `models/Device.js`, parity-tested.
   - Not run on hardware: the Junos SSH fallback.
@@ -68,7 +68,8 @@ Preparing the dev-environment build for a private, in-house beta. Deploy targets
 
 - ✅ Polling baseline (2026-10-19, branch `feature/cloud-status`): until now cloud sync ran only when someone clicked it, so cloud status and the cloud-offline alert went stale in between. Sync now also runs hourly (`CLOUD_SYNC_INTERVAL`), and a status refresh runs every 5 minutes (`CLOUD_STATUS_INTERVAL`, `services/cloud-status.service.js`, provider `listStatuses()`). It updates status, IP, firmware, connection and config state for devices sync already created, pushes `device:status:update`, and drives the cloud alerts. Mist costs one call per 1,000 devices, Central one per 100. Run live against both clouds.
 - ✅ Mist event stream (2026-10-19, branch `feature/cloud-events`; `docs/MULTI_VENDOR_ROADMAP.md` §8f): one outbound WebSocket per Mist org (`services/cloud/`), subscribed to every site's device stats; no public URL needed. Checked live first (`probe-cloud.js --stream`): the stream carries no device status and a disconnecting device just goes quiet, so it triggers the status refresh (a device held offline starts reporting, or an online one's report expires) instead of deciding status itself. Every (re)connect resyncs. Port link changes and restarts from the stream, and every cloud status change (both clouds), are recorded as `DeviceEvent` rows with source `cloud` and shown on the device page's Live tab. Settings → Cloud Integrations shows the stream's state. `CLOUD_STREAM_ENABLED`.
-- [ ] Mist: verify on hardware that an unplugged device shows offline within a few minutes (its last report expires after 190 s, then Mist's REST status is asked) and an AP port change appears as an event.
+- ✅ Mist on hardware (2026-10-20): unplugged JNAP-01 showed offline after about 3 minutes, and both alerts closed themselves when it came back.
+- [ ] Mist: a port change on JNEX-01 appears as a link event within a minute (not run yet).
 - [ ] **Central webhooks (deferred).** New Central has no stream NetHelper can open; it delivers alerts (e.g. "AP Rebooted", with `operation` Add/Update and `state` Active/Cleared) by HTTP POST to a URL it calls, set up under Alert Management, or through the GreenLake event framework (CloudEvents, `/events/v1beta1/subscriptions`). That needs a public HTTPS endpoint, which an in-house install usually doesn't have. Classic Central's protobuf streaming API is not available on New Central. Until then Central stays on the 5-minute refresh. When it is built: `POST /api/v1/webhooks/<integration>` with a per-integration secret (verify GreenLake's signature), map alerts onto the same status-refresh trigger, and show the last delivery in Settings. Meraki is in the same position (webhooks only).
 
 #### Related Documentation
@@ -109,10 +110,10 @@ Next: **notification channels** (phase 7 of the cloud plan, branch `feature/aler
 - ⏳ Later: SMS/PagerDuty, per-user subscriptions, digests/quiet hours.
 
 Also open from the cloud plan (2026-10-19), to check on hardware:
-- [ ] Mist stream: unplug JNAP-01 and confirm it shows offline within a few minutes and "Mist reports offline/online" appears in its Live tab; move a cable on JNEX-01 and confirm a link event within a minute.
-- [ ] Confirm the "Config out of sync" alerts opened for Sw-CoreA/Sw-CoreB (Central "Out of sync" while online).
-- [ ] View `/map` in a browser with the cloud links (Mist and Central).
-- [ ] The three Always-monitor CX switches (Sw-CoreA, Sw-CoreB, Sw-Studio) reject their linked credential (CX login 401 in the backend log); fix the credential.
+- ✅ Mist stream: JNAP-01 unplug/replug confirmed on 2026-10-20 (phase 7). Still open: the JNEX-01 port-change event (above).
+- ✅ "Config out of sync" alerts opened for Sw-CoreA/Sw-CoreB (confirmed 2026-10-20).
+- [ ] View `/map` in a browser with the cloud links (Mist and Central). The API returns 21 nodes and 14 edges; this is part of the user's click-through.
+- ✅ CX credentials for Sw-CoreA, Sw-CoreB and Sw-Studio fixed; connection tests, polls, LLDP and backups pass (2026-10-20).
 
 Deferred:
 - ⏳ Rule scoping (per device, group, site) and custom thresholds; maintenance windows / snooze.
