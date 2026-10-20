@@ -108,6 +108,15 @@ Production writes JSON logs to stdout. Values under secret-looking keys (passwor
 | `ALERT_RETENTION_DAYS` | `90` | Resolved alerts older than this are deleted daily. |
 | `EXECUTION_RETENTION_DAYS` | `90` | Finished automation runs (Run History) older than this are deleted daily. |
 
+### Cloud sync and status
+
+| Variable | Default | Notes |
+|---|---|---|
+| `CLOUD_SYNC_ENABLED` | `true` | Scheduled full device sync from every active cloud integration. **Sync** on the Devices page works either way. |
+| `CLOUD_SYNC_INTERVAL` | `3600000` | Milliseconds between scheduled syncs (1 hour; minimum 300000). Only failures reach the status bar. |
+| `CLOUD_STATUS_ENABLED` | `true` | Status refresh between syncs: status, IP, firmware, connection and config state for devices sync already created. Never adds devices. |
+| `CLOUD_STATUS_INTERVAL` | `300000` | Milliseconds between refreshes (5 minutes; minimum 60000). Mist: one API call per 1,000 devices; Central: one per 100. |
+
 ### Network Map (topology)
 
 | Variable | Default | Notes |

@@ -29,8 +29,8 @@ const CONTRACT_KEYS = [
   'serial', 'name', 'model', 'macAddress', 'ipAddress', 'type', 'vendor', 'platform',
   'status', 'firmwareVersion', 'site', 'lastSeen', 'metadata',
 ].sort();
-// A provider may also report who owns the device's config.
-const OPTIONAL_KEYS = ['cloudManaged', 'cloudManagedSource', 'cloudConnectionStatus'];
+// A provider may also report who owns the device's config, and whether it is in sync.
+const OPTIONAL_KEYS = ['cloudManaged', 'cloudManagedSource', 'cloudConnectionStatus', 'configInSync'];
 const DEVICE_TYPES = ['access_point', 'switch', 'gateway', 'other'];
 const DEVICE_STATUSES = ['online', 'offline', 'warning', 'maintenance'];
 

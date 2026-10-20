@@ -65,6 +65,14 @@ function profileKey(item) {
   return String(item.name ?? item.ssid ?? item.vlan ?? item.id ?? JSON.stringify(item));
 }
 
+/** Central's configStatus (live: "Synchronized", "Out of sync", or null) as in-sync true/false/null. */
+function centralConfigInSync(value) {
+  const key = String(value || '').toLowerCase().replace(/[\s_-]/g, '');
+  if (key === 'synchronized' || key === 'insync') return true;
+  if (key === 'outofsync') return false;
+  return null;
+}
+
 /** Classic Central's API gateway (apigw-*): a different API, unreachable with GreenLake tokens. */
 function isClassicGateway(baseUrl) {
   try {
@@ -283,6 +291,7 @@ class ArubaCentralProvider extends BaseCloudProvider {
       site: item.siteName || item.siteId || null,
       // Central leaves lastSeenAt empty while a device is up: seen now.
       lastSeen: this.parseTimestamp(item.lastSeenAt ?? item.lastSeen) || (status === 'online' ? new Date() : null),
+      configInSync: centralConfigInSync(item.configStatus),
       metadata: {
         siteId: item.siteId,
         siteName: item.siteName,

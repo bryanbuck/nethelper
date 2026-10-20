@@ -353,6 +353,7 @@ class DeviceService {
     if (existingDevice) {
       await this.updateDevice(existingDevice.id, deviceData);
       this.alertCloudStatus(existingDevice.id, existingDevice.name, normalized);
+      this.alertCloudConfig(existingDevice.id, existingDevice.name, normalized);
       return 'updated';
     }
     if (adoptable) {
@@ -360,13 +361,17 @@ class DeviceService {
       const { name: _cloudName, ...adopted } = deviceData;
       await this.updateDevice(adoptable.id, { serial: normalized.serial, ...adopted });
       this.alertCloudStatus(adoptable.id, adoptable.name, normalized);
+      this.alertCloudConfig(adoptable.id, adoptable.name, normalized);
       logger.info('Cloud sync adopted an existing device by MAC', {
         deviceId: adoptable.id, serial: normalized.serial, mac: normalizeMac(normalized.macAddress),
       });
       return 'adopted';
     }
     const created = await this.createDevice({ serial: normalized.serial, ...deviceData });
-    if (created?.id) this.alertCloudStatus(created.id, created.name, normalized);
+    if (created?.id) {
+      this.alertCloudStatus(created.id, created.name, normalized);
+      this.alertCloudConfig(created.id, created.name, normalized);
+    }
     return 'created';
   }
 
@@ -403,6 +408,27 @@ class DeviceService {
       }, { bump: false });
     } else {
       alertService.clear('device.cloud-offline', subject);
+    }
+  }
+
+  /**
+   * Open or clear device.cloud-config from the cloud's config sync state.
+   * Only an online device opens one (an offline device's config can't be in
+   * sync); a state that means neither (`configInSync: null`) changes nothing.
+   * @param {{ status, configInSync, configStatus?, metadata?, serial? }} report
+   */
+  alertCloudConfig(deviceId, name, report) {
+    const subject = { subjectKey: deviceId, deviceId };
+    if (report.configInSync === true) {
+      alertService.clear('device.cloud-config', subject);
+    } else if (report.configInSync === false && report.status === 'online') {
+      const state = report.configStatus ?? report.metadata?.configStatus;
+      alertService.raise('device.cloud-config', {
+        ...subject,
+        title: `${name || report.name} config is out of sync`,
+        message: `Its cloud reports the device is not running the config the cloud intends${state ? ` ("${state}")` : ''}.`,
+        data: { serial: report.serial, configStatus: state || null },
+      }, { bump: false });
     }
   }
 

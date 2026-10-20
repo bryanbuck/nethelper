@@ -19,7 +19,6 @@ const logger = require('./src/utils/logger');
 const { connectDatabase, disconnectDatabase } = require('./src/config/database');
 const { connectRedis, disconnectRedis } = require('./src/config/redis');
 const { initializeQueues, closeQueues } = require('./src/config/bull');
-const pingMonitorService = require('./src/services/ping-monitor.service');
 const stateMonitorService = require('./src/services/live/state-monitor.service');
 const liveViewService = require('./src/services/live/live-view.service');
 const alertService = require('./src/services/alert.service');
@@ -62,10 +61,6 @@ async function startServer() {
     const io = initializeSocket(server);
     logger.info('WebSocket server initialized');
 
-    // Start ping monitoring
-    pingMonitorService.startMonitoring();
-    logger.info('Ping monitoring service started');
-
     // Live port/PoE state for devices with liveMonitoring on. Connects are
     // staggered in the background; a slow switch doesn't delay startup.
     stateMonitorService.start().catch((error) => {
@@ -97,7 +92,6 @@ async function startServer() {
         process.exit(1);
       }, SHUTDOWN_TIMEOUT_MS).unref();
 
-      pingMonitorService.stopMonitoring();
       await liveViewService.stop();
       await stateMonitorService.stop(); // logs out of device sessions
       automationTriggers.stop();

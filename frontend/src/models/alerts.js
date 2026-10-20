@@ -17,6 +17,7 @@ export const ALERT_STATUSES = [
 export const ALERT_RULE_LABELS = {
   'device.offline': 'Offline (ping)',
   'device.cloud-offline': 'Offline (cloud)',
+  'device.cloud-config': 'Config out of sync (cloud)',
   'live.poe-fault': 'PoE fault',
   'live.monitor-down': 'Live monitor lost',
   'backup.failed': 'Backup failed',

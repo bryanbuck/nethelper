@@ -32,22 +32,30 @@ module.exports = (queue) => {
     }
   });
 
-  // Schedule recurring job (every 60 seconds by default)
+  // The only ping scheduler (every 60 seconds by default).
   const interval = parseInt(process.env.PING_MONITOR_INTERVAL) || 60000;
   const enabled = process.env.PING_MONITOR_ENABLED !== 'false';
 
-  if (enabled) {
-    queue.add('checkDevices', {}, {
+  (async () => {
+    // Bull keys a repeatable by its interval: a changed interval, or monitoring
+    // turned off, would otherwise leave the old job sweeping too.
+    for (const job of await queue.getRepeatableJobs()) {
+      if (job.name === 'checkDevices' && (!enabled || Number(job.every) !== interval)) {
+        await queue.removeRepeatableByKey(job.key);
+      }
+    }
+    if (!enabled) {
+      logger.info('Ping monitor job disabled via PING_MONITOR_ENABLED environment variable');
+      return;
+    }
+    await queue.add('checkDevices', {}, {
       repeat: {
         every: interval,
       },
       jobId: 'ping-monitor-recurring',
       removeOnComplete: true, // Keep queue clean
-      removeOnFail: false, // Keep failed jobs for debugging
+      removeOnFail: 20,
     });
-
     logger.info(`Ping monitor job initialized with ${interval}ms interval`);
-  } else {
-    logger.info('Ping monitor job disabled via PING_MONITOR_ENABLED environment variable');
-  }
+  })().catch((error) => logger.error(`Could not schedule ping monitoring: ${error.message}`));
 };

@@ -40,6 +40,10 @@ const PAGE_LIMIT = 1000; // Mist caps `limit` at 1000 (default 100)
 // config_status; `fields=*` adds everything (interface tables, clients) and
 // grows to kilobytes per device. A list returns exactly the fields named.
 const STATS_FIELDS = ['mac', 'ip', 'version', 'last_seen', 'status', 'uptime', 'config_status'];
+// The only config_status value seen live (2026-10-19) is NO_CHANGE: in sync.
+// Others are not documented well enough to call out of sync.
+const mistConfigInSync = (value) => (value === 'NO_CHANGE' ? true : null);
+
 // What the neighbor read needs: an AP's LLDP view of its uplink.
 const NEIGHBOR_FIELDS = ['mac', 'serial', 'status', 'name', 'hostname', 'lldp_stat', 'lldp_stats'];
 
@@ -252,6 +256,33 @@ class MistProvider extends BaseCloudProvider {
     return parseMistNeighbors({ stats, ports });
   }
 
+  /**
+   * Status for the cloud status refresh in one paged read (org device stats)
+   * instead of inventory + sites + stats. A device with no site has no stats
+   * and is left out; the hourly sync covers it.
+   */
+  async listStatuses() {
+    const stats = await this.requestAllPages(`/api/v1/orgs/${this.orgId}/stats/devices`, {
+      params: { type: 'all', fields: [...STATS_FIELDS, 'serial'].join(',') },
+      context: 'device_status',
+    });
+    const statuses = new Map();
+    for (const stat of stats) {
+      if (!stat.serial) continue;
+      const connected = stat.status === 'connected';
+      statuses.set(stat.serial, {
+        status: connected ? 'online' : 'offline',
+        lastSeen: stat.last_seen ? new Date(stat.last_seen * 1000) : null,
+        ipAddress: stat.ip || null,
+        firmwareVersion: stat.version || null,
+        cloudConnectionStatus: connected ? 'connected' : 'not_reachable',
+        configInSync: mistConfigInSync(stat.config_status),
+        configStatus: stat.config_status ?? null,
+      });
+    }
+    return statuses;
+  }
+
   /** The org inventory record of one device, by serial. */
   async findInventoryItem(serial, context) {
     const matches = await this.request('GET', `/api/v1/orgs/${this.orgId}/inventory`, {
@@ -412,6 +443,7 @@ class MistProvider extends BaseCloudProvider {
       // (`mist_configured`), which a config backup reads.
       ...(type === 'access_point' && item.site_id && { cloudManaged: true, cloudManagedSource: 'cloud-inventory' }),
       cloudConnectionStatus: connected ? 'connected' : 'not_reachable',
+      configInSync: mistConfigInSync(stats?.config_status),
       metadata: {
         mistId: item.id,
         siteId: item.site_id,
