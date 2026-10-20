@@ -264,7 +264,7 @@ function runAction(item) {
   background: rgba(var(--v-theme-on-surface), var(--v-hover-opacity));
 }
 .status-message:focus-visible {
-  outline: 2px solid rgb(var(--v-theme-primary));
+  outline: 2px solid rgb(var(--v-theme-primary-text));
 }
 .status-message--active {
   background: rgba(var(--status-tint), 0.12);

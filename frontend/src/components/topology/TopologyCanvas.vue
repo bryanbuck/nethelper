@@ -194,7 +194,7 @@ defineExpose({ relayout, focusNode, fit: () => fitView({ padding: 0.15 }) })
 }
 
 :deep(.topo-node.selected) {
-  border-color: rgb(var(--v-theme-primary));
+  border-color: rgb(var(--v-theme-primary-text));
   box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.35);
 }
 

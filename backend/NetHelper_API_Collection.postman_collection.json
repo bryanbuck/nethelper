@@ -1,8 +1,7 @@
 {
   "info": {
-    "name": "NetHelper API Collection",
-    "description": "Comprehensive collection for NetHelper Aruba Central network automation platform API endpoints",
-    "version": "1.0.0",
+    "name": "NetHelper API",
+    "description": "Generated from the backend route tables by backend/scripts/generate-postman.js; do not edit by hand. Set the email and password variables (they are empty on purpose), run auth → POST /auth/login, and the other requests use the token it stores. Path variables are left blank to fill in.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -17,224 +16,82 @@
   },
   "variable": [
     {
+      "key": "serverUrl",
+      "value": "http://localhost:3000"
+    },
+    {
       "key": "baseUrl",
-      "value": "http://localhost:3000/api/v1",
-      "type": "string",
-      "description": "Base API URL"
+      "value": "{{serverUrl}}/api/v1"
+    },
+    {
+      "key": "email",
+      "value": ""
+    },
+    {
+      "key": "password",
+      "value": ""
     },
     {
       "key": "accessToken",
-      "value": "",
-      "type": "string",
-      "description": "JWT Access Token"
+      "value": ""
     },
     {
       "key": "refreshToken",
-      "value": "",
-      "type": "string",
-      "description": "JWT Refresh Token"
+      "value": ""
     }
   ],
   "item": [
     {
-      "name": "Health Check",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{baseUrl}}/../../health",
-          "host": ["{{baseUrl}}"],
-          "path": ["../..", "health"]
-        },
-        "description": "Health check endpoint to verify server status"
-      },
-      "response": []
-    },
-    {
-      "name": "Authentication",
+      "name": "health",
       "item": [
         {
-          "name": "Register",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\",\n  \"name\": \"John Doe\",\n  \"role\": \"viewer\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/register",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "register"]
-            },
-            "description": "Register a new user"
-          },
-          "response": []
-        },
-        {
-          "name": "Login",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "    const responseJson = pm.response.json();",
-                  "    if (responseJson.success && responseJson.data) {",
-                  "        pm.collectionVariables.set('accessToken', responseJson.data.accessToken);",
-                  "        pm.collectionVariables.set('refreshToken', responseJson.data.refreshToken);",
-                  "    }",
-                  "}"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "login"]
-            },
-            "description": "Authenticate user and retrieve access token"
-          },
-          "response": []
-        },
-        {
-          "name": "Refresh Token",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "    const responseJson = pm.response.json();",
-                  "    if (responseJson.success && responseJson.data) {",
-                  "        pm.collectionVariables.set('accessToken', responseJson.data.accessToken);",
-                  "        pm.collectionVariables.set('refreshToken', responseJson.data.refreshToken);",
-                  "    }",
-                  "}"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/refresh",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "refresh"]
-            },
-            "description": "Refresh access token using refresh token"
-          },
-          "response": []
-        },
-        {
-          "name": "Logout",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/logout",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "logout"]
-            },
-            "description": "Logout user and invalidate refresh token"
-          },
-          "response": []
-        },
-        {
-          "name": "Get Profile",
+          "name": "GET /health",
           "request": {
             "method": "GET",
             "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/auth/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "me"]
+            "auth": {
+              "type": "noauth"
             },
-            "description": "Get current user profile"
+            "url": {
+              "raw": "{{serverUrl}}/health",
+              "host": [
+                "{{serverUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
           },
           "response": []
         },
         {
-          "name": "Update Profile",
+          "name": "GET /health/ready",
           "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"John Doe Updated\",\n  \"email\": \"john.updated@example.com\"\n}"
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "noauth"
             },
             "url": {
-              "raw": "{{baseUrl}}/auth/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "me"]
-            },
-            "description": "Update current user profile"
+              "raw": "{{serverUrl}}/health/ready",
+              "host": [
+                "{{serverUrl}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            }
           },
           "response": []
         }
       ]
     },
     {
-      "name": "Devices",
+      "name": "auth",
       "item": [
         {
-          "name": "Get All Devices",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/devices",
-              "host": ["{{baseUrl}}"],
-              "path": ["devices"]
-            },
-            "description": "Retrieve all devices"
-          },
-          "response": []
-        },
-        {
-          "name": "Create Device",
+          "name": "POST /auth/register",
           "request": {
             "method": "POST",
             "header": [
@@ -243,56 +100,149 @@
                 "value": "application/json"
               }
             ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"AP-Office-01\",\n  \"serial\": \"CN12345678\",\n  \"type\": \"access_point\",\n  \"model\": \"AP-515\",\n  \"ipAddress\": \"192.168.1.100\",\n  \"macAddress\": \"aa:bb:cc:dd:ee:ff\",\n  \"location\": \"Main Office\"\n}"
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"\",\n  \"name\": \"<string>\",\n  \"role\": \"admin\"\n}"
             },
-            "url": {
-              "raw": "{{baseUrl}}/devices",
-              "host": ["{{baseUrl}}"],
-              "path": ["devices"]
-            },
-            "description": "Create a new device (requires admin or operator role)"
+            "description": "Required: email, password, name."
           },
           "response": []
         },
         {
-          "name": "Sync Devices from Aruba Central",
+          "name": "POST /auth/login",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
-              "raw": "{{baseUrl}}/devices/sync",
-              "host": ["{{baseUrl}}"],
-              "path": ["devices", "sync"]
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
             },
-            "description": "Synchronize devices from Aruba Central (requires admin or operator role)"
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "description": "Required: email, password."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const responseJson = pm.response.json();",
+                  "    if (responseJson.success && responseJson.data) {",
+                  "        pm.collectionVariables.set('accessToken', responseJson.data.accessToken);",
+                  "        pm.collectionVariables.set('refreshToken', responseJson.data.refreshToken);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /auth/refresh",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
           },
           "response": []
         },
         {
-          "name": "Get Device by ID",
+          "name": "POST /auth/logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /auth/me",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/devices/:deviceId",
-              "host": ["{{baseUrl}}"],
-              "path": ["devices", ":deviceId"],
-              "variable": [
-                {
-                  "key": "deviceId",
-                  "value": "device-uuid-here",
-                  "description": "Device UUID"
-                }
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
               ]
-            },
-            "description": "Get specific device by ID"
+            }
           },
           "response": []
         },
         {
-          "name": "Update Device",
+          "name": "PUT /auth/me",
           "request": {
             "method": "PUT",
             "header": [
@@ -301,70 +251,679 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"AP-Office-01-Updated\",\n  \"location\": \"Updated Location\",\n  \"status\": \"online\"\n}"
-            },
             "url": {
-              "raw": "{{baseUrl}}/devices/:deviceId",
-              "host": ["{{baseUrl}}"],
-              "path": ["devices", ":deviceId"],
-              "variable": [
-                {
-                  "key": "deviceId",
-                  "value": "device-uuid-here",
-                  "description": "Device UUID"
-                }
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
               ]
             },
-            "description": "Update device (requires admin or operator role)"
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"<string>\",\n  \"email\": \"user@example.com\"\n}"
+            }
           },
           "response": []
         },
         {
-          "name": "Delete Device",
+          "name": "POST /auth/change-password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/change-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "change-password"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"\",\n  \"newPassword\": \"\"\n}"
+            },
+            "description": "Required: currentPassword, newPassword."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "users",
+      "item": [
+        {
+          "name": "GET /users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /users/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"<string>\",\n  \"role\": \"admin\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /users/:id/reset-password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/:id/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                ":id",
+                "reset-password"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"\"\n}"
+            },
+            "description": "Required: password."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /users/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "devices",
+      "item": [
+        {
+          "name": "GET /devices",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/devices",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /devices",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/devices",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"<string>\",\n  \"type\": \"access_point\",\n  \"vendor\": \"aruba\",\n  \"platform\": \"aos-cx\",\n  \"ipAddress\": \"192.0.2.10\",\n  \"serial\": \"<string>\",\n  \"model\": \"<string>\",\n  \"macAddress\": \"<string>\",\n  \"location\": \"<string>\",\n  \"managementMode\": \"cloud\",\n  \"cloudIntegrationId\": \"<uuid>\",\n  \"apiCredentialId\": \"<uuid>\"\n}"
+            },
+            "description": "Required: name, type, ipAddress."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /devices/duplicates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/devices/duplicates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                "duplicates"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /devices/merge/preview",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/devices/merge/preview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                "merge",
+                "preview"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetId\": \"<uuid>\",\n  \"sourceIds\": [\n    \"<uuid>\"\n  ],\n  \"identityFrom\": \"<uuid>\"\n}"
+            },
+            "description": "Required: targetId, sourceIds."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /devices/merge",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/devices/merge",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                "merge"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetId\": \"<uuid>\",\n  \"sourceIds\": [\n    \"<uuid>\"\n  ],\n  \"identityFrom\": \"<uuid>\"\n}"
+            },
+            "description": "Required: targetId, sourceIds."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /devices/credential/preview",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/devices/credential/preview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                "credential",
+                "preview"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceIds\": [\n    \"<uuid>\"\n  ],\n  \"apiCredentialId\": \"<uuid>\"\n}"
+            },
+            "description": "Required: deviceIds."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /devices/credential",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/devices/credential",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                "credential"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceIds\": [\n    \"<uuid>\"\n  ],\n  \"apiCredentialId\": \"<uuid>\"\n}"
+            },
+            "description": "Required: deviceIds."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /devices/sync",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/devices/sync",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                "sync"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /devices/ping/stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/devices/ping/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                "ping",
+                "stats"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /devices/ping/all",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/devices/ping/all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                "ping",
+                "all"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /devices/poll/pollers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/devices/poll/pollers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                "poll",
+                "pollers"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /devices/poll",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/devices/poll",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                "poll"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /devices/groups",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/devices/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                "groups"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /devices/groups",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/devices/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                "groups"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"<string>\",\n  \"description\": \"<string>\",\n  \"deviceIds\": []\n}"
+            },
+            "description": "Required: name."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /devices/groups/:groupId",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/devices/groups/:groupId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                "groups",
+                ":groupId"
+              ],
+              "variable": [
+                {
+                  "key": "groupId",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"<string>\",\n  \"description\": \"<string>\",\n  \"deviceIds\": []\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /devices/groups/:groupId",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/devices/groups/:groupId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                "groups",
+                ":groupId"
+              ],
+              "variable": [
+                {
+                  "key": "groupId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /devices/:deviceId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/devices/:deviceId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                ":deviceId"
+              ],
+              "variable": [
+                {
+                  "key": "deviceId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /devices/:deviceId",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/devices/:deviceId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                ":deviceId"
+              ],
+              "variable": [
+                {
+                  "key": "deviceId",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"<string>\",\n  \"type\": \"access_point\",\n  \"vendor\": \"aruba\",\n  \"platform\": \"aos-cx\",\n  \"model\": \"<string>\",\n  \"ipAddress\": \"192.0.2.10\",\n  \"macAddress\": \"<string>\",\n  \"location\": \"<string>\",\n  \"status\": \"online\",\n  \"managementMode\": \"cloud\",\n  \"cloudIntegrationId\": \"<uuid>\",\n  \"apiCredentialId\": \"<uuid>\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /devices/:deviceId",
           "request": {
             "method": "DELETE",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/devices/:deviceId",
-              "host": ["{{baseUrl}}"],
-              "path": ["devices", ":deviceId"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                ":deviceId"
+              ],
               "variable": [
                 {
                   "key": "deviceId",
-                  "value": "device-uuid-here",
-                  "description": "Device UUID"
+                  "value": ""
                 }
               ]
-            },
-            "description": "Delete device (requires admin role)"
+            }
           },
           "response": []
         },
         {
-          "name": "Get Device Statistics",
+          "name": "GET /devices/:deviceId/stats",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/devices/:deviceId/stats",
-              "host": ["{{baseUrl}}"],
-              "path": ["devices", ":deviceId", "stats"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                ":deviceId",
+                "stats"
+              ],
               "variable": [
                 {
                   "key": "deviceId",
-                  "value": "device-uuid-here",
-                  "description": "Device UUID"
+                  "value": ""
                 }
               ]
-            },
-            "description": "Get device statistics"
+            }
           },
           "response": []
         },
         {
-          "name": "Update Device Configuration",
+          "name": "PUT /devices/:deviceId/configuration",
           "request": {
             "method": "PUT",
             "header": [
@@ -373,49 +932,67 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"configuration\": {\n    \"ssid\": \"Corporate-WiFi\",\n    \"security\": \"wpa2-enterprise\"\n  }\n}"
-            },
             "url": {
               "raw": "{{baseUrl}}/devices/:deviceId/configuration",
-              "host": ["{{baseUrl}}"],
-              "path": ["devices", ":deviceId", "configuration"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                ":deviceId",
+                "configuration"
+              ],
               "variable": [
                 {
                   "key": "deviceId",
-                  "value": "device-uuid-here",
-                  "description": "Device UUID"
+                  "value": ""
                 }
               ]
             },
-            "description": "Update device configuration (requires admin or operator role)"
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"configuration\": {}\n}"
+            },
+            "description": "Required: configuration."
           },
           "response": []
         },
         {
-          "name": "Backup Device Configuration",
+          "name": "POST /devices/:deviceId/backup",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/devices/:deviceId/backup",
-              "host": ["{{baseUrl}}"],
-              "path": ["devices", ":deviceId", "backup"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                ":deviceId",
+                "backup"
+              ],
               "variable": [
                 {
                   "key": "deviceId",
-                  "value": "device-uuid-here",
-                  "description": "Device UUID"
+                  "value": ""
                 }
               ]
             },
-            "description": "Backup device configuration (requires admin or operator role)"
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
           },
           "response": []
         },
         {
-          "name": "Execute Command on Device",
+          "name": "POST /devices/:deviceId/command",
           "request": {
             "method": "POST",
             "header": [
@@ -424,47 +1001,117 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"command\": \"show version\",\n  \"parameters\": {}\n}"
-            },
             "url": {
               "raw": "{{baseUrl}}/devices/:deviceId/command",
-              "host": ["{{baseUrl}}"],
-              "path": ["devices", ":deviceId", "command"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                ":deviceId",
+                "command"
+              ],
               "variable": [
                 {
                   "key": "deviceId",
-                  "value": "device-uuid-here",
-                  "description": "Device UUID"
+                  "value": ""
                 }
               ]
             },
-            "description": "Execute command on device (requires admin role)"
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "Device Groups",
-      "item": [
-        {
-          "name": "Get All Device Groups",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/devices/groups",
-              "host": ["{{baseUrl}}"],
-              "path": ["devices", "groups"]
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"command\": \"<string>\"\n}"
             },
-            "description": "Get all device groups"
+            "description": "Required: command."
           },
           "response": []
         },
         {
-          "name": "Create Device Group",
+          "name": "GET /devices/:deviceId/events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/devices/:deviceId/events",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                ":deviceId",
+                "events"
+              ],
+              "variable": [
+                {
+                  "key": "deviceId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /devices/:deviceId/neighbors",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/devices/:deviceId/neighbors",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                ":deviceId",
+                "neighbors"
+              ],
+              "variable": [
+                {
+                  "key": "deviceId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /devices/:deviceId/live-monitoring",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/devices/:deviceId/live-monitoring",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                ":deviceId",
+                "live-monitoring"
+              ],
+              "variable": [
+                {
+                  "key": "deviceId",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /devices/:deviceId/ping",
           "request": {
             "method": "POST",
             "header": [
@@ -473,21 +1120,478 @@
                 "value": "application/json"
               }
             ],
+            "url": {
+              "raw": "{{baseUrl}}/devices/:deviceId/ping",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                ":deviceId",
+                "ping"
+              ],
+              "variable": [
+                {
+                  "key": "deviceId",
+                  "value": ""
+                }
+              ]
+            },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Office Access Points\",\n  \"description\": \"All access points in the main office\",\n  \"deviceIds\": [\"device-uuid-1\", \"device-uuid-2\"]\n}"
-            },
+              "raw": "{}"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "device-api",
+      "item": [
+        {
+          "name": "GET /device-api/supported-types",
+          "request": {
+            "method": "GET",
+            "header": [],
             "url": {
-              "raw": "{{baseUrl}}/devices/groups",
-              "host": ["{{baseUrl}}"],
-              "path": ["devices", "groups"]
-            },
-            "description": "Create a new device group (requires admin or operator role)"
+              "raw": "{{baseUrl}}/device-api/supported-types",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "device-api",
+                "supported-types"
+              ]
+            }
           },
           "response": []
         },
         {
-          "name": "Update Device Group",
+          "name": "POST /device-api/test-manual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/device-api/test-manual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "device-api",
+                "test-manual"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceIp\": \"192.0.2.10\",\n  \"username\": \"<string>\",\n  \"password\": \"\",\n  \"deviceType\": \"cx_switch\"\n}"
+            },
+            "description": "Required: deviceIp, username, password."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /device-api/test/:deviceId",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/device-api/test/:deviceId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "device-api",
+                "test",
+                ":deviceId"
+              ],
+              "variable": [
+                {
+                  "key": "deviceId",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /device-api/:deviceId/info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/device-api/:deviceId/info",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "device-api",
+                ":deviceId",
+                "info"
+              ],
+              "variable": [
+                {
+                  "key": "deviceId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /device-api/:deviceId/firmware",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/device-api/:deviceId/firmware",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "device-api",
+                ":deviceId",
+                "firmware"
+              ],
+              "variable": [
+                {
+                  "key": "deviceId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "discovery",
+      "item": [
+        {
+          "name": "GET /discovery/subnets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/discovery/subnets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "discovery",
+                "subnets"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /discovery/scan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/discovery/scan",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "discovery",
+                "scan"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subnets\": [\n    \"<string>\"\n  ]\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /discovery/scans",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/discovery/scans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "discovery",
+                "scans"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /discovery/scans/:scanId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/discovery/scans/:scanId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "discovery",
+                "scans",
+                ":scanId"
+              ],
+              "variable": [
+                {
+                  "key": "scanId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /discovery/scans/:scanId",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/discovery/scans/:scanId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "discovery",
+                "scans",
+                ":scanId"
+              ],
+              "variable": [
+                {
+                  "key": "scanId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /discovery/devices/:discoveredId/import",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/discovery/devices/:discoveredId/import",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "discovery",
+                "devices",
+                ":discoveredId",
+                "import"
+              ],
+              "variable": [
+                {
+                  "key": "discoveredId",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"<string>\",\n  \"type\": \"access_point\",\n  \"serial\": \"<string>\",\n  \"model\": \"<string>\",\n  \"location\": \"<string>\",\n  \"apiCredentialId\": \"<uuid>\",\n  \"updateExisting\": false\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /discovery/devices/:discoveredId/ignore",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/discovery/devices/:discoveredId/ignore",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "discovery",
+                "devices",
+                ":discoveredId",
+                "ignore"
+              ],
+              "variable": [
+                {
+                  "key": "discoveredId",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "backups",
+      "item": [
+        {
+          "name": "GET /backups",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backups"
+              ],
+              "query": [
+                {
+                  "key": "deviceId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "scheduleId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "offset",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /backups/run",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backups/run",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backups",
+                "run"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceIds\": [\n    \"<uuid>\"\n  ]\n}"
+            },
+            "description": "Required: deviceIds."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /backups/schedules",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backups/schedules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backups",
+                "schedules"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /backups/schedules",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backups/schedules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backups",
+                "schedules"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"<string>\",\n  \"cronExpression\": \"<string>\",\n  \"timezone\": \"<string>\",\n  \"active\": false,\n  \"deviceSelection\": {\n    \"mode\": \"all\"\n  },\n  \"retentionDays\": 0,\n  \"retentionMaxCount\": 0,\n  \"includeScopes\": false\n}"
+            },
+            "description": "Required: name, cronExpression."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /backups/schedules/:scheduleId",
           "request": {
             "method": "PUT",
             "header": [
@@ -496,89 +1600,57 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Office Access Points Updated\",\n  \"description\": \"Updated description\",\n  \"deviceIds\": [\"device-uuid-1\", \"device-uuid-2\", \"device-uuid-3\"]\n}"
-            },
             "url": {
-              "raw": "{{baseUrl}}/devices/groups/:groupId",
-              "host": ["{{baseUrl}}"],
-              "path": ["devices", "groups", ":groupId"],
+              "raw": "{{baseUrl}}/backups/schedules/:scheduleId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backups",
+                "schedules",
+                ":scheduleId"
+              ],
               "variable": [
                 {
-                  "key": "groupId",
-                  "value": "group-uuid-here",
-                  "description": "Device Group UUID"
+                  "key": "scheduleId",
+                  "value": ""
                 }
               ]
             },
-            "description": "Update device group (requires admin or operator role)"
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"<string>\",\n  \"cronExpression\": \"<string>\",\n  \"timezone\": \"<string>\",\n  \"active\": false,\n  \"deviceSelection\": {\n    \"mode\": \"all\"\n  },\n  \"retentionDays\": 0,\n  \"retentionMaxCount\": 0,\n  \"includeScopes\": false\n}"
+            }
           },
           "response": []
         },
         {
-          "name": "Delete Device Group",
+          "name": "DELETE /backups/schedules/:scheduleId",
           "request": {
             "method": "DELETE",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/devices/groups/:groupId",
-              "host": ["{{baseUrl}}"],
-              "path": ["devices", "groups", ":groupId"],
+              "raw": "{{baseUrl}}/backups/schedules/:scheduleId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backups",
+                "schedules",
+                ":scheduleId"
+              ],
               "variable": [
                 {
-                  "key": "groupId",
-                  "value": "group-uuid-here",
-                  "description": "Device Group UUID"
+                  "key": "scheduleId",
+                  "value": ""
                 }
               ]
-            },
-            "description": "Delete device group (requires admin role)"
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "Automations",
-      "item": [
-        {
-          "name": "Get All Automations",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/automations",
-              "host": ["{{baseUrl}}"],
-              "path": ["automations"]
-            },
-            "description": "Get all automations"
+            }
           },
           "response": []
         },
         {
-          "name": "Get Automation by ID",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/automations/:id",
-              "host": ["{{baseUrl}}"],
-              "path": ["automations", ":id"],
-              "variable": [
-                {
-                  "key": "id",
-                  "value": "automation-uuid-here",
-                  "description": "Automation UUID"
-                }
-              ]
-            },
-            "description": "Get automation by ID"
-          },
-          "response": []
-        },
-        {
-          "name": "Create Automation",
+          "name": "POST /backups/schedules/:scheduleId/run",
           "request": {
             "method": "POST",
             "header": [
@@ -587,21 +1659,540 @@
                 "value": "application/json"
               }
             ],
+            "url": {
+              "raw": "{{baseUrl}}/backups/schedules/:scheduleId/run",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backups",
+                "schedules",
+                ":scheduleId",
+                "run"
+              ],
+              "variable": [
+                {
+                  "key": "scheduleId",
+                  "value": ""
+                }
+              ]
+            },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Daily Configuration Backup\",\n  \"description\": \"Backup device configurations daily\",\n  \"type\": \"configuration_backup\",\n  \"workflow\": {\n    \"steps\": [\n      {\n        \"type\": \"backup_config\",\n        \"parameters\": {\n          \"format\": \"json\"\n        }\n      }\n    ]\n  },\n  \"deviceGroupIds\": [\"group-uuid-1\"]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/automations",
-              "host": ["{{baseUrl}}"],
-              "path": ["automations"]
-            },
-            "description": "Create a new automation (requires admin or operator role)"
+              "raw": "{}"
+            }
           },
           "response": []
         },
         {
-          "name": "Update Automation",
+          "name": "GET /backups/scopes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backups/scopes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backups",
+                "scopes"
+              ],
+              "query": [
+                {
+                  "key": "integrationId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "scopeType",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "scopeId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "offset",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /backups/scopes/run",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/backups/scopes/run",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backups",
+                "scopes",
+                "run"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"integrationId\": \"<string>\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /backups/scopes/:scopeBackupId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backups/scopes/:scopeBackupId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backups",
+                "scopes",
+                ":scopeBackupId"
+              ],
+              "variable": [
+                {
+                  "key": "scopeBackupId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /backups/scopes/:scopeBackupId/content",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backups/scopes/:scopeBackupId/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backups",
+                "scopes",
+                ":scopeBackupId",
+                "content"
+              ],
+              "variable": [
+                {
+                  "key": "scopeBackupId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /backups/scopes/:scopeBackupId/download",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backups/scopes/:scopeBackupId/download",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backups",
+                "scopes",
+                ":scopeBackupId",
+                "download"
+              ],
+              "variable": [
+                {
+                  "key": "scopeBackupId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /backups/scopes/:scopeBackupId/diff/:otherId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backups/scopes/:scopeBackupId/diff/:otherId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backups",
+                "scopes",
+                ":scopeBackupId",
+                "diff",
+                ":otherId"
+              ],
+              "variable": [
+                {
+                  "key": "scopeBackupId",
+                  "value": ""
+                },
+                {
+                  "key": "otherId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /backups/scopes/:scopeBackupId",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backups/scopes/:scopeBackupId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backups",
+                "scopes",
+                ":scopeBackupId"
+              ],
+              "variable": [
+                {
+                  "key": "scopeBackupId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /backups/:backupId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backups/:backupId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backups",
+                ":backupId"
+              ],
+              "variable": [
+                {
+                  "key": "backupId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /backups/:backupId/content",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backups/:backupId/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backups",
+                ":backupId",
+                "content"
+              ],
+              "query": [
+                {
+                  "key": "kind",
+                  "value": "",
+                  "disabled": true
+                }
+              ],
+              "variable": [
+                {
+                  "key": "backupId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /backups/:backupId/download",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backups/:backupId/download",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backups",
+                ":backupId",
+                "download"
+              ],
+              "query": [
+                {
+                  "key": "kind",
+                  "value": "",
+                  "disabled": true
+                }
+              ],
+              "variable": [
+                {
+                  "key": "backupId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /backups/:backupId/diff/:otherId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backups/:backupId/diff/:otherId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backups",
+                ":backupId",
+                "diff",
+                ":otherId"
+              ],
+              "query": [
+                {
+                  "key": "kind",
+                  "value": "",
+                  "disabled": true
+                }
+              ],
+              "variable": [
+                {
+                  "key": "backupId",
+                  "value": ""
+                },
+                {
+                  "key": "otherId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /backups/:backupId/history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backups/:backupId/history",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backups",
+                ":backupId",
+                "history"
+              ],
+              "variable": [
+                {
+                  "key": "backupId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /backups/:backupId",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/backups/:backupId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "backups",
+                ":backupId"
+              ],
+              "variable": [
+                {
+                  "key": "backupId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "topology",
+      "item": [
+        {
+          "name": "GET /topology/graph",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/topology/graph",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "topology",
+                "graph"
+              ],
+              "query": [
+                {
+                  "key": "site",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "includeDiscovered",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /topology/changes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/topology/changes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "topology",
+                "changes"
+              ],
+              "query": [
+                {
+                  "key": "since",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "deviceId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /topology/collect",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/topology/collect",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "topology",
+                "collect"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceIds\": [\n    \"<uuid>\"\n  ]\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /topology/layouts/:scope",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/topology/layouts/:scope",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "topology",
+                "layouts",
+                ":scope"
+              ],
+              "variable": [
+                {
+                  "key": "scope",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /topology/layouts/:scope",
           "request": {
             "method": "PUT",
             "header": [
@@ -610,49 +2201,162 @@
                 "value": "application/json"
               }
             ],
+            "url": {
+              "raw": "{{baseUrl}}/topology/layouts/:scope",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "topology",
+                "layouts",
+                ":scope"
+              ],
+              "variable": [
+                {
+                  "key": "scope",
+                  "value": ""
+                }
+              ]
+            },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Updated Automation Name\",\n  \"description\": \"Updated description\",\n  \"active\": true,\n  \"workflow\": {\n    \"steps\": [\n      {\n        \"type\": \"updated_step\",\n        \"parameters\": {}\n      }\n    ]\n  }\n}"
+              "raw": "{\n  \"positions\": {}\n}"
             },
-            "url": {
-              "raw": "{{baseUrl}}/automations/:id",
-              "host": ["{{baseUrl}}"],
-              "path": ["automations", ":id"],
-              "variable": [
-                {
-                  "key": "id",
-                  "value": "automation-uuid-here",
-                  "description": "Automation UUID"
-                }
-              ]
-            },
-            "description": "Update automation (requires admin or operator role)"
+            "description": "Required: positions."
           },
           "response": []
-        },
+        }
+      ]
+    },
+    {
+      "name": "alerts",
+      "item": [
         {
-          "name": "Delete Automation",
+          "name": "GET /alerts",
           "request": {
-            "method": "DELETE",
+            "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/automations/:id",
-              "host": ["{{baseUrl}}"],
-              "path": ["automations", ":id"],
-              "variable": [
+              "raw": "{{baseUrl}}/alerts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "alerts"
+              ],
+              "query": [
                 {
-                  "key": "id",
-                  "value": "automation-uuid-here",
-                  "description": "Automation UUID"
+                  "key": "status",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "severity",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "rule",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "deviceId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "q",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true
                 }
               ]
-            },
-            "description": "Delete automation (requires admin or operator role)"
+            }
           },
           "response": []
         },
         {
-          "name": "Execute Automation",
+          "name": "GET /alerts/summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/alerts/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "alerts",
+                "summary"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /alerts/rules",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/alerts/rules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "alerts",
+                "rules"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /alerts/rules/:key",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/alerts/rules/:key",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "alerts",
+                "rules",
+                ":key"
+              ],
+              "variable": [
+                {
+                  "key": "key",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": false,\n  \"severity\": \"info\",\n  \"settleSeconds\": 0\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /alerts/acknowledge",
           "request": {
             "method": "POST",
             "header": [
@@ -661,379 +2365,1061 @@
                 "value": "application/json"
               }
             ],
+            "url": {
+              "raw": "{{baseUrl}}/alerts/acknowledge",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "alerts",
+                "acknowledge"
+              ]
+            },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"deviceIds\": [\"device-uuid-1\", \"device-uuid-2\"]\n}"
+              "raw": "{\n  \"ids\": [\n    \"<uuid>\"\n  ]\n}"
             },
+            "description": "Required: ids."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /alerts/resolve",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/alerts/resolve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "alerts",
+                "resolve"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ids\": [\n    \"<uuid>\"\n  ]\n}"
+            },
+            "description": "Required: ids."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "automations",
+      "item": [
+        {
+          "name": "GET /automations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/automations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "automations"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /automations/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/automations/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "automations",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /automations",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/automations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "automations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"<string>\",\n  \"category\": \"network\",\n  \"priority\": \"low\",\n  \"elements\": [],\n  \"description\": \"<string>\",\n  \"active\": false,\n  \"enabled\": false,\n  \"metadata\": {}\n}"
+            },
+            "description": "Required: name, category, priority, elements."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /automations/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/automations/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "automations",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"<string>\",\n  \"category\": \"network\",\n  \"priority\": \"low\",\n  \"elements\": [],\n  \"description\": \"<string>\",\n  \"active\": false,\n  \"enabled\": false,\n  \"metadata\": {}\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /automations/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/automations/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "automations",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /automations/:id/execute",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/automations/:id/execute",
-              "host": ["{{baseUrl}}"],
-              "path": ["automations", ":id", "execute"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "automations",
+                ":id",
+                "execute"
+              ],
               "variable": [
                 {
                   "key": "id",
-                  "value": "automation-uuid-here",
-                  "description": "Automation UUID"
+                  "value": ""
                 }
               ]
             },
-            "description": "Execute automation (requires admin or operator role)"
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /automations/:id/toggle",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/automations/:id/toggle",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "automations",
+                ":id",
+                "toggle"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
           },
           "response": []
         }
       ]
     },
     {
-      "name": "Schedules",
+      "name": "schedules",
       "item": [
         {
-          "name": "Get All Schedules",
+          "name": "GET /schedules",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/schedules",
-              "host": ["{{baseUrl}}"],
-              "path": ["schedules"]
-            },
-            "description": "Get all schedules"
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "schedules"
+              ]
+            }
           },
           "response": []
         },
         {
-          "name": "Get Schedule by ID",
+          "name": "GET /schedules/:id",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/schedules/:id",
-              "host": ["{{baseUrl}}"],
-              "path": ["schedules", ":id"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "schedules",
+                ":id"
+              ],
               "variable": [
                 {
                   "key": "id",
-                  "value": "schedule-uuid-here",
-                  "description": "Schedule UUID"
+                  "value": ""
                 }
               ]
-            },
-            "description": "Get schedule by ID"
+            }
           },
           "response": []
         },
         {
-          "name": "Create Schedule",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"automationId\": \"automation-uuid-here\",\n  \"cronExpression\": \"0 2 * * *\",\n  \"timezone\": \"UTC\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/schedules",
-              "host": ["{{baseUrl}}"],
-              "path": ["schedules"]
-            },
-            "description": "Create a new schedule (requires admin or operator role)"
-          },
-          "response": []
-        },
-        {
-          "name": "Update Schedule",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"cronExpression\": \"0 3 * * *\",\n  \"timezone\": \"America/New_York\",\n  \"active\": true\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/schedules/:id",
-              "host": ["{{baseUrl}}"],
-              "path": ["schedules", ":id"],
-              "variable": [
-                {
-                  "key": "id",
-                  "value": "schedule-uuid-here",
-                  "description": "Schedule UUID"
-                }
-              ]
-            },
-            "description": "Update schedule (requires admin or operator role)"
-          },
-          "response": []
-        },
-        {
-          "name": "Delete Schedule",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/schedules/:id",
-              "host": ["{{baseUrl}}"],
-              "path": ["schedules", ":id"],
-              "variable": [
-                {
-                  "key": "id",
-                  "value": "schedule-uuid-here",
-                  "description": "Schedule UUID"
-                }
-              ]
-            },
-            "description": "Delete schedule (requires admin or operator role)"
-          },
-          "response": []
-        },
-        {
-          "name": "Get Schedules for Automation",
+          "name": "GET /schedules/automation/:automationId",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/schedules/automation/:automationId",
-              "host": ["{{baseUrl}}"],
-              "path": ["schedules", "automation", ":automationId"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "schedules",
+                "automation",
+                ":automationId"
+              ],
               "variable": [
                 {
                   "key": "automationId",
-                  "value": "automation-uuid-here",
-                  "description": "Automation UUID"
+                  "value": ""
                 }
               ]
-            },
-            "description": "Get schedules for a specific automation"
+            }
           },
           "response": []
         }
       ]
     },
     {
-      "name": "Executions",
+      "name": "executions",
       "item": [
         {
-          "name": "Get All Executions",
+          "name": "GET /executions",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/executions?page=1&limit=20&status=success",
-              "host": ["{{baseUrl}}"],
-              "path": ["executions"],
+              "raw": "{{baseUrl}}/executions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "executions"
+              ],
               "query": [
                 {
                   "key": "page",
-                  "value": "1",
-                  "description": "Page number (default: 1)"
+                  "value": "",
+                  "disabled": true
                 },
                 {
                   "key": "limit",
-                  "value": "20",
-                  "description": "Items per page (default: 20, max: 100)"
+                  "value": "",
+                  "disabled": true
                 },
                 {
                   "key": "status",
-                  "value": "success",
-                  "description": "Filter by status: pending, running, success, failed, cancelled"
+                  "value": "",
+                  "disabled": true
                 },
                 {
                   "key": "automationId",
                   "value": "",
-                  "description": "Filter by automation ID",
                   "disabled": true
                 },
                 {
                   "key": "deviceId",
                   "value": "",
-                  "description": "Filter by device ID",
+                  "disabled": true
+                },
+                {
+                  "key": "trigger",
+                  "value": "",
                   "disabled": true
                 }
               ]
-            },
-            "description": "Get all executions with pagination and filtering"
+            }
           },
           "response": []
         },
         {
-          "name": "Get Execution by ID",
+          "name": "GET /executions/:id",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/executions/:id",
-              "host": ["{{baseUrl}}"],
-              "path": ["executions", ":id"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "executions",
+                ":id"
+              ],
               "variable": [
                 {
                   "key": "id",
-                  "value": "execution-uuid-here",
-                  "description": "Execution UUID"
+                  "value": ""
                 }
               ]
-            },
-            "description": "Get execution by ID"
+            }
           },
           "response": []
         },
         {
-          "name": "Cancel Execution",
+          "name": "PATCH /executions/:id/cancel",
           "request": {
             "method": "PATCH",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/executions/:id/cancel",
-              "host": ["{{baseUrl}}"],
-              "path": ["executions", ":id", "cancel"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "executions",
+                ":id",
+                "cancel"
+              ],
               "variable": [
                 {
                   "key": "id",
-                  "value": "execution-uuid-here",
-                  "description": "Execution UUID"
+                  "value": ""
                 }
               ]
             },
-            "description": "Cancel execution (requires admin or operator role)"
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
           },
           "response": []
         },
         {
-          "name": "Get Execution Statistics",
+          "name": "GET /executions/stats/summary",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/executions/stats/summary",
-              "host": ["{{baseUrl}}"],
-              "path": ["executions", "stats", "summary"]
-            },
-            "description": "Get execution statistics summary"
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "executions",
+                "stats",
+                "summary"
+              ]
+            }
           },
           "response": []
         },
         {
-          "name": "Get Executions for Automation",
+          "name": "GET /executions/automation/:automationId",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/executions/automation/:automationId?page=1&limit=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["executions", "automation", ":automationId"],
+              "raw": "{{baseUrl}}/executions/automation/:automationId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "executions",
+                "automation",
+                ":automationId"
+              ],
               "query": [
                 {
                   "key": "page",
-                  "value": "1",
-                  "description": "Page number (default: 1)"
+                  "value": "",
+                  "disabled": true
                 },
                 {
                   "key": "limit",
-                  "value": "20",
-                  "description": "Items per page (default: 20, max: 100)"
+                  "value": "",
+                  "disabled": true
                 },
                 {
                   "key": "status",
                   "value": "",
-                  "description": "Filter by status",
                   "disabled": true
                 }
               ],
               "variable": [
                 {
                   "key": "automationId",
-                  "value": "automation-uuid-here",
-                  "description": "Automation UUID"
+                  "value": ""
                 }
               ]
-            },
-            "description": "Get executions for a specific automation"
+            }
           },
           "response": []
         },
         {
-          "name": "Get Executions for Device",
+          "name": "GET /executions/device/:deviceId",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/executions/device/:deviceId?page=1&limit=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["executions", "device", ":deviceId"],
+              "raw": "{{baseUrl}}/executions/device/:deviceId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "executions",
+                "device",
+                ":deviceId"
+              ],
               "query": [
                 {
                   "key": "page",
-                  "value": "1",
-                  "description": "Page number (default: 1)"
+                  "value": "",
+                  "disabled": true
                 },
                 {
                   "key": "limit",
-                  "value": "20",
-                  "description": "Items per page (default: 20, max: 100)"
+                  "value": "",
+                  "disabled": true
                 },
                 {
                   "key": "status",
                   "value": "",
-                  "description": "Filter by status",
                   "disabled": true
                 }
               ],
               "variable": [
                 {
                   "key": "deviceId",
-                  "value": "device-uuid-here",
-                  "description": "Device UUID"
+                  "value": ""
                 }
               ]
-            },
-            "description": "Get executions for a specific device"
+            }
           },
           "response": []
         }
       ]
-    }
-  ],
-  "event": [
+    },
     {
-      "listen": "prerequest",
-      "script": {
-        "type": "text/javascript",
-        "exec": [
-          "// Auto-refresh token if needed",
-          "const accessToken = pm.collectionVariables.get('accessToken');",
-          "const refreshToken = pm.collectionVariables.get('refreshToken');",
-          "",
-          "if (!accessToken && refreshToken) {",
-          "    pm.sendRequest({",
-          "        url: pm.collectionVariables.get('baseUrl') + '/auth/refresh',",
-          "        method: 'POST',",
-          "        header: {",
-          "            'Content-Type': 'application/json'",
-          "        },",
-          "        body: {",
-          "            mode: 'raw',",
-          "            raw: JSON.stringify({ refreshToken: refreshToken })",
-          "        }",
-          "    }, (err, res) => {",
-          "        if (res && res.code === 200) {",
-          "            const responseJson = res.json();",
-          "            if (responseJson.success && responseJson.data) {",
-          "                pm.collectionVariables.set('accessToken', responseJson.data.accessToken);",
-          "                pm.collectionVariables.set('refreshToken', responseJson.data.refreshToken);",
-          "            }",
-          "        }",
-          "    });",
-          "}"
-        ]
-      }
+      "name": "settings",
+      "item": [
+        {
+          "name": "GET /settings/api-credentials",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/settings/api-credentials",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "api-credentials"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /settings/api-credentials/device/:deviceId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/settings/api-credentials/device/:deviceId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "api-credentials",
+                "device",
+                ":deviceId"
+              ],
+              "variable": [
+                {
+                  "key": "deviceId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /settings/api-credentials/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/settings/api-credentials/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "api-credentials",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /settings/api-credentials",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/settings/api-credentials",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "api-credentials"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"<string>\",\n  \"type\": \"switch\",\n  \"deviceId\": \"<uuid>\",\n  \"username\": \"<string>\",\n  \"password\": \"\",\n  \"apiKey\": \"\",\n  \"apiSecret\": \"\",\n  \"notes\": \"<string>\",\n  \"metadata\": {}\n}"
+            },
+            "description": "Required: name, type."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /settings/api-credentials/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/settings/api-credentials/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "api-credentials",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"<string>\",\n  \"type\": \"switch\",\n  \"deviceId\": \"<uuid>\",\n  \"username\": \"<string>\",\n  \"password\": \"\",\n  \"apiKey\": \"\",\n  \"apiSecret\": \"\",\n  \"notes\": \"<string>\",\n  \"metadata\": {}\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /settings/api-credentials/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/settings/api-credentials/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "api-credentials",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /settings/api-credentials/:id/test",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/settings/api-credentials/:id/test",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "api-credentials",
+                ":id",
+                "test"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /settings/cloud-integrations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/settings/cloud-integrations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "cloud-integrations"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /settings/cloud-integrations",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/settings/cloud-integrations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "cloud-integrations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /settings/cloud-integrations/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/settings/cloud-integrations/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "cloud-integrations",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /settings/cloud-integrations/:id/test",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/settings/cloud-integrations/:id/test",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "cloud-integrations",
+                ":id",
+                "test"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /settings/cloud-integrations/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/settings/cloud-integrations/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "cloud-integrations",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /settings/aruba-central",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/settings/aruba-central",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "aruba-central"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /settings/aruba-central",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/settings/aruba-central",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "aruba-central"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /settings/aruba-central/test",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/settings/aruba-central/test",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "aruba-central",
+                "test"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /settings/aruba-central/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/settings/aruba-central/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "aruba-central",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /settings/git-backup",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/settings/git-backup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "git-backup"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /settings/git-backup",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/settings/git-backup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "git-backup"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /settings/git-backup/test",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/settings/git-backup/test",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "git-backup",
+                "test"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /settings/git-backup",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/settings/git-backup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "git-backup"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
     }
   ]
 }

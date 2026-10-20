@@ -4,7 +4,7 @@
       <v-col cols="12" sm="8" md="6" lg="4" xl="3">
         <v-card class="elevation-8 rounded-lg">
           <v-card-title class="text-center py-8">
-            <div class="text-h4 font-weight-bold primary--text">
+            <div class="text-h4 font-weight-bold text-primary">
               NetHelper
             </div>
             <div class="text-subtitle-1 text-medium-emphasis mt-2">
@@ -186,22 +186,15 @@ authStore.clearError()
 <style scoped>
 .fill-height {
   min-height: 100vh;
-  background: linear-gradient(135deg, #FF8300 0%, #cc6900 100%);
+  background: linear-gradient(
+    135deg,
+    rgb(var(--v-theme-primary)) 0%,
+    color-mix(in srgb, rgb(var(--v-theme-primary)) 80%, black) 100%
+  );
 }
 
 .v-card {
   border-radius: 16px !important;
-}
-
-.v-card-title {
-  background: linear-gradient(45deg, #FF8300, #cc6900);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.primary--text {
-  color: #FF8300 !important;
 }
 
 /* Custom input styling */
@@ -210,7 +203,7 @@ authStore.clearError()
 }
 
 :deep(.v-field--focused .v-field__outline) {
-  --v-field-border-color: rgb(var(--v-theme-primary));
+  --v-field-border-color: rgb(var(--v-theme-primary-text));
 }
 
 /* Loading animation */

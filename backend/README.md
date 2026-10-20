@@ -36,7 +36,7 @@ For production deployment (Docker Compose or systemd + nginx), see [`../deploy/R
 
 ## API
 
-REST under `/api/v1` (routes in `src/routes/`); a Postman collection is in `NetHelper_API_Collection.postman_collection.json` (may lag the routes). Probes: `GET /health` (liveness) and `GET /health/ready` (database + Redis).
+REST under `/api/v1` (routes in `src/routes/`); a Postman collection is in `NetHelper_API_Collection.postman_collection.json`, generated from the route tables by `npm run postman:generate` (a unit test fails when it is out of date; set its `email`/`password` variables, then run Login). Probes: `GET /health` (liveness) and `GET /health/ready` (database + Redis).
 
 ## Project Structure
 
@@ -64,8 +64,6 @@ Run tests with: `npm test` (watch mode: `npm run test:watch`; lint + tests: `npm
 ### Authentication Testing
 
 Test login functionality: `npm run test:login user@example.com password`
-
-For the (historical) login testing guide, see [../docs/archive/LOGIN_TESTING.md](../docs/archive/LOGIN_TESTING.md)
 
 ## Deployment
 

@@ -219,13 +219,13 @@ const handleDelete = (event) => {
 }
 
 .base-node:hover {
-  border-color: rgb(var(--v-theme-primary));
+  border-color: rgb(var(--v-theme-primary-text));
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
   transform: translateY(-1px);
 }
 
 .node-selected {
-  border-color: rgb(var(--v-theme-primary));
+  border-color: rgb(var(--v-theme-primary-text));
   box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.2);
 }
 

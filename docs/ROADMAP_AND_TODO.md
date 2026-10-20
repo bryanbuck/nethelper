@@ -4,7 +4,7 @@ The single forward-looking backlog for NetHelper: features and improvements plan
 
 - **Architecture & the multi-vendor phased plan** live in [`MULTI_VENDOR_ROADMAP.md`](MULTI_VENDOR_ROADMAP.md) (authoritative).
 - **Project conventions** live in [`../CLAUDE.md`](../CLAUDE.md).
-- **Historical/superseded docs** are in [`archive/`](archive/) — do not treat them as current.
+- **Hardware facts** the code depends on live in [`hardware/`](hardware/). Superseded point-in-time docs were deleted on 2026-10-19; git history has them.
 
 > Context: NetHelper is now **multi-vendor** (Aruba/Juniper/Cisco) with a `cloud`/`direct` management model. Some items below were written in the earlier Aruba-Central-only era; where they still apply, read "Aruba Central" as "any cloud provider" and "central/direct" as "cloud/direct." Corrected inline where it matters.
 
@@ -39,8 +39,22 @@ Preparing the dev-environment build for a private, in-house beta. Deploy targets
 - ✅ Status bar (2026-10-16): background-activity toasts (sync, discovery, backups, automations, alerts, socket state) stacked over the page, covered clickable areas, and were gone once they timed out. They now go to a status bar at the bottom (`components/common/StatusBar.vue`): the newest message on the left, a history pop-up of the session's messages (All/Problems filter, unseen badge), and the version plus a real-time connection dot on the right. Only critical alerts still pop up (bottom-right, above the bar). Persistent messages (lost connection, critical alerts, failed automation runs) stay in the bar until dismissed. The log (`stores/notifications.js`) keeps 200 entries in `sessionStorage` per tab, so a reload keeps it; signing in or out clears it. The socket's lost/restored/failed messages share one entry instead of stacking ("Connection Lost" used to stay up forever).
 - ✅ Mist first contact (2026-10-19, branch `feature/mist-parity`): a live Mist org was read for the first time (GET-only probe `backend/scripts/probe-cloud.js`, anonymised captures in `backend/tests/fixtures/mist-live/`). Fixed: site UUIDs stored as Location (now site names), last-seen and config status never populated, Mist devices stuck "unverified" (cloud ownership now from `mist_configured` / site assignment), and a presigned S3 URL in WLANs that made every site scope backup look changed (stripped by `utils/config-redact.js`). Parity with Central: a Mist-managed EX with an IP and a credential backs up the NETCONF `set` config plus Mist's object, falls back to Mist when NETCONF fails, is polled over NETCONF (pollers now follow the router; a cloud-managed device is never SSHed), and a direct connection test that can't reach a cloud device shows what the cloud reports. Also: sync merges `Device.metadata` and keeps a known IP/firmware; the device list now includes its cloud integration (table chips said "Cloud" for every provider); provider-neutral UI text; per-integration scope backup button; scope backups filter by cloud; the Central probe no longer tries CX REST on Junos/IOS switches; a Juniper device without an integration no longer falls back to Central; Mist test failures carry actions. Discovery is multi-vendor (Juniper/Mist OUIs, `matchedVendor`). Validated online the same day (devices powered on): status flips, enrichment, cloud-offline alerts auto-resolve, scope backups stable. Also (2026-10-19, the user's choice): a cloud-managed device whose cloud reports it online but that fails NetHelper's ping now shows `warning`, not `offline` (`utils/device-status.js`, mirrored in the frontend), and its ping alert reads "is not answering ping". NETCONF to the Mist EX ran once a firewall was opened (2026-10-19): connection test, NETCONF polls and LLDP neighbors worked first time. It found that a Junos account without `view-configuration` gets `/* ACCESS-DENIED */` placeholders instead of an error, which had been stored as a successful backup; such reads are now refused, and a Mist-managed switch is backed up from Mist with a warning on the backup (new `ConfigBackup.warning`, migration `20261019200000_config_backup_warning`). Also fixed: the Junos chassis MAC is `fpc-mac-base` on real hardware. With `view-configuration` granted, the full backup ran: Junos `set` config plus Mist's object. Junos still withholds four hierarchies (scripts, event-options, secret, extension-service); per the user's choice such a read is kept and the backup's warning names them, and only an all-placeholder read is refused. Not yet run on hardware: the Junos SSH CLI fallback. Plan for the rest (cloud neighbors, scheduled sync + cloud status poller, cloud event streams, alert notifications): `~/.claude/plans/at-this-point-i-reactive-blanket.md` (local).
 - ✅ Fixed (2026-10-19): every device was pinged twice a minute. Startup ran its own `setInterval` sweep next to the Bull repeatable job, so the two sweeps overwrote each other's stats (the log read "12 successful, 11 failed out of 18") and both counted consecutive failures: a device went offline after about half its `PING_MONITOR_FAILURE_THRESHOLD`. The Bull job is now the only scheduler, and like the topology and cloud jobs it removes a repeatable left over from another interval or from monitoring being turned off.
-- ⏳ Remaining: a hardware validation pass and a clean-host install dry run (phase 7). Full plan: `~/.claude/plans/i-d-like-to-take-scalable-cake.md` (local).
-- ⏸ Deferred to the going-public review: rotating the secrets that were in the tracked `.env`, and a `git filter-repo` history purge.
+- ⏳ Remaining: a hardware validation pass and a clean-host install dry run (phase 7). Full plan: `~/.claude/plans/i-d-like-to-take-scalable-cake.md` (local). Checklist (from the 2026-10-07 outstanding-tasks snapshot):
+  - [ ] Inputs from the user: VM access from the dev host (`user@host`, SSH key, passwordless sudo, OS: Debian 12 / Ubuntu 24.04); outbound internet or a proxy; reachability to devices on 22/443/830 and whether the VM shares an L2 segment with any (MAC discovery); a second fresh VM for bare metal (not a snapshot revert); subnets that are OK to sweep and devices/tenants to treat with care; someone to make a harmless config change mid-run (diff test). The user enters every credential in the UI.
+  - [ ] Docker Compose install following only `deploy/README.md` (host-network override), logging every doc gap. `create-admin`, then integrations/credentials in the UI.
+  - [ ] Per platform (Central, Mist, AOS-CX, AOS-S, Junos): inventory sync, status, connection test, backup, config change, second backup, diff. Also discovery with MACs, the Git mirror, a restart, an upgrade (`docker compose up -d --build` over a running stack), and a browser click-through (Users page, change-password dialog, less-used pages after the Vuetify 3.13 upgrade).
+  - [ ] Bare-metal install on the second VM: systemd unit, nginx with TLS, `nginx -t`.
+  - [ ] Risks to watch: `ping` as non-root in the container; the Compose `!reset` override needs Compose 2.24+; CSP blocking something Vuetify needs; Prisma migrate under `ProtectSystem=strict`; AOS-S prompt/pager handling over SSH (no hardware run yet); the Junos SSH fallback.
+  - [ ] Record results in `docs/BETA_NOTES.md` ("How much has been tested on real equipment"); anything not run is marked unverified.
+  - [ ] Release (only after phase 7 passes): `npm run ci` in both tiers; set the date in `CHANGELOG.md`; merge `release/beta` into `master`; tag `v0.9.0-beta.1`; delete `release/beta`; mark this section shipped and move deferred items to a post-beta list.
+  - ✅ Housekeeping (2026-10-19):
+    - The `CLAUDE.md` commit trailer is updated.
+    - `backend/ARCHITECTURE.md` was deleted. It described the pre-multi-vendor design: a deleted Central service, node-cron, and horizontal scaling.
+    - `backend/DEVICE_POLLING_API.md` was rewritten against the current pollers. Writing it turned up a bug, now fixed: the `backup` and `login-sessions` pollers tried an AOS-CX REST login on any switch, including Junos and IOS.
+    - The Postman collection (39 requests, some for removed routes) is now generated from the route tables by `npm run postman:generate`, covering 119 requests. A unit test fails when the collection is stale or carries a credential. Both Postman files were checked for secrets: neither holds a real one. `docs/MRT_postman.json` is HPE's public Central MRT collection and holds only `{{client_id}}`/`{{client_secret}}` placeholders.
+    - The Git mirror's SSH host key now lives on the data volume (`BACKUP_GIT_KNOWN_HOSTS`, default `git-known_hosts` next to the repo), so recreating the container no longer re-trusts the remote.
+- ✅ History purge (2026-10-19): `git filter-repo` removed `backend/.env`, `backend/node_modules/`, `backend/logs/` and the `CLAUDE.md` files from every commit, and GitHub `master` was force-pushed (every commit ID changed). The real values in that `.env` were the database password and the Aruba Central client ID/secret; the JWT and SMTP entries were placeholders.
+- ⏸ Deferred to the going-public review: rotating the secrets that were in the tracked `.env`. Optional: ask GitHub Support to purge cached views of the old commits.
 
 ---
 
@@ -82,8 +96,24 @@ Shipped (`services/alert.service.js`, rules in `constants/alert-rules.js`, page 
 - ✅ Fixed on the way: a PoE port leaving a fault for a state other than delivering emitted no event; it now emits `port.poe.down`.
 - ✅ Automations and alerts (2026-10-16): an Alert trigger (opened/resolved, rule filter, minimum severity, optional device group) starts automations; Raise/Clear/Acknowledge Alert steps. Automation alerts use rule `automation.raised` with a key shared across automations (one raises on "opened", another clears on "resolved"); an automation never clears a built-in alert and never triggers on `automation.raised`. See item 3a below for the engine.
 
+Next: **notification channels** (phase 7 of the cloud plan, branch `feature/alert-notify`; not started as of 2026-10-19). Alerts are in-app only today.
+- [ ] **Model** `NotificationChannel`: `type` email|webhook, `name`, `config` JSON (email: recipients; webhook: URL plus optional headers), `minSeverity`, `rules` filter (empty = all), `enabled`, `createdById`. Webhook URLs and any header values are secrets: field-encrypted like `CloudIntegration.credentials`, never returned unmasked. Add the model to `OWNED_MODELS` in `services/user-lifecycle.js`. Migration plus the data-model summary in `CLAUDE.md`.
+- [ ] **Delivery**: the alert service's in-process `opened`/`resolved` events (already used by `automation/trigger.service.js`) queue one job per matching channel on a new Bull `notifications` queue, with retries and backoff. Notify once on open and once on resolve, never on a bump. Skip `automation.raised` unless a channel names it. A failed delivery is logged and visible on the channel, never an alert (no loops).
+- [ ] **Email**: reuse the nodemailer transport in `notification.service.js` (SMTP from env: `SMTP_HOST`/`PORT`/`USER`/`PASS`/`FROM`). It only starts when `SMTP_USER` is set, so allow an unauthenticated relay too. Add the vars to `config/env.js`. Subject: severity, rule label, device. Body: message, time, link to `/alerts`.
+- [ ] **Webhook**: POST a generic JSON payload (`event` opened|resolved, alert id/rule/severity/title/message/device/time) with a `text` field that Slack and Teams incoming webhooks display as-is. Timeout of a few seconds. Allow only http(s), and warn on plain http.
+- [ ] **API** (admin only): `settings/notification-channels` CRUD plus `POST /:id/test` (sends a sample, returns the result). Add the routes to the `ADMIN_ONLY` list in `tests/api/role-gates.test.js` and to the API surface in `CLAUDE.md`.
+- [ ] **UI**: Settings → Notifications (`components/settings/NotificationChannels.vue`, admin only): list with last delivery status, add/edit dialog (type, target, minimum severity, rules from `models/alerts.js`), test-send button, enable switch.
+- [ ] **Tests**: channel matching (severity, rules), one notification per open/resolve, secrets masked in API replies, payload shape, retries, role gates. Then a live check: a test send reaches a real mailbox/webhook, and a `device.offline` alert notifies once on open and once on resolve.
+- [ ] **Docs**: this item, `docs/CONFIGURATION.md` (SMTP), `docs/BETA_NOTES.md`, `CLAUDE.md` (services, data model, API).
+- ⏳ Later: SMS/PagerDuty, per-user subscriptions, digests/quiet hours.
+
+Also open from the cloud plan (2026-10-19), to check on hardware:
+- [ ] Mist stream: unplug JNAP-01 and confirm it shows offline within a few minutes and "Mist reports offline/online" appears in its Live tab; move a cable on JNEX-01 and confirm a link event within a minute.
+- [ ] Confirm the "Config out of sync" alerts opened for Sw-CoreA/Sw-CoreB (Central "Out of sync" while online).
+- [ ] View `/map` in a browser with the cloud links (Mist and Central).
+- [ ] The three Always-monitor CX switches (Sw-CoreA, Sw-CoreB, Sw-Studio) reject their linked credential (CX login 401 in the backend log); fix the credential.
+
 Deferred:
-- ⏳ Notification channels: email (nodemailer is wired in `notification.service.js` but unused), webhooks (Slack/Teams incoming webhooks), later SMS/PagerDuty. Per-user subscription preferences.
 - ⏳ Rule scoping (per device, group, site) and custom thresholds; maintenance windows / snooze.
 - ⏳ Port-flap detection from `port.link.*` events; API/transport failure alerts beyond backups.
 - ⏳ Open-alerts banner on the device page.
@@ -236,7 +266,7 @@ Support devices managed directly on the local network rather than through Aruba 
 **Status**: 🔨 Core implemented (2026-07-08) — switch-side probe, schema fields, backup
 routing, and UI shipped and verified against live hardware. Remaining: Central-side
 group/monitor-only enrichment and restore guardrails (restore itself still deferred). The
-OAuth blocker (`docs/archive/CENTRAL_ENDPOINT_TRIAGE.md`) was the token request itself: it
+OAuth blocker found by the 2026-07-08 endpoint triage was the token request itself: it
 posted `client_credentials` to the API gateway instead of HPE GreenLake SSO. Fixed 2026-10-16
 (GreenLake API clients, cluster picker) and verified live the same day; first contact also
 fixed the inventory field mapping (serial/status/last-seen). A full live sync is still to run.
@@ -251,7 +281,7 @@ reads, and block direct config writes to Central-managed switches. Also triage t
 classic-vs-New-Central endpoint mix in `aruba-central.service.js` (the `central` backup
 path via `getDeviceConfiguration` is likely broken on a New Central tenant).
 
-**Full evaluation & design:** `docs/archive/CENTRAL_MANAGEMENT_MODE_PLAN.md` (historical)
+Switch-side probe facts: `docs/hardware/AOS_CX_NOTES.md` ("Central management probe").
 
 ---
 
@@ -358,12 +388,16 @@ Comprehensive audit trail:
 
 ### 11. Built-in UI Themes
 **Priority**: Low
-**Status**: 🔨 Spike done (2026-10-15, branch `spike/classic-theme`): Light, Dark and Classic (circa-2010 admin portal) themes, a theme menu, and the choice saved per browser
+**Status**: ✅ Shipped in `release/beta` (spike 2026-10-15; leftovers done 2026-10-19): Light, Dark and Classic (circa-2010 admin portal) themes, a theme menu, and the choice saved per browser
 
 Built-in themes only. Users can't define their own. See "Themes" in `CLAUDE.md` for how it works.
 - Done: theme tokens instead of hardcoded colors across the automations builder; vue-flow CSS imported and themed; Dark primary changed to `#2D6A00`.
-- Remaining: `LoginView.vue` (orange gradient), `DeviceStatusChart.vue` (literal chart colors), `DeviceInfoDisplay.vue`, `NotFound.vue` still hardcode colors; delete the unused `src/style.css`.
-- Open questions: `#2D6A00` is about 2.8:1 against Dark's background, so green text and outlines may need a lighter variant. Per-user (server-side) theme preference only if testers ask.
+- Done (2026-10-19):
+  - The last hardcoded colors are gone. The login and 404 backgrounds are primary gradients, the dashboard status chart reads the current theme's colors (Chart.js can't use CSS variables), and the device raw-data block uses theme tokens. The unused `src/style.css` was deleted.
+  - Dark's green was too dark to read as a foreground (`#2D6A00` is 2.8:1 on `#121212`). A new `primary-text` theme color fixes this. It is Dark `#5CAB2A` (6.5:1), and the same as primary in Light and Classic. `.text-primary` (text, icons, text/outlined/tonal buttons and chips) and the primary borders and outlines use it, while fills keep primary, which is 6.6:1 against white text.
+- Open questions:
+  - Light's orange `#FF8300` is 2.5:1 on white, both as text and behind white button labels. That is below WCAG AA; fixing it means changing the brand color.
+  - Per-user (server-side) theme preference only if testers ask.
 
 ---
 
@@ -405,7 +439,7 @@ Recently shipped (details in the sections above): Automated Device Discovery (it
 
 ## 🗂️ Historical backlog note
 
-The old per-tier backlogs (`backend_todo.txt` / `frontend_todo.txt`, dated March 2025) were reviewed during the 2026-07 doc consolidation and found **obsolete** — every concrete item sampled (execution status transitions, `auth/register`, `auth/me` GET/PUT, nested schedule/execution routes) is already implemented, and they still reference the deleted `aruba-central.service.js`. They were archived rather than merged; see `archive/BACKEND_TODO_2025-03.txt` and `archive/FRONTEND_TODO_2025-03.txt`. No open items were carried forward from them.
+The old per-tier backlogs (`backend_todo.txt` / `frontend_todo.txt`, dated March 2025) were reviewed during the 2026-07 doc consolidation and found **obsolete** — every concrete item sampled (execution status transitions, `auth/register`, `auth/me` GET/PUT, nested schedule/execution routes) is already implemented, and they still reference the deleted `aruba-central.service.js`. They were archived, then deleted on 2026-10-19 (git history has them). No open items were carried forward from them.
 
 ---
 

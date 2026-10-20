@@ -199,16 +199,11 @@ defineProps({
 }
 
 .raw-data-pre {
-  background-color: #f5f5f5;
+  background-color: rgba(var(--v-theme-on-surface), 0.05);
   padding: 12px;
   border-radius: 4px;
   overflow-x: auto;
   font-size: 12px;
   line-height: 1.4;
-}
-
-.v-theme--dark .raw-data-pre {
-  background-color: #1e1e1e;
-  color: #d4d4d4;
 }
 </style>

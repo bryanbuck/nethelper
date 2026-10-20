@@ -108,4 +108,11 @@ describe('version pollers follow the transport router', () => {
     expect(poller.canProbeCentralStatus({ type: 'switch', vendor: 'cisco', platform: 'ios-xe' })).toBe(false);
     expect(poller.canProbeCentralStatus({ type: 'switch', vendor: 'aruba', platform: 'aos-s' })).toBe(false);
   });
+
+  test('the CX-only backup and login-sessions pollers never log in to another platform', async () => {
+    await expect(poller.backupPoller(junos(), credentials)).rejects.toThrow(/AOS-CX switches over REST only/);
+    await expect(poller.loginSessionsPoller({ id: 's3', name: 'cat1', type: 'switch', vendor: 'cisco', platform: 'ios-xe' }, credentials))
+      .rejects.toThrow(/AOS-CX switches over REST only/);
+    expect(CXSwitchAPI).not.toHaveBeenCalled();
+  });
 });

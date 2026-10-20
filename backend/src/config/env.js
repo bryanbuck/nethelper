@@ -59,6 +59,8 @@ const schema = Joi.object({
   // Where config backups live. Defaults are under backend/storage/.
   BACKUP_STORAGE_PATH: Joi.string().optional(),
   BACKUP_GIT_REPO_PATH: Joi.string().optional(),
+  // Git mirror over SSH: where the remote's host key is remembered.
+  BACKUP_GIT_KNOWN_HOSTS: Joi.string().optional(),
 
   // Live port/PoE state (services/live/). Intervals in milliseconds.
   LIVE_MONITOR_ENABLED: Joi.string().valid('true', 'false').default('true'),

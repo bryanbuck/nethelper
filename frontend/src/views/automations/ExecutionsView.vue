@@ -328,7 +328,7 @@ function timeAgo(value) {
 
 <style scoped>
 .plain-link {
-  color: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-primary-text));
   text-decoration: none;
 }
 

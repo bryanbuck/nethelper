@@ -134,6 +134,7 @@ Production writes JSON logs to stdout. Values under secret-looking keys (passwor
 | `BACKUP_STORAGE_PATH` | `backend/storage/config-backups` | Flat config files (authoritative). Docker: `/data/config-backups`. Bare metal: `/var/lib/nethelper/config-backups`. |
 | `BACKUP_GIT_REPO_PATH` | `backend/storage/config-repo` | Default Git mirror repository, used when the in-app setting is blank. |
 | `BACKUP_GIT_TIMEOUT_MS` | `60000` | Per git command. |
+| `BACKUP_GIT_KNOWN_HOSTS` | `git-known_hosts` next to `BACKUP_GIT_REPO_PATH` | Where the Git mirror's ssh remembers an SSH remote's host key (accepted on first use; pre-fill it to pin the key). `~/.ssh/known_hosts` is still read. Docker: `/data/git-known_hosts`. |
 
 ### Optional integrations
 

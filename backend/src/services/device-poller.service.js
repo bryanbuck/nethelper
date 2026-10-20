@@ -304,16 +304,8 @@ class DevicePollerService {
     try {
       logger.progress(`Polling configuration backup from ${device.name} (${device.ipAddress})`);
 
-      switch (device.type) {
-        case 'switch':
-          break;
-
-        case 'ap':
-        case 'gateway':
-          throw new Error(`Backup polling not yet implemented for device type: ${device.type}`);
-
-        default:
-          throw new Error(`Unsupported device type: ${device.type}`);
+      if (!this.isCxRestSwitch(device)) {
+        throw new Error(`Backup polling reads AOS-CX switches over REST only; use a config backup for ${device.name}`);
       }
 
       // The REST config database (running + startup JSON), and the running
@@ -374,16 +366,8 @@ class DevicePollerService {
     try {
       logger.progress(`Polling login sessions from ${device.name} (${device.ipAddress})`);
 
-      switch (device.type) {
-        case 'switch':
-          break;
-
-        case 'ap':
-        case 'gateway':
-          throw new Error(`Login sessions polling not yet implemented for device type: ${device.type}`);
-
-        default:
-          throw new Error(`Unsupported device type: ${device.type}`);
+      if (!this.isCxRestSwitch(device)) {
+        throw new Error(`Login sessions polling reads AOS-CX switches over REST only (${device.name} is not one)`);
       }
 
       try {
@@ -444,12 +428,20 @@ class DevicePollerService {
   }
 
   /**
-   * Can we read Central status from this device over CX REST? True for
-   * classified AOS-CX switches and for unclassified Aruba switches (which this
-   * codebase keeps on REST transport by default); false for AOS-S, other
-   * vendors' switches, and non-switch devices.
+   * Can we read Central status from this device over CX REST? Same test as
+   * isCxRestSwitch.
    */
   canProbeCentralStatus(device) {
+    return this.isCxRestSwitch(device);
+  }
+
+  /**
+   * Is this a switch we may log in to over AOS-CX REST? True for classified
+   * AOS-CX switches and for unclassified Aruba switches (which this codebase
+   * keeps on REST transport by default); false for AOS-S, other vendors'
+   * switches, and non-switch devices.
+   */
+  isCxRestSwitch(device) {
     if (device?.type !== 'switch') return false;
     // Vendor-aware: a Junos or IOS-XE switch never gets a CX REST login,
     // whatever its model string looks like.
