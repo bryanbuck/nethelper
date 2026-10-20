@@ -113,13 +113,15 @@ class BaseCloudProvider {
   }
 
   /**
-   * LLDP neighbors the cloud plane knows for one device (e.g. a Mist AP's
-   * uplink switch and port), normalized as in services/topology/neighbor.js.
-   * Not implemented by any provider yet: the response fields need checking
-   * against a live tenant first (docs/ROADMAP_AND_TODO.md, Network Map).
-   * @returns {Promise<{neighbors: Object[], identity: {chassisId, sysName}}>}
+   * Every neighbor the cloud plane knows, for all of its devices in one pass:
+   * a few org- or site-wide reads rather than a call per device (Mist allows
+   * 5,000 requests/hour per org). Neighbors are normalized as in
+   * services/topology/neighbor.js. topology.service reads this once per
+   * collection run and per integration.
+   * @returns {Promise<Map<string, {neighbors: Object[], identity: {chassisId, sysName}, online: boolean}>>}
+   *   by device serial; a device the cloud has no neighbor data for is absent
    */
-  async getNeighbors(device) { // eslint-disable-line no-unused-vars
+  async listNeighbors() {
     this.unsupported('topology');
   }
 

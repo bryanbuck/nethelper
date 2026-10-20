@@ -199,10 +199,10 @@ A `/map` page to explore the managed network visually, built from each device's 
 - ✅ Models `DeviceLink`, `DeviceTopologyState`, `TopologyChange`, `MapLayout`; `DiscoveredDevice.subnet` (Discovery now records the swept subnet).
 - ✅ Map (vue-flow + dagre): layered auto-layout; nodes draggable by operators, with positions saved per site and shared. Status colors update from `device:status:update`. Neighbors not in inventory are dashed "ghost" nodes, importable when Discovery saw them. Discovery hosts not on the map are grouped by subnet. There is a link-change history drawer.
 - ✅ Device page **Neighbors** tab (`GET /devices/:id/neighbors`, "Read now").
+- ✅ Cloud neighbor sources (2026-10-19, branch `feature/cloud-neighbors`): a cloud-managed device no direct transport reaches gets its neighbors from Mist (AP LLDP from device stats, switch ports from `/stats/ports/search`) or Central (`/network-monitoring/v1/topology/{site-id}`), one bulk read per integration per collection run (`listNeighbors()`). Run live against both clouds: four Central APs and the cloud-only AOS-S switch, and the Mist AP, now sit on their uplink ports; links seen from a switch's own LLDP and from the cloud merge. Offline devices are skipped, keeping their last links. Captures in `tests/fixtures/mist-live/neighbors-*.json` and `tests/fixtures/central-live/`.
 - ✅ API: `GET /topology/graph`, `GET /topology/changes`, `POST /topology/collect` (operator+), `GET`/`PUT /topology/layouts/:scope` (PUT operator+). Socket: `topology:progress`, `topology:updated`.
 
 Deferred:
-- ⏳ Cloud neighbor sources: Mist's fields are now confirmed live (2026-10-19: AP `lldp_stat`, switch `clients` with `source: lldp`, both under `/stats/devices?fields=*`; captured in `tests/fixtures/mist-live/`). New Central still needs a read-only live check before a parser is written.
 - ⏳ Run the Junos, AOS-S and IOS-XE parsers against real output and replace the spec-derived test strings with captures.
 - ⏳ Endpoint attachment from switch MAC tables (AOS-CX `system/vlans/*/macs`), so Discovery hosts hang off their switch port, plus a "where is this MAC/IP?" search.
 - ⏳ Live link-state edges (color an edge from `device:event` port changes for live-monitored devices).

@@ -121,8 +121,9 @@
           class="map-hint"
         >
           No links yet. Neighbors come from each device's LLDP/CDP table, read with the
-          device's linked credential<span v-if="canEdit">: use <strong>Refresh topology</strong></span>.
-          Devices without a credential or a supported platform show a
+          device's linked credential, or from Mist or Central for a cloud-managed device
+          the credential doesn't reach<span v-if="canEdit">: use <strong>Refresh topology</strong></span>.
+          Devices with no neighbor source show a
           <v-icon size="14">mdi-lan-pending</v-icon> marker.
         </v-alert>
         <TopologyCanvas

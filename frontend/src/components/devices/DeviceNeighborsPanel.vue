@@ -30,7 +30,8 @@
         <span v-if="state.lastSuccessAt"> (last good read {{ formatTime(state.lastSuccessAt) }})</span>
       </template>
       <template v-else>
-        Not collected yet. Neighbors are read from the device's LLDP/CDP table with its linked credential.
+        Not collected yet. Neighbors are read from the device's LLDP/CDP table with its linked credential,
+        or from its cloud when the device is cloud-managed.
       </template>
     </v-card-subtitle>
 
@@ -55,7 +56,7 @@
         <span class="text-medium-emphasis">{{ (item.remoteCapabilities || []).join(', ') }}</span>
       </template>
       <template #[`item.source`]="{ item }">
-        {{ String(item.source || '').toUpperCase() }}
+        {{ PROTOCOL_LABELS[item.source] || String(item.source || '').toUpperCase() }}
       </template>
       <template #[`item.lastSeen`]="{ item }">
         <span :class="{ 'text-medium-emphasis': !item.active }">
@@ -100,6 +101,9 @@ const headers = [
   { title: 'Protocol', key: 'source' },
   { title: 'Last seen', key: 'lastSeen' }
 ]
+
+// `cloud`: a link the cloud computed (Central's site topology), not one LLDP table.
+const PROTOCOL_LABELS = { lldp: 'LLDP', cdp: 'CDP', cloud: 'Cloud topology' }
 
 const stateLabel = computed(() => ({
   ok: 'Collected',

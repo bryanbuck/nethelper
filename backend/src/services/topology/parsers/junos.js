@@ -1,9 +1,10 @@
 /**
  * Junos LLDP, over NETCONF (preferred) or the CLI (fallback when NETCONF is off).
  *
- * Spec-derived (Junos XML API reference and CLI docs), not yet checked against
- * a live device. Element names differ by release: ELS switches report
- * <lldp-local-port-id>, older releases <lldp-local-interface>; both are read.
+ * The NETCONF path is checked against a live EX4000 (Junos 24.4,
+ * tests/fixtures/junos-live/); the CLI parser is spec-derived. Element names
+ * differ by release: ELS switches report <lldp-local-port-id>, older releases
+ * <lldp-local-interface>; both are read.
  */
 
 const { makeNeighbor } = require('../neighbor');

@@ -24,7 +24,20 @@ both devices were powered on: `inventory-online.json` (`connected: true`),
 `neighbor_mac`/`neighbor_system_name`/`neighbor_port_desc` from LLDP) and
 `device-events-online.json` (`/devices/events/search`: `SW_RESTARTED`,
 `SW_CONNECTED`, `AP_RESTARTED` with `reason: power_cycle`, ...), the inputs for
-cloud neighbors and cloud events.
+cloud neighbors and cloud events. The `neighbors-*.json` files come from one
+later run (so their anonymised ids line up with each other, not with the files
+above): inventory, `/stats/devices` with the neighbor `fields` list, and
+`/stats/ports/search`, with the AP on the EX's `mge-0/0/0`; an AP33's
+`lldp_stats` is keyed by `""` (its only port).
+
+`central-live/` holds **live** New Central captures from one run (2026-10-19,
+anonymised the same way): the `network-monitoring/v1alpha1/devices` list and
+`network-monitoring/v1/topology/{site-id}` for three sites (`topology-hq.json`:
+VSX core pair, APs, an AOS-S switch, unmanaged LLDP neighbors under `tpd_<mac>`
+serials; `topology-branch.json`: a gateway whose WAN uplinks are port-less
+links to `Internet`/`LTE` pseudo-devices, and an offline switch still listing
+its last link; `topology-teleworker.json`: empty, the site's only AP offline).
+Topology is served only on `v1`; `v1alpha1` returns 404.
 
 `junos-live/` holds **real** NETCONF replies from the same EX4000-12MP (Junos
 24.4R2.25, Mist-managed, 2026-10-19), with MACs, serials and CLEI codes

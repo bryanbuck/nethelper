@@ -4,6 +4,7 @@ const { redactConfigSecrets } = require('../../utils/config-redact');
 const ArubaErrorHandler = require('../../utils/aruba-error-handler');
 const { getRedis } = require('../../config/redis');
 const { detectPlatform } = require('../../utils/device-platform');
+const { parseCentralTopology } = require('../topology/parsers/central');
 const { debugLog, Services } = require('../../utils/debug-logger');
 
 const logger = debugLog.createLogger(Services.ARUBA_CENTRAL);
@@ -88,7 +89,7 @@ class ArubaCentralProvider extends BaseCloudProvider {
   }
 
   supports(capability) {
-    return ['inventory', 'status', 'test', 'scope-backup'].includes(capability);
+    return ['inventory', 'status', 'test', 'scope-backup', 'topology'].includes(capability);
     // NOT 'config-backup': the classic /configuration/v2 endpoint is
     // quarantined (see getDeviceConfiguration). CX configs are still backed
     // up over device REST; AOS-S over SSH.
@@ -239,6 +240,23 @@ class ArubaCentralProvider extends BaseCloudProvider {
     if (!item) throw new Error(`Device ${serial} not found in ${this.label}`);
     const normalized = this.normalizeDevice(item);
     return { status: normalized.status, lastSeen: normalized.lastSeen, raw: item };
+  }
+
+  /**
+   * Neighbors for every device, from each site's topology (one call per site,
+   * sequential for Central's per-second limit). Only the GA v1 path serves
+   * topology; v1alpha1 returns 404 (live tenant, 2026-10-19). A device with
+   * no site is in no topology, so it is absent from the result.
+   */
+  async listNeighbors() {
+    const siteIds = [...new Set((await this.listInventory()).map((d) => d.metadata.siteId).filter(Boolean))];
+    const replies = [];
+    for (const siteId of siteIds) {
+      replies.push(await this.makeRequest('GET', `/network-monitoring/v1/topology/${encodeURIComponent(siteId)}`, {
+        context: 'topology',
+      }));
+    }
+    return parseCentralTopology(replies);
   }
 
   /**
