@@ -20,7 +20,7 @@ const mistSwitch = (over = {}) => ({
 });
 const mistReports = (status) => {
   const getDeviceStatus = jest.fn(async () => ({ status, lastSeen: new Date(1791421861000) }));
-  CloudProviderFactory.forDevice.mockResolvedValue({ integration: { name: 'Buck Home' }, label: 'Buck Home (juniper_mist)', getDeviceStatus });
+  CloudProviderFactory.forDevice.mockResolvedValue({ integration: { name: 'My Mist' }, label: 'My Mist (juniper_mist)', getDeviceStatus });
   return getDeviceStatus;
 };
 
@@ -45,8 +45,8 @@ test('NETCONF off on a Mist switch: fails, never SSHes, and adds what Mist repor
   const result = await testDeviceConnection(mistSwitch(), CREDS);
 
   expect(result.success).toBe(false);
-  expect(result.cloudStatus).toMatchObject({ provider: 'Buck Home', status: 'offline' });
-  expect(result.message).toMatch(/Buck Home reports the device offline; NetHelper did not reach it directly/);
+  expect(result.cloudStatus).toMatchObject({ provider: 'My Mist', status: 'offline' });
+  expect(result.message).toMatch(/My Mist reports the device offline; NetHelper did not reach it directly/);
   expect(sshDeviceService.testConnection).not.toHaveBeenCalled();
 });
 

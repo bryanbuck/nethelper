@@ -2,7 +2,7 @@
 
 NetHelper inventories network devices, tracks whether they're up, and backs up their configurations with change history. It works across vendors and across management planes: cloud-managed (Aruba Central, Juniper Mist) and direct (SSH, REST, NETCONF).
 
-This is a **private, in-house beta**. Install it from [`deploy/README.md`](../deploy/README.md). Every setting is listed in [`CONFIGURATION.md`](CONFIGURATION.md).
+This is a **private, in-house beta**. Install it from [`deploy/README.md`](../deploy/README.md), then follow [`GETTING_STARTED.md`](GETTING_STARTED.md) for the first steps. Every setting is listed in [`CONFIGURATION.md`](CONFIGURATION.md).
 
 ## What's supported
 

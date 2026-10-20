@@ -96,7 +96,7 @@ describe('stream events', () => {
 
 describe('Mist stream URL and capability', () => {
   const mist = (baseUrl) => new MistProvider({
-    id: 'int-mist', provider: 'juniper_mist', name: 'Buck Home', baseUrl, credentials: { apiToken: 't', orgId: 'o' },
+    id: 'int-mist', provider: 'juniper_mist', name: 'My Mist', baseUrl, credentials: { apiToken: 't', orgId: 'o' },
   });
 
   test('each regional API host has its stream on api-ws', () => {
@@ -183,7 +183,7 @@ describe('cloud-stream.service', () => {
     const streams = [];
     const provider = {
       id,
-      label: 'Buck Home (juniper_mist)',
+      label: 'My Mist (juniper_mist)',
       integration: { baseUrl: 'https://api.ac2.mist.com', updatedAt: new Date('2026-10-19T00:00:00Z'), ...integration },
       supports: (capability) => capability === 'events',
       listEventChannels: jest.fn(async () => ['/sites/s1/stats/devices']),

@@ -70,7 +70,7 @@ const neighbor = (localPort, chassisId, portId, sysName) => ({
 function stubCx(neighbors) {
   devicePoller.withCxSession.mockImplementation(async (_device, _creds, fn) => fn({
     getLldpNeighbors: async () => neighbors,
-    getLldpIdentity: async () => ({ chassisId: 'ec:67:94:d1:a8:00', sysName: 'Sw-Studio' }),
+    getLldpIdentity: async () => ({ chassisId: 'ec:67:94:00:20:00', sysName: 'Sw-Studio' }),
   }));
 }
 
@@ -97,19 +97,19 @@ test('AOS-CX without a credential is skipped with a reason the user can act on',
 });
 
 test('a Central-managed CX switch is read over local REST; first run records links, not changes', async () => {
-  stubCx([neighbor('1/1/13', '14:ab:ec:c2:0e:00', '1/1/6', 'Sw-CoreB'), neighbor('1/1/4', '04:2a:e2:70:cb:4e', 'P1', 'phone')]);
+  stubCx([neighbor('1/1/13', '14:ab:ec:00:10:00', '1/1/6', 'Sw-CoreB'), neighbor('1/1/4', '04:2a:e2:00:30:4e', 'P1', 'phone')]);
   const result = await topology.collectDevice(cx);
   expect(result).toMatchObject({ status: 'ok', source: 'AOS-CX REST', neighbors: 2, changes: 0 });
   expect(mockStore.links).toHaveLength(2);
-  expect(mockStore.states.get('d-cx')).toMatchObject({ status: 'ok', chassisId: 'ec:67:94:d1:a8:00', neighborCount: 2 });
+  expect(mockStore.states.get('d-cx')).toMatchObject({ status: 'ok', chassisId: 'ec:67:94:00:20:00', neighborCount: 2 });
   expect(mockStore.changes).toEqual([]);
   expect(CloudProviderFactory.forDevice).not.toHaveBeenCalled();
 });
 
 test('the next run records what changed', async () => {
-  stubCx([neighbor('1/1/13', '14:ab:ec:c2:0e:00', '1/1/6', 'Sw-CoreB'), neighbor('1/1/4', '04:2a:e2:70:cb:4e', 'P1', 'phone')]);
+  stubCx([neighbor('1/1/13', '14:ab:ec:00:10:00', '1/1/6', 'Sw-CoreB'), neighbor('1/1/4', '04:2a:e2:00:30:4e', 'P1', 'phone')]);
   await topology.collectDevice(cx);
-  stubCx([neighbor('1/1/13', '14:ab:ec:c2:0e:00', '1/1/6', 'Sw-CoreB')]);
+  stubCx([neighbor('1/1/13', '14:ab:ec:00:10:00', '1/1/6', 'Sw-CoreB')]);
   const result = await topology.collectDevice(cx);
   expect(result.changes).toBe(1);
   expect(mockStore.changes[0]).toMatchObject({ deviceId: 'd-cx', type: 'link.removed', localPort: '1/1/4' });
@@ -117,13 +117,13 @@ test('the next run records what changed', async () => {
 });
 
 test('a failed read leaves existing links alone', async () => {
-  stubCx([neighbor('1/1/13', '14:ab:ec:c2:0e:00', '1/1/6', 'Sw-CoreB')]);
+  stubCx([neighbor('1/1/13', '14:ab:ec:00:10:00', '1/1/6', 'Sw-CoreB')]);
   await topology.collectDevice(cx);
   devicePoller.withCxSession.mockRejectedValue(new Error('connect ETIMEDOUT'));
   const result = await topology.collectDevice(cx);
   expect(result).toMatchObject({ status: 'failed', reason: 'connect ETIMEDOUT' });
   expect(mockStore.links.every((l) => l.active)).toBe(true);
-  expect(mockStore.states.get('d-cx')).toMatchObject({ status: 'failed', chassisId: 'ec:67:94:d1:a8:00' });
+  expect(mockStore.states.get('d-cx')).toMatchObject({ status: 'failed', chassisId: 'ec:67:94:00:20:00' });
 });
 
 test('a cloud AP whose provider has no neighbor API is unsupported', async () => {
@@ -138,8 +138,8 @@ test('a cloud AP whose provider has no neighbor API is unsupported', async () =>
 test('a Mist-managed EX with an IP and a credential is read over NETCONF, not the cloud', async () => {
   settingsService.getDeviceCredentialsForUse.mockResolvedValue({ username: 'u', password: 'p' });
   JunosAPI.getLldpTopology.mockResolvedValue({
-    neighbors: [neighbor('mge-0/0/0', 'a8:f7:d9:b2:ed:0b', 'eth0', 'JNAP-01')],
-    identity: { chassisId: '4c:4a:b4:3b:79:80', sysName: 'JNEX-01' },
+    neighbors: [neighbor('mge-0/0/0', 'a8:f7:d9:00:60:0b', 'eth0', 'JNAP-01')],
+    identity: { chassisId: '4c:4a:b4:00:40:80', sysName: 'JNEX-01' },
   });
   const result = await topology.collectDevice({
     id: 'd-ex', name: 'JNEX-01', type: 'switch', vendor: 'juniper', platform: 'junos', ipAddress: '172.16.10.102', managementMode: 'cloud',

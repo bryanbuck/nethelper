@@ -69,12 +69,12 @@ describe('ping monitor', () => {
 
   test('a device its cloud reports online "is not answering ping", and the event carries warning', async () => {
     await pingMonitor.updateDeviceStatus('d1', 'JNEX-01', false, null, 5, 'warning', {
-      managementMode: 'cloud', cloudStatus: 'online', cloudIntegration: { name: 'Buck Home' },
+      managementMode: 'cloud', cloudStatus: 'online', cloudIntegration: { name: 'My Mist' },
     });
 
     expect(alertService.raise).toHaveBeenCalledWith('device.offline', expect.objectContaining({
       title: 'JNEX-01 is not answering ping',
-      message: expect.stringMatching(/Buck Home reports it online/),
+      message: expect.stringMatching(/My Mist reports it online/),
     }), expect.anything());
     expect(socket.emit).toHaveBeenCalledWith('device:status:update', expect.objectContaining({
       status: 'warning', pingStatus: 'offline',

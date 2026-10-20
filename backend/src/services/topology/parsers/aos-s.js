@@ -1,7 +1,7 @@
 /**
  * AOS-S (ProCurve/AOS-Switch) CLI. Written from the AOS-S management guide;
  * checked against a live 2930F (WC.16.11) on 2026-10-20, which prints MACs
- * as e4de40-aabc80 rather than the guide's spaced form (normalizeMac handles
+ * as e4de40-008080 rather than the guide's spaced form (normalizeMac handles
  * both). See docs/hardware/AOS_S_NOTES.md.
  *
  * `show lldp info remote-device detail` prints one block per neighbor:
