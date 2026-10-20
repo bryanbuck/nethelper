@@ -60,6 +60,14 @@
               </span>
             </div>
 
+            <!-- Push stream from the cloud (Mist): status changes arrive within a minute -->
+            <div v-if="integration.eventStream" class="d-flex align-center mt-1">
+              <v-icon size="small" class="mr-1" :color="streamInfo(integration.eventStream).color">
+                {{ streamInfo(integration.eventStream).icon }}
+              </v-icon>
+              <span class="text-body-2">{{ streamInfo(integration.eventStream).label }}</span>
+            </div>
+
             <!-- Result of a test run in this session, with the provider's own
                  error details rather than just the summary toast. -->
             <v-alert
@@ -287,6 +295,24 @@ const detailRows = (details) => [
 ].filter(row => row.value)
 
 const formatDate = (value) => (value ? new Date(value).toLocaleString() : '')
+
+// integration.eventStream: { state, connectedAt, lastMessageAt, lastError } (backend cloud-stream.service).
+function streamInfo(stream) {
+  if (stream.state === 'connected') {
+    return {
+      icon: 'mdi-access-point',
+      color: 'success',
+      label: stream.lastMessageAt
+        ? `Event stream connected, last report ${formatDate(stream.lastMessageAt)}`
+        : 'Event stream connected, no reports yet',
+    }
+  }
+  if (stream.state === 'disconnected') {
+    return { icon: 'mdi-access-point-off', color: 'warning', label: `Event stream down (${stream.lastError || 'disconnected'}), retrying` }
+  }
+  if (stream.state === 'connecting') return { icon: 'mdi-progress-clock', color: 'info', label: 'Event stream connecting' }
+  return { icon: 'mdi-access-point-off', color: 'grey', label: 'Event stream stopped' }
+}
 
 const resetForm = (provider = null) => {
   form.provider = provider

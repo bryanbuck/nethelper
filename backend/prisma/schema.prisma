@@ -225,7 +225,7 @@ model DeviceEvent {
   type       String
   port       String?
   data       Json     @default("{}")
-  source     String // push | poll | resync
+  source     String // push | poll | resync (live monitor) | cloud (cloud status refresh, cloud event stream)
   occurredAt DateTime @default(now())
 
   @@index([deviceId, occurredAt])

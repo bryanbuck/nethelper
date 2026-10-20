@@ -31,6 +31,7 @@ const { PLATFORMS } = require('../../constants/vendors');
 const { CapabilityError } = require('../cloud-providers/errors');
 const { mergePort, diffPort, diffSnapshots } = require('./port-state');
 const alertService = require('../alert.service');
+const deviceEvents = require('../device-events.service');
 const logger = require('../../utils/logger');
 
 const num = (value, fallback) => (Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback);
@@ -44,7 +45,6 @@ function config() {
     // notification socket can outlive its session. Recycle well before that.
     sessionMaxAgeMs: num(process.env.LIVE_SESSION_MAX_AGE, 6 * 3600000),
     maxConnections: num(process.env.LIVE_MAX_CONNECTIONS, 200),
-    retentionDays: num(process.env.DEVICE_EVENT_RETENTION_DAYS, 30),
     backoffBaseMs: 5000,
     backoffMaxMs: 300000,
   };
@@ -294,7 +294,6 @@ class StateMonitorService {
   constructor() {
     this.monitors = new Map(); // deviceId -> DeviceMonitor
     this.holders = new Map(); // deviceId -> Set<holder>
-    this.pruneTimer = null;
   }
 
   /** Boot: watch every device with liveMonitoring on, staggered. */
@@ -313,14 +312,10 @@ class StateMonitorService {
       });
       index += 1;
     }
-    this.pruneTimer = setInterval(() => this.pruneEvents().catch(() => {}), 24 * 3600 * 1000);
-    this.pruneTimer.unref?.();
-    this.pruneEvents().catch(() => {});
     logger.info(`Live state monitoring started for ${this.monitors.size} device(s)`);
   }
 
   async stop() {
-    clearInterval(this.pruneTimer);
     await Promise.all([...this.monitors.values()].map((m) => m.stop()));
     this.monitors.clear();
     this.holders.clear();
@@ -400,31 +395,9 @@ class StateMonitorService {
     return this.monitors.get(deviceId)?.snapshot() || null;
   }
 
-  /** Persist an event and broadcast it. */
+  /** Persist an event, broadcast it, and report the alerts it implies. */
   async recordEvent(device, event, source) {
-    const row = await getPrisma().deviceEvent.create({
-      data: {
-        deviceId: device.id,
-        type: event.type,
-        port: event.port,
-        data: event.data || {},
-        source,
-      },
-    }).catch((error) => {
-      logger.error(`Failed to record device event for ${device.name}: ${error.message}`);
-      return null;
-    });
-    const payload = {
-      id: row?.id || null,
-      deviceId: device.id,
-      deviceName: device.name,
-      type: event.type,
-      port: event.port,
-      data: event.data || {},
-      source,
-      occurredAt: row?.occurredAt || new Date(),
-    };
-    emit('device:event', payload);
+    const payload = await deviceEvents.record(device, event, source);
     this.alertOn(device, event);
     return payload;
   }
@@ -482,12 +455,6 @@ class StateMonitorService {
       // Nothing watches the device now, so nothing would clear these.
       await alertService.clearDevice(device.id, ['live.poe-fault', 'live.monitor-down']);
     }
-  }
-
-  async pruneEvents() {
-    const cutoff = new Date(Date.now() - config().retentionDays * 24 * 3600 * 1000);
-    const { count } = await getPrisma().deviceEvent.deleteMany({ where: { occurredAt: { lt: cutoff } } });
-    if (count) logger.info(`Pruned ${count} device event(s) older than ${config().retentionDays} days`);
   }
 }
 

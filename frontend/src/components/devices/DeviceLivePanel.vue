@@ -149,47 +149,25 @@
         </v-table>
       </v-card>
 
-      <!-- Events -->
-      <v-card>
-        <v-card-title class="d-flex align-center">
-          <v-icon start icon="mdi-timeline-clock-outline" />
-          Recent events
-          <v-spacer />
-          <span class="text-caption text-medium-emphasis">Raw transitions, newest first</span>
-        </v-card-title>
-        <v-divider />
-        <v-list v-if="live.events.length" density="compact">
-          <v-list-item v-for="e in live.events" :key="e.id || `${e.type}-${e.occurredAt}`">
-            <template #prepend>
-              <v-icon :icon="eventInfo(e).icon" :color="eventInfo(e).color" size="small" />
-            </template>
-            <v-list-item-title>
-              <span v-if="e.port" class="font-weight-medium">{{ e.port }}</span>
-              {{ eventInfo(e).label }}
-            </v-list-item-title>
-            <template #append>
-              <span class="text-caption text-medium-emphasis">{{ formatTime(e.occurredAt) }}</span>
-            </template>
-          </v-list-item>
-        </v-list>
-        <v-card-text v-else class="text-medium-emphasis">
-          No events yet. Link and PoE changes show up here as they happen.
-        </v-card-text>
-      </v-card>
+      <DeviceEventsCard :events="live.events" empty-text="No events yet. Link and PoE changes show up here as they happen." />
     </template>
+
+    <!-- No live state: what the cloud reports is still recorded -->
+    <DeviceEventsCard v-if="!liveCapable" :events="live.events" :empty-text="cloudEventsNote" />
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { format } from 'date-fns'
 import { useLiveStore } from '@/stores/live'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useWebSocket } from '@/composables/useWebSocket'
 import deviceService from '@/services/device.service'
-import { PlatformInfo, liveStateMode } from '@/models/vendors'
+import { PlatformInfo, liveStateMode, cloudProviderLabel } from '@/models/vendors'
 import LiveSparkline from '@/components/devices/LiveSparkline.vue'
+import DeviceEventsCard from '@/components/devices/DeviceEventsCard.vue'
+import { speedLabel } from '@/models/device-events'
 
 const props = defineProps({
   device: { type: Object, required: true },
@@ -223,6 +201,16 @@ const unavailableReason = computed(() => {
   return 'This device has no IP address. Edit it and add one: live state reads the switch directly.'
 })
 
+// Under a cloud, the device's history still comes from what the cloud reports.
+const cloudEventsNote = computed(() => {
+  const provider = props.device.cloudIntegration?.provider
+  if (props.device.managementMode !== 'cloud' || !provider) return 'No events yet.'
+  const name = cloudProviderLabel(provider)
+  return provider === 'juniper_mist'
+    ? `No events yet. Status changes ${name} reports, and port link changes and restarts from its event stream, show up here.`
+    : `No events yet. Status changes ${name} reports show up here (checked every few minutes).`
+})
+
 const deliveryNote = computed(() => {
   if (mode.value === 'push') return 'The switch pushes link and PoE changes as they happen (about a second).'
   if (mode.value === 'poll') return 'Link and PoE state is re-read every minute.'
@@ -252,10 +240,6 @@ function linkChip(p) {
   if (p.adminUp === false) return { label: 'Disabled', color: 'grey', icon: 'mdi-cancel' }
   if (p.linkUp) return { label: p.speedMbps ? speedLabel(p.speedMbps) : 'Up', color: 'success', icon: 'mdi-arrow-up-bold' }
   return { label: 'Down', color: 'grey', icon: 'mdi-arrow-down-bold' }
-}
-
-function speedLabel(mbps) {
-  return mbps >= 1000 ? `${mbps / 1000}G` : `${mbps}M`
 }
 
 function poeChip(p) {
@@ -293,33 +277,6 @@ function recentlyChanged(port) {
   return at && now.value - at < 3000
 }
 
-const EVENTS = {
-  'port.link.up': { label: 'link up', icon: 'mdi-arrow-up-bold', color: 'success' },
-  'port.link.down': { label: 'link down', icon: 'mdi-arrow-down-bold', color: 'medium-emphasis' },
-  'port.admin.up': { label: 'enabled', icon: 'mdi-check-circle-outline', color: 'success' },
-  'port.admin.down': { label: 'disabled', icon: 'mdi-cancel', color: 'medium-emphasis' },
-  'port.poe.up': { label: 'PoE delivering', icon: 'mdi-flash', color: 'success' },
-  'port.poe.down': { label: 'PoE stopped', icon: 'mdi-flash-off', color: 'medium-emphasis' },
-  'port.poe.fault': { label: 'PoE fault', icon: 'mdi-flash-alert', color: 'error' },
-  'monitor.connected': { label: 'Monitoring reconnected', icon: 'mdi-lan-connect', color: 'success' },
-  'monitor.disconnected': { label: 'Monitoring lost contact', icon: 'mdi-lan-disconnect', color: 'warning' },
-}
-
-function eventInfo(e) {
-  const info = EVENTS[e.type] || { label: e.type, icon: 'mdi-information-outline', color: 'medium-emphasis' }
-  if (e.type === 'port.link.up' && e.data?.speedMbps) return { ...info, label: `link up at ${speedLabel(e.data.speedMbps)}` }
-  if (e.type === 'port.poe.up' && e.data?.pdClass) return { ...info, label: `PoE delivering (${e.data.pdClass})` }
-  return info
-}
-
-function formatTime(at) {
-  try {
-    return format(new Date(at), 'MMM d, HH:mm:ss')
-  } catch {
-    return ''
-  }
-}
-
 async function toggleMonitoring(enabled) {
   toggling.value = true
   try {
@@ -338,11 +295,12 @@ async function toggleMonitoring(enabled) {
 
 function start() {
   if (liveCapable.value) live.watch(props.device.id)
+  else live.watchEvents(props.device.id)
 }
 
 watch(() => props.device.id, () => start())
 // Platform or IP fixed while the tab is open: start (or stop) without a reload.
-watch(liveCapable, (capable) => (capable ? start() : live.unwatch()))
+watch(liveCapable, () => start())
 
 onMounted(() => {
   start()

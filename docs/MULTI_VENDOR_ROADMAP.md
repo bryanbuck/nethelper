@@ -528,6 +528,55 @@ true, anything else → null (no failure value seen live yet). The
 (10-minute settle, since a push briefly reads out of sync) and clears when it
 is back in sync.
 
+## 8f. Cloud event streams (2026-10-19)
+
+A provider that supports `'events'` offers `listEventChannels()` and
+`openEventStream(channels)`: an unopened, read-only EventEmitter (`open`,
+`data`, `close`). `services/cloud/cloud-stream.service.js` holds one
+connection per such integration. It starts with the server, reconciles every
+5 minutes and after any integration edit (open new, close removed, reconnect
+edited, subscribe new sites), and reconnects with backoff (5 s doubling to
+5 min). It is in-memory and single-instance, like the live monitor.
+`CLOUD_STREAM_ENABLED` turns it off.
+
+**Mist** (`services/cloud/mist-stream.js`): `wss://api-ws.<region>.mist.com/api-ws/v1/stream`
+(the API host with `api-ws.` for `api.`), the REST token in the upgrade
+request, one `/sites/:id/stats/devices` subscription per site. Checked live on
+2026-10-19 (`probe-cloud.js --stream`, `tests/fixtures/mist-live/stream-stats-devices.json`):
+- `channel_subscribed` acks each subscription; an unknown channel gets no
+  reply (`/sites/:id/devices/events` is not one). `/sites/:id/devices` sent
+  nothing in two minutes with no config change.
+- `data` is a JSON string of **partial** stats, about once a minute per
+  connected device: a switch sends one message (serial, uptime, `if_stat`),
+  an AP sends two (`port_stat`, then uptime/version) keyed by MAC with no
+  serial. Each says how long it stays valid (`_ttl`, 190 s).
+- **No message carries a status**, and a disconnecting device just goes quiet.
+
+So the stream is a trigger, and REST stays the source of truth: a device the
+database holds as not online that reports, an online device whose last report
+expired (`_ttl` + 30 s, swept every 30 s, re-asked each window while the cloud
+still says online), and every (re)connect all run the §8e status refresh for
+that integration, one at a time and at most every 30 s. Status, alerts and
+`device:status:update` therefore come from one place. The refresh writes a
+status change only if the status is still the one it read, so overlapping
+refreshes report a change once.
+
+**Events** (`DeviceEvent`, source `cloud`, `services/device-events.service.js`,
+which also records the live monitor's): `port.link.up`/`down` when a port's
+state differs between two messages (switch ports from their logical units,
+skipping irb/vme/me0/lo0), `device.restarted` when uptime goes backwards by
+more than a minute, and `cloud.<status>` for every status change the refresh
+writes from a known status (both clouds). The first message after start is a
+baseline. Events stay raw. The device page's Live tab lists them for devices
+without live state; Settings → Cloud Integrations shows each stream's state
+(`eventStream` on `GET /settings/cloud-integrations`).
+
+**Central: none.** New Central delivers alerts only by HTTP POST to a URL it
+calls (webhooks under Alert Management, or the GreenLake event framework).
+That needs a public HTTPS endpoint, so it is deferred
+(`ROADMAP_AND_TODO.md` item 1). Classic Central's protobuf streaming API does
+not apply to New Central. Central stays on the 5-minute refresh.
+
 ## 9. Risks & open questions
 
 1. **Meraki backup semantics** — biggest product-level risk: settings snapshot ≠ running-config. Needs UI honesty and a decision on which settings objects constitute the snapshot. (Partly addressed 2026-09-14: `format` is now persisted per backup and drives the filename in the Git mirror — see §8b — so the distinction is recorded. The UI labelling decision remains open.)

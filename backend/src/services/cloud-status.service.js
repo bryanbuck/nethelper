@@ -7,13 +7,20 @@
  *
  * Changes are pushed as `device:status:update` and drive the cloud alerts
  * (device.cloud-offline, device.cloud-config) as soon as they happen, rather
- * than at the next sync.
+ * than at the next sync. A change from a known status is also recorded as a
+ * DeviceEvent (`cloud.<status>`, source `cloud`).
+ *
+ * Runs on its schedule and whenever the Mist event stream sees a device start
+ * or stop reporting (services/cloud/cloud-stream.service.js). A write is
+ * conditional on the status it read, so two overlapping refreshes report a
+ * change once.
  */
 
 const { getPrisma } = require('../config/database');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const { ENV_ARUBA_INTEGRATION_ID } = require('./cloud-providers/cloud-provider-factory');
 const deviceService = require('./device.service');
+const deviceEvents = require('./device-events.service');
 const { effectiveStatus } = require('../utils/device-status');
 const logger = require('../utils/logger');
 
@@ -93,7 +100,11 @@ class CloudStatusService {
       const patch = statusPatch(device, report);
       if (!Object.keys(patch).length) continue;
       try {
-        await getPrisma().device.update({ where: { id: device.id }, data: patch });
+        const { count } = await getPrisma().device.updateMany({
+          where: { id: device.id, cloudStatus: device.cloudStatus },
+          data: patch,
+        });
+        if (!count) continue; // another refresh changed it first
       } catch (error) {
         logger.warn(`cloud-status: could not update ${device.name}: ${error.message}`);
         continue;
@@ -101,6 +112,12 @@ class CloudStatusService {
       summary.updated++;
       if (patch.cloudStatus) {
         summary.statusChanges++;
+        if (device.cloudStatus) {
+          deviceEvents.record(device, {
+            type: `cloud.${patch.cloudStatus}`,
+            data: { previous: device.cloudStatus, provider: provider.providerType },
+          }, 'cloud');
+        }
         deviceService.alertCloudStatus(device.id, device.name, { status: patch.cloudStatus, serial: device.serial });
         emit('device:status:update', {
           deviceId: device.id,

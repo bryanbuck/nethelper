@@ -20,6 +20,8 @@ const { connectDatabase, disconnectDatabase } = require('./src/config/database')
 const { connectRedis, disconnectRedis } = require('./src/config/redis');
 const { initializeQueues, closeQueues } = require('./src/config/bull');
 const stateMonitorService = require('./src/services/live/state-monitor.service');
+const cloudStreamService = require('./src/services/cloud/cloud-stream.service');
+const deviceEvents = require('./src/services/device-events.service');
 const liveViewService = require('./src/services/live/live-view.service');
 const alertService = require('./src/services/alert.service');
 const automationTriggers = require('./src/services/automation/trigger.service');
@@ -67,6 +69,12 @@ async function startServer() {
       logger.error(`Live state monitoring failed to start: ${error.message}`);
     });
 
+    // Push streams from the clouds (Mist), in the background like the above.
+    cloudStreamService.start().catch((error) => {
+      logger.error(`Cloud event streams failed to start: ${error.message}`);
+    });
+    deviceEvents.startPruning();
+
     // Daily prune of old resolved alerts; automations with an Alert trigger
     alertService.start();
     automationTriggers.start();
@@ -94,6 +102,8 @@ async function startServer() {
 
       await liveViewService.stop();
       await stateMonitorService.stop(); // logs out of device sessions
+      cloudStreamService.stop();
+      deviceEvents.stopPruning();
       automationTriggers.stop();
       automationSchedules.stop();
       alertService.stop();

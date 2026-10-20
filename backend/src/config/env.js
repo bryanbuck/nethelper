@@ -80,6 +80,8 @@ const schema = Joi.object({
   CLOUD_SYNC_INTERVAL: Joi.number().integer().min(300000).default(3600000),
   CLOUD_STATUS_ENABLED: Joi.string().valid('true', 'false').default('true'),
   CLOUD_STATUS_INTERVAL: Joi.number().integer().min(60000).default(300000),
+  // Push streams from clouds that offer one (Mist WebSocket; services/cloud/).
+  CLOUD_STREAM_ENABLED: Joi.string().valid('true', 'false').default('true'),
 
   // Network Map neighbor collection (services/topology/). Interval in milliseconds.
   TOPOLOGY_ENABLED: Joi.string().valid('true', 'false').default('true'),

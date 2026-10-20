@@ -49,74 +49,17 @@ Preparing the dev-environment build for a private, in-house beta. Deploy targets
 ### 1. Real-time Updates from Cloud Providers (webhooks / event streams)
 
 **Priority**: Medium
-**Status**: Not Started (polling baseline shipped 2026-10-19, see below)
-**Estimated Effort**: 2-3 weeks
+**Status**: Mist shipped 2026-10-19 (event stream); Central deferred (webhooks only, needs a public endpoint)
 
-- ✅ Polling baseline (2026-10-19, branch `feature/cloud-status`): until now cloud sync ran only when someone clicked it, so cloud status and the cloud-offline alert went stale in between. Sync now also runs hourly (`CLOUD_SYNC_INTERVAL`), and a status refresh runs every 5 minutes (`CLOUD_STATUS_INTERVAL`, `services/cloud-status.service.js`, provider `listStatuses()`). It updates status, IP, firmware, connection and config state for devices sync already created, pushes `device:status:update`, and drives the cloud alerts. Mist costs one call per 1,000 devices, Central one per 100. Run live against both clouds. Event streams below would make changes arrive in seconds rather than minutes.
-
-> **Multi-vendor note:** originally scoped to Aruba Central webhooks; now applies per cloud provider. Aruba Central and Meraki offer webhooks; **Mist offers a WebSocket event stream** (already noted as post-MVP in the multi-vendor roadmap). Implement as a capability on `BaseCloudProvider` (e.g. `subscribeEvents`) so each provider supplies its own mechanism, feeding the same internal device-update path.
-
-#### Description
-Integrate with each cloud provider's webhook/event notification system to receive real-time device status updates directly, rather than relying solely on periodic sync operations.
-
-#### Benefits
-- **Real-time visibility**: Instant notification when devices go online/offline in Aruba Central
-- **Reduced polling**: Less need for frequent API calls to check device status
-- **Better accuracy**: Central Status would reflect changes immediately
-- **Event-driven architecture**: More efficient use of resources
-
-#### Technical Requirements
-
-##### Backend Changes
-1. **Webhook Endpoint**: Create endpoint to receive Aruba Central webhook events
-   - `POST /api/webhooks/aruba-central`
-   - Handle authentication/verification from Aruba Central
-   - Process event types: device status changes, alerts, configuration changes
-
-2. **Webhook Registration**: Automate webhook registration with Aruba Central
-   - Register webhook URL during initial setup
-   - Handle webhook lifecycle (create, update, delete, verify)
-   - Store webhook IDs and secrets
-
-3. **Event Processing Service**:
-   - Parse Aruba Central event payloads
-   - Map events to internal device updates
-   - Update database with new device status
-   - Emit WebSocket events to connected frontend clients
-
-4. **Security**:
-   - Validate webhook signatures from Aruba Central
-   - Implement IP whitelist for Aruba Central webhook sources
-   - Rate limiting on webhook endpoint
-
-##### Frontend Changes
-1. **Real-time Status Display**:
-   - Already handled via existing WebSocket infrastructure
-   - No additional changes needed (events flow through existing `device:update` handlers)
-
-2. **Connection Indicator**:
-   - Show webhook connection status in UI
-   - Display last received webhook event timestamp
-
-#### Prerequisites
-- [ ] Aruba Central account must support webhooks (check subscription tier)
-- [ ] Public-facing webhook endpoint (requires proper domain/SSL)
-- [ ] Understand Aruba Central webhook payload formats
-- [ ] Test webhook reliability and rate limits
-
-#### Implementation Steps
-1. Research Aruba Central webhook documentation
-2. Set up test environment with ngrok or similar for webhook testing
-3. Implement webhook endpoint and event processing
-4. Add webhook management UI in Settings page
-5. Test with various device event types
-6. Deploy to production with proper SSL and domain
-7. Monitor webhook reliability and performance
+- ✅ Polling baseline (2026-10-19, branch `feature/cloud-status`): until now cloud sync ran only when someone clicked it, so cloud status and the cloud-offline alert went stale in between. Sync now also runs hourly (`CLOUD_SYNC_INTERVAL`), and a status refresh runs every 5 minutes (`CLOUD_STATUS_INTERVAL`, `services/cloud-status.service.js`, provider `listStatuses()`). It updates status, IP, firmware, connection and config state for devices sync already created, pushes `device:status:update`, and drives the cloud alerts. Mist costs one call per 1,000 devices, Central one per 100. Run live against both clouds.
+- ✅ Mist event stream (2026-10-19, branch `feature/cloud-events`; `docs/MULTI_VENDOR_ROADMAP.md` §8f): one outbound WebSocket per Mist org (`services/cloud/`), subscribed to every site's device stats; no public URL needed. Checked live first (`probe-cloud.js --stream`): the stream carries no device status and a disconnecting device just goes quiet, so it triggers the status refresh (a device held offline starts reporting, or an online one's report expires) instead of deciding status itself. Every (re)connect resyncs. Port link changes and restarts from the stream, and every cloud status change (both clouds), are recorded as `DeviceEvent` rows with source `cloud` and shown on the device page's Live tab. Settings → Cloud Integrations shows the stream's state. `CLOUD_STREAM_ENABLED`.
+- [ ] Mist: verify on hardware that an unplugged device shows offline within a few minutes (its last report expires after 190 s, then Mist's REST status is asked) and an AP port change appears as an event.
+- [ ] **Central webhooks (deferred).** New Central has no stream NetHelper can open; it delivers alerts (e.g. "AP Rebooted", with `operation` Add/Update and `state` Active/Cleared) by HTTP POST to a URL it calls, set up under Alert Management, or through the GreenLake event framework (CloudEvents, `/events/v1beta1/subscriptions`). That needs a public HTTPS endpoint, which an in-house install usually doesn't have. Classic Central's protobuf streaming API is not available on New Central. Until then Central stays on the 5-minute refresh. When it is built: `POST /api/v1/webhooks/<integration>` with a per-integration secret (verify GreenLake's signature), map alerts onto the same status-refresh trigger, and show the last delivery in Settings. Meraki is in the same position (webhooks only).
 
 #### Related Documentation
-- [Aruba Central API Webhooks Documentation](https://developer.arubanetworks.com/aruba-central/)
-- WebSocket service: `frontend/src/services/websocket.service.js`
-- Device service: `backend/src/services/device.service.js`
+- [Mist WebSocket API overview](https://www.juniper.net/documentation/us/en/software/mist/automation-integration/topics/concept/websocket-api-overview.html)
+- [New Central alert webhooks](https://developer.arubanetworks.com/new-central/docs/alert-with-webhooks), [GreenLake webhooks guide](https://developer.greenlake.hpe.com/docs/greenlake/services/event/public/guide)
+- Backend: `backend/src/services/cloud/` (stream), `backend/src/services/cloud-status.service.js` (status refresh)
 
 #### Notes
 - This complements the ICMP ping monitoring (Item 1) rather than replaces it

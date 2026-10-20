@@ -142,6 +142,26 @@ class BaseCloudProvider {
     return new Map(devices.filter((d) => d.serial).map((d) => [d.serial, this.statusOf(d)]));
   }
 
+  /**
+   * Channels for openEventStream(), e.g. one per site. Read again when the
+   * stream reconnects and periodically, so new sites are picked up.
+   * @returns {Promise<string[]>}
+   */
+  async listEventChannels() {
+    this.unsupported('events');
+  }
+
+  /**
+   * An unopened push stream from the cloud plane (services/cloud/): an
+   * EventEmitter with open(), close(), subscribe(), unsubscribe() and the
+   * events `open`, `data` ({ channel, data }) and `close` ({ code, error }).
+   * The stream is read-only; services/cloud/cloud-stream.service.js owns
+   * reconnects and what the data means.
+   */
+  openEventStream(channels) { // eslint-disable-line no-unused-vars
+    this.unsupported('events');
+  }
+
   /** The status fields of a NormalizedCloudDevice. */
   statusOf(device) {
     return {
@@ -157,7 +177,7 @@ class BaseCloudProvider {
 
   /**
    * Capability probe used by transport routing and the UI.
-   * @param {string} capability - 'inventory' | 'status' | 'config-backup' | 'scope-backup' | 'topology' | 'test'
+   * @param {string} capability - 'inventory' | 'status' | 'config-backup' | 'scope-backup' | 'topology' | 'events' | 'test'
    * @returns {boolean}
    */
   supports(capability) { // eslint-disable-line no-unused-vars

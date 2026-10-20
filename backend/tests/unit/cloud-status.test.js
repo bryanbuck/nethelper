@@ -5,7 +5,10 @@
  */
 jest.mock('axios');
 jest.mock('../../src/config/redis', () => ({ getRedis: jest.fn() }));
-const mockPrisma = { device: { findMany: jest.fn(), update: jest.fn(async () => ({})) } };
+const mockPrisma = {
+  device: { findMany: jest.fn(), updateMany: jest.fn(async () => ({ count: 1 })) },
+  deviceEvent: { create: jest.fn(async ({ data }) => ({ id: 'e1', occurredAt: new Date(), ...data })) },
+};
 jest.mock('../../src/config/database', () => ({ getPrisma: () => mockPrisma }));
 jest.mock('../../src/services/alert.service', () => ({ raise: jest.fn(), clear: jest.fn() }));
 jest.mock('../../src/websocket/socket.handler', () => {
@@ -109,7 +112,7 @@ describe('provider status reads (live captures)', () => {
 });
 
 describe('refreshProvider', () => {
-  const provider = (statuses) => ({ id: 'int-mist', label: 'Buck Home (juniper_mist)', listStatuses: jest.fn(async () => statuses) });
+  const provider = (statuses) => ({ id: 'int-mist', label: 'Buck Home (juniper_mist)', providerType: 'juniper_mist', listStatuses: jest.fn(async () => statuses) });
 
   test('only devices that sync made and this integration owns are read, and nothing is created', async () => {
     mockPrisma.device.findMany.mockResolvedValue([]);
@@ -126,7 +129,7 @@ describe('refreshProvider', () => {
     const summary = await cloudStatus.refreshProvider(provider(new Map([['SN000002', report()]])));
 
     expect(summary).toMatchObject({ devices: 1, updated: 1, statusChanges: 1 });
-    expect(mockPrisma.device.update).toHaveBeenCalledWith({ where: { id: 'd1' }, data: expect.objectContaining({ cloudStatus: 'online' }) });
+    expect(mockPrisma.device.updateMany).toHaveBeenCalledWith({ where: { id: 'd1', cloudStatus: 'offline' }, data: expect.objectContaining({ cloudStatus: 'online' }) });
     // Up in the cloud but failing ping: warning (utils/device-status.js).
     expect(socket.emit).toHaveBeenCalledWith('device:status:update', expect.objectContaining({
       deviceId: 'd1', status: 'warning', cloudStatus: 'online',
@@ -134,12 +137,35 @@ describe('refreshProvider', () => {
     expect(alertService.clear).toHaveBeenCalledWith('device.cloud-offline', { subjectKey: 'd1', deviceId: 'd1' });
   });
 
+  test('a change from a known status is recorded as a cloud event; a first status is not', async () => {
+    mockPrisma.device.findMany.mockResolvedValue([row(), row({ id: 'd2', name: 'JNAP-01', serial: 'SN000001', cloudStatus: null })]);
+
+    await cloudStatus.refreshProvider(provider(new Map([['SN000002', report()], ['SN000001', report()]])));
+
+    expect(mockPrisma.deviceEvent.create).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.deviceEvent.create).toHaveBeenCalledWith({ data: {
+      deviceId: 'd1', type: 'cloud.online', port: null, data: { previous: 'offline', provider: 'juniper_mist' }, source: 'cloud',
+    } });
+  });
+
+  test('a device another refresh already changed is not reported twice', async () => {
+    mockPrisma.device.findMany.mockResolvedValue([row()]);
+    mockPrisma.device.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    const summary = await cloudStatus.refreshProvider(provider(new Map([['SN000002', report()]])));
+
+    expect(summary).toMatchObject({ updated: 0, statusChanges: 0 });
+    expect(socket.emit).not.toHaveBeenCalled();
+    expect(mockPrisma.deviceEvent.create).not.toHaveBeenCalled();
+    expect(alertService.clear).not.toHaveBeenCalled();
+  });
+
   test('an unchanged device costs no write, no event and no alert call', async () => {
     mockPrisma.device.findMany.mockResolvedValue([row({ cloudStatus: 'online', cloudConnectionStatus: 'connected' })]);
 
     await cloudStatus.refreshProvider(provider(new Map([['SN000002', report()]])));
 
-    expect(mockPrisma.device.update).not.toHaveBeenCalled();
+    expect(mockPrisma.device.updateMany).not.toHaveBeenCalled();
     expect(socket.emit).not.toHaveBeenCalled();
     expect(alertService.raise).not.toHaveBeenCalled();
     expect(alertService.clear).not.toHaveBeenCalled();

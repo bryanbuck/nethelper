@@ -5,12 +5,20 @@
  *
  * SAFETY:
  *  - Sends GET requests only. Any other method is refused before it is sent.
+ *  - --stream (Mist) opens the org's WebSocket and sends `subscribe` messages
+ *    only, then closes after --seconds.
  *  - Secrets in replies (PSKs, passwords, tokens) are always replaced by
  *    fingerprints (utils/config-redact.js), even in the "raw" files.
  *  - Output goes to --out, which must be outside the repository.
  *
  * Usage (from backend/):
  *   node scripts/probe-cloud.js --integration <id|name> --out <dir> [--get <path>]... [--no-builtin]
+ *   node scripts/probe-cloud.js --integration <id|name> --out <dir> --no-builtin \
+ *     --stream '/sites/{site}/stats/devices' [--stream …] [--seconds 120]
+ *
+ * `{site}` in a stream channel expands to every site of the org. The stream's
+ * messages are written as stream.json / stream.anon.json, each with the
+ * milliseconds since the subscribe and `data` parsed when Mist sent a string.
  *
  * For Juniper Mist the built-in set covers every endpoint mist.provider.js
  * reads plus candidates for neighbors and events. For Aruba Central there is
@@ -31,13 +39,15 @@ const { redactConfigSecrets } = require('../src/utils/config-redact');
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
 function parseArgs(argv) {
-  const args = { gets: [], builtin: true };
+  const args = { gets: [], streams: [], seconds: 120, builtin: true };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--integration') args.integration = argv[++i];
     else if (arg === '--out') args.out = argv[++i];
     else if (arg === '--get') args.gets.push(argv[++i]);
     else if (arg === '--no-builtin') args.builtin = false;
+    else if (arg === '--stream') args.streams.push(argv[++i]);
+    else if (arg === '--seconds') args.seconds = Number(argv[++i]);
     else throw new Error(`Unknown argument: ${arg}`);
   }
   if (!args.integration || !args.out) {
@@ -135,8 +145,11 @@ class Anonymiser {
     // Bare 12-hex strings are MACs in these APIs (Mist even keys stats `_id` by one).
     if (/^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$/i.test(value) || /^[0-9a-f]{12}$/i.test(value)) return this.mac(value);
     if (/^\d{1,3}(\.\d{1,3}){3}$/.test(value)) return this.ip(value);
-    // IPv6 link-local addresses embed the MAC (EUI-64), also inside lists like "a/24,fe80::.../64".
-    return value.replace(/fe80:[0-9a-f:]+/gi, 'fe80::1');
+    // IPv6 link-local addresses embed the MAC (EUI-64), also inside lists like "a/24,fe80::.../64",
+    // and ids are embedded in paths (stream channels: /sites/<site id>/stats/devices).
+    return value
+      .replace(/fe80:[0-9a-f:]+/gi, 'fe80::1')
+      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, (id) => this.uuid(id));
   }
 
   walk(node, key = '') {
@@ -201,6 +214,47 @@ async function mistPlan(provider, probe, anonymiser) {
   }
 }
 
+/** Subscribe to Mist stream channels for `seconds`; resolves with every message received. */
+async function mistStream(provider, channels, seconds) {
+  const WebSocket = require('ws');
+  if (!provider.streamUrl) throw new Error(`${provider.label} has no stream URL (base URL ${provider.integration.baseUrl})`);
+  console.log(`Streaming ${provider.streamUrl} for ${seconds}s:`);
+  const messages = [];
+  const started = Date.now();
+  const ws = new WebSocket(provider.streamUrl, { headers: provider.streamHeaders(), handshakeTimeout: 15000 });
+  await new Promise((resolve, reject) => {
+    ws.on('unexpected-response', (_req, res) => reject(new Error(`stream upgrade refused (${res.statusCode})`)));
+    ws.on('error', reject);
+    ws.on('open', () => {
+      for (const channel of channels) {
+        console.log(`  subscribe ${channel}`);
+        ws.send(JSON.stringify({ subscribe: channel }));
+      }
+      setTimeout(() => ws.close(1000), seconds * 1000);
+    });
+    ws.on('message', (raw) => {
+      let message;
+      try {
+        message = JSON.parse(raw.toString());
+      } catch {
+        message = { unparsed: raw.toString().slice(0, 2000) };
+      }
+      if (typeof message.data === 'string') {
+        try {
+          message = { ...message, data: JSON.parse(message.data), dataWasString: true };
+        } catch { /* keep the string */ }
+      }
+      messages.push({ ms: Date.now() - started, ...message });
+      console.log(`  +${Date.now() - started}ms ${message.event || '?'} ${message.channel || ''}`);
+    });
+    ws.on('close', (code, reason) => {
+      console.log(`  closed ${code} ${reason || ''}`);
+      resolve();
+    });
+  });
+  return messages;
+}
+
 async function findIntegration(ref) {
   const prisma = getPrisma();
   const byId = await prisma.cloudIntegration.findUnique({ where: { id: ref } }).catch(() => null);
@@ -245,6 +299,23 @@ async function main() {
   for (const endpoint of args.gets) {
     const [pathname, query] = endpoint.split('?');
     await probe(`get-${pathname}`, pathname, Object.fromEntries(new URLSearchParams(query || '')));
+  }
+  if (args.streams.length) {
+    if (integration.provider !== 'juniper_mist') throw new Error('--stream is only for Juniper Mist');
+    const sites = await get(provider, `/api/v1/orgs/${provider.orgId}/sites`, { limit: 1000, page: 1 });
+    captured.push({ file: 'stream-sites', data: redactConfigSecrets(sites) });
+    const channels = args.streams.flatMap((channel) => (channel.includes('{site}')
+      ? sites.map((site) => channel.replace('{site}', site.id))
+      : [channel]));
+    try {
+      const messages = redactConfigSecrets(await mistStream(provider, channels, args.seconds));
+      fs.writeFileSync(path.join(args.out, 'stream.json'), `${JSON.stringify(messages, null, 2)}\n`);
+      captured.push({ file: 'stream', data: messages });
+      summary.push({ name: 'stream', endpoint: provider.streamUrl, channels, ok: true, size: `${messages.length} messages` });
+    } catch (error) {
+      summary.push({ name: 'stream', endpoint: provider.streamUrl, channels, ok: false, error: error.message });
+      console.log(`  FAIL  stream  ${error.message}`);
+    }
   }
 
   for (const { data } of captured) anonymiser.learn(data);
