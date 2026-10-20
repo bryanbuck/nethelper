@@ -18,7 +18,7 @@
       </div>
     </v-alert>
 
-    <v-card elevation="2">
+    <v-card elevation="2" class="device-table-card">
       <v-card-title class="d-flex align-center justify-space-between">
         <div class="d-flex align-center">
           <v-icon class="mr-2" color="primary">mdi-devices</v-icon>
@@ -223,6 +223,80 @@
         </div>
       </v-expand-transition>
       
+      <!-- Bulk Actions Bar: above the table, pinned under the app bar while the page scrolls -->
+      <v-slide-y-transition>
+        <v-card-actions v-if="selectedItems.length > 0" class="bulk-actions-bar">
+          <div class="d-flex align-center justify-space-between w-100">
+            <div class="d-flex align-center">
+              <v-icon class="mr-2" color="primary">mdi-checkbox-marked</v-icon>
+              <span class="font-weight-medium">{{ selectedItems.length }} devices selected</span>
+            </div>
+            
+            <div class="d-flex align-center ga-2">
+              <v-menu v-if="canEdit">
+                <template #activator="{ props }">
+                  <v-btn
+                    v-bind="props"
+                    variant="outlined"
+                    size="small"
+                    prepend-icon="mdi-access-point"
+                    :loading="bulkLiveBusy"
+                  >
+                    Live Monitoring
+                  </v-btn>
+                </template>
+                <v-list density="compact">
+                  <v-list-item prepend-icon="mdi-access-point" title="Turn on" @click="bulkLiveMonitoring(true)" />
+                  <v-list-item prepend-icon="mdi-access-point-off" title="Turn off" @click="bulkLiveMonitoring(false)" />
+                </v-list>
+              </v-menu>
+              <v-btn
+                v-if="canEdit"
+                variant="outlined"
+                size="small"
+                prepend-icon="mdi-key-variant"
+                @click="credentialDialog = true"
+              >
+                Credential
+              </v-btn>
+              <v-btn
+                v-if="canEdit && selectedItems.length >= 2"
+                variant="outlined"
+                size="small"
+                prepend-icon="mdi-call-merge"
+                :loading="mergeLoading"
+                @click="openMerge"
+              >
+                Merge
+              </v-btn>
+              <v-btn
+                variant="outlined"
+                size="small"
+                prepend-icon="mdi-restart"
+                @click="bulkReboot"
+              >
+                Reboot Selected
+              </v-btn>
+              <v-btn
+                variant="outlined"
+                size="small"
+                prepend-icon="mdi-download"
+                @click="exportSelected"
+              >
+                Export Selected
+              </v-btn>
+              <v-btn
+                variant="text"
+                size="small"
+                @click="selectedItems = []"
+              >
+                Clear Selection
+              </v-btn>
+            </div>
+          </div>
+        </v-card-actions>
+      </v-slide-y-transition>
+
       <!-- Data Table -->
       <v-data-table-server
         v-model="selectedItems"
@@ -474,80 +548,6 @@
           </div>
         </template>
       </v-data-table-server>
-      
-      <!-- Bulk Actions Bar -->
-      <v-slide-y-transition>
-        <v-card-actions v-if="selectedItems.length > 0" class="bulk-actions-bar">
-          <div class="d-flex align-center justify-space-between w-100">
-            <div class="d-flex align-center">
-              <v-icon class="mr-2" color="primary">mdi-checkbox-marked</v-icon>
-              <span class="font-weight-medium">{{ selectedItems.length }} devices selected</span>
-            </div>
-            
-            <div class="d-flex align-center ga-2">
-              <v-menu v-if="canEdit">
-                <template #activator="{ props }">
-                  <v-btn
-                    v-bind="props"
-                    variant="outlined"
-                    size="small"
-                    prepend-icon="mdi-access-point"
-                    :loading="bulkLiveBusy"
-                  >
-                    Live Monitoring
-                  </v-btn>
-                </template>
-                <v-list density="compact">
-                  <v-list-item prepend-icon="mdi-access-point" title="Turn on" @click="bulkLiveMonitoring(true)" />
-                  <v-list-item prepend-icon="mdi-access-point-off" title="Turn off" @click="bulkLiveMonitoring(false)" />
-                </v-list>
-              </v-menu>
-              <v-btn
-                v-if="canEdit"
-                variant="outlined"
-                size="small"
-                prepend-icon="mdi-key-variant"
-                @click="credentialDialog = true"
-              >
-                Credential
-              </v-btn>
-              <v-btn
-                v-if="canEdit && selectedItems.length >= 2"
-                variant="outlined"
-                size="small"
-                prepend-icon="mdi-call-merge"
-                :loading="mergeLoading"
-                @click="openMerge"
-              >
-                Merge
-              </v-btn>
-              <v-btn
-                variant="outlined"
-                size="small"
-                prepend-icon="mdi-restart"
-                @click="bulkReboot"
-              >
-                Reboot Selected
-              </v-btn>
-              <v-btn
-                variant="outlined"
-                size="small"
-                prepend-icon="mdi-download"
-                @click="exportSelected"
-              >
-                Export Selected
-              </v-btn>
-              <v-btn
-                variant="text"
-                size="small"
-                @click="selectedItems = []"
-              >
-                Clear Selection
-              </v-btn>
-            </div>
-          </div>
-        </v-card-actions>
-      </v-slide-y-transition>
     </v-card>
 
     <DeviceMergeDialog
@@ -1032,9 +1032,20 @@ defineExpose({ refreshTable })
   min-height: 400px;
 }
 
+/* v-card's overflow: hidden would make the card the sticky container; clip keeps the rounded corners without that. */
+.device-table-card {
+  overflow: clip;
+}
+
 .bulk-actions-bar {
-  background-color: rgba(var(--v-theme-primary), 0.1);
-  border-top: 1px solid rgba(var(--v-theme-primary), 0.2);
+  position: sticky;
+  top: var(--v-layout-top);
+  z-index: 2;
+  /* Opaque so rows don't show through while it's pinned. */
+  background:
+    linear-gradient(rgba(var(--v-theme-primary), 0.1), rgba(var(--v-theme-primary), 0.1)),
+    rgb(var(--v-theme-surface));
+  border-bottom: 1px solid rgba(var(--v-theme-primary), 0.2);
 }
 
 .device-data-table :deep(.v-data-table__tr:hover) {
