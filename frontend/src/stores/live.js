@@ -6,6 +6,10 @@
  * LIVE_VIEW_POLL_INTERVAL. Everything shown comes from the device; until two
  * counter samples have arrived there are no rates, and the view says so.
  *
+ * A device without live state (a cloud-managed AP or Junos switch) can still
+ * be watched for its recorded events only (`watchEvents`): cloud status
+ * changes, and port link changes and restarts from the Mist stream.
+ *
  * The reducers below are plain functions so they can be unit tested.
  */
 import { defineStore } from 'pinia'
@@ -45,7 +49,7 @@ export function applyEvent(events, event) {
 
 export const useLiveStore = defineStore('live', () => {
   const deviceId = ref(null)
-  const state = ref('idle') // idle | connecting | live | error
+  const state = ref('idle') // idle | connecting | live | events | error
   const error = ref(null)
   const monitor = ref({ connected: false, mode: null, lastError: null, updatedAt: null })
   const ports = ref([])
@@ -80,9 +84,14 @@ export const useLiveStore = defineStore('live', () => {
     ports.value = snapshot.ports || []
   }
 
-  function bind(id) {
+  function bind(id, { eventsOnly = false } = {}) {
     const socket = webSocketService.socket
     if (!socket) return false
+    if (eventsOnly) {
+      handlers = { 'device:event': (e) => e.deviceId === id && (events.value = applyEvent(events.value, e)) }
+      socket.on('device:event', handlers['device:event'])
+      return true
+    }
     handlers = {
       'device:live:snapshot': (s) => s.deviceId === id && applySnapshot(s),
       'device:live:port': ({ deviceId: d, port }) => {
@@ -164,10 +173,25 @@ export const useLiveStore = defineStore('live', () => {
     await Promise.all([subscribe(id), loadEvents(id)])
   }
 
+  /** Recorded events only, for a device without live state. */
+  async function watchEvents(id) {
+    if (deviceId.value === id && state.value !== 'idle') return
+    await unwatch()
+    deviceId.value = id
+    state.value = 'events'
+    await loadEvents(id)
+    if (deviceId.value !== id) return
+    // History still shows without the socket; new events need it.
+    if (await socketReady()) {
+      if (deviceId.value === id && state.value === 'events') bind(id, { eventsOnly: true })
+    }
+  }
+
   async function unwatch() {
     const id = deviceId.value
+    const wasLive = state.value !== 'events'
     unbind()
-    if (id && webSocketService.connected) webSocketService.emit('unsubscribe:device-live', id)
+    if (id && wasLive && webSocketService.connected) webSocketService.emit('unsubscribe:device-live', id)
     deviceId.value = null
     reset()
   }
@@ -184,6 +208,7 @@ export const useLiveStore = defineStore('live', () => {
     changedAt,
     hasRates,
     watch,
+    watchEvents,
     unwatch,
   }
 })

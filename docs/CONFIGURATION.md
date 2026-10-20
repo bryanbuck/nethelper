@@ -116,6 +116,7 @@ Production writes JSON logs to stdout. Values under secret-looking keys (passwor
 | `CLOUD_SYNC_INTERVAL` | `3600000` | Milliseconds between scheduled syncs (1 hour; minimum 300000). Only failures reach the status bar. |
 | `CLOUD_STATUS_ENABLED` | `true` | Status refresh between syncs: status, IP, firmware, connection and config state for devices sync already created. Never adds devices. |
 | `CLOUD_STATUS_INTERVAL` | `300000` | Milliseconds between refreshes (5 minutes; minimum 60000). Mist: one API call per 1,000 devices; Central: one per 100. |
+| `CLOUD_STREAM_ENABLED` | `true` | Juniper Mist event stream: one outbound WebSocket per Mist org. A device starting or stopping reporting triggers the status refresh at once (at most every 30 s per org), and port link changes and restarts are recorded as device events. Needs outbound HTTPS to `api-ws.<region>.mist.com`. |
 
 ### Network Map (topology)
 

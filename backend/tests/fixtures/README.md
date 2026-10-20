@@ -28,7 +28,13 @@ cloud neighbors and cloud events. The `neighbors-*.json` files come from one
 later run (so their anonymised ids line up with each other, not with the files
 above): inventory, `/stats/devices` with the neighbor `fields` list, and
 `/stats/ports/search`, with the AP on the EX's `mge-0/0/0`; an AP33's
-`lldp_stats` is keyed by `""` (its only port).
+`lldp_stats` is keyed by `""` (its only port). `stream-stats-devices.json` is
+75 seconds of the org's WebSocket stream (`probe-cloud.js --stream
+'/sites/{site}/stats/devices'`, both devices online): the subscribe ack, then
+partial stats as Mist sends them (`data` was a JSON string, parsed here):
+one switch message (serial, uptime, `if_stat`), two AP messages keyed by MAC
+with no serial (`port_stat`; uptime/version), each with `_ttl: 190` and none
+with a `status`.
 
 `central-live/` holds **live** New Central captures from one run (2026-10-19,
 anonymised the same way): the `network-monitoring/v1alpha1/devices` list and

@@ -495,7 +495,18 @@ class SettingsService {
       },
     });
 
+    this.integrationsChanged();
     return this.sanitizeIntegration(integration);
+  }
+
+  /** Open, close or reconnect cloud event streams to match (best-effort, not awaited). */
+  integrationsChanged() {
+    try {
+      // Lazy: the stream service pulls in the provider factory, which needs this module.
+      require('./cloud/cloud-stream.service').reconcile().catch(() => {});
+    } catch (error) {
+      logger.warn(`Cloud event streams not reconciled: ${error.message}`);
+    }
   }
 
   /**
@@ -527,6 +538,7 @@ class SettingsService {
 
     // Credentials or base URL may have changed - drop the cached OAuth token.
     await this.clearIntegrationCache(integration);
+    this.integrationsChanged();
     return this.sanitizeIntegration(integration);
   }
 
@@ -581,6 +593,7 @@ class SettingsService {
 
     await this.clearIntegrationCache(integration);
     await prisma.cloudIntegration.delete({ where: { id: integrationId } });
+    this.integrationsChanged();
   }
 
   /** Drop any provider-side cached token for an integration (best-effort). */

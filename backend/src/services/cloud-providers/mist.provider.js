@@ -3,6 +3,7 @@ const BaseCloudProvider = require('./base-cloud-provider');
 const { redactConfigSecrets } = require('../../utils/config-redact');
 const { CLOUD_PROVIDERS } = require('../../constants/vendors');
 const { parseMistNeighbors } = require('../topology/parsers/mist');
+const { MistStream } = require('../cloud/mist-stream');
 const logger = require('../../utils/logger');
 
 /**
@@ -18,6 +19,7 @@ const logger = require('../../utils/logger');
  *   GET /api/v1/orgs/:org_id/stats/devices    - live stats (ip, version, uptime)
  *   GET /api/v1/sites/:site_id/devices/:id    - a device's Mist config object
  *   GET /api/v1/orgs/:org_id/stats/ports/search - switch/gateway LLDP neighbors per port
+ *   WSS api-ws.<region>/api-ws/v1/stream   - /sites/:site_id/stats/devices (cloud/mist-stream.js)
  *   Scope backups (org and site config, where AP config lives):
  *   GET /api/v1/orgs/:org_id, /orgs/:org_id/sites
  *   GET /api/v1/orgs/:org_id/{setting,wlans,templates,rftemplates,
@@ -66,11 +68,50 @@ class MistProvider extends BaseCloudProvider {
   }
 
   supports(capability) {
-    return ['inventory', 'status', 'test', 'config-backup', 'scope-backup', 'topology'].includes(capability);
+    return ['inventory', 'status', 'test', 'config-backup', 'scope-backup', 'topology', 'events'].includes(capability);
   }
 
   get orgId() {
     return this.integration.credentials.orgId;
+  }
+
+  /**
+   * The org's WebSocket stream: every regional cloud serves it on its API
+   * host with `api-ws.` for `api.` (api.ac2.mist.com → api-ws.ac2.mist.com).
+   * Null for a base URL that isn't a Mist API host.
+   */
+  get streamUrl() {
+    let url;
+    try {
+      url = new URL(this.integration.baseUrl);
+    } catch {
+      return null;
+    }
+    if (url.protocol !== 'https:' || !/^api\.([a-z0-9-]+\.)?mist\.com$/.test(url.hostname)) return null;
+    return `wss://${url.hostname.replace(/^api\./, 'api-ws.')}/api-ws/v1/stream`;
+  }
+
+  /** Headers for the stream's upgrade request (the same token as REST). */
+  streamHeaders() {
+    return { Authorization: `Token ${this.integration.credentials.apiToken}` };
+  }
+
+  /** The org's sites: [{ id, name }]. */
+  async listSites() {
+    const sites = await this.requestAllPages(`/api/v1/orgs/${this.orgId}/sites`, { context: 'site_list' });
+    return sites.map((site) => ({ id: site.id, name: site.name }));
+  }
+
+  /** Stream channels: device stats for every site (Mist has no org-wide one). */
+  async listEventChannels() {
+    const sites = await this.listSites();
+    return sites.map((site) => `/sites/${site.id}/stats/devices`);
+  }
+
+  /** An unopened stream over `channels`; see cloud/mist-stream.js. */
+  openEventStream(channels) {
+    if (!this.streamUrl) this.unsupported('events', `no stream host for ${this.integration.baseUrl}`);
+    return new MistStream({ url: this.streamUrl, headers: this.streamHeaders(), channels });
   }
 
   async request(method, endpoint, { params = {}, context = 'api_call' } = {}) {
@@ -184,8 +225,7 @@ class MistProvider extends BaseCloudProvider {
     // Inventory names a device's site only by id; resolve names once.
     const siteNames = new Map();
     try {
-      const sites = await this.requestAllPages(`/api/v1/orgs/${this.orgId}/sites`, { context: 'site_list' });
-      for (const site of sites) siteNames.set(site.id, site.name);
+      for (const site of await this.listSites()) siteNames.set(site.id, site.name);
     } catch (error) {
       logger.warn(`Mist site list unavailable for ${this.label}, syncing without site names: ${error.message}`);
     }

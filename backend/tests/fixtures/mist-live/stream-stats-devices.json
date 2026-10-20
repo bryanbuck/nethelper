@@ -1,0 +1,682 @@
+[
+  {
+    "ms": 250,
+    "event": "channel_subscribed",
+    "channel": "/sites/00000000-0000-4000-8000-000000000001/stats/devices"
+  },
+  {
+    "ms": 51546,
+    "event": "data",
+    "channel": "/sites/00000000-0000-4000-8000-000000000001/stats/devices",
+    "data": {
+      "name": "JNEX-01",
+      "commits": [
+        {
+          "seq_no": 0,
+          "log": "version=1792458644",
+          "client": "netconf",
+          "user": "root",
+          "timestamp": 1792458656
+        },
+        {
+          "seq_no": 1,
+          "log": "version=1792457873",
+          "client": "netconf",
+          "user": "root",
+          "timestamp": 1792457884
+        },
+        {
+          "seq_no": 2,
+          "log": "version=1792457180",
+          "client": "netconf",
+          "user": "root",
+          "timestamp": 1792457190
+        },
+        {
+          "seq_no": 3,
+          "log": "creating ephemeral db instance mist-pcap",
+          "client": "netconf",
+          "user": "root",
+          "timestamp": 1792455043
+        },
+        {
+          "seq_no": 4,
+          "log": "delete ephemeral instance mist-pcap",
+          "client": "netconf",
+          "user": "root",
+          "timestamp": 1792455032
+        },
+        {
+          "seq_no": 5,
+          "log": "creating ephemeral db instance mist-pcap",
+          "client": "netconf",
+          "user": "root",
+          "timestamp": 1791419379
+        },
+        {
+          "seq_no": 6,
+          "log": "delete ephemeral instance mist-pcap",
+          "client": "netconf",
+          "user": "root",
+          "timestamp": 1791419368
+        },
+        {
+          "seq_no": 7,
+          "log": "creating ephemeral db instance mist-pcap",
+          "client": "netconf",
+          "user": "root",
+          "timestamp": 1791387854
+        },
+        {
+          "seq_no": 8,
+          "log": "delete ephemeral instance mist-pcap",
+          "client": "netconf",
+          "user": "root",
+          "timestamp": 1791387843
+        },
+        {
+          "seq_no": 9,
+          "log": "version=1788556538",
+          "client": "netconf",
+          "user": "root",
+          "timestamp": 1788556563
+        }
+      ],
+      "ip": "172.16.10.102",
+      "hostname": "JNEX-01",
+      "has_pcap": true,
+      "chassis_mac": "5c5b35000001",
+      "cpu_stat": {
+        "system": 3,
+        "idle": 96,
+        "interrupt": 0,
+        "user": 1,
+        "load_avg": [
+          0.26,
+          0.36,
+          0.39
+        ]
+      },
+      "uptime": 11603,
+      "site_id": "00000000-0000-4000-8000-000000000001",
+      "config_timestamp": 1792458644,
+      "clients": [
+        {
+          "device_mac": "5c5b35000001",
+          "port_ids": [
+            "ge-0/0/11"
+          ],
+          "source": "lldp",
+          "mac": "5c5b35000002"
+        },
+        {
+          "device_mac": "5c5b35000001",
+          "port_ids": [
+            "mge-0/0/0"
+          ],
+          "source": "lldp",
+          "mac": "5c5b35000003"
+        }
+      ],
+      "arp_table_stats": {
+        "arp_table_count": 1,
+        "max_entries_supported": 4096
+      },
+      "serial": "SN000001",
+      "dhcpd_stat": {},
+      "chassis_model": "EX4000-12MP",
+      "_id": "5c5b35000001",
+      "mac_table_stats": {
+        "mac_table_count": 2,
+        "max_mac_entries_supported": 32768
+      },
+      "fw_restore_available": false,
+      "vc_setup_info": {
+        "err_vc_config_out_of_sync": false,
+        "no_backup": false,
+        "config_type": "nonprovisioned",
+        "err_missing_dev_id_fpc": false,
+        "err_vc_no_split_detection_missing": false
+      },
+      "type": "switch",
+      "service_stat": {},
+      "org_id": "00000000-0000-4000-8000-000000000002",
+      "if_stat": {
+        "vme.0": {
+          "tx_pkts": 0,
+          "rx_pkts": 0,
+          "rx_bytes": 0,
+          "port_id": "vme",
+          "up": false,
+          "tx_bytes": 0
+        },
+        "irb.0": {
+          "tx_pkts": 6213,
+          "vlan": 1,
+          "rx_pkts": 4546,
+          "rx_bytes": 0,
+          "port_id": "irb",
+          "up": true,
+          "ips": [
+            "172.16.10.102/24"
+          ],
+          "servp_info": {},
+          "tx_bytes": 0
+        },
+        "mge-0/0/0.0": {
+          "tx_pkts": 476,
+          "rx_pkts": 490,
+          "rx_bytes": 0,
+          "port_id": "mge-0/0/0",
+          "up": true,
+          "tx_bytes": 0
+        },
+        "mge-0/0/1.0": {
+          "tx_pkts": 0,
+          "rx_pkts": 0,
+          "rx_bytes": 0,
+          "port_id": "mge-0/0/1",
+          "up": false,
+          "tx_bytes": 0
+        },
+        "mge-0/0/2.0": {
+          "tx_pkts": 0,
+          "rx_pkts": 0,
+          "rx_bytes": 0,
+          "port_id": "mge-0/0/2",
+          "up": false,
+          "tx_bytes": 0
+        },
+        "mge-0/0/3.0": {
+          "tx_pkts": 0,
+          "rx_pkts": 0,
+          "rx_bytes": 0,
+          "port_id": "mge-0/0/3",
+          "up": false,
+          "tx_bytes": 0
+        },
+        "ge-0/0/5.0": {
+          "tx_pkts": 0,
+          "rx_pkts": 0,
+          "rx_bytes": 0,
+          "port_id": "ge-0/0/5",
+          "up": false,
+          "tx_bytes": 0
+        },
+        "ge-0/0/6.0": {
+          "tx_pkts": 0,
+          "rx_pkts": 0,
+          "rx_bytes": 0,
+          "port_id": "ge-0/0/6",
+          "up": false,
+          "tx_bytes": 0
+        },
+        "ge-0/0/4.0": {
+          "tx_pkts": 0,
+          "rx_pkts": 0,
+          "rx_bytes": 0,
+          "port_id": "ge-0/0/4",
+          "up": false,
+          "tx_bytes": 0
+        },
+        "ge-0/0/9.0": {
+          "tx_pkts": 0,
+          "rx_pkts": 0,
+          "rx_bytes": 0,
+          "port_id": "ge-0/0/9",
+          "up": false,
+          "tx_bytes": 0
+        },
+        "me0.0": {
+          "tx_pkts": 0,
+          "rx_pkts": 0,
+          "rx_bytes": 0,
+          "port_id": "me0",
+          "up": false,
+          "tx_bytes": 0
+        },
+        "ge-0/0/7.0": {
+          "tx_pkts": 0,
+          "rx_pkts": 0,
+          "rx_bytes": 0,
+          "port_id": "ge-0/0/7",
+          "up": false,
+          "tx_bytes": 0
+        },
+        "ge-0/0/10.0": {
+          "tx_pkts": 0,
+          "rx_pkts": 0,
+          "rx_bytes": 0,
+          "port_id": "ge-0/0/10",
+          "up": false,
+          "tx_bytes": 0
+        },
+        "ge-0/0/8.0": {
+          "tx_pkts": 0,
+          "rx_pkts": 0,
+          "rx_bytes": 0,
+          "port_id": "ge-0/0/8",
+          "up": false,
+          "tx_bytes": 0
+        },
+        "ge-0/0/11.0": {
+          "tx_pkts": 6634,
+          "rx_pkts": 971,
+          "rx_bytes": 0,
+          "port_id": "ge-0/0/11",
+          "up": true,
+          "tx_bytes": 0
+        },
+        "lo0.16385": {
+          "tx_pkts": 766441,
+          "rx_pkts": 766135,
+          "rx_bytes": 0,
+          "port_id": "lo0",
+          "up": true,
+          "tx_bytes": 0
+        }
+      },
+      "fw_versions_outofsync": false,
+      "ext_ip": "203.0.113.1",
+      "part_number": "",
+      "version": "24.4R2.25",
+      "mac": "5c5b35000001",
+      "_ttl": 190,
+      "config_status": "COMMITED",
+      "route_summary_stats": {
+        "route_table_count": {
+          "inet.0": 3,
+          "inet6.0": 3
+        },
+        "max_unicast_routes_supported": 1024,
+        "fib_routes": 2,
+        "rib_routes": 14,
+        "total_routes": 3
+      },
+      "memory_stat": {
+        "usage": 25
+      },
+      "model": "EX4000-12MP",
+      "clients_stats": {
+        "total": {
+          "num_wired_clients": 2,
+          "num_aps": [
+            1
+          ]
+        }
+      },
+      "chassis_serial": "SN000001",
+      "ip_stat": {
+        "netmask": "203.0.113.2",
+        "ip": "172.16.10.102",
+        "ips": {
+          "vlan1": "172.16.10.102"
+        },
+        "gateway": "172.16.10.1"
+      },
+      "config_version": 1792458644,
+      "last_seen": 1792466507,
+      "module_stat": [
+        {
+          "locating": false,
+          "optics_cpld_version": "",
+          "power_cpld_version": "",
+          "memory_stat": {
+            "usage": 25
+          },
+          "cpld_version": "1.26",
+          "bcm_mac_pcie_version": "",
+          "vc_state": "present",
+          "boot_partition": "junos",
+          "poe": {
+            "max_power": 240,
+            "total_power_allocated": 19.5,
+            "power_draw": 6.6,
+            "status": "BT_MODE",
+            "power_reserved": 23.2
+          },
+          "backup_version": "",
+          "vc_mode": "HiGiG",
+          "tpmversion": "",
+          "type": "fpc",
+          "mac": "5c5b35000001",
+          "_idx": 0,
+          "temperatures": [
+            {
+              "name": "Thermal board Sensor 1",
+              "status": "ok",
+              "celsius": 45
+            },
+            {
+              "name": "Thermal board Sensor 2",
+              "status": "ok",
+              "celsius": 45
+            },
+            {
+              "name": "Thermal board Sensor 3",
+              "status": "ok",
+              "celsius": 37
+            },
+            {
+              "name": "PFE Die Sensor",
+              "status": "ok",
+              "celsius": 54
+            },
+            {
+              "name": "PoE Controller Sensor 1",
+              "status": "ok",
+              "celsius": 36
+            },
+            {
+              "name": "PoE Controller Sensor 2",
+              "status": "ok",
+              "celsius": 40
+            },
+            {
+              "name": "PoE Controller Sensor 3",
+              "status": "ok",
+              "celsius": 36
+            }
+          ],
+          "psus": [
+            {
+              "name": "Power Supply 0",
+              "status": "ok",
+              "description": "JPSU-305W-AC"
+            }
+          ],
+          "humidity": [],
+          "fiber_port_cpldversion": "",
+          "model": "EX4000-12MP",
+          "private_mac": "",
+          "pics": [
+            {
+              "port_groups": [
+                {
+                  "count": 4,
+                  "type": "GE"
+                },
+                {
+                  "count": 8,
+                  "type": "GE"
+                }
+              ],
+              "index": 0,
+              "model_number": "EX4000-12MP"
+            },
+            {
+              "port_groups": [
+                {
+                  "count": 4,
+                  "type": "SFP/SFP+"
+                }
+              ],
+              "index": 1,
+              "model_number": "EX4000-12MP"
+            }
+          ],
+          "nvme_disk_version": "",
+          "re_fpga_version": "",
+          "recovery_version": "24.4R2.25",
+          "fpga_version": "",
+          "pending_version": "",
+          "uboot_version": "2.14",
+          "tmc_fpga_version": "",
+          "cpu_stat": {
+            "interrupt": 0,
+            "idle": 96,
+            "user": 1,
+            "system": 3,
+            "load_avg": [
+              0.26,
+              0.36,
+              0.39
+            ]
+          },
+          "bios_version": "",
+          "fan_cpldversion": "",
+          "version": "24.4R2.25",
+          "fpc_idx": 0,
+          "fans": [],
+          "uptime": 11580,
+          "cpu_cpldversion": "",
+          "vc_links": [
+            {
+              "port_id": "vcp-0/1/1"
+            },
+            {
+              "port_id": "vcp-0/1/0"
+            }
+          ],
+          "serial": "SN000001",
+          "poe_version": "6.0.0.12.0 (type4)",
+          "vc_role": "master",
+          "part_number": ""
+        }
+      ],
+      "_time": 1792455127.0824592
+    },
+    "dataWasString": true
+  },
+  {
+    "ms": 58661,
+    "event": "data",
+    "channel": "/sites/00000000-0000-4000-8000-000000000001/stats/devices",
+    "data": {
+      "mac": "5c5b35000003",
+      "model": "AP33",
+      "name": "JNAP-01",
+      "tx_bytes": 0,
+      "tx_pkts": 0,
+      "rx_bytes": 0,
+      "rx_pkts": 0,
+      "last_seen": 1792466514,
+      "_offset_apstats": 34736901698,
+      "config_reverted": false,
+      "ip_stat": {
+        "dns": [
+          "172.16.1.20"
+        ],
+        "ips": {
+          "vlan1": "172.16.10.100/24,fe80::1/64"
+        },
+        "gateway": "172.16.10.1",
+        "ip6": "fe80::1",
+        "netmask6": "/64",
+        "ip": "172.16.10.100",
+        "netmask": "203.0.113.3",
+        "dhcp_server": "172.16.1.20"
+      },
+      "ip": "172.16.10.100",
+      "ext_ip": "203.0.113.1",
+      "port_stat": {
+        "eth0": {
+          "up": true,
+          "speed": 2500,
+          "full_duplex": true,
+          "tx_bytes": 2266503,
+          "tx_pkts": 9921,
+          "rx_bytes": 4166518,
+          "rx_pkts": 17945,
+          "rx_errors": 0,
+          "rx_peak_bps": 62142,
+          "tx_peak_bps": 8532
+        },
+        "eth1": {
+          "up": false,
+          "speed": 0,
+          "full_duplex": false,
+          "tx_bytes": 0,
+          "tx_pkts": 0,
+          "rx_bytes": 0,
+          "rx_pkts": 0,
+          "rx_errors": 0,
+          "rx_peak_bps": 0,
+          "tx_peak_bps": 0
+        }
+      },
+      "lacp_stat": {},
+      "power_srcs": [],
+      "power_src": "LLDP",
+      "power_avail": 19500,
+      "power_needed": 19500,
+      "power_budget": 0,
+      "power_constrained": false,
+      "power_opmode": "",
+      "inactive_wired_vlans": [
+        21
+      ],
+      "cpu_util": 4,
+      "cpu_user": 90360,
+      "cpu_system": 88492,
+      "l2tp_stat": {},
+      "lldp_stat": {
+        "system_name": "JNEX-01",
+        "system_desc": "Juniper Networks, Inc. ex4000-12mp Ethernet Switch, kernel JUNOS 24.4R2.25, Build date: 2025-09-20 09:45:49 UTC Copyright (c) 1996-2025 Juniper Networks, Inc.",
+        "mgmt_addr": "5c-5b-35-00-00-04",
+        "mgmt_addrs": [
+          "5c-5b-35-00-00-04"
+        ],
+        "port_desc": "mge-0/0/0",
+        "port_id": "mge-0/0/0",
+        "ap_port_name": "",
+        "chassis_id": "5c:5b:35:00:00:01",
+        "lldp_med_supported": true,
+        "power_request_count": 1,
+        "power_allocated": 19500,
+        "power_requested": 19500,
+        "power_draw": 19500
+      },
+      "lldp_stats": {
+        "": {
+          "system_name": "JNEX-01",
+          "system_desc": "Juniper Networks, Inc. ex4000-12mp Ethernet Switch, kernel JUNOS 24.4R2.25, Build date: 2025-09-20 09:45:49 UTC Copyright (c) 1996-2025 Juniper Networks, Inc.",
+          "mgmt_addr": "5c-5b-35-00-00-04",
+          "mgmt_addrs": [
+            "5c-5b-35-00-00-04"
+          ],
+          "port_desc": "mge-0/0/0",
+          "port_id": "mge-0/0/0",
+          "ap_port_name": "",
+          "chassis_id": "5c:5b:35:00:00:01",
+          "lldp_med_supported": true,
+          "power_request_count": 1,
+          "power_allocated": 19500,
+          "power_requested": 19500,
+          "power_draw": 19500
+        }
+      },
+      "num_wlans": 6,
+      "radio_stat": {
+        "band_5": {
+          "num_clients": 0,
+          "num_wlans": 3,
+          "channel": 36,
+          "bandwidth": 40,
+          "power": 16,
+          "tx_bytes": 0,
+          "tx_pkts": 0,
+          "rx_bytes": 0,
+          "rx_pkts": 0,
+          "noise_floor": -94,
+          "usage": "5",
+          "util_all": 3,
+          "util_tx": 2,
+          "util_rx_in_bss": 0,
+          "util_rx_other_bss": 0,
+          "util_unknown_wifi": 0,
+          "util_non_wifi": 0,
+          "util_undecodable_wifi": 0,
+          "mac": "5c5b35000005"
+        },
+        "band_24": {
+          "num_clients": 0,
+          "num_wlans": 3,
+          "channel": 11,
+          "bandwidth": 20,
+          "power": 18,
+          "tx_bytes": 0,
+          "tx_pkts": 0,
+          "rx_bytes": 0,
+          "rx_pkts": 0,
+          "noise_floor": -99,
+          "usage": "24",
+          "util_all": 13,
+          "util_tx": 6,
+          "util_rx_in_bss": 0,
+          "util_rx_other_bss": 7,
+          "util_unknown_wifi": 1,
+          "util_non_wifi": 0,
+          "util_undecodable_wifi": 0,
+          "mac": "5c5b35000006"
+        }
+      },
+      "esl_stat": {},
+      "num_clients": 0,
+      "iot_stat": {},
+      "env_stat": {
+        "cpu_temp": 50,
+        "ambient_temp": 0,
+        "humidity": 0,
+        "attitude": 0,
+        "pressure": 0,
+        "accel_x": 0,
+        "accel_y": -0.032,
+        "accel_z": -0.992,
+        "magne_x": 0,
+        "magne_y": 0,
+        "magne_z": 0,
+        "vcore_voltage": 0
+      },
+      "mount": "faceup",
+      "tx_bps": 0,
+      "rx_bps": 0,
+      "expiring_certs": {},
+      "mem_total_kb": 1031896,
+      "mem_used_kb": 89132,
+      "_time": 1792466514.4485998,
+      "_ttl": 190,
+      "last_epoch": 1792466514,
+      "type": "ap"
+    },
+    "dataWasString": true
+  },
+  {
+    "ms": 58663,
+    "event": "data",
+    "channel": "/sites/00000000-0000-4000-8000-000000000001/stats/devices",
+    "data": {
+      "mac": "5c5b35000003",
+      "last_seen": 1792466514,
+      "name": "JNAP-01",
+      "uptime": 11516,
+      "version": "0.12.27458",
+      "_partition": 0,
+      "_offset_apbasic": 34736901698,
+      "ip_stat": {
+        "dns": [
+          "172.16.1.20"
+        ],
+        "ips": {
+          "vlan1": "172.16.10.100/24,fe80::1/64"
+        },
+        "gateway": "172.16.10.1",
+        "ip6": "fe80::1",
+        "netmask6": "/64",
+        "ip": "172.16.10.100",
+        "netmask": "203.0.113.3",
+        "dhcp_server": "172.16.1.20"
+      },
+      "ip": "172.16.10.100",
+      "ble_stat": {
+        "tx_pkts": 23069,
+        "tx_bytes": 137703,
+        "rx_pkts": 1043018,
+        "rx_bytes": 31462681,
+        "tx_resets": 0
+      },
+      "_time": 1792466514.451327
+    },
+    "dataWasString": true
+  }
+]

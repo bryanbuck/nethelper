@@ -1,4 +1,5 @@
 const settingsService = require('../services/settings.service');
+const cloudStream = require('../services/cloud/cloud-stream.service');
 const { CLOUD_PROVIDERS } = require('../constants/vendors');
 const logger = require('../utils/logger');
 
@@ -300,7 +301,8 @@ class SettingsController {
       res.json({
         success: true,
         data: {
-          integrations,
+          // eventStream: the push stream's state (Mist), null when there is none.
+          integrations: integrations.map((integration) => ({ ...integration, eventStream: cloudStream.status(integration.id) })),
           providers: Object.values(CLOUD_PROVIDERS).map((provider) => ({
             id: provider.id,
             label: provider.label,
