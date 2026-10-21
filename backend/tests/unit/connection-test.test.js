@@ -13,7 +13,10 @@ const DeviceAPIFactory = require('../../src/services/device-api/device-api-facto
 const sshDeviceService = require('../../src/services/ssh-device.service');
 const CloudProviderFactory = require('../../src/services/cloud-providers/cloud-provider-factory');
 const NetconfClient = require('../../src/services/device-api/netconf-client');
-const { testDeviceConnection, recordDeviceTest } = require('../../src/services/connection-test.service');
+const {
+  testDeviceConnection, recordDeviceTest, manualTestPlatforms, manualTestDevice,
+} = require('../../src/services/connection-test.service');
+const devicePollerService = require('../../src/services/device-poller.service');
 
 const CREDS = { username: 'admin', password: 'pw' };
 const mistSwitch = (over = {}) => ({
@@ -108,5 +111,37 @@ describe('recordDeviceTest', () => {
     mockDeviceUpdate.mockRejectedValueOnce(new Error('db down'));
 
     await expect(recordDeviceTest('d1', { success: true })).resolves.toBeUndefined();
+  });
+});
+
+describe('manual test (Device API Testing)', () => {
+  test('offers every platform a direct transport can test, with its transports in order', () => {
+    const byId = Object.fromEntries(manualTestPlatforms().map((p) => [p.platform, p]));
+    expect(byId['aos-cx']).toMatchObject({ testable: true, transports: ['REST'] });
+    expect(byId['aos-s']).toMatchObject({ testable: true, transports: ['SSH'] });
+    expect(byId.junos).toMatchObject({ testable: true, transports: ['NETCONF', 'SSH'] });
+    expect(byId['ios-xe']).toMatchObject({ testable: true, transports: ['SSH'] });
+    expect(byId.meraki).toMatchObject({ testable: false, transports: [] });
+  });
+
+  test('an AOS-S test goes over SSH like a stored direct device', async () => {
+    sshDeviceService.testConnection.mockResolvedValue({ success: true, transport: 'ssh' });
+
+    const result = await testDeviceConnection(manualTestDevice('10.0.0.9', 'aos-s'), CREDS);
+
+    expect(result).toMatchObject({ success: true, transport: 'ssh' });
+    expect(sshDeviceService.testConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ ipAddress: '10.0.0.9', platform: 'aos-s', vendor: 'aruba', managementMode: 'direct' }), CREDS,
+    );
+    expect(DeviceAPIFactory.createDeviceAPI).not.toHaveBeenCalled();
+  });
+
+  test('an AOS-CX test does not write Central status: there is no device row', async () => {
+    DeviceAPIFactory.createDeviceAPI.mockReturnValue({ testConnection: async () => ({ success: true }) });
+
+    const result = await testDeviceConnection(manualTestDevice('10.0.0.8', 'aos-cx'), CREDS);
+
+    expect(result.success).toBe(true);
+    expect(devicePollerService.refreshCentralStatus).not.toHaveBeenCalled();
   });
 });

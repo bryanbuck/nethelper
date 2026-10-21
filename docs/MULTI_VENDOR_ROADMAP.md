@@ -201,7 +201,7 @@ CloudProviderFactory.activeProviders()     // all isActive integrations, instant
 
 - `determineDeviceAPIType(device)` becomes **vendor-field driven**: `(vendor, platform, type)` → api type via the capability matrix in `constants/vendors.js`. The Aruba model regexes survive only in the Phase 0 backfill script and as a last-ditch fallback for `vendor: aruba, platform: null`.
 - The switch grows over phases: `cx_switch` → `junos` (Phase 2, only if a structured client is built) → `catalyst_restconf` (Phase 4, optional).
-- `getSupportedDeviceTypes()` is generated from `constants/vendors.js` — this also fixes the frontend's hardcoded type lists.
+- The manual connection test's platform list (`connection-test.service.js` `manualTestPlatforms()`, `GET /device-api/supported-types`) is generated from `constants/vendors.js` and the transport matrix, and manual tests route through `testDeviceConnection` like stored ones (2026-10-21, #19).
 - Cloud-managed devices normally don't reach the factory; the router sends them to their CloudProvider. **Exception: read-only local reads of AOS-CX** (config backup, live state in §8c, LLDP topology in §8d), which keep working under Central management and are ranked ahead of the cloud plane when the device has an IP and a linked credential.
 
 ### Transport router (`utils/transport-router.js`)
@@ -255,7 +255,7 @@ junos: {
 2. **Add/Edit modals**: Vendor select (default Aruba), Platform select filtered by vendor, and replace the hardcoded `'Aruba Central'` management-mode option with "Cloud-managed" + a Cloud Integration select populated from the integrations store.
 3. **Settings → Cloud Integrations**: replace `ArubaCentralCredentials.vue` with a generic `CloudIntegrations.vue` list (provider badge, name, baseUrl, test button, active toggle) + per-provider form sections (Central: clientId/secret/customerId; Mist: token/orgId/region; Meraki: apiKey/orgId). `stores/settings.js` `arubaCentralConfigs` actions → `cloudIntegrations` actions. Stays in the existing credentials tab alongside `ApiCredentials.vue`.
 4. **DeviceTable**: "Central Status" → "Cloud Status"; Central-managed chip → provider-branded chip ("Central" / "Mist" / "Meraki" from the device's integration). Fix `stores/devices.js:362` `=== 'cx'` check to use the platform field.
-5. **Connection testing**: `DeviceConnectionTest.vue` + `DeviceApiTestingView.vue` hardcoded type lists → fetch from the (now constants-driven) `/device-api/supported-types` endpoint.
+5. **Connection testing**: `DeviceConnectionTest.vue` + `DeviceApiTestingView.vue` hardcoded type lists → fetch from the (now constants-driven) `/device-api/supported-types` endpoint. Done 2026-10-21 (#19): the endpoint lists platforms and their test transports.
 
 ## 8. Phased roadmap
 

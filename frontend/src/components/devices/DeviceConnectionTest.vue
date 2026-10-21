@@ -11,8 +11,8 @@
           v-model="formData.deviceIp"
           label="Device IP Address"
           :rules="[rules.required, rules.ip]"
-          outlined
-          dense
+          variant="outlined"
+          density="compact"
           class="mb-2"
           prepend-icon="mdi-ip-network"
         />
@@ -21,8 +21,8 @@
           v-model="formData.username"
           label="Username"
           :rules="[rules.required]"
-          outlined
-          dense
+          variant="outlined"
+          density="compact"
           class="mb-2"
           prepend-icon="mdi-account"
         />
@@ -32,23 +32,26 @@
           label="Password"
           :rules="[rules.required]"
           :type="showPassword ? 'text' : 'password'"
-          outlined
-          dense
+          variant="outlined"
+          density="compact"
           class="mb-2"
           prepend-icon="mdi-lock"
-          :append-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
-          @click:append="showPassword = !showPassword"
+          :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
+          @click:append-inner="showPassword = !showPassword"
         />
 
         <v-select
-          v-model="formData.deviceType"
-          label="Device Type"
-          :items="deviceTypes"
+          v-model="formData.platform"
+          label="Platform"
+          :items="platforms"
           item-title="name"
-          item-value="type"
+          item-value="platform"
           :rules="[rules.required]"
-          outlined
-          dense
+          :loading="loadingPlatforms"
+          :hint="platformHint"
+          persistent-hint
+          variant="outlined"
+          density="compact"
           prepend-icon="mdi-router-network"
         />
       </v-form>
@@ -56,19 +59,20 @@
       <!-- Test Results -->
       <v-alert
         v-if="testResult"
-        :type="testResult.success ? 'success' : 'error'"
-        :icon="testResult.success ? 'mdi-check-circle' : 'mdi-alert-circle'"
+        :type="resultType"
         class="mt-4"
-        closable
+        :closable="mode === 'manual'"
         @click:close="clearResults"
       >
-        <div class="text-h6 mb-2">
-          {{ testResult.success ? 'Connection Successful' : errorInfo.title }}
-        </div>
+        <div class="text-h6 mb-2">{{ resultTitle }}</div>
 
         <div v-if="testResult.success">
+          <div v-if="testResult.transport" class="mb-1">
+            <strong>Via:</strong> {{ transportLabel(testResult.transport) }}
+          </div>
+
           <div v-if="testResult.responseTime" class="mb-1">
-            <strong>Response Time:</strong> {{ testResult.responseTime }}ms
+            <strong>Response Time:</strong> {{ testResult.responseTime }} ms
           </div>
 
           <div v-if="testResult.deviceInfo">
@@ -82,9 +86,12 @@
             <strong>Version:</strong> {{ testResult.deviceInfo.version }}
           </div>
 
-          <div v-if="testResult.testedAt" class="mt-2 text-caption">
-            Last Tested: {{ formatDate(testResult.testedAt) }}
-          </div>
+          <pre v-if="testResult.preview" class="text-caption mt-2 preview">{{ testResult.preview }}</pre>
+        </div>
+
+        <!-- Nothing reaches this device directly: not a failure -->
+        <div v-else-if="testResult.cloudOnly">
+          {{ testResult.message }}
         </div>
 
         <div v-else>
@@ -103,16 +110,14 @@
             {{ testResult.details }}
           </div>
         </div>
-      </v-alert>
 
-      <!-- Device Info Display -->
-      <DeviceInfoDisplay
-        v-if="showDeviceInfo && deviceInfo"
-        :device-info="deviceInfo"
-        :firmware-info="firmwareInfo"
-        :loading="loadingInfo"
-        class="mt-4"
-      />
+        <div v-if="testResult.centralStatus" class="mt-2 text-caption">
+          Switch reports: {{ centralStatusLabel }}
+        </div>
+        <div v-if="testResult.testedAt" class="mt-2 text-caption">
+          Tested {{ formatDate(testResult.testedAt) }}
+        </div>
+      </v-alert>
 
       <!-- Loading Indicator -->
       <v-progress-linear
@@ -126,23 +131,13 @@
     <v-card-actions>
       <v-spacer />
       <v-btn
-        v-if="mode === 'manual'"
         color="primary"
         :loading="testing"
         :disabled="!canTest"
         @click="testConnection"
       >
-        <v-icon left>mdi-connection</v-icon>
-        Test Connection
-      </v-btn>
-      <v-btn
-        v-else
-        color="primary"
-        :loading="testing"
-        @click="testConnection"
-      >
-        <v-icon left>mdi-connection</v-icon>
-        Test Connection
+        <v-icon start>mdi-connection</v-icon>
+        {{ testResult && mode === 'stored' ? 'Test Again' : 'Test Connection' }}
       </v-btn>
     </v-card-actions>
   </v-card>
@@ -151,7 +146,6 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import deviceApiService from '@/services/deviceApi.service'
-import DeviceInfoDisplay from './DeviceInfoDisplay.vue'
 import { formatDistanceToNow } from 'date-fns'
 
 const props = defineProps({
@@ -164,15 +158,13 @@ const props = defineProps({
     type: String,
     default: null
   },
+  // A result already reported elsewhere (stored mode), shown without
+  // contacting the device again; Test Again runs a new test.
+  result: {
+    type: Object,
+    default: null
+  },
   autoTest: {
-    type: Boolean,
-    default: false
-  },
-  showDeviceInfo: {
-    type: Boolean,
-    default: false
-  },
-  showFirmwareInfo: {
     type: Boolean,
     default: false
   },
@@ -186,6 +178,8 @@ const props = defineProps({
   }
 })
 
+// test-complete fires for every finished test, passed or not
+// (result.success says which); test-error when the test couldn't run.
 const emit = defineEmits(['test-start', 'test-complete', 'test-error'])
 
 // Form data
@@ -197,16 +191,28 @@ const formData = ref({
   deviceIp: '',
   username: '',
   password: '',
-  deviceType: 'cx_switch'
+  platform: 'aos-cx'
 })
 
-// Device types
-const deviceTypes = ref([
-  { type: 'cx_switch', name: 'CX Switch (Aruba AOS-CX)' },
-  { type: 'aos_switch', name: 'AOS Switch (Legacy Aruba)' },
-  { type: 'instant_ap', name: 'Instant AP (Aruba IAP)' },
-  { type: 'aruba_controller', name: 'Aruba Controller' }
-])
+// Platforms the backend can test (GET /device-api/supported-types)
+const platforms = ref([])
+const loadingPlatforms = ref(false)
+
+const platformHint = computed(() => {
+  const transports = platforms.value.find(p => p.platform === formData.value.platform)?.transports || []
+  return transports.length ? `Tested over ${transports.join(', then ')}` : ''
+})
+
+const loadPlatforms = async () => {
+  loadingPlatforms.value = true
+  try {
+    platforms.value = (await deviceApiService.getSupportedTypes()).filter(p => p.testable)
+  } catch (error) {
+    console.error('Error loading platforms:', error)
+  } finally {
+    loadingPlatforms.value = false
+  }
+}
 
 // Validation rules
 const rules = {
@@ -220,12 +226,12 @@ const rules = {
 
 // Test state
 const testing = ref(false)
-const testResult = ref(null)
-const deviceInfo = ref(null)
-const firmwareInfo = ref(null)
-const loadingInfo = ref(false)
+const testResult = ref(props.result)
 
-// Computed
+watch(() => props.result, (result) => {
+  testResult.value = result
+})
+
 const canTest = computed(() => {
   if (props.mode === 'stored') {
     return !!props.deviceId
@@ -233,45 +239,49 @@ const canTest = computed(() => {
   return formValid.value
 })
 
+const resultType = computed(() => {
+  if (testResult.value?.success) return 'success'
+  return testResult.value?.cloudOnly ? 'info' : 'error'
+})
+
+const resultTitle = computed(() => {
+  if (testResult.value?.success) return 'Connection Successful'
+  if (testResult.value?.cloudOnly) return 'No direct connection to test'
+  return errorInfo.value.title
+})
+
 const errorInfo = computed(() => {
-  if (!testResult.value || testResult.value.success) {
+  if (!testResult.value || testResult.value.success || testResult.value.cloudOnly) {
     return { title: '', message: '', actions: [] }
   }
   return deviceApiService.formatConnectionError(testResult.value)
 })
 
+const centralStatusLabel = computed(() => {
+  const status = testResult.value?.centralStatus
+  if (!status) return ''
+  const label = status.centralManaged === true ? 'Central-managed' : status.centralManaged === false ? 'Locally managed' : 'Unknown'
+  return status.connectionStatus ? `${label} (${status.connectionStatus})` : label
+})
+
+const transportLabel = (transport) => ({ 'cx-rest': 'REST', rest: 'REST', netconf: 'NETCONF', ssh: 'SSH' }[transport] || transport)
+
 // Methods
 const testConnection = async () => {
   testing.value = true
   testResult.value = null
-  deviceInfo.value = null
-  firmwareInfo.value = null
 
   emit('test-start')
 
   try {
-    let response
-
-    if (props.mode === 'manual') {
-      response = await deviceApiService.testManualConnection(formData.value)
-    } else {
-      response = await deviceApiService.testDeviceConnection(props.deviceId)
-    }
-
-    // testDeviceConnection already unwraps; the manual test returns the envelope
-    const result = props.mode === 'manual' ? response.data || response : response
+    // Both return the test's own result, never the HTTP envelope
+    const result = props.mode === 'manual'
+      ? await deviceApiService.testManualConnection(formData.value)
+      : await deviceApiService.testDeviceConnection(props.deviceId)
     testResult.value = result
 
-    if (result.success) {
-      emit('test-complete', result)
-
-      // Load additional info if requested
-      if (props.showDeviceInfo && props.deviceId) {
-        await loadDeviceInfo()
-      }
-    } else {
-      emit('test-error', result)
-    }
+    const { deviceIp, username, platform } = formData.value
+    emit('test-complete', props.mode === 'manual' ? { ...result, deviceIp, username, platform } : result)
   } catch (error) {
     console.error('Connection test failed:', error)
     testResult.value = {
@@ -286,30 +296,8 @@ const testConnection = async () => {
   }
 }
 
-const loadDeviceInfo = async () => {
-  if (!props.deviceId) return
-
-  loadingInfo.value = true
-
-  try {
-    const deviceInfoResponse = await deviceApiService.getDeviceInfo(props.deviceId)
-    deviceInfo.value = deviceInfoResponse.data || deviceInfoResponse
-
-    if (props.showFirmwareInfo) {
-      const firmwareInfoResponse = await deviceApiService.getFirmwareInfo(props.deviceId)
-      firmwareInfo.value = firmwareInfoResponse.data || firmwareInfoResponse
-    }
-  } catch (error) {
-    console.error('Error loading device info:', error)
-  } finally {
-    loadingInfo.value = false
-  }
-}
-
 const clearResults = () => {
   testResult.value = null
-  deviceInfo.value = null
-  firmwareInfo.value = null
 }
 
 const formatDate = (dateString) => {
@@ -322,8 +310,8 @@ const formatDate = (dateString) => {
   }
 }
 
-// Auto-test on mount if requested
 onMounted(() => {
+  if (props.mode === 'manual') loadPlatforms()
   if (props.autoTest && canTest.value) {
     testConnection()
   }
@@ -340,5 +328,9 @@ watch(() => props.deviceId, (newId) => {
 <style scoped>
 .v-alert ul {
   margin-top: 8px;
+}
+
+.preview {
+  white-space: pre-wrap;
 }
 </style>

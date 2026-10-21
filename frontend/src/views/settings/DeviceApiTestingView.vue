@@ -27,8 +27,6 @@
           <v-card-text class="pt-4">
             <DeviceConnectionTest
               mode="manual"
-              :show-device-info="true"
-              :show-firmware-info="true"
               :show-title="false"
               @test-complete="handleTestComplete"
             />
@@ -116,32 +114,23 @@
         <v-card>
           <v-card-title class="bg-secondary text-white">
             <v-icon icon="mdi-devices" class="mr-2" />
-            Supported Device Types
+            Supported Platforms
           </v-card-title>
 
           <v-card-text>
             <v-list v-if="!loadingSupportedTypes" density="compact">
               <v-list-item
                 v-for="type in supportedTypes"
-                :key="type.type"
-                :prepend-icon="type.implemented ? 'mdi-check-circle' : 'mdi-close-circle'"
-                :class="type.implemented ? 'text-success' : 'text-medium-emphasis'"
+                :key="type.platform"
+                :prepend-icon="type.testable ? 'mdi-check-circle' : 'mdi-close-circle'"
+                :class="type.testable ? 'text-success' : 'text-medium-emphasis'"
               >
                 <v-list-item-title>{{ type.name }}</v-list-item-title>
                 <v-list-item-subtitle>
-                  {{ type.description }}
-                  <v-chip
-                    v-if="!type.implemented"
-                    size="x-small"
-                    color="grey"
-                    class="ml-2"
-                  >
-                    Planned
-                  </v-chip>
+                  {{ type.testable ? `Tested over ${type.transports.join(', then ')}` : 'Reached only through its cloud; nothing to test directly' }}
                 </v-list-item-subtitle>
               </v-list-item>
             </v-list>
-
             <v-skeleton-loader v-else type="list-item@4" />
           </v-card-text>
         </v-card>
@@ -209,7 +198,7 @@
             <v-list density="compact">
               <v-list-item prepend-icon="mdi-check">
                 <v-list-item-subtitle>
-                  Ensure the device has REST API enabled
+                  AOS-CX needs its REST API enabled (HTTPS); Junos is tried over NETCONF, then SSH
                 </v-list-item-subtitle>
               </v-list-item>
 
@@ -221,13 +210,13 @@
 
               <v-list-item prepend-icon="mdi-check">
                 <v-list-item-subtitle>
-                  Use administrator credentials for full API access
+                  Config backups need an account that can read the running config
                 </v-list-item-subtitle>
               </v-list-item>
 
               <v-list-item prepend-icon="mdi-check">
                 <v-list-item-subtitle>
-                  Check firewall rules allow HTTPS connections
+                  Check firewall rules allow HTTPS (REST) or SSH (port 22) from NetHelper
                 </v-list-item-subtitle>
               </v-list-item>
             </v-list>
@@ -261,9 +250,9 @@
             </v-list-item>
 
             <v-list-item>
-              <v-list-item-title>Device Type</v-list-item-title>
-              <v-list-item-subtitle class="text-capitalize">
-                {{ selectedTest.deviceType?.replace('_', ' ') || 'N/A' }}
+              <v-list-item-title>Platform</v-list-item-title>
+              <v-list-item-subtitle>
+                {{ platformName(selectedTest.platform) }}
               </v-list-item-subtitle>
             </v-list-item>
 
@@ -364,7 +353,7 @@ const handleTestComplete = (result) => {
     timestamp: new Date(),
     deviceIp: result.deviceIp || 'Unknown',
     username: result.username || 'Unknown',
-    deviceType: result.deviceType,
+    platform: result.platform,
     success: result.success,
     responseTime: result.responseTime,
     message: result.message,
@@ -398,6 +387,9 @@ const clearRecentTests = () => {
   notificationStore.showSuccess('Test history cleared')
 }
 
+const platformName = (platform) =>
+  supportedTypes.value.find(t => t.platform === platform)?.name || platform || 'N/A'
+
 const formatTestTime = (timestamp) => {
   return formatDistanceToNow(new Date(timestamp), { addSuffix: true })
 }
@@ -413,33 +405,7 @@ const loadSupportedTypes = async () => {
     supportedTypes.value = types
   } catch (error) {
     console.error('Error loading supported types:', error)
-    // Fallback to hardcoded types
-    supportedTypes.value = [
-      {
-        type: 'cx_switch',
-        name: 'CX Switch',
-        description: 'Aruba CX switches (AOS-CX)',
-        implemented: true
-      },
-      {
-        type: 'aos_switch',
-        name: 'AOS Switch',
-        description: 'Legacy Aruba switches',
-        implemented: false
-      },
-      {
-        type: 'instant_ap',
-        name: 'Instant AP',
-        description: 'Aruba Instant APs',
-        implemented: false
-      },
-      {
-        type: 'aruba_controller',
-        name: 'Controller',
-        description: 'Aruba Controllers',
-        implemented: false
-      }
-    ]
+    supportedTypes.value = []
   } finally {
     loadingSupportedTypes.value = false
   }

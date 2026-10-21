@@ -6,6 +6,7 @@ const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory')
 const { isCxRestCapable } = require('../utils/device-platform');
 const { resolveTransport } = require('../utils/transport-router');
 const { getPrisma } = require('../config/database');
+const { PLATFORMS, VENDORS, TRANSPORT_MATRIX } = require('../constants/vendors');
 const logger = require('../utils/logger');
 
 /**
@@ -54,7 +55,8 @@ async function testDeviceConnection(device, credentials) {
 
       // While we have working REST access to a CX switch, refresh its
       // switch-reported Central state (best-effort, never fails the test).
-      if (result.success && isCxRestCapable(device)) {
+      // (A manual test's device has no row to update.)
+      if (result.success && device.id && isCxRestCapable(device)) {
         const centralStatus = await devicePollerService.refreshCentralStatus(device, credentials);
         if (centralStatus) {
           result.centralStatus = {
@@ -87,6 +89,41 @@ async function testDeviceConnection(device, credentials) {
     }
   }
   return result;
+}
+
+/**
+ * Platforms the manual test (Device API Testing) can reach, generated from the
+ * vendor catalog and the transport matrix so the form never offers a type
+ * nothing can test: [{ platform, vendor, name, transports, testable }].
+ * transports are display names in the order tried ('REST', 'NETCONF', 'SSH').
+ */
+function manualTestPlatforms() {
+  return Object.values(PLATFORMS).map((platform) => {
+    const transports = (TRANSPORT_MATRIX[`${platform.vendor}/${platform.id}`]?.test || []).map((t) => {
+      if (t === 'ssh') return 'SSH';
+      return platform.deviceApiType === 'junos' ? 'NETCONF' : 'REST';
+    });
+    return {
+      platform: platform.id,
+      vendor: platform.vendor,
+      name: `${VENDORS[platform.vendor]?.label || platform.vendor} ${platform.label}`,
+      transports,
+      testable: transports.length > 0,
+    };
+  });
+}
+
+/** A device row for a manual test of ipAddress, routed like a direct device of that platform. */
+function manualTestDevice(ipAddress, platform) {
+  return {
+    name: `Test device ${ipAddress}`,
+    ipAddress,
+    managementMode: 'direct',
+    vendor: PLATFORMS[platform].vendor,
+    platform,
+    type: 'switch',
+    model: 'Unknown',
+  };
 }
 
 /** What the device's cloud says about it, or null when the cloud can't say. */
@@ -124,4 +161,6 @@ async function recordDeviceTest(deviceId, result, responseTime = null) {
   }
 }
 
-module.exports = { testDeviceConnection, cloudView, recordDeviceTest };
+module.exports = {
+  testDeviceConnection, cloudView, recordDeviceTest, manualTestPlatforms, manualTestDevice,
+};

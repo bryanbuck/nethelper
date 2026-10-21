@@ -589,9 +589,7 @@
           <DeviceConnectionTest
             mode="stored"
             :device-id="device?.id"
-            :auto-test="autoTestOnOpen"
-            :show-device-info="true"
-            :show-firmware-info="true"
+            :result="lastTest"
             :show-title="false"
             @test-complete="handleConnectionTestComplete"
           />
@@ -666,8 +664,10 @@ const testingConnection = ref(false)
 const lastTestCentralStatus = ref(null)
 // What the device's cloud said when a direct test couldn't reach it.
 const lastTestCloudStatus = ref(null)
-// Outcome of the last header test, with a link to the details dialog.
+// Outcome of the last header test, with a link to the details dialog, which
+// shows the full result (lastTest) without testing again.
 const lastTestResult = ref(null)
+const lastTest = ref(null)
 
 // Selected tab, kept in the URL (?tab=live) so a live view can be linked.
 const TABS = ['live', 'neighbors']
@@ -678,7 +678,6 @@ const tab = computed({
 
 // Connection test dialog state
 const showConnectionTestDialog = ref(false)
-const autoTestOnOpen = ref(true)
 
 const systemData = computed(() => devicesStore.systemData)
 const systemLoading = computed(() => devicesStore.systemLoading)
@@ -935,6 +934,7 @@ watch(() => route.params.id, (id, previous) => {
   if (id && id !== previous) {
     stopBackupWait()
     lastTestResult.value = null
+    lastTest.value = null
     lastTestCentralStatus.value = null
     lastTestCloudStatus.value = null
     loadDevice()
@@ -954,10 +954,34 @@ const closeConnectionTestDialog = () => {
   showConnectionTestDialog.value = false
 }
 
+// Test Again in the dialog: the header follows the newest result.
 const handleConnectionTestComplete = (result) => {
-  if (result.success) {
-    notificationStore.showSuccess('API connection test successful')
+  applyTestResult(result)
+  fetchDevice().catch(() => {})
+}
+
+/** Show a test result beside the button; returns the summary line. */
+const applyTestResult = (result) => {
+  lastTest.value = result
+  lastTestCentralStatus.value = null
+  lastTestCloudStatus.value = null
+  if (result?.centralStatus) {
+    const { centralManaged, connectionStatus } = result.centralStatus
+    const label = centralManaged === true ? `${cloudPlaneName.value}-managed` : centralManaged === false ? 'Locally managed' : 'Unknown'
+    lastTestCentralStatus.value = connectionStatus ? `${label} (${connectionStatus})` : label
   }
+  if (result?.cloudStatus) {
+    const { provider, status, lastSeen } = result.cloudStatus
+    lastTestCloudStatus.value = `${provider} reports it ${status}${lastSeen ? `, last seen ${formatRelativeTime(lastSeen)}` : ''}`
+  }
+  if (result?.success) {
+    const via = result.transport ? ` (via ${result.transport.toUpperCase()})` : ''
+    lastTestResult.value = `Direct connection successful${via}`
+  } else {
+    // A cloud-only result's message says there is nothing to test directly
+    lastTestResult.value = result?.message || 'Direct connection failed'
+  }
+  return lastTestResult.value
 }
 
 // Test the direct (REST/SSH) path for a directly-managed device. The backend
@@ -968,32 +992,22 @@ const testDirectConnection = async () => {
   lastTestCentralStatus.value = null
   lastTestCloudStatus.value = null
   lastTestResult.value = null
+  lastTest.value = null
   try {
     const result = await deviceApiService.testDeviceConnection(device.value.id)
-    if (result?.centralStatus) {
-      const { centralManaged, connectionStatus } = result.centralStatus
-      const label = centralManaged === true ? `${cloudPlaneName.value}-managed` : centralManaged === false ? 'Locally managed' : 'Unknown'
-      lastTestCentralStatus.value = connectionStatus ? `${label} (${connectionStatus})` : label
-    }
-    if (result?.cloudStatus) {
-      const { provider, status, lastSeen } = result.cloudStatus
-      lastTestCloudStatus.value = `${provider} reports it ${status}${lastSeen ? `, last seen ${formatRelativeTime(lastSeen)}` : ''}`
-    }
+    const summary = applyTestResult(result)
     if (result?.success) {
-      const via = result.transport ? ` (via ${result.transport.toUpperCase()})` : ''
-      lastTestResult.value = `Direct connection successful${via}`
-      notificationStore.showSuccess(lastTestResult.value, 'Connection Test')
+      notificationStore.showSuccess(summary, 'Connection Test')
     } else if (result?.cloudOnly) {
       // Nothing to test directly (a cloud-managed AP): not a failure.
-      lastTestResult.value = result.message
-      notificationStore.showInfo(result.message, 'Connection Test')
+      notificationStore.showInfo(summary, 'Connection Test')
     } else {
-      lastTestResult.value = result?.message || 'Direct connection failed'
-      notificationStore.showError(lastTestResult.value, 'Connection Test')
+      notificationStore.showError(summary, 'Connection Test')
     }
   } catch (err) {
-    lastTestResult.value = err.userMessage || err.message || 'Direct connection failed'
-    notificationStore.showError(lastTestResult.value, 'Connection Test')
+    const message = err.userMessage || err.message || 'Direct connection failed'
+    applyTestResult({ success: false, message, details: err.message, testedAt: new Date().toISOString() })
+    notificationStore.showError(message, 'Connection Test')
   } finally {
     testingConnection.value = false
     // The test is recorded on the device (API Status in the Devices table)

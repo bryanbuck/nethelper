@@ -1,6 +1,7 @@
-const DeviceAPIFactory = require('../services/device-api/device-api-factory');
 const settingsService = require('../services/settings.service');
-const { testDeviceConnection, cloudView, recordDeviceTest } = require('../services/connection-test.service');
+const {
+  testDeviceConnection, cloudView, recordDeviceTest, manualTestPlatforms, manualTestDevice,
+} = require('../services/connection-test.service');
 const { usesDeviceCredential } = require('../services/device-credential.service');
 const { getPrisma } = require('../config/database');
 const logger = require('../utils/logger');
@@ -145,177 +146,21 @@ class DeviceAPITestController {
   }
 
   /**
-   * Get device information using device API
-   * GET /api/v1/device-api/:deviceId/info
-   */
-  async getDeviceInfo(req, res, next) {
-    try {
-      const { deviceId } = req.params;
-
-      logger.info('Getting device info via API', {
-        deviceId,
-      });
-
-      // Get device and credentials
-      const prisma = getPrisma();
-      const device = await prisma.device.findUnique({
-        where: { id: deviceId },
-      });
-
-      if (!device) {
-        return res.status(404).json({
-          success: false,
-          error: 'Device not found',
-        });
-      }
-
-      const credentials = await settingsService.getDeviceCredentialsForUse(deviceId);
-
-      if (!credentials) {
-        return res.status(400).json({
-          success: false,
-          error: 'No credentials configured for this device',
-        });
-      }
-
-      // Create device API instance and get info
-      const deviceAPI = DeviceAPIFactory.createDeviceAPI(device, credentials);
-
-      // Login first
-      await deviceAPI.login();
-
-      // Get device info
-      const deviceInfo = await deviceAPI.getDeviceInfo();
-
-      // Logout
-      await deviceAPI.logout();
-
-      res.json({
-        success: true,
-        data: deviceInfo,
-      });
-    } catch (error) {
-      logger.error('Failed to get device info', {
-        error: error.message,
-      });
-
-      next(error);
-    }
-  }
-
-  /**
-   * Get firmware information using device API
-   * GET /api/v1/device-api/:deviceId/firmware
-   */
-  async getFirmwareInfo(req, res, next) {
-    try {
-      const { deviceId } = req.params;
-
-      logger.info('Getting firmware info via API', {
-        deviceId,
-      });
-
-      // Get device and credentials
-      const prisma = getPrisma();
-      const device = await prisma.device.findUnique({
-        where: { id: deviceId },
-      });
-
-      if (!device) {
-        return res.status(404).json({
-          success: false,
-          error: 'Device not found',
-        });
-      }
-
-      const credentials = await settingsService.getDeviceCredentialsForUse(deviceId);
-
-      if (!credentials) {
-        return res.status(400).json({
-          success: false,
-          error: 'No credentials configured for this device',
-        });
-      }
-
-      // Create device API instance
-      const deviceAPI = DeviceAPIFactory.createDeviceAPI(device, credentials);
-
-      // Login
-      await deviceAPI.login();
-
-      // Get firmware info
-      const firmwareInfo = await deviceAPI.getFirmwareInfo();
-
-      // Logout
-      await deviceAPI.logout();
-
-      res.json({
-        success: true,
-        data: firmwareInfo,
-      });
-    } catch (error) {
-      logger.error('Failed to get firmware info', {
-        error: error.message,
-      });
-
-      next(error);
-    }
-  }
-
-  /**
    * Test with manual credentials (no storage)
    * POST /api/v1/device-api/test-manual
    *
-   * Body: {
-   *   deviceIp: "192.168.1.1",
-   *   username: "admin",
-   *   password: "password",
-   *   deviceType: "cx_switch" (optional)
-   * }
+   * Body: { deviceIp, username, password, platform } (platform: one of
+   * GET /device-api/supported-types with testable true; default aos-cx).
+   * Routed like a direct device of that platform (connection-test.service),
+   * so SSH-only platforms are tested over the CLI.
    */
   async testManualConnection(req, res, _next) {
     try {
-      const { deviceIp, username, password, deviceType } = req.body;
+      const { deviceIp, username, password, platform = 'aos-cx' } = req.body;
 
-      logger.info('Testing manual device connection', {
-        deviceIp,
-        username,
-        deviceType: deviceType || 'auto-detect',
-      });
+      logger.info('Testing manual device connection', { deviceIp, username, platform });
 
-      // Validate required fields
-      if (!deviceIp || !username || !password) {
-        return res.status(400).json({
-          success: false,
-          error: 'Missing required fields',
-          message: 'deviceIp, username, and password are required',
-        });
-      }
-
-      // Create a temporary device object
-      const tempDevice = {
-        name: `Test Device ${deviceIp}`,
-        ipAddress: deviceIp,
-        type: 'switch',
-        model: 'Unknown',
-      };
-
-      // Create temporary credentials object
-      const tempCredentials = {
-        username,
-        password,
-        type: deviceType || 'switch',
-      };
-
-      // Create device API instance
-      const deviceAPI = DeviceAPIFactory.createDeviceAPI(
-        tempDevice,
-        tempCredentials,
-        deviceType
-      );
-
-      // Test connection
-      const result = await deviceAPI.testConnection();
+      const result = await testDeviceConnection(manualTestDevice(deviceIp, platform), { username, password });
 
       res.json({
         success: true,
@@ -326,33 +171,22 @@ class DeviceAPITestController {
         error: error.message,
       });
 
-      if (error.message.includes('Unsupported device API type')) {
-        return res.status(400).json({
-          success: false,
-          error: 'Device type not supported',
-          message: error.message,
-        });
-      }
-
       res.json({
-        success: false,
-        error: error.message,
-        message: 'Connection test failed',
+        success: true,
+        data: { success: false, message: error.message, testedAt: new Date().toISOString() },
       });
     }
   }
 
   /**
-   * Get list of supported device types
+   * Platforms the manual test can reach, and over which transports
    * GET /api/v1/device-api/supported-types
    */
   async getSupportedTypes(req, res, next) {
     try {
-      const supportedTypes = DeviceAPIFactory.getSupportedDeviceTypes();
-
       res.json({
         success: true,
-        data: supportedTypes,
+        data: manualTestPlatforms(),
       });
     } catch (error) {
       logger.error('Failed to get supported types', {
