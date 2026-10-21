@@ -44,13 +44,13 @@ A cloud-managed AOS-CX or Mist-managed EX switch can be read directly too (confi
 
 1. **Settings → API Credentials → Add Credential**: the account from the table above. Credentials are encrypted at rest and never shown again.
 2. On **Devices**, select the devices that use it and choose **Credential** in the bar above the table. The preview says which devices it skips (for example cloud-only APs, which NetHelper never reaches directly) and why.
-3. Run the connection test from the same dialog, or **Test Direct Connection** on a device's page. A pass means NetHelper logged in to the device itself. A cloud-only device shows its cloud's view instead.
+3. Run the connection test from the same dialog, or **Test Connection** on a device's page. A pass means NetHelper logged in to the device itself. A cloud-only device shows its cloud's view instead.
 
 When a test fails with "rejected the username or password", check the account on the device. When it times out, check reachability and the service (REST, SSH, NETCONF).
 
 ## 5. Back up configurations
 
-On a device's page, **Backup Config**, or **Config Backups → Run Backup Now** for many at once. Run it again later: an unchanged config is recorded as unchanged, and a changed one gets a diff you can view on **Config Backups**. Schedules are on the same page's **Schedules** tab.
+On a device's page, **Back Up Now**, or **Config Backups → Run Backup Now** for many at once. Run it again later: an unchanged config is recorded as unchanged, and a changed one gets a diff you can view on **Config Backups**. Schedules are on the same page's **Schedules** tab.
 
 Backups contain secrets, so only admins and operators can see their contents.
 

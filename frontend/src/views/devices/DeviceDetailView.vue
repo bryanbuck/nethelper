@@ -69,7 +69,7 @@
                 @click="testDirectConnection"
               >
                 <v-icon left>mdi-connection</v-icon>
-                Test Direct Connection
+                Test Connection
               </v-btn>
               <v-btn
                 color="primary"
@@ -80,10 +80,30 @@
                 <v-icon left>mdi-refresh</v-icon>
                 Refresh System Info
               </v-btn>
-              <v-btn color="primary" variant="tonal">
-                <v-icon left>mdi-cog</v-icon>
-                Configure
+              <v-btn
+                v-if="device && canEdit"
+                color="primary"
+                variant="outlined"
+                :loading="backupRunning"
+                @click="backUpNow"
+              >
+                <v-icon left>mdi-backup-restore</v-icon>
+                Back Up Now
               </v-btn>
+              <v-btn
+                v-if="device && canEdit"
+                color="primary"
+                variant="tonal"
+                @click="editDialog = true"
+              >
+                <v-icon left>mdi-pencil</v-icon>
+                Edit
+              </v-btn>
+            </div>
+            <div v-if="lastTestResult" class="text-caption text-grey">
+              {{ lastTestResult }}
+              &middot;
+              <a href="#" class="text-primary" @click.prevent="openConnectionTestDialog">Details</a>
             </div>
             <div v-if="lastTestCentralStatus" class="text-caption text-grey">
               Switch reports: {{ lastTestCentralStatus }}
@@ -578,75 +598,6 @@
           </v-card>
         </v-col>
       </v-row>
-
-      <!-- Actions Section -->
-      <v-row class="mt-4">
-        <v-col cols="12">
-          <v-card>
-            <v-card-title>
-              <v-icon left>mdi-lightning-bolt</v-icon>
-              Quick Actions
-            </v-card-title>
-            <v-divider />
-            <v-card-text>
-              <v-row>
-                <v-col cols="12" sm="6" md="3">
-                  <v-btn
-                    block
-                    variant="outlined"
-                    color="primary"
-                    @click="refreshSystemInfo"
-                  >
-                    <v-icon left>mdi-sync</v-icon>
-                    Sync System Info
-                  </v-btn>
-                </v-col>
-                <v-col cols="12" sm="6" md="3">
-                  <v-btn
-                    block
-                    variant="outlined"
-                    color="info"
-                  >
-                    <v-icon left>mdi-chip</v-icon>
-                    Check Firmware
-                  </v-btn>
-                </v-col>
-                <v-col cols="12" sm="6" md="3">
-                  <v-btn
-                    block
-                    variant="outlined"
-                    color="warning"
-                  >
-                    <v-icon left>mdi-backup-restore</v-icon>
-                    Backup Config
-                  </v-btn>
-                </v-col>
-                <v-col cols="12" sm="6" md="3">
-                  <v-btn
-                    block
-                    variant="outlined"
-                    color="secondary"
-                  >
-                    <v-icon left>mdi-cog</v-icon>
-                    Configure
-                  </v-btn>
-                </v-col>
-                <v-col cols="12" sm="6" md="3">
-                  <v-btn
-                    block
-                    variant="outlined"
-                    color="success"
-                    @click="openConnectionTestDialog"
-                  >
-                    <v-icon left>mdi-connection</v-icon>
-                    Test API Connection
-                  </v-btn>
-                </v-col>
-              </v-row>
-            </v-card-text>
-          </v-card>
-        </v-col>
-      </v-row>
     </template>
 
     <!-- Connection Test Dialog -->
@@ -654,7 +605,7 @@
       <v-card>
         <v-card-title>
           <v-icon icon="mdi-connection" class="mr-2" />
-          Test API Connection - {{ device?.name }}
+          Connection Test - {{ device?.name }}
         </v-card-title>
 
         <v-card-text>
@@ -678,6 +629,12 @@
       </v-card>
     </v-dialog>
 
+    <DeviceEditDialog
+      v-model="editDialog"
+      :device="device"
+      @saved="onEdited"
+    />
+
     <DeviceMergeDialog
       v-if="duplicateGroup"
       v-model="mergeDialog"
@@ -699,6 +656,9 @@ import DeviceConnectionTest from '@/components/devices/DeviceConnectionTest.vue'
 import DeviceLivePanel from '@/components/devices/DeviceLivePanel.vue'
 import DeviceNeighborsPanel from '@/components/devices/DeviceNeighborsPanel.vue'
 import DeviceMergeDialog from '@/components/devices/DeviceMergeDialog.vue'
+import DeviceEditDialog from '@/components/devices/DeviceEditDialog.vue'
+import { useBackupsStore } from '@/stores/backups'
+import { useWebSocket } from '@/composables/useWebSocket'
 import deviceService from '@/services/device.service'
 import deviceApiService from '@/services/deviceApi.service'
 import { cloudProviderLabel } from '@/models/vendors'
@@ -709,6 +669,8 @@ const router = useRouter()
 const devicesStore = useDevicesStore()
 const notificationStore = useNotificationsStore()
 const authStore = useAuthStore()
+const backupsStore = useBackupsStore()
+const { on: onSocket, off: offSocket } = useWebSocket()
 const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole))
 
 // The row shown is the store's own object whenever the store holds it, so
@@ -727,6 +689,8 @@ const testingConnection = ref(false)
 const lastTestCentralStatus = ref(null)
 // What the device's cloud said when a direct test couldn't reach it.
 const lastTestCloudStatus = ref(null)
+// Outcome of the last header test, with a link to the details dialog.
+const lastTestResult = ref(null)
 
 // Selected tab, kept in the URL (?tab=live) so a live view can be linked.
 const TABS = ['live', 'neighbors']
@@ -962,7 +926,13 @@ const loadDevice = async () => {
 
 // The same view is reused when navigating from one device to another.
 watch(() => route.params.id, (id, previous) => {
-  if (id && id !== previous) loadDevice()
+  if (id && id !== previous) {
+    stopBackupWait()
+    lastTestResult.value = null
+    lastTestCentralStatus.value = null
+    lastTestCloudStatus.value = null
+    loadDevice()
+  }
 })
 
 // A cloud sync may have changed this device (or merged it by MAC).
@@ -991,6 +961,7 @@ const testDirectConnection = async () => {
   testingConnection.value = true
   lastTestCentralStatus.value = null
   lastTestCloudStatus.value = null
+  lastTestResult.value = null
   try {
     const result = await deviceApiService.testDeviceConnection(device.value.id)
     if (result?.centralStatus) {
@@ -1004,17 +975,62 @@ const testDirectConnection = async () => {
     }
     if (result?.success) {
       const via = result.transport ? ` (via ${result.transport.toUpperCase()})` : ''
-      notificationStore.showSuccess(`Direct connection successful${via}`, 'Connection Test')
+      lastTestResult.value = `Direct connection successful${via}`
+      notificationStore.showSuccess(lastTestResult.value, 'Connection Test')
     } else if (result?.cloudOnly) {
       // Nothing to test directly (a cloud-managed AP): not a failure.
+      lastTestResult.value = result.message
       notificationStore.showInfo(result.message, 'Connection Test')
     } else {
-      notificationStore.showError(result?.message || 'Direct connection failed', 'Connection Test')
+      lastTestResult.value = result?.message || 'Direct connection failed'
+      notificationStore.showError(lastTestResult.value, 'Connection Test')
     }
   } catch (err) {
-    notificationStore.showError(err.userMessage || err.message || 'Direct connection failed', 'Connection Test')
+    lastTestResult.value = err.userMessage || err.message || 'Direct connection failed'
+    notificationStore.showError(lastTestResult.value, 'Connection Test')
   } finally {
     testingConnection.value = false
+  }
+}
+
+const editDialog = ref(false)
+const onEdited = (updated) => {
+  if (updated) applyDevicePatch(updated)
+  fetchDevice().catch(() => {})
+}
+
+// Back Up Now: queue a backup of this device and wait for its result. The
+// websocket service already reports the outcome in the status bar; the page
+// only tracks when its own run is done.
+const BACKUP_WAIT_MS = 5 * 60 * 1000
+const backupRunning = ref(false)
+let backupWait = null
+
+const stopBackupWait = () => {
+  if (!backupWait) return
+  offSocket('backup:completed', backupWait.handler)
+  offSocket('backup:failed', backupWait.handler)
+  clearTimeout(backupWait.timer)
+  backupWait = null
+  backupRunning.value = false
+}
+
+const backUpNow = async () => {
+  if (!device.value || backupRunning.value) return
+  const deviceId = device.value.id
+  backupRunning.value = true
+  const handler = (data) => {
+    if (data?.deviceId === deviceId) stopBackupWait()
+  }
+  backupWait = { handler, timer: setTimeout(stopBackupWait, BACKUP_WAIT_MS) }
+  onSocket('backup:completed', handler)
+  onSocket('backup:failed', handler)
+  try {
+    await backupsStore.runBackup([deviceId])
+    notificationStore.showInfo(`Backup of ${device.value?.name || 'this device'} queued`, 'Config Backup')
+  } catch (err) {
+    stopBackupWait()
+    notificationStore.showError(err.userMessage || err.message || 'Failed to queue the backup', 'Config Backup')
   }
 }
 
@@ -1023,6 +1039,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  stopBackupWait()
   // Clear system data when leaving the page
   devicesStore.clearSystemData()
 })
