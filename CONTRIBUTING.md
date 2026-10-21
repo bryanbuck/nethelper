@@ -1,6 +1,6 @@
 # Contributing to NetHelper
 
-Thanks for helping. This page covers the workflow; the architecture and the project's conventions are in [`CLAUDE.md`](CLAUDE.md) and [`docs/MULTI_VENDOR_ROADMAP.md`](docs/MULTI_VENDOR_ROADMAP.md). Read both before a change of any size.
+Thanks for helping. This page covers the workflow; the architecture and the project's conventions are in [`docs/MULTI_VENDOR_ROADMAP.md`](docs/MULTI_VENDOR_ROADMAP.md). Read this before a change of any size.
 
 ## Setup
 
@@ -21,8 +21,7 @@ Node 22 (see `.nvmrc`), PostgreSQL 15+, Redis 7+. The quick start in [`README.md
 
 ## Things review checks
 
-- Docs updated per the "Documentation maintenance" table in `CLAUDE.md`.
-- No secrets, real device configurations, or unanonymised captures. Fixtures marked live are anonymised real captures; new ones must be too.
+- No secrets, real device configurations, or unanonymized captures. Fixtures marked live are anonymized real captures; new ones must be too.
 - No fabricated data in the UI: charts and stats come from the API.
 
 ## Security issues
