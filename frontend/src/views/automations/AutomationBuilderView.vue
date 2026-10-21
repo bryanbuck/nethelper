@@ -98,7 +98,7 @@
                 <v-list-item
                   prepend-icon="mdi-cog"
                   title="Workflow Settings"
-                  @click="settingsDialog = true"
+                  @click="openSettings"
                 />
                 <v-list-item
                   prepend-icon="mdi-help-circle"
@@ -284,7 +284,6 @@
       :node="selectedNode"
       :nodes="workflowElements.filter((el) => !(el.source && el.target))"
       @save="onNodeSave"
-      @test="onNodeTest"
     />
     
     <!-- Workflow Settings Dialog -->
@@ -294,36 +293,31 @@
         
         <v-card-text>
           <v-text-field
-            v-model="workflowMetadata.name"
+            v-model="settingsDraft.name"
             label="Workflow Name"
             variant="outlined"
             required
           />
-          
+
           <v-textarea
-            v-model="workflowMetadata.description"
+            v-model="settingsDraft.description"
             label="Description"
             variant="outlined"
             rows="3"
           />
-          
+
           <v-select
-            v-model="workflowMetadata.category"
+            v-model="settingsDraft.category"
             label="Category"
             :items="workflowCategories"
             variant="outlined"
           />
-          
+
           <v-select
-            v-model="workflowMetadata.priority"
+            v-model="settingsDraft.priority"
             label="Priority"
             :items="priorityOptions"
             variant="outlined"
-          />
-          
-          <v-checkbox
-            v-model="workflowMetadata.enabled"
-            label="Enable workflow"
           />
         </v-card-text>
         
@@ -491,6 +485,7 @@ const selectedElement = ref(null)
 const selectedNode = ref(null)
 const configDialog = ref(false)
 const settingsDialog = ref(false)
+const settingsDraft = ref({})
 const importDialog = ref(false)
 const helpDialog = ref(false)
 const showValidationDialog = ref(false)
@@ -532,7 +527,7 @@ const isEditing = computed(() => !!route.params.id)
 const workflowStatus = computed(() => {
   if (workflowElements.value.length === 0) return 'Empty'
   if (!validationResult.value?.isValid) return 'Invalid'
-  if (workflowMetadata.value.enabled) return 'Active'
+  if (workflowMetadata.value.active) return 'Active'
   return 'Draft'
 })
 
@@ -694,11 +689,6 @@ const onNodeSave = (updatedNode) => {
   configDialog.value = false
 }
 
-const onNodeTest = (testData) => {
-  showSnackbar(`Testing ${testData.node.type} node configuration...`, 'info')
-  // Implement test logic here
-}
-
 const addNodeToCanvas = (nodeData) => {
   if (canvas.value) {
     canvas.value.addNodeFromPalette(nodeData)
@@ -736,7 +726,9 @@ const saveWorkflow = async () => {
       category: workflowMetadata.value.category,
       priority: workflowMetadata.value.priority,
       active: workflowMetadata.value.active,
-      enabled: workflowMetadata.value.enabled,
+      // `active` is the on/off switch. Nothing in the UI shows `enabled`, so
+      // the builder keeps it on (Run Now and triggers skip a disabled row).
+      enabled: true,
       elements: workflowElements.value,
       metadata: {
         nodeCount: nodes.length,
@@ -790,14 +782,9 @@ const deployWorkflow = async () => {
   deploying.value = true
   
   try {
-    // First save the workflow if there are unsaved changes
-    if (workflowId.value) {
-      await saveWorkflow()
-    } else {
-      // Must save first before deploying
-      await saveWorkflow()
-    }
-    
+    // Save first; deploying after a failed save would activate the old version
+    if (!(await saveWorkflow())) return // the save failed and said why
+
     // Deploy (activate) the automation
     if (workflowId.value) {
       await automationsStore.updateAutomation(workflowId.value, {
@@ -895,9 +882,18 @@ const handleImport = async () => {
   }
 }
 
+// The dialog edits a copy: Cancel drops it, Save applies it to the workflow,
+// which the main Save then stores.
+const openSettings = () => {
+  const { name, description, category, priority } = workflowMetadata.value
+  settingsDraft.value = { name, description, category, priority }
+  settingsDialog.value = true
+}
+
 const saveSettings = () => {
+  workflowMetadata.value = { ...workflowMetadata.value, ...settingsDraft.value }
   settingsDialog.value = false
-  showSnackbar('Settings saved', 'success')
+  showSnackbar('Settings applied. Save the workflow to keep them.', 'info')
 }
 
 const handleBack = () => {

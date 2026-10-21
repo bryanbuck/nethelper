@@ -268,8 +268,14 @@ const selectionBoxStyle = computed(() => {
 })
 
 // Methods
+// The counter restarts at 1 on every mount, so skip ids a loaded or imported
+// graph already uses: vue-flow merges a node into the one with its id.
 const generateNodeId = () => {
-  return `node_${nodeIdCounter.value++}`
+  let id
+  do {
+    id = `node_${nodeIdCounter.value++}`
+  } while (findNode(id))
+  return id
 }
 
 const generateEdgeId = () => {

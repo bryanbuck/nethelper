@@ -90,6 +90,7 @@ Preparing the dev-environment build for a private, in-house beta. Deploy targets
 - ✅ #17, #3 (2026-10-21): device page polls system info on load only when it can work (`utils/transport-router.js` `localPollAvailability()`, returned as `systemPoll` by `GET /devices/:id`); the type-specific card (no real data) replaced by Platform & Access.
 - ✅ #13, #14 (2026-10-21): IP (cloud devices on edit) and location optional in the device forms; device create/update routes write only `device.service.js` `editableFields()`.
 - ✅ #19, #20 (2026-10-21): manual connection test takes a platform and routes through `connection-test.service` (`manualTestPlatforms()`/`manualTestDevice()`, served by `GET /device-api/supported-types`); Details dialog shows the existing result and handles `cloudOnly`; `GET /device-api/:id/info` and `/firmware` removed.
+- ✅ #21, #22, #23 (2026-10-21): automation builder. New node ids skip ids already on the canvas (`WorkflowCanvas.vue` `generateNodeId`); the status chip follows `active`; the hidden `enabled` checkbox is gone (builder saves send `enabled: true`); Workflow Settings edits a copy; the node dialog's no-op Test button is removed; Deploy stops after a failed save.
 
 ---
 
