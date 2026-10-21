@@ -384,7 +384,7 @@ class WebSocketService {
 
   /**
    * Handle config backup failed events (per device)
-   * @param {Object} data - { backupId, deviceId, deviceName, error }
+   * @param {Object} data - { backupId, deviceId, deviceName, error, unsupported? }
    */
   handleBackupFailed(data) {
     console.log('Backup failed:', data)
@@ -393,6 +393,10 @@ class WebSocketService {
       const { error: errorMessage } = data
 
       this.stores.backups.applyBackupEvent(data)
+
+      // A platform with no per-device config (Mist APs): expected on an "all
+      // devices" run, so only the run summary counts it.
+      if (data.unsupported) return
 
       this.stores.notifications.showError(
         `Configuration backup for ${this.backupSubject(data)} failed: ${errorMessage || 'Unknown error'}`,
@@ -405,24 +409,30 @@ class WebSocketService {
 
   /**
    * Handle config backup run completed events (whole batch)
-   * @param {Object} data - { scheduleId, total, succeeded, failed }
+   * @param {Object} data - { scheduleId, total, succeeded, failed, unsupported? }
    */
   handleBackupRunCompleted(data) {
     console.log('Backup run completed:', data)
 
     try {
       const { total, succeeded, failed } = data
+      // Device runs count devices with no per-device config apart (a number;
+      // scope runs send a list of integrations).
+      const skipped = typeof data.unsupported === 'number' ? data.unsupported : 0
+      const skippedNote = skipped > 0
+        ? `, ${skipped} skipped (no per-device config; see Cloud Scopes)`
+        : ''
 
       this.stores.backups.handleRunCompleted(data)
 
       if (failed > 0) {
         this.stores.notifications.showWarning(
-          `Backup run finished: ${succeeded}/${total} succeeded, ${failed} failed`,
+          `Backup run finished: ${succeeded}/${total - skipped} succeeded, ${failed} failed${skippedNote}`,
           'Backup Run Complete'
         )
       } else {
         this.stores.notifications.showSuccess(
-          `Backup run finished: ${succeeded}/${total} ${data.scope ? 'cloud scope(s)' : 'device(s)'} backed up`,
+          `Backup run finished: ${succeeded}/${total - skipped} ${data.scope ? 'cloud scope(s)' : 'device(s)'} backed up${skippedNote}`,
           'Backup Run Complete'
         )
       }

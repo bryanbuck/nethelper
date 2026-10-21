@@ -113,13 +113,16 @@ class ConfigBackupService {
     const includeScopes = Boolean(schedule?.includeScopes);
     if (devices.length === 0 && !includeScopes) {
       logger.warn('Backup run matched no devices', { scheduleId, deviceIds });
-      return { total: 0, succeeded: 0, failed: 0 };
+      return { total: 0, succeeded: 0, failed: 0, unsupported: 0 };
     }
 
-    const results = { total: devices.length, succeeded: 0, failed: 0 };
+    // unsupported: devices whose platform has no per-device config (Mist APs),
+    // counted apart so an "all devices" run doesn't report them as failures.
+    const results = { total: devices.length, succeeded: 0, failed: 0, unsupported: 0 };
     for (const device of devices) {
-      const ok = await this.backupDevice(device, { scheduleId, trigger, triggeredBy });
-      if (ok) results.succeeded++;
+      const outcome = await this.backupDeviceOutcome(device, { scheduleId, trigger, triggeredBy });
+      if (outcome === 'success') results.succeeded++;
+      else if (outcome === 'unsupported') results.unsupported++;
       else results.failed++;
     }
 
@@ -166,7 +169,15 @@ class ConfigBackupService {
    * Back up a single device's configuration from Aruba Central to local
    * storage. Returns true on success.
    */
-  async backupDevice(device, { scheduleId = null, trigger = 'manual', triggeredBy = null } = {}) {
+  async backupDevice(device, options = {}) {
+    return (await this.backupDeviceOutcome(device, options)) === 'success';
+  }
+
+  /**
+   * backupDevice, returning 'success', 'failed', or 'unsupported' (the
+   * platform has no per-device config: a CapabilityError).
+   */
+  async backupDeviceOutcome(device, { scheduleId = null, trigger = 'manual', triggeredBy = null } = {}) {
     const prisma = getPrisma();
     const record = await prisma.configBackup.create({
       data: {
@@ -264,14 +275,15 @@ class ConfigBackupService {
         ...(warning && { warning }),
       });
       alertService.clear('backup.failed', { subjectKey: `device:${device.id}` });
-      return true;
+      return 'success';
     } catch (error) {
       // A CapabilityError means the device's platform genuinely has nothing to
       // back up (e.g. Mist configures APs via site/WLAN templates, not
       // per-device config). That is expected on an "all devices" schedule, so
       // it is a warning, not an error — but it is still recorded on the backup
       // row so the reason is visible in the UI.
-      if (error.name === 'CapabilityError') {
+      const unsupported = error.name === 'CapabilityError';
+      if (unsupported) {
         logger.warn(`Config backup not supported for ${device.name}: ${error.message}`);
       } else {
         logger.error(`Config backup failed for device ${device.name} (${deviceStorageKey(device)}):`, error);
@@ -285,9 +297,10 @@ class ConfigBackupService {
         deviceId: device.id,
         deviceName: device.name,
         error: error.message,
+        ...(unsupported && { unsupported: true }),
       });
       // Nothing to back up on this platform is expected, not an alert.
-      if (error.name !== 'CapabilityError') {
+      if (!unsupported) {
         alertService.raise('backup.failed', {
           subjectKey: `device:${device.id}`,
           deviceId: device.id,
@@ -296,7 +309,7 @@ class ConfigBackupService {
           data: { backupId: record.id },
         });
       }
-      return false;
+      return unsupported ? 'unsupported' : 'failed';
     }
   }
 

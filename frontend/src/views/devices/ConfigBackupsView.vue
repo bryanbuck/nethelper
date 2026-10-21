@@ -578,6 +578,7 @@
               <v-select
                 v-model="compareFromId"
                 :items="compareCandidates"
+                :loading="loadingCompareRows"
                 label="From (older)"
                 density="compact"
                 @update:model-value="loadDiff"
@@ -587,6 +588,7 @@
               <v-select
                 v-model="compareToId"
                 :items="compareCandidates"
+                :loading="loadingCompareRows"
                 label="To (newer)"
                 density="compact"
                 @update:model-value="loadDiff"
@@ -1087,40 +1089,51 @@ async function downloadScope(item) {
 // Compare / diff (device backups, or cloud-scope backups)
 const showCompareDialog = ref(false)
 const compareMode = ref('device')
-const compareKey = ref(null)
+const compareRows = ref([])
+const loadingCompareRows = ref(false)
 const compareFromId = ref(null)
 const compareToId = ref(null)
 const compareKind = ref(null)
 const diffResult = ref(null)
 const loadingDiff = ref(false)
 
-const scopeKey = b => `${b.integrationId}|${b.scopeType}|${b.scopeId}`
-
-const compareCandidates = computed(() => {
-  const rows = compareMode.value === 'scope'
-    ? backupsStore.scopeBackups.filter(b => b.status === 'success' && scopeKey(b) === compareKey.value)
-    : backupsStore.backups.filter(b => b.status === 'success' && b.deviceId === compareKey.value)
-  return rows.map(b => ({ title: formatDate(b.createdAt), value: b.id }))
-})
+// Candidates are the device's (or scope's) whole history, loaded when the
+// dialog opens: the table holds only one page of every device's backups.
+const compareCandidates = computed(() =>
+  compareRows.value.map(b => ({ title: formatDate(b.createdAt), value: b.id }))
+)
 
 function openCompareDialog(item) {
   compareMode.value = 'device'
-  compareKey.value = item.deviceId
-  startCompare(item)
+  startCompare(item, () => backupsStore.fetchDeviceBackupHistory(item.deviceId))
 }
 
 function openScopeCompareDialog(item) {
   compareMode.value = 'scope'
-  compareKey.value = scopeKey(item)
-  startCompare(item)
+  startCompare(item, () => backupsStore.fetchScopeBackupHistory(item))
 }
 
-function startCompare(item) {
+let compareLoad = 0
+
+async function startCompare(item, loadHistory) {
+  compareRows.value = [item]
   compareToId.value = item.id
   compareFromId.value = null
   compareKind.value = null
   diffResult.value = null
   showCompareDialog.value = true
+
+  const load = ++compareLoad
+  loadingCompareRows.value = true
+  try {
+    const rows = await loadHistory()
+    if (load !== compareLoad) return // another Compare was opened meanwhile
+    compareRows.value = rows.some(b => b.id === item.id) ? rows : [item, ...rows]
+  } catch (error) {
+    if (load === compareLoad) notify(error.userMessage || error.message || 'Failed to load backup history', 'error')
+  } finally {
+    if (load === compareLoad) loadingCompareRows.value = false
+  }
 }
 
 async function loadDiff() {
