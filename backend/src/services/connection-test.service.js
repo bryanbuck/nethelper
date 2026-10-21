@@ -5,6 +5,7 @@ const NetconfClient = require('./device-api/netconf-client');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const { isCxRestCapable } = require('../utils/device-platform');
 const { resolveTransport } = require('../utils/transport-router');
+const { getPrisma } = require('../config/database');
 const logger = require('../utils/logger');
 
 /**
@@ -101,4 +102,26 @@ async function cloudView(device) {
   }
 }
 
-module.exports = { testDeviceConnection, cloudView };
+/**
+ * Store a test's outcome on the device it contacted (Device.api*), so the
+ * Devices table shows each device's own result rather than the shared
+ * credential's. Best-effort: never fails the test.
+ */
+async function recordDeviceTest(deviceId, result, responseTime = null) {
+  try {
+    await getPrisma().device.update({
+      where: { id: deviceId },
+      data: {
+        apiTestStatus: result.success ? 'success' : 'failed',
+        apiLastTested: new Date(),
+        apiResponseTime: Number.isFinite(result.responseTime) ? Math.round(result.responseTime)
+          : Number.isFinite(responseTime) ? Math.round(responseTime) : null,
+        apiError: result.success ? null : String(result.message || 'Connection failed').slice(0, 1000),
+      },
+    });
+  } catch (error) {
+    logger.warn('Failed to record device test result', { deviceId, error: error.message });
+  }
+}
+
+module.exports = { testDeviceConnection, cloudView, recordDeviceTest };

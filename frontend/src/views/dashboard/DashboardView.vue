@@ -320,7 +320,7 @@ const executeQuickAction = (action) => {
       syncAllDevices()
       break
     case 'create-automation':
-      router.push('/automations/new')
+      router.push('/automations/builder')
       break
     case 'view-alerts':
       router.push('/alerts')

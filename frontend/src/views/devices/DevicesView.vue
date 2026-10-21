@@ -31,52 +31,23 @@
         </div>
       </div>
       
-      <!-- Quick Stats Cards -->
+      <!-- Quick Stats Cards: fleet-wide counts; a click filters the table by that status -->
       <v-row class="mb-6">
-        <v-col cols="12" sm="6" md="3">
-          <v-card variant="tonal" color="success">
+        <v-col v-for="card in statCards" :key="card.key" cols="12" sm="6" md="3">
+          <v-card
+            :variant="isActiveCard(card) ? 'flat' : 'tonal'"
+            :color="card.color"
+            class="stats-card"
+            link
+            :aria-pressed="isActiveCard(card)"
+            @click="selectStatus(card.status)"
+          >
             <v-card-text class="d-flex align-center">
               <div class="flex-grow-1">
-                <div class="text-h5 font-weight-bold">{{ devicesStore.stats.online }}</div>
-                <div class="text-body-2">Online Devices</div>
+                <div class="text-h5 font-weight-bold">{{ devicesStore.stats[card.key] }}</div>
+                <div class="text-body-2">{{ card.label }}</div>
               </div>
-              <v-icon size="32" color="success">mdi-check-circle</v-icon>
-            </v-card-text>
-          </v-card>
-        </v-col>
-        
-        <v-col cols="12" sm="6" md="3">
-          <v-card variant="tonal" color="error">
-            <v-card-text class="d-flex align-center">
-              <div class="flex-grow-1">
-                <div class="text-h5 font-weight-bold">{{ devicesStore.stats.offline }}</div>
-                <div class="text-body-2">Offline Devices</div>
-              </div>
-              <v-icon size="32" color="error">mdi-close-circle</v-icon>
-            </v-card-text>
-          </v-card>
-        </v-col>
-        
-        <v-col cols="12" sm="6" md="3">
-          <v-card variant="tonal" color="warning">
-            <v-card-text class="d-flex align-center">
-              <div class="flex-grow-1">
-                <div class="text-h5 font-weight-bold">{{ devicesStore.stats.warning }}</div>
-                <div class="text-body-2">Warning Devices</div>
-              </div>
-              <v-icon size="32" color="warning">mdi-alert-circle</v-icon>
-            </v-card-text>
-          </v-card>
-        </v-col>
-        
-        <v-col cols="12" sm="6" md="3">
-          <v-card variant="tonal" color="primary">
-            <v-card-text class="d-flex align-center">
-              <div class="flex-grow-1">
-                <div class="text-h5 font-weight-bold">{{ devicesStore.stats.total }}</div>
-                <div class="text-body-2">Total Devices</div>
-              </div>
-              <v-icon size="32" color="primary">mdi-devices</v-icon>
+              <v-icon size="32">{{ isActiveCard(card) && card.status ? 'mdi-filter' : card.icon }}</v-icon>
             </v-card-text>
           </v-card>
         </v-col>
@@ -109,7 +80,11 @@
       </v-alert>
 
       <!-- Device Table -->
-      <DeviceTable ref="deviceTable" @edit-device="handleEditDevice" />
+      <DeviceTable
+        ref="deviceTable"
+        v-model:status-filter="statusFilter"
+        @edit-device="handleEditDevice"
+      />
 
       <DeviceMergeDialog
         v-if="currentDuplicate"
@@ -313,10 +288,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import DeviceMergeDialog from '@/components/devices/DeviceMergeDialog.vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
 import { useSettingsStore } from '@/stores/settings'
 import { useWebSocket } from '@/composables/useWebSocket'
@@ -326,6 +301,7 @@ import { vendorOptions, platformOptions } from '@/models/vendors'
 import { useDeviceForm, deviceTypes, managementModeOptions, deviceFormRules as rules } from '@/composables/useDeviceForm'
 
 const route = useRoute()
+const router = useRouter()
 const devicesStore = useDevicesStore()
 const settingsStore = useSettingsStore()
 const { connected, connecting } = useWebSocket()
@@ -500,17 +476,38 @@ const handleEditDevice = (device) => {
   showEditDialog.value = true
 }
 
-// Handle query parameters for filtering
-const handleQueryParams = () => {
-  if (route.query.status) {
-    // The DeviceTable component will handle the initial filtering
-    // based on store state updates
-  }
+// Status filter shared with the table. ?status= (the Dashboard's cards)
+// seeds it; on this page the cards change it in place.
+const STATUSES = ['online', 'offline', 'warning', 'maintenance']
+const statusFilter = ref(STATUSES.includes(route.query.status) ? route.query.status : null)
+
+const statCards = [
+  { key: 'online', status: 'online', label: 'Online Devices', color: 'success', icon: 'mdi-check-circle' },
+  { key: 'offline', status: 'offline', label: 'Offline Devices', color: 'error', icon: 'mdi-close-circle' },
+  { key: 'warning', status: 'warning', label: 'Warning Devices', color: 'warning', icon: 'mdi-alert-circle' },
+  { key: 'total', status: null, label: 'Total Devices', color: 'primary', icon: 'mdi-devices' }
+]
+
+const isActiveCard = (card) => card.status !== null && statusFilter.value === card.status
+
+// Clicking the active card again (or Total) clears the status filter
+const selectStatus = (status) => {
+  statusFilter.value = status && statusFilter.value !== status ? status : null
 }
+
+// Keep the URL in step, so a reload or a shared link shows the same list
+watch(statusFilter, (status) => {
+  if ((route.query.status || null) === status) return
+  router.replace({ query: { ...route.query, status: status || undefined } })
+})
+// ...and follow it when it changes under us (e.g. the Devices nav item drops ?status=)
+watch(() => route.query.status, (status) => {
+  const next = STATUSES.includes(status) ? status : null
+  if (next !== statusFilter.value) statusFilter.value = next
+})
 
 // Initialize
 onMounted(() => {
-  handleQueryParams()
   devicesStore.fetchDuplicates().catch(() => {})
   // Needed by the cloud-integration selector in the add/edit dialogs.
   settingsStore.fetchCloudIntegrations().catch((error) => {

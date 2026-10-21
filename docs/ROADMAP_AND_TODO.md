@@ -75,6 +75,8 @@ Preparing the dev-environment build for a private, in-house beta. Deploy targets
 **Status**: started 2026-10-20. Bugs found in beta testing are GitHub Issues in the private repo, labeled `beta` (`gh issue list -l beta`). A fix closes its issue from the commit (`Fixes #N`) and adds a line under `[Unreleased]` in `CHANGELOG.md`. The version stays `0.9.0-beta.1` until the next tag.
 
 - ✅ #1 (2026-10-20): dead buttons on the device page; header consolidated, edit dialog shared (`components/devices/DeviceEditDialog.vue`).
+- ✅ #2, #5, #6, #7, #24 (2026-10-21): Devices table server pagination/sorting (`GET /devices` `limit`/`page`/`sortBy`/`sortOrder`, fleet-wide `summary`; store `ensureAllDevices()` for pickers), Remove row action (admin), buttons hidden from roles the API refuses, per-section Settings errors.
+- ✅ #4, #8, #9, #10, #11, #12, #18 (2026-10-21): Automations list reactivity; clickable status cards (Dashboard links to a filtered Devices page, Devices page cards filter in place); CSV export (`utils/csv.js`); search clear; device type labels from `models/Device.js` `deviceTypeInfo()`; per-device connection test result (`Device.api*`, migration `20261021120000_device_api_test_status`).
 
 ---
 

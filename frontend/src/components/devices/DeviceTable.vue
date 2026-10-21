@@ -43,7 +43,7 @@
             prepend-inner-icon="mdi-magnify"
             style="width: 250px; min-width: 250px;"
             clearable
-            @input="onSearchInput"
+            @update:model-value="onSearchInput"
           />
           
           <v-btn
@@ -85,6 +85,8 @@
               <v-list-item
                 prepend-icon="mdi-export"
                 title="Export CSV"
+                subtitle="Every device matching the search and filters"
+                :disabled="exporting"
                 @click="exportToCsv"
               />
               <v-list-item
@@ -274,6 +276,7 @@
                 variant="outlined"
                 size="small"
                 prepend-icon="mdi-download"
+                :loading="exporting"
                 @click="exportSelected"
               >
                 Export Selected
@@ -307,11 +310,11 @@
         <template #item.name="{ item }">
           <div class="d-flex align-center">
             <v-avatar 
-              :color="getDeviceTypeColor(item.type)" 
+              :color="deviceTypeInfo(item.type).color" 
               size="32" 
               class="mr-3"
             >
-              <v-icon :icon="getDeviceIcon(item.type)" color="white" size="small"></v-icon>
+              <v-icon :icon="deviceTypeInfo(item.type).icon" color="white" size="small"></v-icon>
             </v-avatar>
             <div>
               <div class="font-weight-medium">
@@ -373,12 +376,12 @@
         <template #item.type="{ item }">
           <div class="d-flex align-center">
             <v-icon
-              :color="getDeviceTypeColor(item.type)"
-              :icon="getDeviceIcon(item.type)"
+              :color="deviceTypeInfo(item.type).color"
+              :icon="deviceTypeInfo(item.type).icon"
               size="small"
               class="mr-2"
             ></v-icon>
-            {{ getDeviceTypeLabel(item.type) }}
+            {{ deviceTypeInfo(item.type).label }}
           </div>
         </template>
 
@@ -450,35 +453,14 @@
         <template #item.apiStatus="{ item }">
           <ConnectionStatusBadge
             :status="getApiConnectionStatus(item)"
-            :last-tested="item.apiCredential?.lastTested || item.apiLastTested"
+            :last-tested="item.apiLastTested"
             :response-time="item.apiResponseTime"
             :error-message="item.apiError"
           />
         </template>
 
         <template #item.lastSeen="{ item }">
-          <div>
-            <div class="text-body-2">{{ formatLastSeen(item.lastSeen) }}</div>
-            <div class="text-caption text-medium-emphasis">{{ formatUptime(item.uptime) }}</div>
-          </div>
-        </template>
-        
-        <template #item.performance="{ item }">
-          <div v-if="item.type === 'Access Point'">
-            <div class="text-body-2">{{ item.clients }} clients</div>
-            <div class="text-caption text-medium-emphasis">{{ item.bandwidth }}</div>
-          </div>
-          <div v-else-if="item.type === 'Switch'">
-            <div class="text-body-2">{{ item.ports }} ports</div>
-            <div class="text-caption text-medium-emphasis">{{ item.utilization }} used</div>
-          </div>
-          <div v-else-if="item.type === 'Gateway'">
-            <div class="text-body-2">{{ item.throughput }}</div>
-            <div class="text-caption text-medium-emphasis">{{ item.temperature }}</div>
-          </div>
-          <div v-else>
-            <div class="text-caption text-medium-emphasis">—</div>
-          </div>
+          <div class="text-body-2">{{ formatLastSeen(item.lastSeen) }}</div>
         </template>
         
         <template #item.actions="{ item }">
@@ -585,15 +567,21 @@ import ConnectionStatusBadge from './ConnectionStatusBadge.vue'
 import DeviceMergeDialog from './DeviceMergeDialog.vue'
 import DeviceCredentialDialog from './DeviceCredentialDialog.vue'
 import { cloudProviderLabel, platformOptions } from '@/models/vendors'
-import { unreachableFromHere, answersPingButCloudOffline } from '@/models/Device'
+import { unreachableFromHere, answersPingButCloudOffline, DeviceTypeInfo, deviceTypeInfo } from '@/models/Device'
+import { VendorInfo, PlatformInfo } from '@/models/vendors'
+import { toCsv, downloadCsv } from '@/utils/csv'
 import { useSettingsStore } from '@/stores/settings'
 
 const router = useRouter()
 const devicesStore = useDevicesStore()
 const { connected: wsConnected, connecting: wsConnecting } = useWebSocket()
 
-// Define emits
-const emit = defineEmits(['edit-device'])
+const tableProps = defineProps({
+  // The status filter, two-way (v-model:status-filter) so the Devices page
+  // stat cards can set it and show which one is active
+  statusFilter: { type: String, default: null }
+})
+const emit = defineEmits(['edit-device', 'update:statusFilter'])
 
 // Component state
 const selectedItems = ref([])
@@ -602,7 +590,7 @@ const searchInput = ref('')
 
 // Filters
 const filters = ref({
-  status: null,
+  status: tableProps.statusFilter || null,
   type: null,
   location: null,
   platform: null,
@@ -677,12 +665,6 @@ const headers = [
     width: '160px'
   },
   {
-    title: 'Performance',
-    key: 'performance',
-    sortable: false,
-    width: '140px'
-  },
-  {
     title: 'Actions',
     key: 'actions',
     sortable: false,
@@ -698,16 +680,7 @@ const statusOptions = [
   { title: 'Maintenance', value: 'maintenance' }
 ]
 
-// Keyed by the backend DeviceType enum values.
-const deviceTypeInfo = {
-  access_point: { label: 'Access Point', icon: 'mdi-wifi', color: 'blue' },
-  switch: { label: 'Switch', icon: 'mdi-switch', color: 'green' },
-  gateway: { label: 'Gateway', icon: 'mdi-router-wireless', color: 'orange' },
-  controller: { label: 'Controller', icon: 'mdi-server', color: 'purple' },
-  other: { label: 'Other', icon: 'mdi-help-circle', color: 'grey' }
-}
-
-const typeOptions = Object.entries(deviceTypeInfo).map(([value, info]) => ({ title: info.label, value }))
+const typeOptions = Object.entries(DeviceTypeInfo).map(([value, info]) => ({ title: info.label, value }))
 
 const platformFilterOptions = platformOptions()
 
@@ -754,6 +727,7 @@ const onSearchInput = debounce(() => {
 }, 500)
 
 const applyFilters = () => {
+  emit('update:statusFilter', filters.value.status || null)
   loadItems({
     ...tableOptions.value,
     page: 1
@@ -769,11 +743,18 @@ const clearFilters = () => {
     credential: null
   }
   searchInput.value = ''
+  emit('update:statusFilter', null)
   loadItems({
     ...tableOptions.value,
     page: 1
   })
 }
+
+watch(() => tableProps.statusFilter, (status) => {
+  if ((status || null) === (filters.value.status || null)) return
+  filters.value.status = status || null
+  applyFilters()
+})
 
 const refreshTable = () => {
   loadItems(tableOptions.value)
@@ -890,12 +871,59 @@ const onMerged = () => {
 // A cloud sync job finished (device:sync:completed): show what it changed.
 watch(() => devicesStore.lastSyncResult, () => refreshTable())
 
-const exportSelected = () => {
-  console.log('Exporting selected devices:', selectedItems.value)
+// CSV export: every matching device (not just this page), or the selection
+const exporting = ref(false)
+const API_STATUS_LABELS = { connected: 'Connected', failed: 'Failed', untested: 'Untested', 'no-credentials': 'No credential' }
+const CSV_HEADERS = [
+  'Name', 'Type', 'Vendor', 'Platform', 'Model', 'Serial', 'MAC Address', 'IP Address', 'Location',
+  'Status', 'Ping Status', 'Cloud Status', 'Managed', 'Cloud Integration', 'Firmware', 'Credential',
+  'API Status', 'API Last Tested', 'Last Seen'
+]
+const csvRow = (d) => [
+  d.name, deviceTypeInfo(d.type).label, VendorInfo[d.vendor]?.label || d.vendor,
+  PlatformInfo[d.platform]?.label || d.platform, d.model, d.serial, d.macAddress, d.ipAddress, d.location,
+  d.status, d.pingStatus, d.managementMode === 'cloud' ? d.cloudStatus : '', getManagementChip(d).label,
+  d.cloudIntegration?.name, d.firmwareVersion, d.apiCredential?.name,
+  API_STATUS_LABELS[getApiConnectionStatus(d)], d.apiLastTested, d.lastSeen
+]
+
+const exportRows = async (rows, label) => {
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+  downloadCsv(`devices-${label}-${stamp}.csv`, toCsv(CSV_HEADERS, rows.map(csvRow)))
+  notifications.showSuccess(`Exported ${rows.length} device(s)`)
 }
 
-const exportToCsv = () => {
-  console.log('Exporting all devices to CSV')
+const exportToCsv = async () => {
+  exporting.value = true
+  try {
+    // itemsPerPage -1 = no limit: every row matching the search and filters
+    const { data } = await deviceService.getDevicesWithPagination({
+      itemsPerPage: -1,
+      sortBy: tableOptions.value.sortBy,
+      search: searchInput.value,
+      filters: filters.value
+    })
+    await exportRows(data, 'all')
+  } catch (err) {
+    notifications.showError(err.userMessage || err.message || 'Export failed')
+  } finally {
+    exporting.value = false
+  }
+}
+
+// The selection can span table pages, so fetch rows not on this one (as Merge does)
+const exportSelected = async () => {
+  exporting.value = true
+  try {
+    const rows = await Promise.all(selectedItems.value.map(async (id) =>
+      devicesStore.devices.find((d) => d.id === id) || (await deviceService.getDevice(id)).data
+    ))
+    await exportRows(rows, 'selected')
+  } catch (err) {
+    notifications.showError(err.userMessage || err.message || 'Export failed')
+  } finally {
+    exporting.value = false
+  }
 }
 
 // Utility functions
@@ -918,10 +946,6 @@ const getStatusIcon = (status) => {
   }
   return icons[status] || 'mdi-help-circle'
 }
-
-const getDeviceIcon = (type) => deviceTypeInfo[type]?.icon || 'mdi-help-circle'
-
-const getDeviceTypeLabel = (type) => deviceTypeInfo[type]?.label || type || 'Unknown'
 
 // Name of the cloud plane managing a device ("Central", "Mist", ...), for
 // labels and tooltips. Falls back to the generic "Cloud" when unknown.
@@ -959,8 +983,6 @@ const getManagementMismatch = (item) => {
   return null
 }
 
-const getDeviceTypeColor = (type) => deviceTypeInfo[type]?.color || 'grey'
-
 const formatLastSeen = (lastSeen) => {
   if (!lastSeen) return 'Unknown'
   
@@ -971,33 +993,12 @@ const formatLastSeen = (lastSeen) => {
   }
 }
 
-const formatUptime = (uptime) => {
-  return uptime || 'Unknown'
-}
-
+// The device's own last connection test (Device.api*), not the shared
+// credential's status, which every device using it would echo.
 const getApiConnectionStatus = (device) => {
-  // If device has credentials configured
-  if (device.apiCredentialId) {
-    // Check if we have the credential object with test status
-    const lastTested = device.apiCredential?.lastTested || device.apiLastTested
-    const testStatus = device.apiCredential?.lastTestStatus || device.apiTestStatus
-
-    // If test was performed
-    if (lastTested) {
-      // Check test result
-      if (testStatus === 'success') {
-        return 'connected'
-      } else {
-        return 'failed'
-      }
-    } else {
-      // Has credentials but never tested
-      return 'untested'
-    }
-  } else {
-    // No credentials configured
-    return 'no-credentials'
-  }
+  if (!device.apiCredentialId) return 'no-credentials'
+  if (!device.apiLastTested) return 'untested'
+  return device.apiTestStatus === 'success' ? 'connected' : 'failed'
 }
 
 const getErrorTitle = (error) => {

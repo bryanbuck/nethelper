@@ -407,6 +407,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import { useAutomationsStore } from '@/stores/automations'
 import { apiErrorMessage } from '@/utils/apiError'
 import { formatDistanceToNow, format } from 'date-fns'
@@ -435,9 +436,10 @@ const snackbar = ref({
 })
 
 // Computed properties
-const { automations, loading, stats } = automationsStore
+// storeToRefs keeps these reactive (a plain destructure copies the values once)
+const { automations, loading, stats } = storeToRefs(automationsStore)
 const filteredAutomations = computed(() => {
-  let filtered = automations
+  let filtered = automations.value
 
   if (searchQuery.value) {
     filtered = automationsStore.searchAutomations(searchQuery.value)

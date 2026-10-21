@@ -39,8 +39,8 @@
             class="device-item"
           >
             <template #prepend>
-              <v-avatar :color="getDeviceTypeColor(device.type)" variant="tonal">
-                <v-icon :icon="getDeviceIcon(device.type)"></v-icon>
+              <v-avatar :color="deviceTypeInfo(device.type).color" variant="tonal">
+                <v-icon :icon="deviceTypeInfo(device.type).icon"></v-icon>
               </v-avatar>
             </template>
             
@@ -49,7 +49,7 @@
             </v-list-item-title>
             
             <v-list-item-subtitle class="text-caption">
-              {{ device.location }} " {{ device.ipAddress }}
+              {{ [device.location, device.ipAddress].filter(Boolean).join(' · ') }}
             </v-list-item-subtitle>
             
             <template #append>
@@ -94,6 +94,7 @@
 import { computed, ref } from 'vue'
 import { useDevicesStore } from '@/stores/devices'
 import { formatDistanceToNow } from 'date-fns'
+import { deviceTypeInfo } from '@/models/Device'
 
 const props = defineProps({
   maxItems: {
@@ -111,28 +112,6 @@ const loading = computed(() => devicesStore.loading)
 const recentDevices = computed(() => 
   devicesStore.recentDevices.slice(0, props.maxItems)
 )
-
-const getDeviceIcon = (type) => {
-  const icons = {
-    'Access Point': 'mdi-wifi',
-    'Switch': 'mdi-switch',
-    'Gateway': 'mdi-router-wireless',
-    'Controller': 'mdi-server',
-    'Router': 'mdi-router'
-  }
-  return icons[type] || 'mdi-help-circle'
-}
-
-const getDeviceTypeColor = (type) => {
-  const colors = {
-    'Access Point': 'blue',
-    'Switch': 'green',
-    'Gateway': 'orange',
-    'Controller': 'purple',
-    'Router': 'teal'
-  }
-  return colors[type] || 'grey'
-}
 
 const getStatusColor = (status) => {
   const colors = {

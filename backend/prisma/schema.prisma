@@ -197,6 +197,13 @@ model Device {
   lastSeen        DateTime? // Last seen timestamp (updated by both ping monitoring and Aruba Central sync)
   metadata        Json?
   apiCredentialId String?
+  // Last connection test of THIS device (POST /device-api/test/:id or a
+  // credential test that picked it). The credential's own lastTestStatus is
+  // shared by every device using it, so the Devices table shows these.
+  apiTestStatus   String? // success | failed
+  apiLastTested   DateTime?
+  apiResponseTime Int? // ms
+  apiError        String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

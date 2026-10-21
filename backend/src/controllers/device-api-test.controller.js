@@ -1,6 +1,6 @@
 const DeviceAPIFactory = require('../services/device-api/device-api-factory');
 const settingsService = require('../services/settings.service');
-const { testDeviceConnection, cloudView } = require('../services/connection-test.service');
+const { testDeviceConnection, cloudView, recordDeviceTest } = require('../services/connection-test.service');
 const { usesDeviceCredential } = require('../services/device-credential.service');
 const { getPrisma } = require('../config/database');
 const logger = require('../utils/logger');
@@ -72,7 +72,9 @@ class DeviceAPITestController {
       }
 
       // Same transport routing as a real operation (connection-test.service).
+      const startTime = Date.now();
       const result = await testDeviceConnection(device, credentials);
+      await recordDeviceTest(deviceId, result, Date.now() - startTime);
 
       // Update credential test status
       if (device.apiCredentialId) {
@@ -111,6 +113,9 @@ class DeviceAPITestController {
             where: { id: req.params.deviceId },
           });
 
+          if (device) {
+            await recordDeviceTest(device.id, { success: false, message: error.message });
+          }
           if (device?.apiCredentialId) {
             await prisma.apiCredential.update({
               where: { id: device.apiCredentialId },

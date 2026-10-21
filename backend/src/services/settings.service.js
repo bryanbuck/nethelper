@@ -276,8 +276,9 @@ class SettingsService {
         // A real connection attempt, routed like any other operation. Lazy
         // require: connection-test pulls in device-poller, which requires this
         // module.
-        const { testDeviceConnection } = require('./connection-test.service');
+        const { testDeviceConnection, recordDeviceTest } = require('./connection-test.service');
         testResult = await testDeviceConnection(device, this.decryptCredential(credential));
+        await recordDeviceTest(device.id, testResult, Date.now() - startTime);
 
         // Update credential with test results
         await prisma.apiCredential.update({

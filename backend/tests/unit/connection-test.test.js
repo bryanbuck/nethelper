@@ -6,12 +6,14 @@ jest.mock('../../src/services/device-api/device-api-factory', () => ({ createDev
 jest.mock('../../src/services/ssh-device.service', () => ({ testConnection: jest.fn() }));
 jest.mock('../../src/services/device-poller.service', () => ({ refreshCentralStatus: jest.fn() }));
 jest.mock('../../src/services/cloud-providers/cloud-provider-factory', () => ({ forDevice: jest.fn() }));
+const mockDeviceUpdate = jest.fn();
+jest.mock('../../src/config/database', () => ({ getPrisma: () => ({ device: { update: mockDeviceUpdate } }) }));
 
 const DeviceAPIFactory = require('../../src/services/device-api/device-api-factory');
 const sshDeviceService = require('../../src/services/ssh-device.service');
 const CloudProviderFactory = require('../../src/services/cloud-providers/cloud-provider-factory');
 const NetconfClient = require('../../src/services/device-api/netconf-client');
-const { testDeviceConnection } = require('../../src/services/connection-test.service');
+const { testDeviceConnection, recordDeviceTest } = require('../../src/services/connection-test.service');
 
 const CREDS = { username: 'admin', password: 'pw' };
 const mistSwitch = (over = {}) => ({
@@ -83,4 +85,28 @@ test('a cloud failure to answer leaves the result as it was', async () => {
   expect(result.success).toBe(false);
   expect(result.cloudStatus).toBeUndefined();
   expect(result.message).toMatch(/No usable transport/);
+});
+
+describe('recordDeviceTest', () => {
+  test('stores a pass on the tested device and clears its last error', async () => {
+    await recordDeviceTest('d1', { success: true, transport: 'netconf' }, 412.6);
+
+    const { where, data } = mockDeviceUpdate.mock.calls[0][0];
+    expect(where).toEqual({ id: 'd1' });
+    expect(data).toMatchObject({ apiTestStatus: 'success', apiResponseTime: 413, apiError: null });
+    expect(data.apiLastTested).toBeInstanceOf(Date);
+  });
+
+  test('stores a failure with its message', async () => {
+    await recordDeviceTest('d1', { success: false, message: 'Authentication failed' });
+
+    expect(mockDeviceUpdate.mock.calls[0][0].data)
+      .toMatchObject({ apiTestStatus: 'failed', apiError: 'Authentication failed', apiResponseTime: null });
+  });
+
+  test('never throws when the write fails', async () => {
+    mockDeviceUpdate.mockRejectedValueOnce(new Error('db down'));
+
+    await expect(recordDeviceTest('d1', { success: true })).resolves.toBeUndefined();
+  });
 });
