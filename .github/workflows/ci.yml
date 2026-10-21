@@ -2,12 +2,18 @@
 # The `backend` and `frontend` jobs are the required checks; `audit` reports
 # production-dependency advisories but is not required, so a newly published
 # advisory upstream doesn't block unrelated work.
+#
+# A push that changes only Markdown (e.g. a docs edit on github.com) is
+# skipped. Pull requests always run: a required check that never reports
+# would leave a docs-only PR unmergeable.
 name: CI
 
 on:
   pull_request:
   push:
     branches: [master]
+    paths-ignore:
+      - '**.md'
 
 permissions:
   contents: read
