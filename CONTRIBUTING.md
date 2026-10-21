@@ -48,7 +48,7 @@ And three rules:
 
 ## Releasing
 
-1. Set the new version everywhere it appears: `VERSION`, `version` in both `package.json` files (and their lockfiles, with `npm version <v> --no-git-tag-version` in each tier), the `NETHELPER_VERSION` defaults in `deploy/docker-compose.yml`, and `ARG VITE_APP_VERSION` in `frontend/Dockerfile`. `backend/tests/unit/release-version.test.js` fails if one is missed.
+1. Set the new version everywhere it appears: `VERSION`, `version` in both `package.json` files (and their lockfiles, with `npm version <v> --no-git-tag-version` in each tier), the `NETHELPER_VERSION` defaults in `deploy/docker-compose.yml`, `ARG VITE_APP_VERSION` in `frontend/Dockerfile`, and the `gh release download` example in `deploy/README.md`. `backend/tests/unit/release-version.test.js` fails if one is missed.
 2. Move the `[Unreleased]` entries in `CHANGELOG.md` under a dated heading for the version: `## [<version>] — <YYYY-MM-DD>`.
 3. Merge to `master`, then tag and push the tag: `git tag v<version> && git push origin v<version>`.
 

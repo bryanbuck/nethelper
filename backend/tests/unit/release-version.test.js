@@ -25,6 +25,13 @@ describe('release version', () => {
     defaults.forEach((v) => expect(v).toBe(VERSION));
   });
 
+  test('the runbook downloads this release', () => {
+    const readme = read('deploy/README.md');
+    const named = [...readme.matchAll(/nethelper-(\d[0-9A-Za-z.-]*?)\.tar\.gz|release download v(\S+)/g)].map((m) => m[1] || m[2]);
+    expect(named.length).toBeGreaterThanOrEqual(3);
+    named.forEach((v) => expect(v).toBe(VERSION));
+  });
+
   test('the frontend Dockerfile build arg defaults to it', () => {
     expect(read('frontend/Dockerfile')).toMatch(new RegExp(`^ARG VITE_APP_VERSION=${VERSION.replace(/\./g, '\\.')}$`, 'm'));
   });

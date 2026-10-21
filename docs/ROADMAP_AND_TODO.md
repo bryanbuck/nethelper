@@ -82,7 +82,7 @@ Preparing the dev-environment build for a private, in-house beta. Deploy targets
 
 ## 🐞 Beta feedback
 
-**Status**: started 2026-10-20. Bugs found in beta testing are GitHub Issues in the private repo, labeled `beta` (`gh issue list -l beta`). A fix closes its issue from the commit (`Fixes #N`) and adds a line under `[Unreleased]` in `CHANGELOG.md`. The version stays `0.9.0-beta.1` until the next tag.
+**Status**: started 2026-10-20. Bugs found in beta testing are GitHub Issues in the private repo, labeled `beta` (`gh issue list -l beta`). A fix closes its issue from the commit (`Fixes #N`) and adds a line under `[Unreleased]` in `CHANGELOG.md`. Released fixes: everything up to #23 shipped in `v0.9.0-beta.2` (2026-10-21, the first tag published by `.github/workflows/release.yml`: GHCR images and a release tarball); #25–#28 are open. New fixes go under `[Unreleased]` until the next tag.
 
 - ✅ #1 (2026-10-20): dead buttons on the device page; header consolidated, edit dialog shared (`components/devices/DeviceEditDialog.vue`).
 - ✅ #2, #5, #6, #7, #24 (2026-10-21): Devices table server pagination/sorting (`GET /devices` `limit`/`page`/`sortBy`/`sortOrder`, fleet-wide `summary`; store `ensureAllDevices()` for pickers), Remove row action (admin), buttons hidden from roles the API refuses, per-section Settings errors.
