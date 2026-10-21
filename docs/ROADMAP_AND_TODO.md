@@ -62,7 +62,7 @@ Preparing the dev-environment build for a private, in-house beta. Deploy targets
   - Rotate the deferred secrets (above).
   - Re-run the audit: secret patterns over files and history, personal data, private addresses in fixtures, third-party content.
   - Confirm the license (AGPL-3.0-or-later is provisional).
-  - Enable GitHub private vulnerability reporting (`SECURITY.md` points to it), CI (`npm run ci` in both tiers) and Dependabot.
+  - Enable GitHub private vulnerability reporting (`SECURITY.md` points to it). CI (`npm run ci` in both tiers, `.github/workflows/ci.yml`) and Dependabot added 2026-10-21; at going-public time also consider CodeQL and secret scanning (free on public repos).
 - ⏳ Post-beta hardening (from the audit):
   - Tokens are kept in `localStorage`, so an XSS would expose them; the CSP is the guard. Consider an httpOnly, SameSite refresh-token cookie.
   - After a password change or an admin reset, access tokens already issued keep working until they expire (`JWT_EXPIRES_IN`, 1 h); only the refresh token is revoked. Role changes and deletions already apply on the next request (`authenticate` reloads the user). Add a `tokenVersion` claim that `authenticate` checks.

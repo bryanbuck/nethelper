@@ -41,7 +41,7 @@ npm run dev                                     # API on :3000
 cd ../frontend && npm ci && npm run dev         # UI on :5173, proxies /api to :3000
 ```
 
-`npm run ci` in each tier runs lint and tests (and, in the frontend, the production build).
+`npm run ci` in each tier runs lint and tests (and, in the frontend, the production build); GitHub Actions runs both on every pull request. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 Architecture: [`docs/MULTI_VENDOR_ROADMAP.md`](docs/MULTI_VENDOR_ROADMAP.md). Forward-looking work: [`docs/ROADMAP_AND_TODO.md`](docs/ROADMAP_AND_TODO.md).
 
