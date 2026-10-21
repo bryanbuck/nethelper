@@ -604,15 +604,6 @@
           Cancel
         </v-btn>
         
-        <v-btn 
-          variant="outlined"
-          prepend-icon="mdi-test-tube"
-          :disabled="!formValid"
-          @click="testConfiguration"
-        >
-          Test
-        </v-btn>
-        
         <v-spacer></v-spacer>
         
         <v-btn 
@@ -662,7 +653,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update:modelValue', 'save', 'test'])
+const emit = defineEmits(['update:modelValue', 'save'])
 
 // Component state
 const form = ref(null)
@@ -948,13 +939,6 @@ const handleSave = async () => {
 const handleCancel = () => {
   show.value = false
   initializeConfig() // Reset to original values
-}
-
-const testConfiguration = () => {
-  emit('test', {
-    node: props.node,
-    config: nodeConfig.value
-  })
 }
 
 // Watchers
