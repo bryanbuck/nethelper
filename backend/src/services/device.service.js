@@ -239,6 +239,14 @@ class DeviceService {
       // Toggled only via PATCH /devices/:id/live-monitoring, which checks the
       // device can actually be watched and starts/stops the monitor.
       delete data.liveMonitoring;
+      // Written only by connection tests; a new credential makes the last one stale.
+      for (const field of ['apiTestStatus', 'apiLastTested', 'apiResponseTime', 'apiError']) delete data[field];
+      if ('apiCredentialId' in data) {
+        const current = await prisma.device.findUnique({ where: { id: deviceId }, select: { apiCredentialId: true } });
+        if (current && current.apiCredentialId !== (data.apiCredentialId || null)) {
+          Object.assign(data, { apiTestStatus: null, apiLastTested: null, apiResponseTime: null, apiError: null });
+        }
+      }
 
       const device = await prisma.device.update({
         where: { id: deviceId },

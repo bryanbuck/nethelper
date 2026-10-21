@@ -3,11 +3,13 @@
  * Represents a network device in the NetHelper Automation Platform
  */
 
-// Device type enumeration
+// Device type enumeration (the backend DeviceType enum)
 export const DeviceType = {
   ACCESS_POINT: 'access_point',
   SWITCH: 'switch',
-  GATEWAY: 'gateway'
+  GATEWAY: 'gateway',
+  CONTROLLER: 'controller',
+  OTHER: 'other'
 }
 
 // Device status enumeration
@@ -18,7 +20,8 @@ export const DeviceStatus = {
   MAINTENANCE: 'maintenance'
 }
 
-// Device type display information
+// Device type display information, keyed by the enum. Compare and look up
+// by the enum value, never by a display label.
 export const DeviceTypeInfo = {
   [DeviceType.ACCESS_POINT]: {
     label: 'Access Point',
@@ -37,7 +40,24 @@ export const DeviceTypeInfo = {
     icon: 'mdi-router-wireless',
     description: 'Network gateway device',
     color: 'purple'
+  },
+  [DeviceType.CONTROLLER]: {
+    label: 'Controller',
+    icon: 'mdi-server',
+    description: 'Wireless or network controller',
+    color: 'indigo'
+  },
+  [DeviceType.OTHER]: {
+    label: 'Other',
+    icon: 'mdi-help-circle',
+    description: 'Other network device',
+    color: 'grey'
   }
+}
+
+/** Label, icon and color for a DeviceType value (unknown types get a generic entry). */
+export function deviceTypeInfo(type) {
+  return DeviceTypeInfo[type] || { label: type || 'Unknown', icon: 'mdi-help-circle', description: '', color: 'grey' }
 }
 
 // Device status display information

@@ -14,6 +14,7 @@ jest.mock('../../src/config/database', () => ({
 jest.mock('../../src/services/settings.service', () => ({ getDeviceCredentialsForUse: jest.fn(async () => null) }));
 jest.mock('../../src/services/connection-test.service', () => ({
   testDeviceConnection: jest.fn(),
+  recordDeviceTest: jest.fn(),
   cloudView: jest.fn(async () => ({ provider: 'My Mist', status: 'online', lastSeen: null })),
 }));
 

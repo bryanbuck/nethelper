@@ -199,6 +199,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useDevicesStore } from '@/stores/devices'
 import { useAuthStore } from '@/stores/auth'
 import { format } from 'date-fns'
+import { toCsv, downloadCsv } from '@/utils/csv'
 
 const devicesStore = useDevicesStore()
 const authStore = useAuthStore()
@@ -275,20 +276,7 @@ function exportToCSV() {
     item.error || ''
   ])
 
-  const csvContent = [
-    csvHeaders.join(','),
-    ...csvRows.map(row => row.map(cell => `"${cell}"`).join(','))
-  ].join('\n')
-
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-  const link = document.createElement('a')
-  const url = URL.createObjectURL(blob)
-  link.setAttribute('href', url)
-  link.setAttribute('download', `firmware-status-${format(new Date(), 'yyyy-MM-dd-HHmmss')}.csv`)
-  link.style.visibility = 'hidden'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+  downloadCsv(`firmware-status-${format(new Date(), 'yyyy-MM-dd-HHmmss')}.csv`, toCsv(csvHeaders, csvRows))
 }
 
 onMounted(async () => {

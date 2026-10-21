@@ -197,7 +197,7 @@
           <v-card>
             <v-card-text>
               <div class="text-overline text-grey">Device Type</div>
-              <div class="text-h5">{{ device.type || 'N/A' }}</div>
+              <div class="text-h5">{{ device.type ? deviceTypeInfo(device.type).label : 'N/A' }}</div>
               <v-icon class="mt-2" size="large">{{ getDeviceIcon(device.type) }}</v-icon>
             </v-card-text>
           </v-card>
@@ -664,7 +664,7 @@ import { useWebSocket } from '@/composables/useWebSocket'
 import deviceService from '@/services/device.service'
 import deviceApiService from '@/services/deviceApi.service'
 import { cloudProviderLabel } from '@/models/vendors'
-import { unreachableFromHere, answersPingButCloudOffline } from '@/models/Device'
+import { unreachableFromHere, answersPingButCloudOffline, deviceTypeInfo } from '@/models/Device'
 
 const route = useRoute()
 const router = useRouter()
@@ -811,15 +811,7 @@ const managementMismatch = computed(() => {
   return null
 })
 
-const getDeviceIcon = (type) => {
-  if (!type) return 'mdi-devices'
-  const typeLower = type.toLowerCase()
-  if (typeLower.includes('switch')) return 'mdi-switch'
-  if (typeLower.includes('access point') || typeLower.includes('ap')) return 'mdi-wifi'
-  if (typeLower.includes('gateway')) return 'mdi-router'
-  if (typeLower.includes('controller')) return 'mdi-server'
-  return 'mdi-devices'
-}
+const getDeviceIcon = (type) => deviceTypeInfo(type).icon
 
 const formatTimestamp = (timestamp) => {
   if (!timestamp) return 'N/A'
@@ -992,6 +984,8 @@ const testDirectConnection = async () => {
     notificationStore.showError(lastTestResult.value, 'Connection Test')
   } finally {
     testingConnection.value = false
+    // The test is recorded on the device (API Status in the Devices table)
+    fetchDevice().catch(() => {})
   }
 }
 

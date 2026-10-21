@@ -21,6 +21,8 @@ const logger = debugLog.createLogger(Services.DEVICE);
 const OPERATIONS = ['config', 'test', 'poll', 'live', 'topology'];
 const DIRECT_TRANSPORTS = new Set(['device-rest', 'ssh']);
 const MAX_DEVICES = 500;
+// Linking or unlinking a credential makes the device's last test result stale
+const CLEAR_TEST_RESULT = { apiTestStatus: null, apiLastTested: null, apiResponseTime: null, apiError: null };
 
 // ApiCredential.type names the device class it was made for; 'other' fits any.
 const CREDENTIAL_DEVICE_TYPES = {
@@ -158,7 +160,7 @@ async function assign(deviceIds, credentialId = null, { userId = null } = {}) {
     if (linkIds.length) {
       await tx.device.updateMany({
         where: { id: { in: linkIds } },
-        data: { apiCredentialId: credentialId, updatedAt: now },
+        data: { apiCredentialId: credentialId, ...CLEAR_TEST_RESULT, updatedAt: now },
       });
     }
     if (unlinkIds.length) {
@@ -166,7 +168,7 @@ async function assign(deviceIds, credentialId = null, { userId = null } = {}) {
       // without one), so the flag must not outlive it.
       await tx.device.updateMany({
         where: { id: { in: unlinkIds } },
-        data: { apiCredentialId: null, liveMonitoring: false, updatedAt: now },
+        data: { apiCredentialId: null, liveMonitoring: false, ...CLEAR_TEST_RESULT, updatedAt: now },
       });
     }
   });

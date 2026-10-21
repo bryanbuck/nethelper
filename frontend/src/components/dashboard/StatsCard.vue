@@ -1,9 +1,12 @@
 <template>
+  <!-- With actions, the whole card is the link (the button just labels it) -->
   <v-card 
     class="stats-card" 
     :color="color" 
     :variant="variant"
     elevation="2"
+    :link="showActions"
+    @click="showActions && $emit('action-click')"
   >
     <v-card-text class="d-flex align-center justify-space-between">
       <div>
@@ -44,7 +47,6 @@
         variant="text" 
         size="small" 
         :color="color"
-        @click="$emit('action-click')"
       >
         View Details
         <v-icon end>mdi-arrow-right</v-icon>
