@@ -3,6 +3,9 @@ const router = express.Router();
 const deviceApiTestController = require('../controllers/device-api-test.controller');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
 const { body, param, validationResult } = require('express-validator');
+const { manualTestPlatforms } = require('../services/connection-test.service');
+
+const TESTABLE_PLATFORMS = manualTestPlatforms().filter((p) => p.testable).map((p) => p.platform);
 
 // Validation middleware
 const handleValidationErrors = (req, res, next) => {
@@ -20,7 +23,7 @@ const handleValidationErrors = (req, res, next) => {
 router.use(authenticate);
 
 /**
- * Get list of supported device API types
+ * Platforms the manual test can reach (and over which transports)
  * GET /api/v1/device-api/supported-types
  */
 router.get('/supported-types', deviceApiTestController.getSupportedTypes);
@@ -33,7 +36,7 @@ router.get('/supported-types', deviceApiTestController.getSupportedTypes);
  *   deviceIp: "192.168.1.1",
  *   username: "admin",
  *   password: "password",
- *   deviceType: "cx_switch" (optional)
+ *   platform: "aos-cx" (optional; aos-cx | aos-s | junos | ios-xe)
  * }
  */
 router.post(
@@ -53,10 +56,10 @@ router.post(
     body('password')
       .notEmpty()
       .withMessage('Password is required'),
-    body('deviceType')
+    body('platform')
       .optional()
-      .isIn(['cx_switch', 'aos_switch', 'instant_ap', 'aruba_controller'])
-      .withMessage('Invalid device type'),
+      .isIn(TESTABLE_PLATFORMS)
+      .withMessage(`Platform must be one of ${TESTABLE_PLATFORMS.join(', ')}`),
     handleValidationErrors,
   ],
   deviceApiTestController.testManualConnection
@@ -74,32 +77,6 @@ router.post(
     handleValidationErrors,
   ],
   deviceApiTestController.testDeviceConnection
-);
-
-/**
- * Get device information via device API
- * GET /api/v1/device-api/:deviceId/info
- */
-router.get(
-  '/:deviceId/info',
-  [
-    param('deviceId').isUUID().withMessage('Invalid device ID'),
-    handleValidationErrors,
-  ],
-  deviceApiTestController.getDeviceInfo
-);
-
-/**
- * Get firmware information via device API
- * GET /api/v1/device-api/:deviceId/firmware
- */
-router.get(
-  '/:deviceId/firmware',
-  [
-    param('deviceId').isUUID().withMessage('Invalid device ID'),
-    handleValidationErrors,
-  ],
-  deviceApiTestController.getFirmwareInfo
 );
 
 module.exports = router;

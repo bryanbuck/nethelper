@@ -1211,7 +1211,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"deviceIp\": \"192.0.2.10\",\n  \"username\": \"<string>\",\n  \"password\": \"\",\n  \"deviceType\": \"cx_switch\"\n}"
+              "raw": "{\n  \"deviceIp\": \"192.0.2.10\",\n  \"username\": \"<string>\",\n  \"password\": \"\",\n  \"platform\": \"aos-cx\"\n}"
             },
             "description": "Required: deviceIp, username, password."
           },
@@ -1247,56 +1247,6 @@
             "body": {
               "mode": "raw",
               "raw": "{}"
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "GET /device-api/:deviceId/info",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/device-api/:deviceId/info",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "device-api",
-                ":deviceId",
-                "info"
-              ],
-              "variable": [
-                {
-                  "key": "deviceId",
-                  "value": ""
-                }
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "GET /device-api/:deviceId/firmware",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/device-api/:deviceId/firmware",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "device-api",
-                ":deviceId",
-                "firmware"
-              ],
-              "variable": [
-                {
-                  "key": "deviceId",
-                  "value": ""
-                }
-              ]
             }
           },
           "response": []

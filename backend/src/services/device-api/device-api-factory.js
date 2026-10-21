@@ -1,7 +1,7 @@
 const CXSwitchAPI = require('./cx-switch-api');
 const JunosAPI = require('./junos-api');
 const logger = require('../../utils/logger');
-const { PLATFORMS, VENDORS } = require('../../constants/vendors');
+const { PLATFORMS } = require('../../constants/vendors');
 const { detectPlatform } = require('../../utils/device-platform');
 
 /**
@@ -89,39 +89,6 @@ class DeviceAPIFactory {
       `No device REST API for ${device.vendor || 'unknown vendor'}/${platform} `
       + `(device "${device.name}"). This device is reached over SSH or its cloud platform.`
     );
-  }
-
-  /**
-   * Get list of supported device API types, generated from the vendor/platform
-   * catalog so the UI never drifts from what the factory can actually build.
-   *
-   * @returns {Array<Object>} Array of supported device types with metadata
-   */
-  static getSupportedDeviceTypes() {
-    const IMPLEMENTED = new Set(['cx_switch', 'junos']);
-
-    return Object.values(PLATFORMS)
-      .filter((platform) => platform.deviceApiType)
-      .map((platform) => ({
-        type: platform.deviceApiType,
-        name: `${VENDORS[platform.vendor]?.label || platform.vendor} ${platform.label}`,
-        description: `${platform.label} devices reached over their REST API`,
-        vendor: platform.vendor,
-        platform: platform.id,
-        implemented: IMPLEMENTED.has(platform.deviceApiType),
-      }));
-  }
-
-  /**
-   * Check if a device API type is supported
-   *
-   * @param {string} apiType - Device API type to check
-   * @returns {boolean} True if supported
-   */
-  static isSupported(apiType) {
-    const supported = DeviceAPIFactory.getSupportedDeviceTypes();
-    const deviceType = supported.find(dt => dt.type === apiType);
-    return deviceType && deviceType.implemented;
   }
 }
 

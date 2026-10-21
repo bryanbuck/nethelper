@@ -3,7 +3,7 @@ import { handleApiError } from '@/utils/apiError'
 
 /**
  * Device API Testing Service
- * Handles testing device API connectivity and retrieving device information
+ * Handles testing device connectivity (REST, NETCONF or SSH, as the backend routes it)
  */
 /**
  * The result inside a /device-api/test reply. A test that ran comes back as
@@ -21,8 +21,8 @@ class DeviceApiService {
    * @param {string} params.deviceIp - Device IP address
    * @param {string} params.username - Username for authentication
    * @param {string} params.password - Password for authentication
-   * @param {string} params.deviceType - Device type (cx_switch, aos_switch, instant_ap, aruba_controller)
-   * @returns {Promise<Object>} Test result
+   * @param {string} params.platform - Platform id (aos-cx, aos-s, junos, ios-xe; see getSupportedTypes)
+   * @returns {Promise<Object>} The test's own result, like testDeviceConnection
    */
   async testManualConnection(params) {
     try {
@@ -30,9 +30,9 @@ class DeviceApiService {
         deviceIp: params.deviceIp,
         username: params.username,
         password: params.password,
-        deviceType: params.deviceType || 'cx_switch'
+        platform: params.platform || 'aos-cx'
       })
-      return response.data
+      return connectionTestResult(response.data)
     } catch (error) {
       console.error('Error testing manual connection:', error)
       throw handleApiError(error, 'testing device connection')
@@ -58,43 +58,13 @@ class DeviceApiService {
   }
 
   /**
-   * Get device information via API
-   * @param {string} deviceId - Device ID
-   * @returns {Promise<Object>} Device information
-   */
-  async getDeviceInfo(deviceId) {
-    try {
-      const response = await api.get(`/device-api/${deviceId}/info`)
-      return response.data
-    } catch (error) {
-      console.error('Error getting device info:', error)
-      throw handleApiError(error, 'retrieving device information')
-    }
-  }
-
-  /**
-   * Get firmware information via API
-   * @param {string} deviceId - Device ID
-   * @returns {Promise<Object>} Firmware information
-   */
-  async getFirmwareInfo(deviceId) {
-    try {
-      const response = await api.get(`/device-api/${deviceId}/firmware`)
-      return response.data
-    } catch (error) {
-      console.error('Error getting firmware info:', error)
-      throw handleApiError(error, 'retrieving firmware information')
-    }
-  }
-
-  /**
-   * Get supported device types
-   * @returns {Promise<Array>} List of supported device types
+   * Platforms the manual test can reach
+   * @returns {Promise<Array>} [{ platform, vendor, name, transports, testable }]
    */
   async getSupportedTypes() {
     try {
       const response = await api.get('/device-api/supported-types')
-      return response.data
+      return response.data?.data || []
     } catch (error) {
       console.error('Error getting supported types:', error)
       throw handleApiError(error, 'retrieving supported device types')
