@@ -1,4 +1,4 @@
-const { resolveTransport } = require('../../src/utils/transport-router');
+const { resolveTransport, localPollAvailability } = require('../../src/utils/transport-router');
 const { detectPlatform, detectVendor, isCxRestCapable, useSshTransport } = require('../../src/utils/device-platform');
 const { TRANSPORT_MATRIX, PLATFORMS } = require('../../src/constants/vendors');
 
@@ -116,5 +116,23 @@ describe('resolveTransport live', () => {
       expect(resolveTransport({ type: 'switch', platform, ipAddress: '10.0.0.3' }, 'live')).toEqual([]);
     }
     expect(resolveTransport({ type: 'switch', vendor: 'juniper', platform: 'junos', ipAddress: '10.0.0.4' }, 'live')).toEqual([]);
+  });
+});
+
+describe('localPollAvailability', () => {
+  const ready = { ipAddress: '10.0.0.5', apiCredentialId: 'cred-1' };
+
+  test.each([
+    ['direct AOS-CX', direct({ vendor: 'aruba', platform: 'aos-cx', ...ready }), null],
+    ['direct AOS-S over SSH', direct({ vendor: 'aruba', platform: 'aos-s', ...ready }), null],
+    ['Mist switch over NETCONF', cloud({ vendor: 'juniper', platform: 'junos', ...ready }), null],
+    ['Central AOS-CX over REST', cloud({ vendor: 'aruba', platform: 'aos-cx', ...ready }), null],
+    ['Central AOS-S (never SSHed)', cloud({ vendor: 'aruba', platform: 'aos-s', ...ready }), 'cloud-only'],
+    ['Mist AP', cloud({ type: 'access_point', vendor: 'juniper', platform: null, ...ready }), 'cloud-only'],
+    ['direct Meraki', direct({ vendor: 'cisco', platform: 'meraki', ...ready }), 'no-transport'],
+    ['no IP', direct({ vendor: 'aruba', platform: 'aos-cx', apiCredentialId: 'cred-1' }), 'no-ip'],
+    ['no credential', direct({ vendor: 'aruba', platform: 'aos-cx', ipAddress: '10.0.0.5' }), 'no-credential'],
+  ])('%s', (_label, device, reason) => {
+    expect(localPollAvailability(device)).toEqual({ available: reason === null, reason });
   });
 });
