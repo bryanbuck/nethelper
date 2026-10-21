@@ -8,6 +8,7 @@
             Firmware Status
             <v-spacer></v-spacer>
             <v-btn
+              v-if="canEdit"
               color="primary"
               :loading="loading"
               :disabled="loading"
@@ -180,7 +181,7 @@
                 <v-container class="text-center py-8">
                   <v-icon size="64" color="grey-lighten-1">mdi-chip</v-icon>
                   <div class="text-h6 mt-4 mb-2">No Firmware Data Available</div>
-                  <div class="text-body-2 text-grey mb-4">
+                  <div v-if="canEdit" class="text-body-2 text-grey mb-4">
                     Click "Poll All Switches" to retrieve firmware information from your devices
                   </div>
                 </v-container>
@@ -196,9 +197,13 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useDevicesStore } from '@/stores/devices'
+import { useAuthStore } from '@/stores/auth'
 import { format } from 'date-fns'
 
 const devicesStore = useDevicesStore()
+const authStore = useAuthStore()
+// Polling (POST /devices/poll) is operator+
+const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole))
 
 const search = ref('')
 const lastPollTime = ref(null)
@@ -287,10 +292,7 @@ function exportToCSV() {
 }
 
 onMounted(async () => {
-  // Load devices if not already loaded
-  if (devicesStore.devices.length === 0) {
-    await devicesStore.fetchDevices()
-  }
+  await devicesStore.ensureAllDevices()
 })
 </script>
 

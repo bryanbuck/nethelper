@@ -9,11 +9,24 @@ const ArubaErrorHandler = require('../utils/aruba-error-handler');
 class DeviceController {
   async getDevices(req, res, next) {
     try {
-      const { type, status, location, search, platform, credential } = req.query;
+      const { type, status, location, search, platform, credential, page, limit, sortBy, sortOrder } = req.query;
       const filters = { type, status, location, search, platform, credential };
-      
+
+      // limit asks for one page (the Devices table); without it, every device
+      if (limit) {
+        const result = await deviceService.getDevices(filters, { page, limit, sortBy, sortOrder });
+        return res.json({
+          success: true,
+          data: result.devices,
+          count: result.total,
+          page: page || 1,
+          limit,
+          summary: result.summary,
+        });
+      }
+
       const devices = await deviceService.getDevices(filters);
-      
+
       res.json({
         success: true,
         data: devices,

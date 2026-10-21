@@ -778,9 +778,7 @@ async function loadDeviceGroups() {
 const devicesStore = useDevicesStore()
 const availableDevices = computed(() => devicesStore.devices.map((d) => d.name).filter(Boolean))
 onMounted(() => {
-  if (devicesStore.devices.length === 0) {
-    devicesStore.fetchDevices().catch(() => {}) // store records the error
-  }
+  devicesStore.ensureAllDevices().catch(() => {}) // store records the error
   loadDeviceGroups()
   loadTargetDevices()
 })

@@ -30,6 +30,7 @@
           </v-btn>
 
           <v-btn
+            v-if="canEdit"
             color="secondary"
             prepend-icon="mdi-radar"
             :disabled="discoveryStore.isScanning"
@@ -276,7 +277,7 @@
           </template>
 
           <template #item.actions="{ item }">
-            <template v-if="item.status === 'new'">
+            <template v-if="item.status === 'new' && canEdit">
               <v-btn
                 size="small"
                 color="primary"
@@ -512,6 +513,8 @@ const connectionStatus = computed(() => {
 })
 
 const isAdmin = computed(() => authStore.user?.role === 'admin')
+// Scan, import and ignore are operator+
+const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole))
 
 const scanProgressValue = computed(() => discoveryStore.scanProgress?.progress ?? discoveryStore.runningScan?.progress ?? 0)
 const scanPhase = computed(() => discoveryStore.scanProgress?.phase || null)

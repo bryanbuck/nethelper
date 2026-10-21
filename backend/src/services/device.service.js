@@ -11,8 +11,35 @@ const logger = debugLog.createLogger(Services.DEVICE);
 
 const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
+// Device table sort keys → orderBy. `status` is derived (effectiveStatus), so
+// it sorts by ping then cloud status, which is close but not exact.
+const SORT_FIELDS = {
+  name: (dir) => [{ name: dir }],
+  type: (dir) => [{ type: dir }],
+  managementMode: (dir) => [{ managementMode: dir }],
+  ipAddress: (dir) => [{ ipAddress: { sort: dir, nulls: 'last' } }],
+  location: (dir) => [{ location: { sort: dir, nulls: 'last' } }],
+  cloudStatus: (dir) => [{ cloudStatus: dir }],
+  lastSeen: (dir) => [{ lastSeen: { sort: dir, nulls: 'last' } }],
+  status: (dir) => [{ pingStatus: { sort: dir, nulls: 'last' } }, { cloudStatus: dir }],
+};
+const DEFAULT_ORDER = [{ pingStatus: 'asc' }, { name: 'asc' }];
+
+function deviceOrderBy(sortBy, sortOrder) {
+  const dir = sortOrder === 'desc' ? 'desc' : 'asc';
+  const order = SORT_FIELDS[sortBy] ? SORT_FIELDS[sortBy](dir) : DEFAULT_ORDER;
+  // Ties broken by id so pages don't shuffle rows between requests
+  return [...order, { id: 'asc' }];
+}
+
 class DeviceService {
-  async getDevices(filters = {}) {
+  /**
+   * List devices. Without options.limit, returns every matching row (an
+   * array). With it, returns one page: { devices, total, summary }, where
+   * total counts the matching rows and summary counts the whole fleet by
+   * effective status.
+   */
+  async getDevices(filters = {}, options = {}) {
     try {
       const prisma = getPrisma();
       const { type, status, location, search, platform, credential } = filters;
@@ -34,6 +61,9 @@ class DeviceService {
           { name: { contains: search, mode: 'insensitive' } },
           { serial: { contains: search, mode: 'insensitive' } },
           { ipAddress: { contains: search, mode: 'insensitive' } },
+          { model: { contains: search, mode: 'insensitive' } },
+          { location: { contains: search, mode: 'insensitive' } },
+          { macAddress: { contains: search, mode: 'insensitive' } },
         ];
 
         if (where.OR) {
@@ -48,8 +78,12 @@ class DeviceService {
         }
       }
 
+      const { page, limit, sortBy, sortOrder } = options;
+      const paged = Number.isInteger(limit) && limit > 0;
+
       const devices = await prisma.device.findMany({
         where,
+        ...(paged && { skip: (Math.max(page || 1, 1) - 1) * limit, take: limit }),
         include: {
           apiCredential: {
             select: {
@@ -76,14 +110,11 @@ class DeviceService {
             },
           },
         },
-        orderBy: [
-          { pingStatus: 'asc' },
-          { name: 'asc' },
-        ],
+        orderBy: deviceOrderBy(sortBy, sortOrder),
       });
 
       // Map pingStatus to status field for frontend compatibility
-      return devices.map(device => ({
+      const rows = devices.map(device => ({
         ...device,
         // Ping first, then the cloud; warning when only ping says it's down
         status: effectiveStatus(device),
@@ -91,10 +122,29 @@ class DeviceService {
         pingStatus: device.pingStatus,
         cloudStatus: device.cloudStatus,
       }));
+      if (!paged) return rows;
+
+      const [total, summary] = await Promise.all([
+        prisma.device.count({ where }),
+        this.getStatusSummary(),
+      ]);
+      return { devices: rows, total, summary };
     } catch (error) {
       logger.error('Get devices error', { error: error.message, stack: error.stack });
       throw error;
     }
+  }
+
+  /** Fleet-wide device counts by effective status (utils/device-status.js). */
+  async getStatusSummary() {
+    const prisma = getPrisma();
+    const [total, online, offline, warning] = await Promise.all([
+      prisma.device.count(),
+      prisma.device.count({ where: statusWhere('online') }),
+      prisma.device.count({ where: statusWhere('offline') }),
+      prisma.device.count({ where: statusWhere('warning') }),
+    ]);
+    return { total, online, offline, warning };
   }
 
   async getDevice(deviceId) {

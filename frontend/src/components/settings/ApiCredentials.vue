@@ -9,6 +9,7 @@
         </p>
       </div>
       <v-btn
+        v-if="canEdit"
         color="primary"
         prepend-icon="mdi-plus"
         @click="openCreateDialog"
@@ -19,7 +20,7 @@
 
     <!-- Loading State -->
     <v-progress-linear
-      v-if="settingsStore.loading"
+      v-if="settingsStore.credentialsLoading"
       indeterminate
       color="primary"
       class="mb-4"
@@ -27,24 +28,24 @@
 
     <!-- Error Alert -->
     <v-alert
-      v-if="settingsStore.error"
+      v-if="settingsStore.credentialsError"
       type="error"
       variant="tonal"
       closable
       class="mb-4"
-      @click:close="settingsStore.clearError()"
+      @click:close="settingsStore.clearError('credentials')"
     >
-      {{ settingsStore.error }}
+      {{ settingsStore.credentialsError }}
     </v-alert>
 
     <!-- Empty State -->
-    <v-card v-if="!settingsStore.loading && settingsStore.credentialCount === 0" class="text-center pa-8">
+    <v-card v-if="!settingsStore.credentialsLoading && settingsStore.credentialCount === 0" class="text-center pa-8">
       <v-icon size="64" color="grey-lighten-1" class="mb-4">mdi-key-variant</v-icon>
       <div class="text-h6 mb-2">No API Credentials</div>
-      <p class="text-body-2 text-medium-emphasis mb-4">
+      <p v-if="canEdit" class="text-body-2 text-medium-emphasis mb-4">
         Add your first API credential to enable direct device polling
       </p>
-      <v-btn color="primary" prepend-icon="mdi-plus" @click="openCreateDialog">
+      <v-btn v-if="canEdit" color="primary" prepend-icon="mdi-plus" @click="openCreateDialog">
         Add Your First Credential
       </v-btn>
     </v-card>
@@ -54,7 +55,7 @@
       <v-data-table
         :headers="headers"
         :items="settingsStore.apiCredentials"
-        :loading="settingsStore.loading"
+        :loading="settingsStore.credentialsLoading"
         item-value="id"
         class="elevation-0"
       >
@@ -98,7 +99,7 @@
 
         <!-- Actions Column -->
         <template #item.actions="{ item }">
-          <div class="d-flex gap-1">
+          <div v-if="canEdit" class="d-flex gap-1">
             <v-tooltip text="Test Connection">
               <template #activator="{ props }">
                 <v-btn
@@ -230,7 +231,7 @@
             color="primary"
             variant="flat"
             :disabled="!formValid"
-            :loading="settingsStore.loading"
+            :loading="settingsStore.credentialsLoading"
             @click="saveCredential"
           >
             {{ dialogMode === 'create' ? 'Add' : 'Save' }}
@@ -252,7 +253,7 @@
           <v-btn
             color="error"
             variant="flat"
-            :loading="settingsStore.loading"
+            :loading="settingsStore.credentialsLoading"
             @click="confirmDelete"
           >
             Delete
@@ -365,8 +366,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
+import { useAuthStore } from '@/stores/auth'
 import { useDevicesStore } from '@/stores/devices'
 import { useNotificationsStore } from '@/stores/notifications'
 import { format } from 'date-fns'
@@ -374,6 +376,9 @@ import debugLog, { DebugCategory } from '@/utils/debug'
 import deviceApiService from '@/services/deviceApi.service'
 
 const settingsStore = useSettingsStore()
+const authStore = useAuthStore()
+// Adding, editing, deleting and testing credentials are operator+
+const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole))
 const devicesStore = useDevicesStore()
 const notificationStore = useNotificationsStore()
 
@@ -638,10 +643,8 @@ onMounted(async () => {
     // Load credentials
     await settingsStore.fetchApiCredentials()
 
-    // Load devices if not already loaded
-    if (devicesStore.devices.length === 0) {
-      await devicesStore.fetchDevices()
-    }
+    // The test dialog lists every device using a credential
+    await devicesStore.ensureAllDevices()
   } catch (error) {
     debugLog.error(DebugCategory.SETTINGS, 'Failed to load settings data:', error)
 

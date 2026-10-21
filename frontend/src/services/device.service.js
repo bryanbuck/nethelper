@@ -103,9 +103,9 @@ class DeviceService {
     } = options
 
     try {
+      // itemsPerPage -1 is the table's "All": no limit means every row
       const params = {
-        page,
-        limit: itemsPerPage,
+        ...(itemsPerPage > 0 && { page, limit: itemsPerPage }),
         search,
         ...filters
       }
@@ -117,17 +117,19 @@ class DeviceService {
 
       const response = await api.get('/devices', { params })
 
-      // Backend returns { success, data, count }
-      // Transform to match expected pagination format
+      // Backend returns { success, data, count } (count = matching rows), plus
+      // a fleet-wide status summary when paged
       const devices = response.data.data || []
+      const total = response.data.count ?? devices.length
 
       return {
         data: devices,
+        summary: response.data.summary || null,
         pagination: {
           page,
           itemsPerPage,
-          total: response.data.count || devices.length,
-          totalPages: Math.ceil((response.data.count || devices.length) / itemsPerPage)
+          total,
+          totalPages: itemsPerPage > 0 ? Math.ceil(total / itemsPerPage) : 1
         }
       }
     } catch (error) {
@@ -163,6 +165,16 @@ class DeviceService {
     } catch (error) {
       console.error('Error updating device:', error)
       throw handleApiError(error, 'updating device')
+    }
+  }
+
+  async deleteDevice(id) {
+    try {
+      const response = await api.delete(`/devices/${id}`)
+      return response.data
+    } catch (error) {
+      console.error('Error deleting device:', error)
+      throw handleApiError(error, 'deleting device')
     }
   }
 

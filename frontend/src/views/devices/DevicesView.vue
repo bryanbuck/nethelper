@@ -21,6 +21,7 @@
           </v-chip>
           
           <v-btn
+            v-if="canEdit"
             color="secondary"
             prepend-icon="mdi-plus"
             @click="addDevice"

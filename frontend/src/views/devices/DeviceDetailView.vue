@@ -62,7 +62,7 @@
           <div class="d-flex flex-column align-end gap-2">
             <div class="d-flex gap-2">
               <v-btn
-                v-if="device && (device.managementMode === 'direct' || device.apiCredentialId)"
+                v-if="device && canEdit && (device.managementMode === 'direct' || device.apiCredentialId)"
                 color="info"
                 variant="outlined"
                 :loading="testingConnection"
@@ -72,6 +72,7 @@
                 Test Connection
               </v-btn>
               <v-btn
+                v-if="canEdit"
                 color="primary"
                 variant="outlined"
                 :loading="systemLoading"
@@ -260,7 +261,7 @@
               <v-alert type="warning" variant="tonal">
                 <v-alert-title>Unable to retrieve system information</v-alert-title>
                 {{ systemError }}
-                <template #append>
+                <template v-if="canEdit" #append>
                   <v-btn
                     variant="text"
                     size="small"
@@ -425,10 +426,11 @@
             <v-card-text v-else class="text-center py-8">
               <v-icon size="64" color="grey-lighten-1">mdi-information-outline</v-icon>
               <p class="text-h6 mt-4 text-grey">No system information available</p>
-              <p class="text-body-2 text-grey">
+              <p v-if="canEdit" class="text-body-2 text-grey">
                 Click "Refresh System Info" to poll the device for current system information
               </p>
               <v-btn
+                v-if="canEdit"
                 color="primary"
                 variant="tonal"
                 class="mt-4"
@@ -914,8 +916,8 @@ const loadDevice = async () => {
     }
     devicesStore.fetchDuplicates().catch(() => {})
 
-    // Automatically poll system info on load
-    await refreshSystemInfo()
+    // Automatically poll system info on load (POST /devices/poll is operator+)
+    if (canEdit.value) await refreshSystemInfo()
   } catch (err) {
     console.error('Failed to load device:', err)
     error.value = err.userMessage || err.message || 'Failed to load device details'

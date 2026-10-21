@@ -7,7 +7,8 @@ vi.mock('@/services/settings.service', () => ({
     createCloudIntegration: vi.fn(),
     updateCloudIntegration: vi.fn(),
     testCloudIntegration: vi.fn(),
-    deleteCloudIntegration: vi.fn()
+    deleteCloudIntegration: vi.fn(),
+    getApiCredentials: vi.fn()
   }
 }))
 
@@ -32,7 +33,7 @@ describe('settings store: cloud integrations', () => {
 
     expect(store.cloudIntegrations.map((i) => i.id)).toEqual(['i1', 'i2'])
     expect(store.cloudProviders).toHaveLength(2)
-    expect(store.loading).toBe(false)
+    expect(store.integrationsLoading).toBe(false)
   })
 
   test('several integrations of the same provider can coexist', async () => {
@@ -72,11 +73,32 @@ describe('settings store: cloud integrations', () => {
 
     settingsService.deleteCloudIntegration.mockRejectedValueOnce(new Error('in use'))
     await expect(store.deleteCloudIntegration('i1')).rejects.toThrow('in use')
-    expect(store.error).toBe('in use')
+    expect(store.integrationsError).toBe('in use')
+    // Only the integrations section shows it
+    expect(store.credentialsError).toBeNull()
+    expect(store.gitBackupError).toBeNull()
     expect(store.cloudIntegrations).toHaveLength(2)
 
     settingsService.deleteCloudIntegration.mockResolvedValueOnce({})
     await store.deleteCloudIntegration('i1')
     expect(store.cloudIntegrations.map((i) => i.id)).toEqual(['i2'])
+  })
+})
+
+describe('settings store: per-section errors', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  test('a credentials failure stays in the credentials section', async () => {
+    settingsService.getApiCredentials.mockRejectedValueOnce(new Error('denied'))
+    const store = useSettingsStore()
+
+    await expect(store.fetchApiCredentials()).rejects.toThrow('denied')
+
+    expect(store.credentialsError).toBe('denied')
+    expect(store.integrationsError).toBeNull()
+    expect(store.gitBackupError).toBeNull()
+
+    store.clearError('credentials')
+    expect(store.credentialsError).toBeNull()
   })
 })

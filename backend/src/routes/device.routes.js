@@ -3,13 +3,13 @@ const router = express.Router();
 const deviceController = require('../controllers/device.controller');
 const topologyController = require('../controllers/topology.controller');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
-const { validateDevice, validateDeviceGroup, validateUUID } = require('../middleware/validation.middleware');
+const { validateDevice, validateDeviceGroup, validateQuery, validateUUID } = require('../middleware/validation.middleware');
 
 // All routes require authentication
 router.use(authenticate);
 
 // Get all devices
-router.get('/', deviceController.getDevices);
+router.get('/', validateQuery.deviceList, deviceController.getDevices);
 
 // Create new device
 router.post('/', authorize('admin', 'operator'), validateDevice.create, deviceController.createDevice);

@@ -20,6 +20,7 @@
           </v-chip>
           
           <v-btn 
+            v-if="canEdit"
             color="primary" 
             prepend-icon="mdi-sync"
             :loading="devicesStore.loading"
@@ -177,6 +178,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
 import { useAlertsStore } from '@/stores/alerts'
+import { useAuthStore } from '@/stores/auth'
 import { useWebSocket } from '@/composables/useWebSocket'
 import StatsCard from '@/components/dashboard/StatsCard.vue'
 import DeviceStatusChart from '@/components/dashboard/DeviceStatusChart.vue'
@@ -184,6 +186,8 @@ import RecentDevicesList from '@/components/dashboard/RecentDevicesList.vue'
 
 const router = useRouter()
 const devicesStore = useDevicesStore()
+const authStore = useAuthStore()
+const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole))
 const { connected, connecting } = useWebSocket()
 
 const snackbar = ref({
@@ -260,6 +264,8 @@ const warningDevicesTrend = computed(() => {
 
 const alertsStore = useAlertsStore()
 
+// Syncing and creating automations are operator+ in the API
+const EDITOR_ACTIONS = ['sync-devices', 'create-automation']
 const quickActions = computed(() => [
   {
     id: 'sync-devices',
@@ -284,7 +290,7 @@ const quickActions = computed(() => [
     icon: alertsStore.badgeCount ? 'mdi-bell-alert' : 'mdi-bell',
     color: 'warning'
   }
-])
+].filter((action) => canEdit.value || !EDITOR_ACTIONS.includes(action.id)))
 
 const syncAllDevices = async () => {
   try {
