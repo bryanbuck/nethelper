@@ -1,6 +1,6 @@
 # Getting started
 
-Your first hour with NetHelper, after it's installed ([`deploy/README.md`](../deploy/README.md)) and the first admin exists. What each platform supports, and known limits: [`BETA_NOTES.md`](BETA_NOTES.md).
+Your first hour with NetHelper, after it's installed ([`deploy/README.md`](../deploy/README.md); with Docker Compose, `deploy/install.sh` does it in one step) and the first admin exists. What each platform supports, and known limits: [`BETA_NOTES.md`](BETA_NOTES.md).
 
 ## Before you start
 

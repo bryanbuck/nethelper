@@ -13,9 +13,16 @@ You need:
 - a NetHelper account on each directly managed device, with the rights listed in the getting-started guide;
 - API credentials for Aruba Central (New Central, via HPE GreenLake) or Juniper Mist, if you use them.
 
+With Docker Compose, the installer generates the secrets, pulls or builds the images, starts everything and creates the first admin:
+
+```sh
+git clone https://github.com/bryanbuck/nethelper.git /opt/nethelper   # or unpack a release tarball
+cd /opt/nethelper/deploy && ./install.sh
+```
+
 Then:
 
-- **Install** (Docker Compose or systemd + nginx), first admin, backups, and upgrades: [`deploy/README.md`](deploy/README.md)
+- **Install** in detail (Docker Compose by hand, or systemd + nginx), backups, and upgrades: [`deploy/README.md`](deploy/README.md)
 - **First steps** after the install (clouds, credentials, backups, users): [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md)
 - **Security model** and how to report a vulnerability: [`SECURITY.md`](SECURITY.md)
 - **Every setting**: [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)

@@ -1,7 +1,8 @@
 # Runs each tier's `npm run ci` on every pull request and on pushes to master.
 # The `backend` and `frontend` jobs are the required checks; `audit` reports
 # production-dependency advisories but is not required, so a newly published
-# advisory upstream doesn't block unrelated work.
+# advisory upstream doesn't block unrelated work. `shell` runs shellcheck over
+# the deploy scripts (not required either). Releases: release.yml.
 #
 # A push that changes only Markdown (e.g. a docs edit on github.com) is
 # skipped. Pull requests always run: a required check that never reports
@@ -76,3 +77,11 @@ jobs:
           node-version-file: .nvmrc
       - run: npm audit --omit=dev --audit-level=high
         working-directory: ${{ matrix.tier }}
+
+  shell:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      # shellcheck is preinstalled on GitHub's Ubuntu runners.
+      - run: shellcheck deploy/install.sh deploy/systemd/nethelper-admin backend/docker-entrypoint.sh

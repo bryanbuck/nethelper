@@ -9,7 +9,13 @@ Two supported ways to run the 0.9 beta:
 
 Both were installed from this runbook on clean Debian 13 (trixie) VMs on 2026-10-20. Debian 12 and Ubuntu 24.04 should work the same way but haven't been run end to end.
 
-**Getting the code.** Clone the repository (`git clone … /opt/nethelper`) or unpack a release tarball there. Every command below runs from that tree.
+**Getting the code.** Clone the repository (`git clone … /opt/nethelper`) or unpack a release tarball there. Every command below runs from that tree. Each release on GitHub has `nethelper-<version>.tar.gz` (the source plus a prebuilt UI, so bare metal skips the frontend build) and its checksum:
+
+```sh
+gh release download v0.9.0-beta.1 -R bryanbuck/nethelper
+sha256sum -c nethelper-0.9.0-beta.1.tar.gz.sha256
+tar xzf nethelper-0.9.0-beta.1.tar.gz && mv nethelper-0.9.0-beta.1 /opt/nethelper
+```
 
 Either way, the browser talks to one origin: nginx serves the SPA and proxies `/api` and `/socket.io` to the backend. You don't need `CORS_ORIGINS` unless the UI is served from somewhere else.
 
@@ -17,14 +23,48 @@ Files in this directory:
 
 | File | Purpose |
 |---|---|
+| `install.sh` | Compose installer and upgrader (see Quick start) |
 | `docker-compose.yml` | Postgres 15, Redis 7, backend, frontend (nginx) |
 | `docker-compose.host-network.yml` | Optional override for L2 discovery (MAC addresses) |
 | `.env.example` | Compose settings and secrets → copy to `.env` |
 | `systemd/nethelper-backend.service` | Bare-metal backend unit (sandboxed) |
 | `systemd/backend.env.example` | Bare-metal settings template → `/etc/nethelper/backend.env` |
+| `systemd/nethelper-admin` | Bare-metal helper: writes that file, runs the user and key-rotation scripts as the service user |
 | `nginx/nethelper.conf` | Bare-metal nginx site with TLS |
 
-The images are built from `backend/Dockerfile` and `frontend/Dockerfile` (nginx config in `frontend/nginx/`).
+The images are built from `backend/Dockerfile` and `frontend/Dockerfile` (nginx config in `frontend/nginx/`). Each release also publishes them to GHCR.
+
+---
+
+## Quick start (Docker Compose)
+
+On a host with Docker Engine and the Compose plugin ([installing Docker](#docker-compose)):
+
+```sh
+git clone https://github.com/bryanbuck/nethelper.git /opt/nethelper   # or unpack a release tarball
+cd /opt/nethelper/deploy
+./install.sh
+```
+
+It asks whether to use host networking (MAC addresses in discovery; see **Network access and discovery** below) and for the first admin's email and name. At the end it prints the address to sign in at and the admin's generated password. It prints every Docker command before running it. In order, it:
+
+1. checks Docker and Compose;
+2. creates `deploy/.env` with generated secrets. If the file exists, it only fills in required secrets that are empty and never changes a value you set;
+3. pulls the release images, or builds them on this host;
+4. starts the stack and waits until it is healthy;
+5. creates the first admin if there are no users yet.
+
+It doesn't install Docker, set up TLS, or take backups. `./install.sh --help` lists the options. Unattended: `./install.sh -y --admin-email you@example.com --admin-name "Your Name"`; set `NETHELPER_ADMIN_PASSWORD` in your environment to choose the password. `./install.sh --env-only` only writes `deploy/.env`, if you'd rather run Compose yourself (next section).
+
+**Prebuilt images.** Releases publish `ghcr.io/bryanbuck/nethelper-backend` and `nethelper-frontend`. While the repository is private, pulling them needs a GitHub token with the `read:packages` scope:
+
+```sh
+echo <token> | docker login ghcr.io -u <github user> --password-stdin
+```
+
+Without it, or in a git checkout that isn't a release tag (the release images wouldn't match it), the script builds the images on this host instead: a few minutes, with access to the npm registry.
+
+Back up `deploy/.env` afterwards: its `ENCRYPTION_KEY` decrypts every stored credential (see **Backup and restore**). Then sign in, change the admin's password, and follow [`docs/GETTING_STARTED.md`](../docs/GETTING_STARTED.md).
 
 ---
 
@@ -42,7 +82,9 @@ echo "deb [signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/l
 apt update && apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ```
 
-(On Ubuntu, use `linux/ubuntu` in both URLs.) Then:
+(On Ubuntu, use `linux/ubuntu` in both URLs.) Then run `./install.sh` (Quick start), or install by hand:
+
+### Installing by hand
 
 ```sh
 cd /opt/nethelper/deploy
@@ -58,21 +100,21 @@ docker compose ps          # backend and frontend should become "healthy"
 
 The backend applies database migrations every time it starts, and does nothing when the schema is already current. Set `RUN_MIGRATIONS=false` on the backend service to turn that off.
 
-**First admin.** There's no self-signup. Create the first admin from the command line:
+**First admin.** There's no self-signup. `install.sh` creates the first admin; by hand, once the backend is healthy:
 
 ```sh
-docker compose run --rm backend npm run user:manage -- create-admin --email you@example.com --name "Your Name"
+docker compose exec backend npm run user:manage -- create-admin --email you@example.com --name "Your Name"
 ```
 
-It prints a generated password once. To choose the password instead, pass `-e NETHELPER_ADMIN_PASSWORD=...` after `run`. Then:
+It prints a generated password once. To choose the password instead, pass `-e NETHELPER_ADMIN_PASSWORD=...` after `exec`. Then:
 
 1. Browse to `http://<host>:8080` (or your `HTTP_PORT`) and sign in.
 2. Change the password from the account menu (top right).
 3. Add everyone else on the **Users** page.
 
-Running `npm run user:manage` with no arguments opens an interactive menu for listing, editing, and deleting users, and resetting passwords.
+Running `docker compose exec backend npm run user:manage` with no arguments opens an interactive menu for listing, editing, and deleting users, and resetting passwords.
 
-**Network access and discovery.** In the default (bridge) setup, the backend reaches devices through Docker's NAT. That covers ping monitoring, SSH, REST, NETCONF, cloud APIs, and discovery of hosts on any routed subnet. What it can't see is the host's own ARP table, so hosts discovered on the local L2 segment come back **without MAC addresses or vendors**. If you need those, use the host-network override. Turn it on in `deploy/.env`, not with `-f` flags:
+**Network access and discovery.** In the default (bridge) setup, the backend reaches devices through Docker's NAT. That covers ping monitoring, SSH, REST, NETCONF, cloud APIs, and discovery of hosts on any routed subnet. What it can't see is the host's own ARP table, so hosts discovered on the local L2 segment come back **without MAC addresses or vendors**. If you need those, use the host-network override (`./install.sh --host-network` sets it up). By hand, turn it on in `deploy/.env`, not with `-f` flags:
 
 ```sh
 # deploy/.env
@@ -83,7 +125,7 @@ COMPOSE_FILE=docker-compose.yml:docker-compose.host-network.yml
 docker compose up -d --build
 ```
 
-Every `docker compose` command then loads the override, which matters: a command given only `docker-compose.yml` (for example the `run` command under **First admin**) recreates Postgres and Redis without the ports the host-network backend needs, and the backend loses its database. Setting `COMPOSE_FILE` also stops Compose from loading `docker-compose.override.yml` by itself. If you have one (the Git mirror key below), add it to the list: `COMPOSE_FILE=docker-compose.yml:docker-compose.host-network.yml:docker-compose.override.yml`.
+Every `docker compose` command then loads the override, which matters: a command given only `docker-compose.yml` (for example a `docker compose run`) recreates Postgres and Redis without the ports the host-network backend needs, and the backend loses its database. Setting `COMPOSE_FILE` also stops Compose from loading `docker-compose.override.yml` by itself. If you have one (the Git mirror key below), add it to the list: `COMPOSE_FILE=docker-compose.yml:docker-compose.host-network.yml:docker-compose.override.yml`.
 
 With the override, the backend and nginx share the host's network. The API listens on 127.0.0.1:3000 only, Postgres and Redis are published on 127.0.0.1 only, and the UI listens on `HTTP_PORT` on every interface.
 
@@ -183,40 +225,45 @@ Tested layout (adjust the unit file if yours differs):
 
    Tested on Debian 13 with PostgreSQL 17, Redis 8 and nginx 1.26.
 
-2. **Service user and directories**:
+2. **Service user, directories, and the admin helper**:
 
    ```sh
    useradd --system --home-dir /var/lib/nethelper --shell /usr/sbin/nologin nethelper
    install -d -o nethelper -g nethelper -m 0750 /var/lib/nethelper /var/log/nethelper
    install -d -o root -g nethelper -m 0750 /etc/nethelper
+   ln -s /opt/nethelper/deploy/systemd/nethelper-admin /usr/local/sbin/nethelper-admin
    ```
 
-3. **Database.** Use a hex password, since it goes into a URL:
+   `nethelper-admin` (run as root) writes the settings file and runs the backend's user and key-rotation scripts as the `nethelper` user with that file loaded. `nethelper-admin --help` lists its commands.
+
+3. **Configuration**:
+
+   ```sh
+   nethelper-admin init-env
+   ```
+
+   This writes `/etc/nethelper/backend.env` (mode 0640, group `nethelper`) from `deploy/systemd/backend.env.example`, with generated values for `JWT_SECRET`, `JWT_REFRESH_SECRET`, `ENCRYPTION_KEY`, `REDIS_PASSWORD` and the database password in `DATABASE_URL`. It prints the database and Redis passwords for the next step. It never overwrites an existing file. By hand: copy the template there (`install -o root -g nethelper -m 0640 …`) and fill in those values, each from `openssl rand -hex 32`. Never start from `backend/.env.example`: that one is for development.
+
+   Don't add `NODE_ENV`, `BIND_ADDRESS`, `TRUST_PROXY`, `LOG_DIR`, or the backup paths. The unit sets them, and systemd lets this file override the unit: a copied development value such as `LOG_DIR=./logs` makes the service crash-loop (it can't write inside `/opt`), and `NODE_ENV=development` would run it in development mode on every interface.
+
+4. **Database and Redis**, with the passwords `init-env` printed:
 
    ```sh
    sudo -u postgres createuser nethelper
-   sudo -u postgres psql -c "ALTER USER nethelper PASSWORD '<hex password>'"
+   sudo -u postgres psql -c "ALTER USER nethelper PASSWORD '<database password>'"
    sudo -u postgres createdb -O nethelper nethelper
    ```
 
-   Redis: set `requirepass` in `/etc/redis/redis.conf` and restart it.
+   Redis: set `requirepass <redis password>` in `/etc/redis/redis.conf` and restart it.
 
-4. **Code, dependencies, and build**:
+5. **Dependencies and build**:
 
    ```sh
    cd /opt/nethelper/backend  && npm ci --omit=dev && npx prisma generate
    cd /opt/nethelper/frontend && npm ci && npm run build   # produces dist/
    ```
 
-5. **Configuration.** Start from the bare-metal template, **not** `backend/.env.example` (that one is for development):
-
-   ```sh
-   install -o root -g nethelper -m 0640 /opt/nethelper/deploy/systemd/backend.env.example /etc/nethelper/backend.env
-   ```
-
-   Set `DATABASE_URL` (with the database password from step 3), `REDIS_PASSWORD`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, and `ENCRYPTION_KEY`. Generate each secret with `openssl rand -hex 32`.
-
-   Don't add `NODE_ENV`, `BIND_ADDRESS`, `TRUST_PROXY`, `LOG_DIR`, or the backup paths. The unit sets them, and systemd lets this file override the unit: a copied development value such as `LOG_DIR=./logs` makes the service crash-loop (it can't write inside `/opt`), and `NODE_ENV=development` would run it in development mode on every interface.
+   A release tarball already contains `frontend/dist`, so skip the second line.
 
 6. **Backend service.** It migrates the database, then starts:
 
@@ -235,12 +282,13 @@ Tested layout (adjust the unit file if yours differs):
    nginx -t && systemctl reload nginx
    ```
 
-8. **First admin.** It prints a generated password once; change it after signing in, then add other users on the Users page:
+8. **First admin.** It prints a generated password once (or set `NETHELPER_ADMIN_PASSWORD` to choose it). Change it after signing in, then add other users on the Users page:
 
    ```sh
-   cd /opt/nethelper/backend
-   sudo -u nethelper sh -c 'set -a; . /etc/nethelper/backend.env; set +a; npm run user:manage -- create-admin --email you@example.com --name "Your Name"'
+   nethelper-admin users create-admin --email you@example.com --name "Your Name"
    ```
+
+   `nethelper-admin users` with no arguments opens the interactive user menu.
 
 The unit is sandboxed:
 
@@ -330,20 +378,23 @@ record every event twice. Live-monitoring settings are in
 
 Migrations run automatically on start in both setups. Take a database backup first: migrations are forward-only.
 
+From a release tarball, unpack the new release next to the old tree and swap them. With Docker Compose, copy `deploy/.env` (and `deploy/docker-compose.override.yml`, if you have one) into the new tree first: they live in the tree.
+
 **Docker Compose:**
 
 ```sh
-git pull                          # or unpack the new release
-cd deploy && docker compose up -d --build
-docker compose ps                 # wait for healthy
+cd /opt/nethelper && git pull     # or swap in the new release
+cd deploy && ./install.sh         # pulls or builds, restarts, waits for healthy
 ```
+
+By hand, replace the last line with `docker compose up -d --build` (or `docker compose pull && docker compose up -d` for the release images), then `docker compose ps` until both are healthy. If `deploy/.env` sets `NETHELPER_VERSION` (older `.env.example` files did), delete that line, or the old version stays pinned; `install.sh` warns about it.
 
 **Bare metal:**
 
 ```sh
-cd /opt/nethelper && git pull
+cd /opt/nethelper && git pull            # or swap in the new release
 cd backend  && npm ci --omit=dev && npx prisma generate
-cd ../frontend && npm ci && npm run build
+cd ../frontend && npm ci && npm run build   # not needed from a release tarball
 systemctl restart nethelper-backend      # migrates, then starts
 ```
 
@@ -355,15 +406,14 @@ Changing `ENCRYPTION_KEY` makes stored secrets unreadable unless they are re-enc
 
 1. Stop the backend.
 2. Put the new key in the config, and keep the old one to hand.
-3. Run the rotation script. It rewrites all the secrets or none of them, and `-- --dry-run` previews it first.
+3. Run the rotation script. It rewrites all the secrets or none of them, and `--dry-run` previews it first.
 4. Start the backend again.
 
 The command for step 3:
 
 ```sh
 # Docker Compose
-docker compose run --rm -e OLD_ENCRYPTION_KEY='<old key>' backend npm run key:rotate
-# Bare metal
-cd /opt/nethelper/backend
-sudo -u nethelper sh -c 'set -a; . /etc/nethelper/backend.env; set +a; OLD_ENCRYPTION_KEY="<old key>" npm run key:rotate'
+docker compose run --rm -e OLD_ENCRYPTION_KEY='<old key>' backend npm run key:rotate   # preview: ... key:rotate -- --dry-run
+# Bare metal (as root)
+OLD_ENCRYPTION_KEY='<old key>' nethelper-admin rotate-key                              # preview: rotate-key --dry-run
 ```

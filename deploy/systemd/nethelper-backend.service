@@ -9,7 +9,7 @@
 #   data         /var/lib/nethelper         (config backups, Git mirror; the user's HOME)
 #   logs         /var/log/nethelper         (rotated by size; also in the journal)
 #   user         nethelper                  (system user, no login shell)
-#   node         /usr/bin/node              (Node 20+; adjust if installed elsewhere)
+#   node         /usr/bin/node              (Node 22+; adjust if installed elsewhere)
 #
 # Install:  cp nethelper-backend.service /etc/systemd/system/
 #           systemctl daemon-reload && systemctl enable --now nethelper-backend
