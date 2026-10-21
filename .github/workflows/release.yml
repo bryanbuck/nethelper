@@ -128,7 +128,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" $flag --title "NetHelper $VERSION" --notes-file notes.md \
             "nethelper-$VERSION.tar.gz" "nethelper-$VERSION.tar.gz.sha256"
       - if: github.event_name != 'push'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nethelper-${{ needs.version.outputs.version }}-dry-run
           path: |
