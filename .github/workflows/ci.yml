@@ -1,0 +1,72 @@
+# Runs each tier's `npm run ci` on every pull request and on pushes to master.
+# The `backend` and `frontend` jobs are the required checks; `audit` reports
+# production-dependency advisories but is not required, so a newly published
+# advisory upstream doesn't block unrelated work.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      # Lint + Jest (role gates, Postman collection drift, parity, transports).
+      - run: npm run ci
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      # The parity specs require backend modules, so both tiers are installed.
+      - run: npm ci
+        working-directory: backend
+      - run: npm ci
+        working-directory: frontend
+      # Lint + Vitest + production build.
+      - run: npm run ci
+        working-directory: frontend
+
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        tier: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: npm audit --omit=dev --audit-level=high
+        working-directory: ${{ matrix.tier }}
