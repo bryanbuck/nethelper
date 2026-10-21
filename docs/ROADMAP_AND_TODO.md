@@ -70,6 +70,14 @@ Preparing the dev-environment build for a private, in-house beta. Deploy targets
 
 ---
 
+## 🐞 Beta feedback
+
+**Status**: started 2026-10-20. Bugs found in beta testing are GitHub Issues in the private repo, labeled `beta` (`gh issue list -l beta`). A fix closes its issue from the commit (`Fixes #N`) and adds a line under `[Unreleased]` in `CHANGELOG.md`. The version stays `0.9.0-beta.1` until the next tag.
+
+- ✅ #1 (2026-10-20): dead buttons on the device page; header consolidated, edit dialog shared (`components/devices/DeviceEditDialog.vue`).
+
+---
+
 ## 🔮 Future Enhancements
 
 ### 1. Real-time Updates from Cloud Providers (webhooks / event streams)
