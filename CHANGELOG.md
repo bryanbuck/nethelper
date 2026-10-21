@@ -4,7 +4,15 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ## [Unreleased]
 
+### Deployment
+- **One-step Docker Compose install**: `deploy/install.sh` checks Docker and Compose, creates `deploy/.env` with generated secrets (it fills in only empty required ones and never changes a set value), pulls the release images or builds them locally, starts the stack, waits until it is healthy, and creates the first admin. Run it again to upgrade. `--host-network` sets up the L2-discovery override, `-y` runs it unattended, and `--env-only` only writes `deploy/.env`. It doesn't install Docker, set up TLS, or take backups.
+- **Release artifacts**: pushing a `v<version>` tag publishes the backend and frontend images to GHCR (`ghcr.io/bryanbuck/nethelper-*`) and a GitHub release with `nethelper-<version>.tar.gz`, which includes a prebuilt UI so bare-metal installs skip the frontend build (`.github/workflows/release.yml`). Pulling needs `docker login ghcr.io` while the repository is private; without it the installer builds locally.
+- **Bare metal**: `deploy/systemd/nethelper-admin` writes `/etc/nethelper/backend.env` with generated secrets (`init-env`), and runs the user CLI (`users`) and key rotation (`rotate-key`) as the service user. It replaces the long `sudo -u nethelper sh -c 'set -a; …'` commands.
+- `npm run user:manage -- create-admin --if-no-users` does nothing when users already exist, and `count-users` prints how many there are.
+- Compose images are now named `${NETHELPER_REGISTRY:-ghcr.io/bryanbuck}/nethelper-backend|frontend`, for local builds too.
+
 ### Fixed
+- `deploy/.env.example` set `NETHELPER_VERSION`, so after an upgrade a copied `.env` kept the old version: the UI showed it, and pulls would fetch the old images. It is now unset by default and follows the tree; `install.sh` warns when an old pin differs from the tree.
 - Device page: **Configure**, **Check Firmware** and **Backup Config** did nothing ([#1](https://github.com/bryanbuck/nethelper/issues/1)). The header now has **Test Connection** (a Details link opens the full test), **Refresh System Info**, **Back Up Now** and **Edit**, which opens the same edit dialog as the Devices table. The duplicate Quick Actions card is gone. Back Up Now and Edit are for admins and operators.
 - Devices table: pagination and column sorting did nothing ([#5](https://github.com/bryanbuck/nethelper/issues/5)). `GET /devices` now returns one page when given `limit` (with `page`, `sortBy`, `sortOrder`), the matching-row count and a fleet-wide status summary for the page's cards. Search also matches model, location and MAC. Pickers elsewhere (backups, credentials, automations, firmware) load the whole inventory instead of the Devices page's filtered page ([#24](https://github.com/bryanbuck/nethelper/issues/24)).
 - Devices table: the row menu's **Reboot**, **Device Info** and **Remove** did nothing ([#2](https://github.com/bryanbuck/nethelper/issues/2)). **Remove** deletes the device (admins, with a confirmation); Reboot, Device Info and the bulk **Reboot Selected** are gone, since NetHelper doesn't write to devices.

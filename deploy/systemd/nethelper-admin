@@ -1,0 +1,113 @@
+#!/bin/sh
+# NetHelper bare-metal admin helper. Runs the backend's admin scripts as the
+# service user with /etc/nethelper/backend.env loaded, and writes that file.
+#
+# Install (as root):
+#   ln -s /opt/nethelper/deploy/systemd/nethelper-admin /usr/local/sbin/nethelper-admin
+#
+#   nethelper-admin init-env
+#   nethelper-admin users                       # interactive user menu
+#   nethelper-admin users create-admin --email you@example.com --name "Your Name"
+#   OLD_ENCRYPTION_KEY='<old key>' nethelper-admin rotate-key [--dry-run]
+#
+# Paths follow deploy/README.md; override with NETHELPER_HOME (code),
+# NETHELPER_ENV (settings file) and NETHELPER_USER (service user).
+
+set -eu
+
+NETHELPER_HOME=${NETHELPER_HOME:-/opt/nethelper}
+NETHELPER_ENV=${NETHELPER_ENV:-/etc/nethelper/backend.env}
+NETHELPER_USER=${NETHELPER_USER:-nethelper}
+
+usage() {
+  cat <<EOF
+Usage: nethelper-admin <command> [args]
+
+  init-env              Write $NETHELPER_ENV from the template, with generated
+                        secrets and database/Redis passwords. Never overwrites.
+  users [args]          User admin (backend/scripts/user-manager.js). No args:
+                        interactive menu. "users create-admin --email E --name N"
+                        creates the first admin; its password comes from
+                        NETHELPER_ADMIN_PASSWORD, else one is generated and printed.
+  rotate-key [--dry-run]
+                        Re-encrypt stored secrets after changing ENCRYPTION_KEY,
+                        with the old key in OLD_ENCRYPTION_KEY. Stop the backend first.
+EOF
+}
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+# 64 hex characters: URL-safe, since the database password goes into DATABASE_URL.
+gen_secret() { od -An -tx1 -N32 /dev/urandom | tr -d ' \n'; }
+
+init_env() {
+  template="$NETHELPER_HOME/deploy/systemd/backend.env.example"
+  [ -f "$template" ] || die "template not found: $template (set NETHELPER_HOME)"
+  [ ! -e "$NETHELPER_ENV" ] || die "$NETHELPER_ENV already exists; edit it instead"
+
+  db_password=$(gen_secret)
+  redis_password=$(gen_secret)
+  tmp="$NETHELPER_ENV.tmp.$$"
+  (umask 077 && DB="$db_password" REDIS="$redis_password" JWT="$(gen_secret)" \
+    REFRESH="$(gen_secret)" ENC="$(gen_secret)" awk '
+    /^DATABASE_URL=/      { sub(/<hex password>/, ENVIRON["DB"]) }
+    /^JWT_SECRET=$/       { $0 = $0 ENVIRON["JWT"] }
+    /^JWT_REFRESH_SECRET=$/ { $0 = $0 ENVIRON["REFRESH"] }
+    /^ENCRYPTION_KEY=$/   { $0 = $0 ENVIRON["ENC"] }
+    /^REDIS_PASSWORD=$/   { $0 = $0 ENVIRON["REDIS"] }
+    { print }' "$template" > "$tmp")
+  chmod 0640 "$tmp"
+  if [ "$(id -u)" -eq 0 ] && getent group "$NETHELPER_USER" >/dev/null 2>&1; then
+    chgrp "$NETHELPER_USER" "$tmp"
+  fi
+  mv "$tmp" "$NETHELPER_ENV"
+
+  cat <<EOF
+Wrote $NETHELPER_ENV with generated secrets.
+
+Use these two when setting up the services:
+  Database password (ALTER USER nethelper PASSWORD '...'): $db_password
+  Redis password (requirepass in /etc/redis/redis.conf):   $redis_password
+
+ENCRYPTION_KEY in that file encrypts every stored credential. Back it up
+somewhere other than the database backups.
+EOF
+}
+
+# Run a backend script as the service user with the settings file loaded.
+run_script() {
+  script=$1; shift
+  [ "$(id -u)" -eq 0 ] || die "run as root (it switches to the $NETHELPER_USER user)"
+  [ -r "$NETHELPER_ENV" ] || die "can't read $NETHELPER_ENV (run init-env first?)"
+  [ -f "$NETHELPER_HOME/backend/scripts/$script" ] || die "not found: $NETHELPER_HOME/backend/scripts/$script"
+  command -v runuser >/dev/null 2>&1 || die "runuser not found (util-linux)"
+  node=$(command -v node) || die "node not found"
+
+  # Only these two of the caller's variables are passed on.
+  admin_password=${NETHELPER_ADMIN_PASSWORD-}
+  admin_password_set=${NETHELPER_ADMIN_PASSWORD+1}
+  old_key=${OLD_ENCRYPTION_KEY-}
+  old_key_set=${OLD_ENCRYPTION_KEY+1}
+  unset NETHELPER_ADMIN_PASSWORD OLD_ENCRYPTION_KEY
+
+  set -a
+  # shellcheck disable=SC1090 # the settings file is chosen at run time
+  . "$NETHELPER_ENV"
+  set +a
+  export NODE_ENV=production CHECKPOINT_DISABLE=1
+  [ -n "$admin_password_set" ] && export NETHELPER_ADMIN_PASSWORD="$admin_password"
+  [ -n "$old_key_set" ] && export OLD_ENCRYPTION_KEY="$old_key"
+
+  cd "$NETHELPER_HOME/backend"
+  exec runuser -u "$NETHELPER_USER" -- "$node" "scripts/$script" "$@"
+}
+
+[ $# -gt 0 ] || { usage >&2; exit 2; }
+command=$1; shift
+case "$command" in
+  init-env) init_env ;;
+  users) run_script user-manager.js "$@" ;;
+  rotate-key) run_script rotate-encryption-key.js "$@" ;;
+  -h|--help|help) usage ;;
+  *) usage >&2; die "unknown command: $command" ;;
+esac

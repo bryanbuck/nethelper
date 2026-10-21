@@ -1,7 +1,13 @@
 # NetHelper: Docker Compose deployment.
 #
+#   ./install.sh            # writes .env, pulls or builds, starts, first admin
+# or by hand:
 #   cp .env.example .env    # then fill in every secret
 #   docker compose up -d --build
+#
+# The images are the release images on GHCR (`docker compose pull`; needs
+# `docker login ghcr.io` while the repository is private) or built from this
+# tree (`--build`); both carry the same name and tag.
 #
 # The UI (and the API behind it, same origin) listens on HTTP_PORT. Put a TLS
 # terminator in front of it for anything beyond a lab: see README.md.
@@ -45,7 +51,7 @@ services:
 
   backend:
     build: ../backend
-    image: nethelper-backend:${NETHELPER_VERSION:-0.9.0-beta.1}
+    image: ${NETHELPER_REGISTRY:-ghcr.io/bryanbuck}/nethelper-backend:${NETHELPER_VERSION:-0.9.0-beta.1}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -78,7 +84,7 @@ services:
       context: ../frontend
       args:
         VITE_APP_VERSION: ${NETHELPER_VERSION:-0.9.0-beta.1}
-    image: nethelper-frontend:${NETHELPER_VERSION:-0.9.0-beta.1}
+    image: ${NETHELPER_REGISTRY:-ghcr.io/bryanbuck}/nethelper-frontend:${NETHELPER_VERSION:-0.9.0-beta.1}
     restart: unless-stopped
     environment:
       BACKEND_UPSTREAM: backend:3000

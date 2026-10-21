@@ -1,0 +1,137 @@
+# Publishes a release when a v<VERSION> tag is pushed:
+#   - the backend and frontend images on GHCR, tagged <version> (and latest
+#     for a version without a pre-release suffix), linux/amd64;
+#   - a GitHub release with nethelper-<version>.tar.gz: the source at the tag
+#     plus a prebuilt frontend/dist, so bare-metal installs skip the frontend
+#     build. CHANGELOG.md's section for the version is the release notes.
+#
+# Run it by hand (Actions → Release → Run workflow) for a dry run: it builds
+# the images and the tarball from the chosen branch and publishes nothing; the
+# tarball is kept as a workflow artifact.
+#
+# Releasing: CONTRIBUTING.md, "Releasing".
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        run: |
+          version=$(cat VERSION)
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match VERSION ($version)"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          case "$version" in
+            *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+  images:
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        tier: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      # OCI labels, including org.opencontainers.image.source, which links the
+      # package to this repository (and its access) on GHCR.
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/nethelper-${{ matrix.tier }}
+          tags: |
+            type=raw,value=${{ needs.version.outputs.version }}
+            type=raw,value=latest,enable=${{ needs.version.outputs.prerelease == 'false' }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.tier }}
+          platforms: linux/amd64
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Only the frontend uses it (the version shown in the UI).
+          build-args: VITE_APP_VERSION=${{ needs.version.outputs.version }}
+          cache-from: type=gha,scope=${{ matrix.tier }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.tier }}
+
+  tarball:
+    # After the images, so a release is never announced before they exist.
+    needs: [version, images]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: frontend
+        env:
+          VITE_APP_VERSION: ${{ needs.version.outputs.version }}
+      - name: Build the tarball
+        run: |
+          name="nethelper-$VERSION"
+          git archive --format=tar --prefix="$name/" -o "$name.tar" HEAD
+          tar --append -f "$name.tar" --transform "s,^frontend/dist,$name/frontend/dist," frontend/dist
+          gzip -9 "$name.tar"
+          sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
+          tar tzf "$name.tar.gz" | grep -q "^$name/frontend/dist/index.html$"
+      - name: Release notes from CHANGELOG.md
+        run: |
+          awk -v v="$VERSION" 'index($0, "## [" v "]") == 1 { on = 1; next } on && /^## \[/ { exit } on { print }' \
+            CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::warning::CHANGELOG.md has no section for $VERSION"
+            echo "See CHANGELOG.md." > notes.md
+          fi
+      - if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          flag=
+          [ "$PRERELEASE" = true ] && flag=--prerelease
+          gh release create "$GITHUB_REF_NAME" $flag --title "NetHelper $VERSION" --notes-file notes.md \
+            "nethelper-$VERSION.tar.gz" "nethelper-$VERSION.tar.gz.sha256"
+      - if: github.event_name != 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nethelper-${{ needs.version.outputs.version }}-dry-run
+          path: |
+            nethelper-*.tar.gz
+            nethelper-*.tar.gz.sha256
+            notes.md

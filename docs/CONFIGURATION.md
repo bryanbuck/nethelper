@@ -149,16 +149,18 @@ Production writes JSON logs to stdout. Values under secret-looking keys (passwor
 | Variable | Used by |
 |---|---|
 | `RUN_MIGRATIONS` | Docker entrypoint. Default `true`; `false` skips `prisma migrate deploy` on start. |
-| `NETHELPER_ADMIN_PASSWORD` | `npm run user:manage -- create-admin`. If unset, a password is generated and printed once. |
-| `OLD_ENCRYPTION_KEY` | `npm run key:rotate`. |
+| `NETHELPER_ADMIN_PASSWORD` | `npm run user:manage -- create-admin`, and the first admin that `deploy/install.sh` or `nethelper-admin users create-admin` creates (read from your shell's environment). If unset, a password is generated and printed once. |
+| `OLD_ENCRYPTION_KEY` | `npm run key:rotate` and `nethelper-admin rotate-key`. |
 
 ## Docker Compose (`deploy/.env`)
 
 | Variable | Default | Notes |
 |---|---|---|
-| `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `ENCRYPTION_KEY` | *(required)* | Compose refuses to start if any is empty. |
+| `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `ENCRYPTION_KEY` | *(required)* | Compose refuses to start if any is empty. `install.sh` generates any that are empty. |
 | `POSTGRES_DB`, `POSTGRES_USER` | `nethelper` | |
-| `NETHELPER_VERSION` | `0.9.0-beta.1` | Image tag and the version shown in the UI. |
+| `NETHELPER_VERSION` | *(unset)* | Pins the image tag and the version shown in the UI. Unset, it follows the tree: `docker-compose.yml`'s default is the tree's `VERSION`. |
+| `NETHELPER_REGISTRY` | `ghcr.io/bryanbuck` | Where the release images are pulled from. Local builds get the same name. |
+| `COMPOSE_FILE` | *(unset)* | Compose's own variable: set to include `docker-compose.host-network.yml` for L2 discovery (`install.sh --host-network` does it). |
 | `HTTP_BIND`, `HTTP_PORT` | `0.0.0.0`, `8080` | Where the UI is published. |
 | `TRUST_PROXY` | `1` | `2` behind an extra TLS proxy. |
 | `CORS_ORIGINS`, `LOG_LEVEL`, `PING_MONITOR_ENABLED` | | Passed through to the backend. |

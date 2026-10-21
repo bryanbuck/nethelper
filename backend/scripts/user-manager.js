@@ -5,10 +5,16 @@
  *   npm run user:manage
  *       Interactive menu: list, create, edit, reset password, delete.
  *
- *   npm run user:manage -- create-admin --email <email> --name "<name>"
+ *   npm run user:manage -- create-admin --email <email> --name "<name>" [--if-no-users]
  *       Non-interactive, for first-run bootstrap and scripted installs. The
  *       password comes from NETHELPER_ADMIN_PASSWORD (min 12 characters); if
  *       that is unset, a random one is generated and printed once.
+ *       --if-no-users does nothing (exit 0) when any user exists, so an
+ *       installer can run it on every upgrade (deploy/install.sh).
+ *
+ *   npm run user:manage -- count-users
+ *       Prints the number of users (deploy/install.sh asks for a first admin
+ *       only when it is 0).
  */
 require('dotenv').config();
 const crypto = require('crypto');
@@ -429,18 +435,26 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
+// Flags that take no value.
+const BOOLEAN_FLAGS = new Set(['if-no-users']);
+
 function parseFlags(args) {
   const flags = {};
   for (let i = 0; i < args.length; i++) {
     const match = /^--([a-z-]+)(?:=(.*))?$/.exec(args[i]);
     if (!match) throw new Error(`Unexpected argument: ${args[i]}`);
-    flags[match[1]] = match[2] !== undefined ? match[2] : args[++i];
+    if (BOOLEAN_FLAGS.has(match[1])) flags[match[1]] = true;
+    else flags[match[1]] = match[2] !== undefined ? match[2] : args[++i];
   }
   return flags;
 }
 
 async function createAdminCommand(args) {
-  const { email, name } = parseFlags(args);
+  const { email, name, 'if-no-users': ifNoUsers } = parseFlags(args);
+  if (ifNoUsers && (await prisma.user.count()) > 0) {
+    console.log('Users already exist; no admin created.');
+    return;
+  }
   if (!email) throw new Error('--email <address> is required');
   if (!validateEmail(email)) throw new Error(`Not a valid email address: ${email}`);
   if (!name || name.trim().length < 2) throw new Error('--name "<full name>" is required');
@@ -472,9 +486,13 @@ async function createAdminCommand(args) {
 }
 
 const [command, ...commandArgs] = process.argv.slice(2);
+const COMMANDS = {
+  'create-admin': createAdminCommand,
+  'count-users': async () => console.log(await prisma.user.count()),
+};
 
-if (command === 'create-admin') {
-  createAdminCommand(commandArgs)
+if (COMMANDS[command]) {
+  COMMANDS[command](commandArgs)
     .then(() => prisma.$disconnect())
     .catch(async (error) => {
       console.error(colorize(error.message, 'red'));
@@ -482,7 +500,7 @@ if (command === 'create-admin') {
       process.exit(1);
     });
 } else if (command) {
-  console.error(`Unknown command "${command}". Run with no arguments for the interactive menu, or use create-admin.`);
+  console.error(`Unknown command "${command}". Run with no arguments for the interactive menu, or use create-admin or count-users.`);
   process.exit(2);
 } else {
   console.log(colorize('Welcome to the User Management Console!', 'bright'));
