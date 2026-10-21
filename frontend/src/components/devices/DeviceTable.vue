@@ -47,6 +47,7 @@
           />
           
           <v-btn
+            v-if="canEdit"
             color="primary"
             prepend-icon="mdi-sync"
             :loading="devicesStore.loading"
@@ -272,14 +273,6 @@
               <v-btn
                 variant="outlined"
                 size="small"
-                prepend-icon="mdi-restart"
-                @click="bulkReboot"
-              >
-                Reboot Selected
-              </v-btn>
-              <v-btn
-                variant="outlined"
-                size="small"
                 prepend-icon="mdi-download"
                 @click="exportSelected"
               >
@@ -496,12 +489,13 @@
             @click.stop="viewDevice(item)"
           ></v-btn>
           <v-btn
+            v-if="canEdit"
             variant="text"
             size="small"
             icon="mdi-pencil"
             @click.stop="editDevice(item)"
           ></v-btn>
-          <v-menu>
+          <v-menu v-if="authStore.isAdmin">
             <template #activator="{ props }">
               <v-btn
                 variant="text"
@@ -513,21 +507,10 @@
             </template>
             <v-list>
               <v-list-item
-                prepend-icon="mdi-restart"
-                title="Reboot"
-                @click="rebootDevice(item)"
-              />
-              <v-list-item
-                prepend-icon="mdi-information"
-                title="Device Info"
-                @click="showDeviceInfo(item)"
-              />
-              <v-divider></v-divider>
-              <v-list-item
                 prepend-icon="mdi-delete"
                 title="Remove"
                 class="text-error"
-                @click="removeDevice(item)"
+                @click="confirmRemove(item)"
               />
             </v-list>
           </v-menu>
@@ -559,6 +542,26 @@
       :devices="mergeCandidates"
       @merged="onMerged"
     />
+
+    <v-dialog v-model="removeDialog" max-width="480">
+      <v-card>
+        <v-card-title>Remove device</v-card-title>
+        <v-card-text>
+          Remove <strong>{{ removeTarget?.name }}</strong> from the inventory? Its events,
+          alerts and topology links are deleted with it; config backups and automation run
+          history are kept.
+          <div v-if="removeTarget?.managementMode === 'cloud'" class="mt-2">
+            It is synced from {{ cloudPlaneName(removeTarget) }}, so the next sync adds it again
+            unless it is removed there too.
+          </div>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="removeDialog = false">Cancel</v-btn>
+          <v-btn color="error" :loading="removing" @click="doRemove">Remove</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <DeviceCredentialDialog
       v-model="credentialDialog"
@@ -663,7 +666,7 @@ const headers = [
   {
     title: 'API Status',
     key: 'apiStatus',
-    sortable: true,
+    sortable: false,
     width: '160px',
     tooltip: 'Device API communication status'
   },
@@ -801,22 +804,37 @@ const editDevice = (device) => {
   emit('edit-device', device)
 }
 
-const rebootDevice = (device) => {
-  console.log('Rebooting device:', device.name)
-}
-
-const removeDevice = (device) => {
-  console.log('Removing device:', device.name)
-}
-
-const showDeviceInfo = (device) => {
-  console.log('Showing device info:', device)
-}
-
-// Bulk actions
 const authStore = useAuthStore()
 const notifications = useNotificationsStore()
 const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole))
+
+// Remove (admin only, like DELETE /devices/:id)
+const removeDialog = ref(false)
+const removeTarget = ref(null)
+const removing = ref(false)
+
+const confirmRemove = (device) => {
+  removeTarget.value = device
+  removeDialog.value = true
+}
+
+const doRemove = async () => {
+  const device = removeTarget.value
+  removing.value = true
+  try {
+    await devicesStore.deleteDevice(device.id)
+    selectedItems.value = selectedItems.value.filter((id) => id !== device.id)
+    notifications.showSuccess(`Removed ${device.name}`)
+    removeDialog.value = false
+    refreshTable()
+  } catch (err) {
+    notifications.showError(err.userMessage || err.message || 'Could not remove the device')
+  } finally {
+    removing.value = false
+  }
+}
+
+// Bulk actions
 const bulkLiveBusy = ref(false)
 
 // Each device is checked server-side (platform, IP, credential); report the
@@ -871,10 +889,6 @@ const onMerged = () => {
 
 // A cloud sync job finished (device:sync:completed): show what it changed.
 watch(() => devicesStore.lastSyncResult, () => refreshTable())
-
-const bulkReboot = () => {
-  console.log('Bulk rebooting devices:', selectedItems.value)
-}
 
 const exportSelected = () => {
   console.log('Exporting selected devices:', selectedItems.value)

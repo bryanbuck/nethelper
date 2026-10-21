@@ -9,12 +9,12 @@
         </div>
       </div>
       <v-spacer />
-      <v-btn color="primary" prepend-icon="mdi-plus" @click="openCreate">
+      <v-btn v-if="authStore.isAdmin" color="primary" prepend-icon="mdi-plus" @click="openCreate">
         Add Integration
       </v-btn>
     </div>
 
-    <v-alert v-if="error" type="error" variant="tonal" class="mb-4" closable @click:close="settingsStore.clearError()">
+    <v-alert v-if="error" type="error" variant="tonal" class="mb-4" closable @click:close="settingsStore.clearError('integrations')">
       {{ error }}
     </v-alert>
 
@@ -105,18 +105,20 @@
           </v-card-text>
 
           <v-card-actions>
-            <v-btn size="small" variant="text" :loading="testingId === integration.id" @click="testIntegration(integration)">
+            <v-btn v-if="authStore.isAdmin" size="small" variant="text" :loading="testingId === integration.id" @click="testIntegration(integration)">
               Test
             </v-btn>
-            <v-btn size="small" variant="text" :loading="syncingId === integration.id" @click="syncIntegration(integration)">
+            <v-btn v-if="canEdit" size="small" variant="text" :loading="syncingId === integration.id" @click="syncIntegration(integration)">
               Sync devices
             </v-btn>
-            <v-btn size="small" variant="text" :loading="scopeBackupId === integration.id" @click="backUpScopes(integration)">
+            <v-btn v-if="canEdit" size="small" variant="text" :loading="scopeBackupId === integration.id" @click="backUpScopes(integration)">
               Back up scopes
             </v-btn>
             <v-spacer />
-            <v-btn size="small" variant="text" icon="mdi-pencil" @click="openEdit(integration)" />
-            <v-btn size="small" variant="text" icon="mdi-delete" color="error" @click="confirmDelete(integration)" />
+            <template v-if="authStore.isAdmin">
+              <v-btn size="small" variant="text" icon="mdi-pencil" @click="openEdit(integration)" />
+              <v-btn size="small" variant="text" icon="mdi-delete" color="error" @click="confirmDelete(integration)" />
+            </template>
           </v-card-actions>
         </v-card>
       </v-col>
@@ -229,12 +231,22 @@ import { storeToRefs } from 'pinia'
 import { useSettingsStore } from '@/stores/settings'
 import { useDevicesStore } from '@/stores/devices'
 import { useBackupsStore } from '@/stores/backups'
+import { useAuthStore } from '@/stores/auth'
 import { CloudProviderInfo } from '@/models/vendors'
 
 const settingsStore = useSettingsStore()
 const devicesStore = useDevicesStore()
 const backupsStore = useBackupsStore()
-const { cloudIntegrations: integrations, cloudProviders, loading, error } = storeToRefs(settingsStore)
+const {
+  cloudIntegrations: integrations,
+  cloudProviders,
+  integrationsLoading: loading,
+  integrationsError: error,
+} = storeToRefs(settingsStore)
+const authStore = useAuthStore()
+// Integrations are created, edited, tested and deleted by admins; syncing and
+// scope backups are operator+
+const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole))
 
 const dialog = ref(false)
 const deleteDialog = ref(false)

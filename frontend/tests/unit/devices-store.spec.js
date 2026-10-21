@@ -5,7 +5,8 @@ vi.mock('@/services/device.service', () => ({
   default: {
     getDevices: vi.fn(),
     getDevicesWithPagination: vi.fn(),
-    createDevice: vi.fn()
+    createDevice: vi.fn(),
+    deleteDevice: vi.fn()
   }
 }))
 
@@ -22,6 +23,7 @@ const DEVICES = [
 describe('devices store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    vi.clearAllMocks()
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
@@ -70,5 +72,51 @@ describe('devices store', () => {
 
     expect(store.devices.map((d) => d.id)).toEqual(['1', '9'])
     expect(store.stats).toMatchObject({ total: 2, online: 1, offline: 1 })
+  })
+
+  test('a table page takes the fleet-wide stats from the server summary', async () => {
+    deviceService.getDevicesWithPagination.mockResolvedValue({
+      data: DEVICES.slice(0, 2),
+      summary: { total: 40, online: 30, offline: 7, warning: 3 },
+      pagination: { page: 1, itemsPerPage: 2, total: 40, totalPages: 20 }
+    })
+    const store = useDevicesStore()
+
+    await store.fetchDevicesWithPagination({ page: 1, itemsPerPage: 2 })
+    expect(store.stats).toEqual({ total: 40, online: 30, offline: 7, warning: 3 })
+
+    // A live status change on a page row doesn't recount the page
+    store.updateDeviceStatus('1', 'offline')
+    expect(store.stats).toEqual({ total: 40, online: 30, offline: 7, warning: 3 })
+  })
+
+  test('ensureAllDevices fetches after a table page, not after a full fetch', async () => {
+    deviceService.getDevices.mockResolvedValue({ data: DEVICES })
+    deviceService.getDevicesWithPagination.mockResolvedValue({
+      data: DEVICES.slice(0, 1),
+      summary: null,
+      pagination: { page: 1, itemsPerPage: 1, total: 4, totalPages: 4 }
+    })
+    const store = useDevicesStore()
+
+    await store.fetchDevicesWithPagination({ page: 1, itemsPerPage: 1 })
+    await store.ensureAllDevices()
+    expect(deviceService.getDevices).toHaveBeenCalledTimes(1)
+    expect(store.devices).toHaveLength(4)
+
+    await store.ensureAllDevices()
+    expect(deviceService.getDevices).toHaveBeenCalledTimes(1)
+  })
+
+  test('deleteDevice removes the row after the API confirms', async () => {
+    deviceService.getDevices.mockResolvedValue({ data: DEVICES })
+    deviceService.deleteDevice.mockResolvedValue({ success: true })
+    const store = useDevicesStore()
+    await store.fetchDevices()
+
+    await store.deleteDevice('2')
+
+    expect(deviceService.deleteDevice).toHaveBeenCalledWith('2')
+    expect(store.devices.map((d) => d.id)).toEqual(['1', '3', '4'])
   })
 })

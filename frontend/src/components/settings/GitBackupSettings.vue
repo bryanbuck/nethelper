@@ -22,7 +22,7 @@
       </v-btn>
     </div>
 
-    <v-alert v-if="error" type="error" variant="tonal" class="mb-4" closable @click:close="settingsStore.clearError()">
+    <v-alert v-if="error" type="error" variant="tonal" class="mb-4" closable @click:close="settingsStore.clearError('gitBackup')">
       {{ error }}
     </v-alert>
 
@@ -162,7 +162,7 @@ const {
   gitBackupConfig: config,
   gitBackupDefaults: defaults,
   gitBackupFields: credentialFields,
-  error,
+  gitBackupError: error,
 } = storeToRefs(settingsStore)
 
 const saving = ref(false)

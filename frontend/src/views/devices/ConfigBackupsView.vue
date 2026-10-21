@@ -1004,9 +1004,7 @@ const viewHint = computed(() =>
 )
 
 async function viewBackup(item) {
-  if (devicesStore.devices.length === 0) {
-    try { await devicesStore.fetchDevices() } catch { /* hint falls back to the generic one */ }
-  }
+  try { await devicesStore.ensureAllDevices() } catch { /* hint falls back to the generic one */ }
   const artifacts = artifactsOf(item)
   viewTarget.value = {
     id: item.id,
@@ -1204,12 +1202,10 @@ const deviceSelectItems = computed(() =>
 async function openRunDialog() {
   selectedDeviceIds.value = []
   deviceSearch.value = ''
-  if (devicesStore.devices.length === 0) {
-    try {
-      await devicesStore.fetchDevices()
-    } catch (error) {
-      notify(error.userMessage || error.message || 'Failed to load devices', 'error')
-    }
+  try {
+    await devicesStore.ensureAllDevices()
+  } catch (error) {
+    notify(error.userMessage || error.message || 'Failed to load devices', 'error')
   }
   showRunDialog.value = true
 }
@@ -1284,9 +1280,7 @@ async function openScheduleDialog(item = null) {
   } else {
     scheduleForm.value = emptyScheduleForm()
   }
-  if (devicesStore.devices.length === 0) {
-    try { await devicesStore.fetchDevices() } catch { /* non-fatal */ }
-  }
+  try { await devicesStore.ensureAllDevices() } catch { /* non-fatal */ }
   showScheduleDialog.value = true
 }
 

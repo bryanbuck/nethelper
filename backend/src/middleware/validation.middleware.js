@@ -160,6 +160,15 @@ const validateQuery = {
     handleValidationErrors,
   ],
 
+  // GET /devices: page/limit opt into one page; sortBy is whitelisted by the service
+  deviceList: [
+    query('page').optional().isInt({ min: 1 }).toInt(),
+    query('limit').optional().isInt({ min: 1, max: 100 }).toInt(),
+    query('sortBy').optional().isString().isLength({ max: 50 }),
+    query('sortOrder').optional().isIn(['asc', 'desc']),
+    handleValidationErrors,
+  ],
+
   deviceFilters: [
     query('type').optional().isIn(['access_point', 'switch', 'gateway']),
     query('status').optional().isIn(['online', 'offline', 'warning', 'maintenance']),

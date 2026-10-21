@@ -39,6 +39,11 @@ export const useDevicesStore = defineStore('devices', () => {
   
   const tableLoading = ref(false)
 
+  // True while `devices` holds the whole inventory (fetchDevices), false
+  // while it holds one table page (fetchDevicesWithPagination). On a page,
+  // `stats` are the server's fleet-wide summary rather than counted here.
+  const devicesComplete = ref(false)
+
   // Firmware polling state
   const firmwareData = ref([])
   const firmwareLoading = ref(false)
@@ -86,6 +91,7 @@ export const useDevicesStore = defineStore('devices', () => {
     try {
       const response = await deviceService.getDevices()
       devices.value = response.data
+      devicesComplete.value = true
       updateStats()
       lastSync.value = new Date()
     } catch (err) {
@@ -95,6 +101,12 @@ export const useDevicesStore = defineStore('devices', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  /** For views that need every device (pickers, lookups): fetch unless held. */
+  async function ensureAllDevices() {
+    if (!devicesComplete.value) await fetchDevices()
+    return devices.value
   }
 
   async function fetchDevicesWithPagination(options = {}) {
@@ -110,6 +122,8 @@ export const useDevicesStore = defineStore('devices', () => {
 
       devices.value = response.data
       pagination.value = response.pagination
+      // "All" (no limit) returns every matching row, but still possibly filtered
+      devicesComplete.value = false
 
       // Update table options
       tableOptions.value = {
@@ -117,7 +131,8 @@ export const useDevicesStore = defineStore('devices', () => {
         ...mergedOptions
       }
 
-      updateStats()
+      if (response.summary) stats.value = { ...response.summary }
+      else updateStats(true)
       lastSync.value = new Date()
 
       return response
@@ -243,7 +258,10 @@ export const useDevicesStore = defineStore('devices', () => {
     }
   }
 
-  function updateStats() {
+  // Counts the held rows; skipped while they are one table page (the stats
+  // are then the server's fleet-wide summary), unless forced.
+  function updateStats(force = false) {
+    if (!devicesComplete.value && !force) return
     stats.value = {
       total: devices.value.length,
       online: onlineDevices.value.length,
@@ -317,6 +335,11 @@ export const useDevicesStore = defineStore('devices', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  async function deleteDevice(deviceId) {
+    await deviceService.deleteDevice(deviceId)
+    removeDevice(deviceId)
   }
 
   function clearSelection() {
@@ -448,6 +471,7 @@ export const useDevicesStore = defineStore('devices', () => {
     pagination,
     tableOptions,
     tableLoading,
+    devicesComplete,
     firmwareData,
     firmwareLoading,
     firmwareError,
@@ -459,6 +483,7 @@ export const useDevicesStore = defineStore('devices', () => {
     recentDevices,
     fetchDevices,
     fetchDevicesWithPagination,
+    ensureAllDevices,
     syncDevices,
     applySyncResult,
     fetchDuplicates,
@@ -470,6 +495,7 @@ export const useDevicesStore = defineStore('devices', () => {
     addDevice,
     removeDevice,
     updateDevice,
+    deleteDevice,
     clearSelection,
     selectDevice,
     deselectDevice,

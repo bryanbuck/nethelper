@@ -56,13 +56,13 @@
                   <ApiCredentials />
                 </ErrorBoundary>
 
-                <!-- Divider between sections -->
-                <v-divider class="my-8"></v-divider>
-
-                <!-- Configuration backup Git mirror -->
-                <ErrorBoundary :show-details="isDevelopment">
-                  <GitBackupSettings />
-                </ErrorBoundary>
+                <!-- Configuration backup Git mirror (admin only, like its API) -->
+                <template v-if="authStore.isAdmin">
+                  <v-divider class="my-8"></v-divider>
+                  <ErrorBoundary :show-details="isDevelopment">
+                    <GitBackupSettings />
+                  </ErrorBoundary>
+                </template>
               </v-card-text>
             </v-window-item>
 
@@ -109,10 +109,12 @@ import CloudIntegrations from '@/components/settings/CloudIntegrations.vue'
 import GitBackupSettings from '@/components/settings/GitBackupSettings.vue'
 import ApiCredentials from '@/components/settings/ApiCredentials.vue'
 import AlertRules from '@/components/settings/AlertRules.vue'
+import { useAuthStore } from '@/stores/auth'
 import debugLog, { DebugCategory } from '@/utils/debug'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 const isDevelopment = computed(() => import.meta.env.DEV)
 
