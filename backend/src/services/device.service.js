@@ -10,6 +10,19 @@ const { debugLog, Services } = require('../utils/debug-logger');
 // Create service-specific logger
 const logger = debugLog.createLogger(Services.DEVICE);
 
+// What a person may set through POST/PUT /devices. Every other column is
+// system-owned: written by cloud sync, the Central probe, the ping monitor,
+// connection tests or the live monitor.
+const EDITABLE_FIELDS = [
+  'name', 'type', 'vendor', 'platform', 'model', 'ipAddress', 'macAddress', 'location',
+  'serial', 'managementMode', 'cloudIntegrationId', 'apiCredentialId',
+];
+/** The listed keys of obj whose values are defined. */
+const pickDefined = (obj, keys) => Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
+
+// Optional columns where a blank form field means "none".
+const BLANK_AS_NULL = ['ipAddress', 'macAddress', 'location', 'platform', 'cloudIntegrationId', 'apiCredentialId'];
+
 const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 // Device table sort keys → orderBy. `status` is derived (effectiveStatus), so
@@ -199,6 +212,23 @@ class DeviceService {
     }
   }
 
+  /**
+   * The fields of a request body a person may write (EDITABLE_FIELDS), with
+   * blanks stored as null and a blank model left unchanged. Used by the
+   * create/update routes; internal writers (sync) call createDevice and
+   * updateDevice with system-owned fields directly.
+   */
+  editableFields(body = {}) {
+    const data = {};
+    for (const field of EDITABLE_FIELDS) {
+      if (!(field in body) || body[field] === undefined) continue;
+      const value = typeof body[field] === 'string' ? body[field].trim() : body[field];
+      if (field === 'model' && !value) continue;
+      data[field] = BLANK_AS_NULL.includes(field) && !value ? null : value;
+    }
+    return data;
+  }
+
   async createDevice(deviceData) {
     try {
       const prisma = getPrisma();
@@ -215,12 +245,16 @@ class DeviceService {
           ipAddress: deviceData.ipAddress,
           macAddress: deviceData.macAddress,
           location: deviceData.location,
-          cloudStatus: deviceData.cloudStatus || deviceData.status || 'offline',
+          cloudStatus: deviceData.cloudStatus || 'offline',
           managementMode: deviceData.managementMode || 'direct',
           cloudIntegrationId: deviceData.cloudIntegrationId || null,
           firmwareVersion: deviceData.firmwareVersion,
           apiCredentialId: deviceData.apiCredentialId || null,
           metadata: deviceData.metadata || {},
+          // From cloud sync only (the routes pass editableFields()), which
+          // reports these for a new device as it does for a known one.
+          ...(deviceData.lastSeen && { lastSeen: deviceData.lastSeen }),
+          ...pickDefined(deviceData, ['cloudConnectionStatus', 'cloudManaged', 'cloudManagedSource', 'cloudManagedCheckedAt']),
         },
       });
 

@@ -28,3 +28,19 @@ describe('device update validation', () => {
     expect(res.body.error).toBe('Invalid MAC address');
   });
 });
+
+describe('device update validation: optional fields', () => {
+  it.each(['', null])('accepts a blank IP address (%p): a cloud device may have none', async (ipAddress) => {
+    expect((await put({ ipAddress })).status).toBe(200);
+  });
+
+  it('rejects a malformed IP address', async () => {
+    const res = await put({ ipAddress: '10.0.0' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Invalid IP address');
+  });
+
+  it.each(['', null])('accepts a blank location (%p)', async (location) => {
+    expect((await put({ location })).status).toBe(200);
+  });
+});
