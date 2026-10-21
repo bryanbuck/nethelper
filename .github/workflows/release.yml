@@ -64,7 +64,7 @@ jobs:
       # OCI labels, including org.opencontainers.image.source, which links the
       # package to this repository (and its access) on GHCR.
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository_owner }}/nethelper-${{ matrix.tier }}
           tags: |
