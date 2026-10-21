@@ -72,7 +72,7 @@
                 Test Connection
               </v-btn>
               <v-btn
-                v-if="canEdit"
+                v-if="canEdit && systemPoll?.available"
                 color="primary"
                 variant="outlined"
                 :loading="systemLoading"
@@ -422,6 +422,13 @@
               </v-row>
             </v-card-text>
 
+            <!-- Nothing can poll this device: say why, not a failure -->
+            <v-card-text v-else-if="systemPoll && !systemPoll.available">
+              <v-alert type="info" variant="tonal" icon="mdi-information-outline">
+                {{ systemPollReason }}
+              </v-alert>
+            </v-card-text>
+
             <!-- No System Data -->
             <v-card-text v-else class="text-center py-8">
               <v-icon size="64" color="grey-lighten-1">mdi-information-outline</v-icon>
@@ -515,86 +522,54 @@
           </v-card>
         </v-col>
 
-        <!-- Type-specific information -->
+        <!-- How NetHelper reaches the device, plus cloud-reported hardware -->
         <v-col cols="12" md="6">
           <v-card>
             <v-card-title>
-              <v-icon left>{{ getDeviceIcon(device.type) }}</v-icon>
-              {{ device.type }} Information
+              <v-icon start>mdi-lan-connect</v-icon>
+              Platform &amp; Access
             </v-card-title>
             <v-divider />
             <v-card-text>
               <v-list density="compact">
-                <!-- Switch specific -->
-                <template v-if="device.type && device.type.toLowerCase().includes('switch')">
-                  <v-list-item v-if="device.ports">
-                    <v-list-item-title>Port Count</v-list-item-title>
-                    <v-list-item-subtitle class="text-body-2 font-weight-medium">
-                      {{ device.ports }} ports
-                    </v-list-item-subtitle>
-                  </v-list-item>
-                  <v-list-item v-if="device.utilization">
-                    <v-list-item-title>Utilization</v-list-item-title>
-                    <v-list-item-subtitle class="text-body-2 font-weight-medium">
-                      {{ device.utilization }}
-                    </v-list-item-subtitle>
-                  </v-list-item>
-                  <v-list-item v-if="device.vlanCount">
-                    <v-list-item-title>VLAN Count</v-list-item-title>
-                    <v-list-item-subtitle class="text-body-2 font-weight-medium">
-                      {{ device.vlanCount }} VLANs
-                    </v-list-item-subtitle>
-                  </v-list-item>
-                </template>
-
-                <!-- AP specific -->
-                <template v-if="device.type && device.type.toLowerCase().includes('access point')">
-                  <v-list-item v-if="device.clients !== undefined">
-                    <v-list-item-title>Connected Clients</v-list-item-title>
-                    <v-list-item-subtitle class="text-body-2 font-weight-medium">
-                      {{ device.clients }} clients
-                    </v-list-item-subtitle>
-                  </v-list-item>
-                  <v-list-item v-if="device.bandwidth">
-                    <v-list-item-title>Bandwidth</v-list-item-title>
-                    <v-list-item-subtitle class="text-body-2 font-weight-medium">
-                      {{ device.bandwidth }}
-                    </v-list-item-subtitle>
-                  </v-list-item>
-                  <v-list-item v-if="device.channel">
-                    <v-list-item-title>Channel</v-list-item-title>
-                    <v-list-item-subtitle class="text-body-2 font-weight-medium">
-                      Channel {{ device.channel }}
-                    </v-list-item-subtitle>
-                  </v-list-item>
-                </template>
-
-                <!-- Gateway specific -->
-                <template v-if="device.type && device.type.toLowerCase().includes('gateway')">
-                  <v-list-item v-if="device.throughput">
-                    <v-list-item-title>Throughput</v-list-item-title>
-                    <v-list-item-subtitle class="text-body-2 font-weight-medium">
-                      {{ device.throughput }}
-                    </v-list-item-subtitle>
-                  </v-list-item>
-                  <v-list-item v-if="device.temperature">
-                    <v-list-item-title>Temperature</v-list-item-title>
-                    <v-list-item-subtitle class="text-body-2 font-weight-medium">
-                      {{ device.temperature }}
-                    </v-list-item-subtitle>
-                  </v-list-item>
-                  <v-list-item v-if="device.wanStatus">
-                    <v-list-item-title>WAN Status</v-list-item-title>
-                    <v-list-item-subtitle class="text-body-2 font-weight-medium">
-                      <v-chip
-                        :color="device.wanStatus === 'up' ? 'success' : 'error'"
-                        size="small"
-                      >
-                        {{ device.wanStatus }}
-                      </v-chip>
-                    </v-list-item-subtitle>
-                  </v-list-item>
-                </template>
+                <v-list-item>
+                  <v-list-item-title>Vendor</v-list-item-title>
+                  <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                    {{ VendorInfo[device.vendor]?.label || 'Unknown' }}
+                  </v-list-item-subtitle>
+                </v-list-item>
+                <v-list-item>
+                  <v-list-item-title>Platform</v-list-item-title>
+                  <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                    {{ PlatformInfo[device.platform]?.label || 'Not classified' }}
+                  </v-list-item-subtitle>
+                </v-list-item>
+                <v-list-item>
+                  <v-list-item-title>Device Credential</v-list-item-title>
+                  <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                    {{ device.apiCredential?.name || (device.apiCredentialId ? 'Linked' : 'None linked') }}
+                  </v-list-item-subtitle>
+                </v-list-item>
+                <v-list-item v-if="device.apiLastTested">
+                  <v-list-item-title>Last Connection Test</v-list-item-title>
+                  <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                    {{ device.apiTestStatus === 'success' ? 'Passed' : 'Failed' }}
+                    {{ formatRelativeTime(device.apiLastTested) }}<template v-if="device.apiResponseTime != null"> &middot; {{ device.apiResponseTime }} ms</template>
+                  </v-list-item-subtitle>
+                  <div v-if="device.apiError" class="text-caption text-error mt-1">{{ device.apiError }}</div>
+                </v-list-item>
+                <v-list-item v-if="device.deviceGroups?.length">
+                  <v-list-item-title>Groups</v-list-item-title>
+                  <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                    {{ device.deviceGroups.map(g => g.name).join(', ') }}
+                  </v-list-item-subtitle>
+                </v-list-item>
+                <v-list-item v-for="item in cloudHardware" :key="item.label">
+                  <v-list-item-title>{{ item.label }}</v-list-item-title>
+                  <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                    {{ item.value }}
+                  </v-list-item-subtitle>
+                </v-list-item>
               </v-list>
             </v-card-text>
           </v-card>
@@ -663,7 +638,7 @@ import { useBackupsStore } from '@/stores/backups'
 import { useWebSocket } from '@/composables/useWebSocket'
 import deviceService from '@/services/device.service'
 import deviceApiService from '@/services/deviceApi.service'
-import { cloudProviderLabel } from '@/models/vendors'
+import { cloudProviderLabel, VendorInfo, PlatformInfo } from '@/models/vendors'
 import { unreachableFromHere, answersPingButCloudOffline, deviceTypeInfo } from '@/models/Device'
 
 const route = useRoute()
@@ -708,6 +683,28 @@ const autoTestOnOpen = ref(true)
 const systemData = computed(() => devicesStore.systemData)
 const systemLoading = computed(() => devicesStore.systemLoading)
 const systemError = computed(() => devicesStore.systemError)
+
+// Whether polling the device itself can work (GET /devices/:id systemPoll):
+// { available, reason }. Kept apart from the row, which list fetches replace
+// with rows that don't carry it.
+const systemPollState = ref(null)
+const systemPoll = computed(() =>
+  systemPollState.value?.id === route.params.id ? systemPollState.value.value : null
+)
+const systemPollReason = computed(() => {
+  switch (systemPoll.value?.reason) {
+    case 'cloud-only':
+      return `${cloudPlaneName.value} is the only way NetHelper reaches this device, so it isn't polled directly. Its firmware and status come from cloud sync (Device Details below).`
+    case 'no-transport':
+      return `NetHelper has no direct way to read ${PlatformInfo[device.value?.platform]?.label || 'this platform'}. What it knows comes from inventory and ping.`
+    case 'no-ip':
+      return 'No IP address is set, so the device can\'t be polled.'
+    case 'no-credential':
+      return 'No device credential is linked. Link one (Edit, or Credential on the Devices page) to read system information from the device.'
+    default:
+      return ''
+  }
+})
 
 const breadcrumbs = computed(() => [
   { text: 'Devices', to: '/devices', disabled: false },
@@ -770,6 +767,19 @@ const cloudInfo = computed(() => {
     configStatus: meta.configStatus || null,
     uptime: formatDuration(Number(seconds)),
   }
+})
+
+// Hardware details some clouds report at sync (Central: part number, persona,
+// role, deployment; Mist: SKU, hardware revision). Shown only when present.
+const cloudHardware = computed(() => {
+  const meta = device.value?.metadata || {}
+  return [
+    { label: 'Part Number', value: meta.partNumber || meta.sku },
+    { label: 'Hardware Revision', value: meta.hwRev },
+    { label: 'Persona', value: meta.persona },
+    { label: 'Role', value: meta.role },
+    { label: 'Deployment', value: meta.deployment },
+  ].filter(item => item.value)
 })
 
 const cloudPlaneName = computed(() =>
@@ -890,6 +900,7 @@ const fetchDevice = async () => {
   const response = await deviceService.getDevice(id)
   if (route.params.id !== id || !response?.data) return
   fetchedDevice.value = response.data
+  systemPollState.value = { id, value: response.data.systemPoll || null }
   devicesStore.updateDeviceLocally(id, response.data)
 }
 
@@ -908,8 +919,9 @@ const loadDevice = async () => {
     }
     devicesStore.fetchDuplicates().catch(() => {})
 
-    // Automatically poll system info on load (POST /devices/poll is operator+)
-    if (canEdit.value) await refreshSystemInfo()
+    // Poll system info on load only when something can answer: each poll
+    // opens a device session (POST /devices/poll is operator+)
+    if (canEdit.value && systemPoll.value?.available) await refreshSystemInfo()
   } catch (err) {
     console.error('Failed to load device:', err)
     error.value = err.userMessage || err.message || 'Failed to load device details'

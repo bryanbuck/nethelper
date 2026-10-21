@@ -1,6 +1,7 @@
 const { getPrisma } = require('../config/database');
 const { normalizeSerial, normalizeMac } = require('../utils/device-key');
 const { effectiveStatus, statusWhere } = require('../utils/device-status');
+const { localPollAvailability } = require('../utils/transport-router');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const { ENV_ARUBA_INTEGRATION_ID } = require('./cloud-providers/cloud-provider-factory');
 const alertService = require('./alert.service');
@@ -190,7 +191,8 @@ class DeviceService {
       });
 
       // Same status mapping as getDevices(), so a fetched row matches a listed one.
-      return device && { ...device, status: effectiveStatus(device) };
+      // systemPoll tells the device page whether polling the device can work.
+      return device && { ...device, status: effectiveStatus(device), systemPoll: localPollAvailability(device) };
     } catch (error) {
       logger.error('Get device error', { error: error.message, stack: error.stack });
       throw error;

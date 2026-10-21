@@ -16,7 +16,7 @@
  */
 
 const { TRANSPORT_MATRIX, TRANSPORT_FALLBACKS } = require('../constants/vendors');
-const { detectPlatform, detectVendor } = require('./device-platform');
+const { detectPlatform, detectVendor, isCxRestCapable } = require('./device-platform');
 
 const OPERATIONS = ['config', 'test', 'poll', 'live', 'topology'];
 
@@ -70,4 +70,23 @@ function resolveTransport(device, operation) {
   return [...transports];
 }
 
-module.exports = { resolveTransport };
+/**
+ * Whether a firmware/system poll can read this device itself, judged from the
+ * row alone (nothing is contacted): { available, reason }. reason is null when
+ * available, else 'cloud-only' (only its cloud reaches it), 'no-transport' (no
+ * local reader for its platform), 'no-ip' or 'no-credential'. Mirrors the
+ * readers in device-poller.service.js readVersion(): device REST means AOS-CX
+ * REST or Junos NETCONF.
+ */
+function localPollAvailability(device) {
+  const readable = resolveTransport(device, 'poll').some((t) =>
+    t === 'ssh' || (t === 'device-rest' && (isCxRestCapable(device) || detectPlatform(device) === 'junos')));
+  if (!readable) {
+    return { available: false, reason: device?.managementMode === 'cloud' ? 'cloud-only' : 'no-transport' };
+  }
+  if (!device.ipAddress) return { available: false, reason: 'no-ip' };
+  if (!device.apiCredentialId) return { available: false, reason: 'no-credential' };
+  return { available: true, reason: null };
+}
+
+module.exports = { resolveTransport, localPollAvailability };
