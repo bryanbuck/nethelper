@@ -391,8 +391,23 @@ describe('backupDevice', () => {
       }),
     });
 
+    const emit = jest.spyOn(configBackupService, 'emit');
+
     expect(await configBackupService.backupDevice(device)).toBe(false);
     expect(mockDb.backups[0]).toMatchObject({ status: 'failed', error: 'AP1 is an access point' });
+    // Flagged, so the UI can leave it out of the status bar
+    expect(emit).toHaveBeenCalledWith('backup:failed', expect.objectContaining({ unsupported: true }));
+    emit.mockRestore();
+  });
+
+  test('a real failure is not flagged unsupported', async () => {
+    const device = addDevice({ vendor: 'aruba', platform: 'aos-s' });
+    sshDeviceService.getRunningConfig.mockResolvedValue('   \n');
+    const emit = jest.spyOn(configBackupService, 'emit');
+
+    expect(await configBackupService.backupDeviceOutcome(device)).toBe('failed');
+    expect(emit.mock.calls.find(([event]) => event === 'backup:failed')[1]).not.toHaveProperty('unsupported');
+    emit.mockRestore();
   });
 
   test('a Git mirror failure does not fail the backup', async () => {
@@ -544,6 +559,23 @@ describe('runBackupBatch with cloud scopes', () => {
     expect(scopeBackupService.runScopeBackups).toHaveBeenCalledWith(expect.objectContaining({ schedule, push: false }));
     expect(result).toMatchObject({ total: 1, succeeded: 1, scopes: { succeeded: 2 } });
     expect(gitBackupService.pushIfConfigured).toHaveBeenCalledTimes(1);
+  });
+
+  test('devices with no per-device config are counted apart from failures', async () => {
+    addDevice({ vendor: 'aruba', platform: 'aos-s' });
+    addDevice({ vendor: 'juniper', managementMode: 'cloud', type: 'access_point', serial: 'AP1' });
+    sshDeviceService.getRunningConfig.mockResolvedValue('hostname a\n');
+    CloudProviderFactory.forDevice.mockResolvedValue({
+      label: 'Mist',
+      getDeviceConfiguration: jest.fn(async () => {
+        throw new CapabilityError('AP1 is an access point');
+      }),
+    });
+    addSchedule({ includeScopes: false });
+
+    const result = await configBackupService.runBackupBatch({ scheduleId: 'sch1', trigger: 'scheduled' });
+
+    expect(result).toMatchObject({ total: 2, succeeded: 1, failed: 0, unsupported: 1 });
   });
 
   test('a scopes-only schedule still runs when it matches no devices', async () => {

@@ -150,6 +150,23 @@ export const useBackupsStore = defineStore('backups', () => {
     }
   }
 
+  // Successful backups of one device or one cloud scope, newest first, for the
+  // Compare dialog. Read apart from the table, whose rows are one page of all
+  // devices (or scopes) mixed together.
+  const HISTORY_LIMIT = 200
+
+  async function fetchDeviceBackupHistory(deviceId) {
+    const response = await backupService.getBackups({ deviceId, status: 'success', limit: HISTORY_LIMIT })
+    return response.data || []
+  }
+
+  async function fetchScopeBackupHistory({ integrationId, scopeType, scopeId }) {
+    const response = await backupService.getScopeBackups({
+      integrationId, scopeType, scopeId, status: 'success', limit: HISTORY_LIMIT
+    })
+    return response.data || []
+  }
+
   // Cloud-scope actions
 
   async function fetchScopeBackups(params = {}) {
@@ -362,6 +379,8 @@ export const useBackupsStore = defineStore('backups', () => {
     scopeTotal,
     scopeLoading,
     fetchScopeBackups,
+    fetchDeviceBackupHistory,
+    fetchScopeBackupHistory,
     runScopeBackup,
     fetchScopeBackupContent,
     downloadScopeBackup,

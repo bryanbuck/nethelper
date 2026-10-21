@@ -112,4 +112,24 @@ describe('backups store', () => {
 
     expect(store.activeSchedules.map((s) => s.id)).toEqual(['s1'])
   })
+
+  test('Compare history reads one device or scope without touching the table', async () => {
+    const store = useBackupsStore()
+    store.backups = [{ id: 'page-row' }]
+    store.scopeBackups = [{ id: 'page-scope' }]
+
+    backupService.getBackups.mockResolvedValue({ data: [{ id: 'b2' }, { id: 'b1' }], total: 2 })
+    expect(await store.fetchDeviceBackupHistory('d1')).toEqual([{ id: 'b2' }, { id: 'b1' }])
+    expect(backupService.getBackups).toHaveBeenLastCalledWith({ deviceId: 'd1', status: 'success', limit: 200 })
+
+    backupService.getScopeBackups.mockResolvedValue({ data: [{ id: 's1' }], total: 1 })
+    const scope = { id: 's1', integrationId: 'i1', scopeType: 'site', scopeId: 'site-9', status: 'success' }
+    expect(await store.fetchScopeBackupHistory(scope)).toEqual([{ id: 's1' }])
+    expect(backupService.getScopeBackups).toHaveBeenLastCalledWith({
+      integrationId: 'i1', scopeType: 'site', scopeId: 'site-9', status: 'success', limit: 200
+    })
+
+    expect(store.backups).toEqual([{ id: 'page-row' }])
+    expect(store.scopeBackups).toEqual([{ id: 'page-scope' }])
+  })
 })

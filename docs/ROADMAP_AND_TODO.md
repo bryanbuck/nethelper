@@ -90,6 +90,7 @@ Preparing the dev-environment build for a private, in-house beta. Deploy targets
 - ✅ #17, #3 (2026-10-21): device page polls system info on load only when it can work (`utils/transport-router.js` `localPollAvailability()`, returned as `systemPoll` by `GET /devices/:id`); the type-specific card (no real data) replaced by Platform & Access.
 - ✅ #13, #14 (2026-10-21): IP (cloud devices on edit) and location optional in the device forms; device create/update routes write only `device.service.js` `editableFields()`.
 - ✅ #19, #20 (2026-10-21): manual connection test takes a platform and routes through `connection-test.service` (`manualTestPlatforms()`/`manualTestDevice()`, served by `GET /device-api/supported-types`); Details dialog shows the existing result and handles `cloudOnly`; `GET /device-api/:id/info` and `/firmware` removed.
+- ✅ #15, #16 (2026-10-21): backups. Compare loads the device's or scope's successful history through the list routes (store `fetchDeviceBackupHistory`/`fetchScopeBackupHistory`, 200 newest); a `CapabilityError` backup is `unsupported` (`config-backup.service.js` `backupDeviceOutcome()`, `backup:failed` `unsupported: true`, `backup:run:completed` `unsupported` count) and stays out of the status bar.
 
 ---
 

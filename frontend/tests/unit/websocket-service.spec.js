@@ -106,6 +106,28 @@ describe('websocket service', () => {
     expect(log.popup.title).toBe('Switch down') // warnings stay in the bar
   })
 
+  test('a device with no per-device config stays out of the status bar', async () => {
+    await service.connect('http://x')
+    const log = service.stores.notifications
+    log.clearHistory()
+    service.handleBackupFailed({ backupId: 'b1', deviceId: 'd1', deviceName: 'ap-1', error: 'AP config lives in the site', unsupported: true })
+    expect(log.entries).toHaveLength(0)
+    service.handleBackupFailed({ backupId: 'b2', deviceId: 'd2', deviceName: 'sw-1', error: 'timed out' })
+    expect(log.entries).toHaveLength(1)
+    expect(log.entries[0].message).toContain('"sw-1" failed: timed out')
+  })
+
+  test('the run summary counts skipped devices apart from failures', async () => {
+    await service.connect('http://x')
+    const log = service.stores.notifications
+    log.clearHistory()
+    service.handleBackupRunCompleted({ total: 82, succeeded: 2, failed: 0, unsupported: 80 })
+    expect(log.entries[0].type).toBe('success')
+    expect(log.entries[0].message).toBe('Backup run finished: 2/2 device(s) backed up, 80 skipped (no per-device config; see Cloud Scopes)')
+    service.handleBackupRunCompleted({ scope: true, total: 3, succeeded: 3, failed: 0, unsupported: ['Central (aruba_central)'] })
+    expect(log.entries[0].message).toBe('Backup run finished: 3/3 cloud scope(s) backed up')
+  })
+
   test('request() rejects when there is no connected socket', async () => {
     await expect(service.request('subscribe:device-live', 'id')).rejects.toThrow('Real-time connection is not available')
   })
