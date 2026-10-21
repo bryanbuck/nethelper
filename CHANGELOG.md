@@ -4,6 +4,16 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ## [Unreleased]
 
+## [0.9.0-beta.2] — 2026-10-21
+
+Fixes from the first round of beta feedback, a one-step Docker Compose installer, and the first release with prebuilt images and a release tarball. Scope and limitations are unchanged from 0.9.0-beta.1: see [`docs/BETA_NOTES.md`](docs/BETA_NOTES.md).
+
+### Upgrading from 0.9.0-beta.1
+- Take a database backup first: migrations are forward-only. One migration, `20261021120000_device_api_test_status`, adds four columns to `Device` and runs on start.
+- **Docker Compose**: if `deploy/.env` sets `NETHELPER_VERSION` (the 0.9.0-beta.1 `.env.example` did), delete that line, or the old version stays pinned. Then run `deploy/install.sh` from the new tree; it keeps your `.env` values. To pull the prebuilt images while the repository is private, first run `docker login ghcr.io` with a GitHub token that has `read:packages`; without it, the installer builds the images on the host.
+- **Bare metal**: follow "Upgrading" in [`deploy/README.md`](deploy/README.md). The release tarball includes the built UI, so the frontend build step can be skipped. The new `nethelper-admin` helper is optional.
+- **API**: `GET /device-api/:id/info` and `GET /device-api/:id/firmware` are removed (use `POST /device-api/test/:deviceId` and the device pollers). `POST` and `PUT /devices` ignore fields other than the editable ones, listed under Fixed below.
+
 ### Deployment
 - **One-step Docker Compose install**: `deploy/install.sh` checks Docker and Compose, creates `deploy/.env` with generated secrets (it fills in only empty required ones and never changes a set value), pulls the release images or builds them locally, starts the stack, waits until it is healthy, and creates the first admin. Run it again to upgrade. `--host-network` sets up the L2-discovery override, `-y` runs it unattended, and `--env-only` only writes `deploy/.env`. It doesn't install Docker, set up TLS, or take backups.
 - **Release artifacts**: pushing a `v<version>` tag publishes the backend and frontend images to GHCR (`ghcr.io/bryanbuck/nethelper-*`) and a GitHub release with `nethelper-<version>.tar.gz`, which includes a prebuilt UI so bare-metal installs skip the frontend build (`.github/workflows/release.yml`). Pulling needs `docker login ghcr.io` while the repository is private; without it the installer builds locally.
@@ -35,6 +45,11 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 - Automation builder: the node dialog's **Test** button did nothing and is gone; Run Now and Deploy check every node ([#23](https://github.com/bryanbuck/nethelper/issues/23)). **Deploy** after a failed save no longer activates the previously saved version and reports success.
 - Config Backups: **Compare** offered only the backups that happened to be on the table's current page, often just the one clicked ([#15](https://github.com/bryanbuck/nethelper/issues/15)). It now loads the device's (or cloud scope's) last 200 successful backups when it opens.
 - Every "All devices" backup run put one error in the status bar per Mist AP, burying real failures ([#16](https://github.com/bryanbuck/nethelper/issues/16)). A device whose platform has no per-device config (its config lives in the cloud scope backups) is still recorded on its backup row, but it is left out of the status bar and counted apart: "Backup run finished: 12/12 device(s) backed up, 80 skipped (no per-device config; see Cloud Scopes)". `backup:failed` carries `unsupported: true` for such a device, and `backup:run:completed` an `unsupported` count.
+
+### Known issues
+- The Firmware Status and Device API Testing pages aren't in the navigation, and two Settings tabs are empty ([#25](https://github.com/bryanbuck/nethelper/issues/25)).
+- There is no UI to manage device groups, which automation triggers and targets use ([#26](https://github.com/bryanbuck/nethelper/issues/26)).
+- The Firmware Status page's error can't be dismissed, and some buttons lack their icon spacing ([#27](https://github.com/bryanbuck/nethelper/issues/27)).
 
 ## [0.9.0-beta.1] — 2026-10-20
 
