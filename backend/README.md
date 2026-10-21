@@ -2,7 +2,7 @@
 
 Node.js backend for NetHelper, a **multi-vendor** network automation and monitoring platform. Provides REST APIs and WebSocket connections for device management, config backup, discovery, and automation across Aruba, Juniper, and Cisco — via cloud providers (Aruba Central, Juniper Mist, Cisco Meraki) or direct device access (REST / NETCONF / SSH).
 
-> Architecture, conventions, and the multi-vendor design live in [`../CLAUDE.md`](../CLAUDE.md) and [`../docs/MULTI_VENDOR_ROADMAP.md`](../docs/MULTI_VENDOR_ROADMAP.md). This README is setup/run only.
+> Architecture and the multi-vendor design: [`../docs/MULTI_VENDOR_ROADMAP.md`](../docs/MULTI_VENDOR_ROADMAP.md). Contributor workflow: [`../CONTRIBUTING.md`](../CONTRIBUTING.md). This README is setup/run only.
 
 ## Features
 

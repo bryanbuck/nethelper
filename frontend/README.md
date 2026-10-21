@@ -2,7 +2,7 @@
 
 Vue 3 SPA for NetHelper: device inventory and status, discovery, configuration backups and diffs, cloud integrations, user administration, and the (experimental) automation builder.
 
-> Architecture and conventions: [`../CLAUDE.md`](../CLAUDE.md) and [`../docs/MULTI_VENDOR_ROADMAP.md`](../docs/MULTI_VENDOR_ROADMAP.md). Deployment: [`../deploy/README.md`](../deploy/README.md). This file covers local development only.
+> Architecture: [`../docs/MULTI_VENDOR_ROADMAP.md`](../docs/MULTI_VENDOR_ROADMAP.md). Contributor workflow: [`../CONTRIBUTING.md`](../CONTRIBUTING.md). Deployment: [`../deploy/README.md`](../deploy/README.md). This file covers local development only.
 
 ## Development
 
