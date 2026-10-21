@@ -81,18 +81,38 @@ describe('DeviceEditDialog', () => {
     wrapper.unmount()
   })
 
-  test('does not save when a required field is empty', async () => {
+  const mountWith = (overrides) => mount({
+    render: () => h(VApp, () => h(DeviceEditDialog, { modelValue: true, device: { ...device, ...overrides } }))
+  }, { global: { plugins: [createVuetify({ components, directives })] }, attachTo: document.body })
+
+  test('does not save a directly managed device without an IP address', async () => {
     const devices = useDevicesStore()
     devices.updateDevice = vi.fn()
-    const wrapper = mount({
-      render: () => h(VApp, () => h(DeviceEditDialog, { modelValue: true, device: { ...device, location: '' } }))
-    }, { global: { plugins: [createVuetify({ components, directives })] }, attachTo: document.body })
+    const wrapper = mountWith({ ipAddress: '' })
     await flushPromises()
 
     button('Save Changes').click()
     await flushPromises()
 
     expect(devices.updateDevice).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  test('saves a cloud device with no IP address or location (#13)', async () => {
+    const devices = useDevicesStore()
+    devices.updateDevice = vi.fn().mockResolvedValue(device)
+    const wrapper = mountWith({ managementMode: 'cloud', ipAddress: null, location: null })
+    await flushPromises()
+
+    button('Save Changes').click()
+    await flushPromises()
+
+    expect(devices.updateDevice).toHaveBeenCalledWith('dev-1', expect.objectContaining({
+      ipAddress: null,
+      location: null,
+      managementMode: 'cloud',
+      cloudIntegrationId: 'int-1'
+    }))
     wrapper.unmount()
   })
 })

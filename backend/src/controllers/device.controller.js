@@ -236,9 +236,8 @@ class DeviceController {
 
   async createDevice(req, res, next) {
     try {
-      const deviceData = req.body;
-      
-      const device = await deviceService.createDevice(deviceData);
+      // Only user-editable fields; status, metadata and the rest are system-owned.
+      const device = await deviceService.createDevice(deviceService.editableFields(req.body));
       
       res.status(201).json({
         success: true,
@@ -253,9 +252,7 @@ class DeviceController {
   async updateDevice(req, res, next) {
     try {
       const { deviceId } = req.params;
-      const updateData = req.body;
-      
-      const device = await deviceService.updateDevice(deviceId, updateData);
+      const device = await deviceService.updateDevice(deviceId, deviceService.editableFields(req.body));
       
       res.json({
         success: true,

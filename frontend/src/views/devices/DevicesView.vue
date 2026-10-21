@@ -177,8 +177,8 @@
                   v-model="newDevice.location"
                   label="Location"
                   variant="outlined"
-                  required
-                  :rules="[rules.required]"
+                  hint="Optional"
+                  persistent-hint
                 />
               </v-col>
 
@@ -417,8 +417,7 @@ const closeAddDialog = () => {
 
 const saveDevice = async () => {
   // Validate required fields
-  if (!newDevice.value.name || !newDevice.value.type ||
-      !newDevice.value.ipAddress || !newDevice.value.location) {
+  if (!newDevice.value.name || !newDevice.value.type || !newDevice.value.ipAddress) {
     showSnackbar('Please fill in all required fields', 'error')
     return
   }
@@ -436,7 +435,7 @@ const saveDevice = async () => {
       platform: newDevice.value.platform || null,
       ipAddress: newDevice.value.ipAddress, // Required
       macAddress: newDevice.value.macAddress || undefined, // optional; never invent one
-      location: newDevice.value.location,
+      location: newDevice.value.location || null,
       serial: newDevice.value.serialNumber?.trim() || null, // optional; blank is stored as no serial
       model: newDevice.value.model || '',
       managementMode: newDevice.value.managementMode || 'direct',

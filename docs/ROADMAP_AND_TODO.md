@@ -78,6 +78,7 @@ Preparing the dev-environment build for a private, in-house beta. Deploy targets
 - ✅ #2, #5, #6, #7, #24 (2026-10-21): Devices table server pagination/sorting (`GET /devices` `limit`/`page`/`sortBy`/`sortOrder`, fleet-wide `summary`; store `ensureAllDevices()` for pickers), Remove row action (admin), buttons hidden from roles the API refuses, per-section Settings errors.
 - ✅ #4, #8, #9, #10, #11, #12, #18 (2026-10-21): Automations list reactivity; clickable status cards (Dashboard links to a filtered Devices page, Devices page cards filter in place); CSV export (`utils/csv.js`); search clear; device type labels from `models/Device.js` `deviceTypeInfo()`; per-device connection test result (`Device.api*`, migration `20261021120000_device_api_test_status`).
 - ✅ #17, #3 (2026-10-21): device page polls system info on load only when it can work (`utils/transport-router.js` `localPollAvailability()`, returned as `systemPoll` by `GET /devices/:id`); the type-specific card (no real data) replaced by Platform & Access.
+- ✅ #13, #14 (2026-10-21): IP (cloud devices on edit) and location optional in the device forms; device create/update routes write only `device.service.js` `editableFields()`.
 
 ---
 

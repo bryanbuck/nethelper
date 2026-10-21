@@ -38,9 +38,9 @@
                 v-model="form.ipAddress"
                 label="IP Address"
                 variant="outlined"
-                required
-                :rules="[deviceFormRules.required, deviceFormRules.ipAddress]"
-                hint="Required for device API queries"
+                :required="ipRequired"
+                :rules="ipRequired ? [deviceFormRules.required, deviceFormRules.ipAddress] : [deviceFormRules.ipAddress]"
+                :hint="ipRequired ? 'Required for a directly managed device' : 'Optional; its cloud fills it in on sync'"
                 persistent-hint
               />
             </v-col>
@@ -59,8 +59,8 @@
                 v-model="form.location"
                 label="Location"
                 variant="outlined"
-                required
-                :rules="[deviceFormRules.required]"
+                hint="Optional"
+                persistent-hint
               />
             </v-col>
 
@@ -303,9 +303,13 @@ const close = () => {
   open.value = false
 }
 
+// A directly managed device is reached at its IP; a cloud device may have
+// none (an offline AP, or one its cloud reports without an address).
+const ipRequired = computed(() => form.value.managementMode !== 'cloud')
+
 const save = async () => {
   const f = form.value
-  if (!f.name || !f.type || !f.ipAddress || !f.location) {
+  if (!f.name || !f.type || (ipRequired.value && !f.ipAddress)) {
     notifications.showError('Please fill in all required fields', 'Edit Device')
     return
   }
@@ -318,9 +322,9 @@ const save = async () => {
       type: f.type,
       vendor: f.vendor || 'aruba',
       platform: f.platform || null,
-      ipAddress: f.ipAddress,
+      ipAddress: f.ipAddress || null,
       macAddress: f.macAddress || null,
-      location: f.location,
+      location: f.location || null,
       serial: f.serialNumber?.trim() || null,
       model: f.model || '',
       managementMode: f.managementMode || 'direct',

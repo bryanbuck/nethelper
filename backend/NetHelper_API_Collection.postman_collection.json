@@ -890,7 +890,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"<string>\",\n  \"type\": \"access_point\",\n  \"vendor\": \"aruba\",\n  \"platform\": \"aos-cx\",\n  \"model\": \"<string>\",\n  \"ipAddress\": \"192.0.2.10\",\n  \"macAddress\": \"<string>\",\n  \"location\": \"<string>\",\n  \"status\": \"online\",\n  \"managementMode\": \"cloud\",\n  \"cloudIntegrationId\": \"<uuid>\",\n  \"apiCredentialId\": \"<uuid>\"\n}"
+              "raw": "{\n  \"name\": \"<string>\",\n  \"type\": \"access_point\",\n  \"vendor\": \"aruba\",\n  \"platform\": \"aos-cx\",\n  \"model\": \"<string>\",\n  \"ipAddress\": \"192.0.2.10\",\n  \"serial\": \"<string>\",\n  \"macAddress\": \"<string>\",\n  \"location\": \"<string>\",\n  \"managementMode\": \"cloud\",\n  \"cloudIntegrationId\": \"<uuid>\",\n  \"apiCredentialId\": \"<uuid>\"\n}"
             }
           },
           "response": []
