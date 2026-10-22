@@ -32,4 +32,15 @@ function normalizeMac(mac) {
   return hex.match(/.{2}/g).join(':');
 }
 
-module.exports = { deviceStorageKey, normalizeSerial, normalizeMac };
+/**
+ * The spellings a MAC is stored in (providers differ: Central aa:bb:…, Mist
+ * bare aabb…), for a database match with `in` + `mode: 'insensitive'`.
+ */
+function macVariants(mac) {
+  const colon = normalizeMac(mac);
+  if (!colon) return [];
+  const hex = colon.replace(/:/g, '');
+  return [colon, hex, colon.replace(/:/g, '-'), hex.match(/.{4}/g).join('.')];
+}
+
+module.exports = { deviceStorageKey, normalizeSerial, normalizeMac, macVariants };

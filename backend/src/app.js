@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+const { apiLimiter } = require('./middleware/rate-limit');
 
 // Import routes
 // This section imports all the route modules that define the API endpoints for different functional areas.
@@ -67,17 +68,10 @@ app.use(express.json({ limit: bodyLimit }));
 app.use(express.urlencoded({ extended: true, limit: bodyLimit }));
 
 // Rate limiting
-// Implements rate limiting to prevent abuse and DDoS attacks by limiting the number of requests
-// from a single IP address within a specified time window. Configuration is driven by environment variables.
+// Limits how many API requests one signed-in user (or, without a valid token,
+// one client IP) can make per window (middleware/rate-limit.js).
 const windowMs = Number(process.env.RATE_LIMIT_WINDOW || 15) * 60 * 1000;
-const limiter = rateLimit({
-  windowMs,
-  max: Number(process.env.RATE_LIMIT_MAX_REQUESTS || 300),
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: 'Too many requests from this IP, please try again later.',
-});
-app.use('/api/', limiter);
+app.use('/api/', apiLimiter({ windowMs, max: Number(process.env.RATE_LIMIT_MAX_REQUESTS || 300) }));
 
 // Stricter limit on credential endpoints to slow password guessing. Only
 // failed attempts count, so normal logins and token refreshes aren't throttled.

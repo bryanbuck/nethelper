@@ -102,8 +102,26 @@
       <v-divider></v-divider>
 
       <!-- Error Alert -->
+      <!-- Rate limited: keep the rows already shown and retry when allowed -->
       <v-alert
-        v-if="devicesStore.error"
+        v-if="devicesStore.error?.type === 'RATE_LIMIT'"
+        type="warning"
+        variant="tonal"
+        class="ma-4"
+      >
+        <v-alert-title>Too many requests</v-alert-title>
+        <div class="mt-1">
+          {{ devicesStore.error.userMessage }}
+          {{ devicesStore.devices.length ? 'The list below is from the last successful load.' : '' }}
+          <template v-if="rateLimitRetryAt">Retrying automatically.</template>
+        </div>
+        <template #append>
+          <v-btn variant="text" size="small" prepend-icon="mdi-refresh" @click="retryLoad">Retry now</v-btn>
+        </template>
+      </v-alert>
+
+      <v-alert
+        v-else-if="devicesStore.error"
         type="error"
         variant="tonal"
         closable
@@ -554,7 +572,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDevicesStore } from '@/stores/devices'
 import { useAuthStore } from '@/stores/auth'
@@ -1024,6 +1042,23 @@ const retryLoad = () => {
   devicesStore.clearError()
   refreshTable()
 }
+
+// A rate-limited load retries once the API takes requests again (its
+// Retry-After, capped so a long window still gets a try every 2 minutes).
+const rateLimitRetryAt = ref(null)
+let rateLimitTimer = null
+watch(() => devicesStore.error, (error) => {
+  clearTimeout(rateLimitTimer)
+  rateLimitRetryAt.value = null
+  if (error?.type !== 'RATE_LIMIT') return
+  const waitMs = Math.min((error.retryAfter || 30) * 1000 + 500, 120000)
+  rateLimitRetryAt.value = Date.now() + waitMs
+  rateLimitTimer = setTimeout(() => {
+    rateLimitRetryAt.value = null
+    if (devicesStore.error?.type === 'RATE_LIMIT') retryLoad()
+  }, waitMs)
+})
+onUnmounted(() => clearTimeout(rateLimitTimer))
 
 // Initialize table
 onMounted(() => {

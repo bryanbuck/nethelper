@@ -168,7 +168,14 @@ Shipped on the branch (design: `MULTI_VENDOR_ROADMAP.md` §8c):
 - ✅ Device page **Live** tab: port grid (link, speed, PoE status and draw), per-port throughput from counter deltas, CPU/memory, recent events. Polled only while open.
 - ✅ Fixed on the way (found on hardware): AOS-CX config backups and firmware/system polls over local REST used HTTP Basic auth, which AOS-CX refuses; they now use cookie sessions.
 
+- ✅ Device **History** tab (2026-10-22): ping and cloud status lanes plus a combined "do they agree" lane, from `ping.*` (new, source `ping`) and `cloud.*` `DeviceEvent`s (`services/device-history.service.js`, `GET /devices/:id/history`), with config-backup and restart markers; a backup with `hasChanges` brackets the change between it and the previous success. Per-source seen times on `Device` (`pingLastSeen`, `cloudCheckedAt`, `cloudLastSeen`, migration `20261022120000_device_seen_sources`) drive the Last Seen card (`frontend/src/models/device-seen.js`).
+
 Deferred:
+- ✅ "Who has this address?" (2026-10-22): device page banner button, `services/address-lookup.service.js`. Clouds answer through the providers' `findByAddress(ip)` (Mist and Central, 2026-10-22): their devices and the clients seen with the IP, with the switch port or AP; a client's MAC stands in for the neighbor table's when the address is off the host's segment.
+- ⏳ Mist wireless client search (`/orgs/:id/clients/search`) is mapped from the spec; no wireless client was seen in the live org to check the field names.
+- ⏳ Probing the address itself (nmap on one host: reverse DNS, SSH/HTTPS banners and certificate subject) was left out as too heavy; the lookup above covers what NetHelper already holds.
+- ⏳ Who changed a device's config, and exactly when: Mist org audit logs (`/orgs/:id/logs`) and the Central audit trail name the admin; AOS-CX and Junos log commits locally (`show accounting`/`show system commit`). Today the History tab only brackets a change between two backups.
+- ⏳ History lanes for the live monitor's session (connected/lost) and the cloud connection state (`cloudConnectionStatus`), and a ping latency series (needs metric history storage, below).
 - ✅ Automation event triggers (2026-10-16): done through alerts rather than raw `DeviceEvent`. An Alert trigger fires after the rule's settle time, so a PoE boot bounce never starts a run. A raw `DeviceEvent` trigger is still open if a case needs events no rule covers.
 - ⏳ Live state for Junos (NETCONF), AOS-S and IOS-XE (SSH), via the existing poll mode; needs hardware to validate parsers.
 - ⏳ Optional syslog receiver as a push source for non-CX switches (one line of switch config; needs an inbound UDP port).

@@ -1,8 +1,9 @@
 /**
  * Display metadata for DeviceEvent rows (backend services/device-events.service.js):
- * live-monitor port/PoE transitions (source push|poll|resync) and cloud
- * events (source cloud): status changes from the cloud status refresh, and
- * port link changes and restarts from the Mist event stream.
+ * live-monitor port/PoE transitions (source push|poll|resync), cloud
+ * events (source cloud): status changes from the cloud status refresh and
+ * sync, and port link changes and restarts from the Mist event stream, and
+ * the ping monitor's settled up/down changes (source ping).
  */
 
 import { cloudProviderLabel } from '@/models/vendors'
@@ -22,6 +23,8 @@ export const DEVICE_EVENTS = {
   'cloud.warning': { label: 'Cloud reports warning', icon: 'mdi-cloud-alert-outline', color: 'warning' },
   'cloud.maintenance': { label: 'Cloud reports maintenance', icon: 'mdi-cloud-cog-outline', color: 'medium-emphasis' },
   'device.restarted': { label: 'Restarted', icon: 'mdi-restart', color: 'warning' },
+  'ping.online': { label: 'Answers ping', icon: 'mdi-lan-check', color: 'success' },
+  'ping.offline': { label: 'Stopped answering ping', icon: 'mdi-lan-disconnect', color: 'error' },
 }
 
 export const EVENT_SOURCE_LABELS = {
@@ -29,6 +32,7 @@ export const EVENT_SOURCE_LABELS = {
   poll: 'polled',
   resync: 'found on resync',
   cloud: 'from the cloud',
+  ping: 'ping from NetHelper',
 }
 
 export function speedLabel(mbps) {

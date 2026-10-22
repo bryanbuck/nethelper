@@ -34,6 +34,8 @@ const DEVICE_FIELDS = {
   ipAddress: true,
   firmwareVersion: true,
   lastSeen: true,
+  cloudCheckedAt: true,
+  cloudLastSeen: true,
   cloudConnectionStatus: true,
   cloudManagedSource: true,
   metadata: true,
@@ -56,7 +58,7 @@ function emit(event, payload) {
  * missing IP/firmware never clears a known one, and the switch's own answer
  * (switch-rest) outranks the cloud's connection state.
  */
-function statusPatch(device, report) {
+function statusPatch(device, report, now = new Date()) {
   const patch = {};
   const statusChanged = report.status && report.status !== device.cloudStatus;
   if (statusChanged) patch.cloudStatus = report.status;
@@ -72,6 +74,17 @@ function statusPatch(device, report) {
   if (lastSeen && (statusChanged || report.status !== 'online')
     && (!device.lastSeen || lastSeen > new Date(device.lastSeen))) {
     patch.lastSeen = lastSeen;
+  }
+  // cloudLastSeen only matters once the device stops being online (until
+  // then cloudCheckedAt, written in bulk, is the newer answer), so it is
+  // written on status changes and offline reports, not every refresh.
+  if (statusChanged && report.status === 'online') {
+    patch.cloudLastSeen = lastSeen || now;
+  } else if (report.status && report.status !== 'online') {
+    const lastAlive = lastSeen || (statusChanged && device.cloudStatus === 'online' ? device.cloudCheckedAt : null);
+    if (lastAlive && (!device.cloudLastSeen || new Date(lastAlive) > new Date(device.cloudLastSeen))) {
+      patch.cloudLastSeen = new Date(lastAlive);
+    }
   }
   const metadata = isPlainObject(device.metadata) ? device.metadata : {};
   if (report.configStatus !== undefined && report.configStatus !== null && report.configStatus !== metadata.configStatus) {
@@ -95,9 +108,10 @@ class CloudStatusService {
     });
 
     const summary = { integrationId: provider.id, name: provider.label, devices: devices.length, updated: 0, statusChanges: 0 };
+    const now = new Date();
     for (const device of devices) {
       const report = statuses.get(device.serial);
-      const patch = statusPatch(device, report);
+      const patch = statusPatch(device, report, now);
       if (!Object.keys(patch).length) continue;
       try {
         const { count } = await getPrisma().device.updateMany({
@@ -112,12 +126,7 @@ class CloudStatusService {
       summary.updated++;
       if (patch.cloudStatus) {
         summary.statusChanges++;
-        if (device.cloudStatus) {
-          deviceEvents.record(device, {
-            type: `cloud.${patch.cloudStatus}`,
-            data: { previous: device.cloudStatus, provider: provider.providerType },
-          }, 'cloud');
-        }
+        await deviceEvents.recordStateIfChanged(device, 'cloud.', patch.cloudStatus, 'cloud', { provider: provider.providerType });
         deviceService.alertCloudStatus(device.id, device.name, { status: patch.cloudStatus, serial: device.serial });
         emit('device:status:update', {
           deviceId: device.id,
@@ -125,12 +134,29 @@ class CloudStatusService {
           status: effectiveStatus({ ...device, cloudStatus: patch.cloudStatus }),
           cloudStatus: patch.cloudStatus,
           ...(patch.lastSeen && { lastSeen: patch.lastSeen }),
+          ...(patch.cloudLastSeen && { cloudLastSeen: patch.cloudLastSeen }),
+          cloudCheckedAt: now,
         });
       }
       // A device that just came online is checked too: offline ones never open it.
       if (patch.metadata || patch.cloudStatus) {
         deviceService.alertCloudConfig(device.id, device.name, { ...report, serial: device.serial });
       }
+    }
+    // A status this process hasn't compared with the device's history yet
+    // (first refresh after start) starts or corrects its cloud lane.
+    for (const device of devices) {
+      const status = statuses.get(device.serial)?.status;
+      if (status) await deviceEvents.recordStateOnce(device, 'cloud.', status, 'cloud', { provider: provider.providerType });
+    }
+    // One write for every device read this time: "the cloud had a status for
+    // it as of now", which the device page uses as the cloud's last sighting
+    // while it reports the device online.
+    if (devices.length) {
+      await getPrisma().device.updateMany({
+        where: { id: { in: devices.map((d) => d.id) } },
+        data: { cloudCheckedAt: now },
+      }).catch((error) => logger.warn(`cloud-status: could not stamp cloudCheckedAt: ${error.message}`));
     }
     return summary;
   }

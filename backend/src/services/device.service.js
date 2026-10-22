@@ -5,6 +5,7 @@ const { localPollAvailability } = require('../utils/transport-router');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const { ENV_ARUBA_INTEGRATION_ID } = require('./cloud-providers/cloud-provider-factory');
 const alertService = require('./alert.service');
+const deviceEvents = require('./device-events.service');
 const { debugLog, Services } = require('../utils/debug-logger');
 
 // Create service-specific logger
@@ -203,13 +204,40 @@ class DeviceService {
         },
       });
 
+      if (!device) return null;
       // Same status mapping as getDevices(), so a fetched row matches a listed one.
       // systemPoll tells the device page whether polling the device can work.
-      return device && { ...device, status: effectiveStatus(device), systemPoll: localPollAvailability(device) };
+      return {
+        ...device,
+        status: effectiveStatus(device),
+        systemPoll: localPollAvailability(device),
+        sameIpDevices: await this.findSameIpDevices(device),
+      };
     } catch (error) {
       logger.error('Get device error', { error: error.message, stack: error.stack });
       throw error;
     }
+  }
+
+  /**
+   * Other devices with this device's IP address. When the cloud reports this
+   * device offline but its address answers ping, a device here that its cloud
+   * reports online with the same IP is what answers (a cloud keeps an offline
+   * device's last IP after another device took it). Rows with the same IP and
+   * no serial are duplicates instead (findDuplicateGroups).
+   */
+  async findSameIpDevices(device) {
+    if (!device.ipAddress) return [];
+    const rows = await getPrisma().device.findMany({
+      where: { ipAddress: device.ipAddress, id: { not: device.id } },
+      select: {
+        id: true, name: true, serial: true, managementMode: true, pingStatus: true, cloudStatus: true,
+        cloudIntegration: { select: { name: true, provider: true } },
+      },
+      orderBy: { name: 'asc' },
+      take: 10,
+    });
+    return rows.map((row) => ({ ...row, status: effectiveStatus(row) }));
   }
 
   /**
@@ -405,6 +433,16 @@ class DeviceService {
     return this.syncDevicesFromCloud();
   }
 
+  /**
+   * A cloud status change sync saw first (the status refresh usually does)
+   * becomes a `cloud.<status>` DeviceEvent, like the refresh's, so the
+   * device's history has no gap. A new device records its first status.
+   */
+  recordCloudTransition(device, normalized) {
+    if (!normalized.status || normalized.status === device.cloudStatus) return;
+    deviceEvents.recordStateIfChanged(device, 'cloud.', normalized.status, 'cloud', { via: 'sync' });
+  }
+
   /** Upsert one NormalizedCloudDevice, stamping its owning integration. */
   async upsertCloudDevice(normalized, cloudIntegrationId) {
     if (!normalized.serial) {
@@ -440,6 +478,10 @@ class DeviceService {
       ...(normalized.firmwareVersion && { firmwareVersion: normalized.firmwareVersion }),
       // Never clear a lastSeen that ping or the live monitor recorded.
       ...(normalized.lastSeen && { lastSeen: normalized.lastSeen }),
+      cloudCheckedAt: new Date(),
+      ...((normalized.status === 'online' || normalized.lastSeen) && {
+        cloudLastSeen: normalized.lastSeen || new Date(),
+      }),
       ...this.cloudManagedFields(normalized, current),
       // Merged, so keys other writers keep in metadata survive a sync.
       metadata: { ...(isPlainObject(current?.metadata) ? current.metadata : {}), ...(normalized.metadata || {}) },
@@ -447,6 +489,7 @@ class DeviceService {
 
     if (existingDevice) {
       await this.updateDevice(existingDevice.id, deviceData);
+      this.recordCloudTransition(existingDevice, normalized);
       this.alertCloudStatus(existingDevice.id, existingDevice.name, normalized);
       this.alertCloudConfig(existingDevice.id, existingDevice.name, normalized);
       return 'updated';
@@ -455,6 +498,7 @@ class DeviceService {
       // Keep the name the user gave it; everything else comes from the cloud.
       const { name: _cloudName, ...adopted } = deviceData;
       await this.updateDevice(adoptable.id, { serial: normalized.serial, ...adopted });
+      this.recordCloudTransition(adoptable, normalized);
       this.alertCloudStatus(adoptable.id, adoptable.name, normalized);
       this.alertCloudConfig(adoptable.id, adoptable.name, normalized);
       logger.info('Cloud sync adopted an existing device by MAC', {
@@ -464,6 +508,7 @@ class DeviceService {
     }
     const created = await this.createDevice({ serial: normalized.serial, ...deviceData });
     if (created?.id) {
+      this.recordCloudTransition({ ...created, cloudStatus: null }, normalized);
       this.alertCloudStatus(created.id, created.name, normalized);
       this.alertCloudConfig(created.id, created.name, normalized);
     }

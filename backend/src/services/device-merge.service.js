@@ -52,7 +52,7 @@ const DEVICE_SUMMARY = {
 // Filled on the target from the first source that has a value.
 const FILL_FIELDS = [
   'serial', 'macAddress', 'ipAddress', 'platform', 'model', 'firmwareVersion',
-  'apiCredentialId', 'location', 'lastSeen',
+  'apiCredentialId', 'location', 'lastSeen', 'pingLastSeen',
 ];
 
 // Owned by the cloud plane; copied from the cloud row when one is merged in.

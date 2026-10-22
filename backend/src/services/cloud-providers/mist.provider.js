@@ -4,6 +4,7 @@ const { redactConfigSecrets } = require('../../utils/config-redact');
 const { CLOUD_PROVIDERS } = require('../../constants/vendors');
 const { parseMistNeighbors } = require('../topology/parsers/mist');
 const { MistStream } = require('../cloud/mist-stream');
+const { normalizeMac } = require('../../utils/device-key');
 const logger = require('../../utils/logger');
 
 /**
@@ -19,6 +20,7 @@ const logger = require('../../utils/logger');
  *   GET /api/v1/orgs/:org_id/stats/devices    - live stats (ip, version, uptime)
  *   GET /api/v1/sites/:site_id/devices/:id    - a device's Mist config object
  *   GET /api/v1/orgs/:org_id/stats/ports/search - switch/gateway LLDP neighbors per port
+ *   GET /api/v1/orgs/:org_id/{devices,wired_clients,clients}/search?ip= - who holds an IP
  *   WSS api-ws.<region>/api-ws/v1/stream   - /sites/:site_id/stats/devices (cloud/mist-stream.js)
  *   Scope backups (org and site config, where AP config lives):
  *   GET /api/v1/orgs/:org_id, /orgs/:org_id/sites
@@ -49,6 +51,51 @@ const mistConfigInSync = (value) => (value === 'NO_CHANGE' ? true : null);
 // What the neighbor read needs: an AP's LLDP view of its uplink.
 const NEIGHBOR_FIELDS = ['mac', 'serial', 'status', 'name', 'hostname', 'lldp_stat', 'lldp_stats'];
 
+// How far back findByAddress searches. Wired client search defaults to a day,
+// wireless to two weeks; one window keeps the answers comparable.
+const ADDRESS_WINDOW = '7d';
+
+const fromEpoch = (seconds) => (seconds ? new Date(seconds * 1000) : null);
+const first = (value) => (Array.isArray(value) ? value[0] : value) || null;
+
+/** A devices/search result (no serial or status there; `timestamp` is its last report). */
+function mistDeviceHolder(item) {
+  return {
+    kind: 'device', name: item.last_hostname || first(item.hostname), mac: normalizeMac(item.mac), serial: null,
+    model: item.model || null, status: null, lastSeen: fromEpoch(item.timestamp), manufacturer: null, connectedTo: null,
+  };
+}
+
+/** A wired_clients/search result: the port it holds `ip` on, else its latest port. */
+function mistWiredHolder(item, ip) {
+  const ports = item.device_mac_port || [];
+  const port = ports.filter((p) => p.ip === ip).sort((a, b) => String(b.when).localeCompare(String(a.when)))[0] || null;
+  const seen = port?.when ? new Date(port.when) : fromEpoch(item.timestamp);
+  return {
+    kind: 'client', name: item.last_hostname || first(item.hostname), mac: normalizeMac(item.mac), serial: null,
+    model: null, status: null, lastSeen: Number.isNaN(seen?.getTime()) ? null : seen, manufacturer: item.manufacture || null,
+    connectedTo: {
+      name: null, serial: null,
+      mac: normalizeMac(port?.device_mac || item.last_device_mac),
+      port: port?.port_id || item.last_port_id || null,
+      vlan: port?.vlan ?? item.last_vlan ?? null,
+      ssid: null,
+    },
+  };
+}
+
+/** A clients/search (wireless) result. Field names from Mist's spec; no live sample yet. */
+function mistWirelessHolder(item) {
+  return {
+    kind: 'client', name: item.last_hostname || first(item.hostname), mac: normalizeMac(item.mac), serial: null,
+    model: item.last_model || null, status: null, lastSeen: fromEpoch(item.timestamp), manufacturer: item.manufacture || null,
+    connectedTo: {
+      name: null, serial: null, mac: normalizeMac(item.last_ap || first(item.ap)), port: null,
+      vlan: item.last_vlan ?? null, ssid: item.last_ssid || first(item.ssid),
+    },
+  };
+}
+
 class MistProvider extends BaseCloudProvider {
   /**
    * @param {Object} integration - { id, provider, name, baseUrl,
@@ -68,7 +115,7 @@ class MistProvider extends BaseCloudProvider {
   }
 
   supports(capability) {
-    return ['inventory', 'status', 'test', 'config-backup', 'scope-backup', 'topology', 'events'].includes(capability);
+    return ['inventory', 'status', 'test', 'config-backup', 'scope-backup', 'topology', 'events', 'address-lookup'].includes(capability);
   }
 
   get orgId() {
@@ -321,6 +368,25 @@ class MistProvider extends BaseCloudProvider {
       });
     }
     return statuses;
+  }
+
+  /**
+   * Who holds `ip`, from three org searches that filter by exact IP on
+   * Mist's side (verified live 2026-10-22): Mist's own devices, wired clients
+   * (with the switch port they were seen on; Mist APs show up here too) and
+   * wireless clients, over the last ADDRESS_WINDOW.
+   */
+  async findByAddress(ip) {
+    const search = (what) => this.request('GET', `/api/v1/orgs/${this.orgId}/${what}/search`, {
+      params: { ip, duration: ADDRESS_WINDOW, limit: 20 },
+      context: 'address_lookup',
+    }).then((data) => data?.results || []);
+    const [devices, wired, wireless] = await Promise.all([search('devices'), search('wired_clients'), search('clients')]);
+    return [
+      ...devices.map(mistDeviceHolder),
+      ...wired.map((client) => mistWiredHolder(client, ip)),
+      ...wireless.map(mistWirelessHolder),
+    ];
   }
 
   /** The org inventory record of one device, by serial. */

@@ -143,6 +143,20 @@ class BaseCloudProvider {
   }
 
   /**
+   * What this cloud knows holds an IPv4 address, for "Who has this address?"
+   * (services/address-lookup.service.js): its own devices and the clients it
+   * has seen with that IP. A few org-wide reads, never one per device.
+   * @param {string} ip
+   * @returns {Promise<AddressHolder[]>} where AddressHolder =
+   *   { kind: 'device'|'client', name, mac, serial, model,
+   *     status: 'online'|'offline'|'connected'|'disconnected'|null, lastSeen,
+   *     manufacturer, connectedTo: { name, serial, mac, port, vlan, ssid } | null }
+   */
+  async findByAddress(ip) { // eslint-disable-line no-unused-vars
+    this.unsupported('address-lookup');
+  }
+
+  /**
    * Channels for openEventStream(), e.g. one per site. Read again when the
    * stream reconnects and periodically, so new sites are picked up.
    * @returns {Promise<string[]>}
@@ -177,7 +191,7 @@ class BaseCloudProvider {
 
   /**
    * Capability probe used by transport routing and the UI.
-   * @param {string} capability - 'inventory' | 'status' | 'config-backup' | 'scope-backup' | 'topology' | 'events' | 'test'
+   * @param {string} capability - 'inventory' | 'status' | 'config-backup' | 'scope-backup' | 'topology' | 'events' | 'address-lookup' | 'test'
    * @returns {boolean}
    */
   supports(capability) { // eslint-disable-line no-unused-vars

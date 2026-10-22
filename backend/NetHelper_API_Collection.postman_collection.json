@@ -1074,6 +1074,56 @@
           "response": []
         },
         {
+          "name": "GET /devices/:deviceId/history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/devices/:deviceId/history",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                ":deviceId",
+                "history"
+              ],
+              "variable": [
+                {
+                  "key": "deviceId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /devices/:deviceId/address-lookup",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/devices/:deviceId/address-lookup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                ":deviceId",
+                "address-lookup"
+              ],
+              "variable": [
+                {
+                  "key": "deviceId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "GET /devices/:deviceId/neighbors",
           "request": {
             "method": "GET",

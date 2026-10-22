@@ -45,18 +45,6 @@
               <span v-if="device.cloudManagedCheckedAt">
                 Verified {{ verifiedBy }} {{ formatRelativeTime(device.cloudManagedCheckedAt) }}
               </span>
-              <span v-if="unreachableFromHere(device)">
-                <span v-if="device.cloudManagedCheckedAt"> &middot; </span>
-                {{ cloudPlaneName }} reports it online, but it doesn't answer ping from NetHelper
-              </span>
-              <span v-else-if="answersPingButCloudOffline(device)">
-                <span v-if="device.cloudManagedCheckedAt"> &middot; </span>
-                {{ cloudPlaneName }} reports it offline, but its address answers ping (another device may now use this IP)
-              </span>
-              <span v-if="device.cloudConnectionStatus && device.cloudConnectionStatus !== 'connected'">
-                <span v-if="device.cloudManagedCheckedAt"> &middot; </span>
-                {{ cloudPlaneName }} connection: {{ device.cloudConnectionStatus }}
-              </span>
             </div>
           </div>
           <div class="d-flex flex-column align-end gap-2">
@@ -117,6 +105,32 @@
       </v-col>
     </v-row>
 
+    <!-- Ping and the cloud disagree about this device (status "warning") -->
+    <v-row v-if="device && cloudStatusWarning">
+      <v-col cols="12">
+        <v-alert type="warning" variant="tonal" prominent :title="cloudStatusWarning.title">
+          <template v-if="cloudStatusWarning.answeredBy">
+            <router-link :to="`/devices/${cloudStatusWarning.answeredBy.id}`" class="font-weight-medium">
+              {{ cloudStatusWarning.answeredBy.name }}
+            </router-link>
+            has the same IP address ({{ device.ipAddress }}) and
+            {{ cloudStatusWarning.answeredBy.why }}, so it is most likely what answers.
+            {{ cloudPlaneName }} still lists this device's last known address.
+          </template>
+          <template v-else>{{ cloudStatusWarning.text }}</template>
+          <DeviceAddressLookup v-if="cloudStatusWarning.lookup" :device-id="device.id" />
+          <div v-if="cloudConnectionNote" class="mt-1">{{ cloudConnectionNote }}</div>
+        </v-alert>
+      </v-col>
+    </v-row>
+    <v-row v-else-if="device && cloudConnectionNote">
+      <v-col cols="12">
+        <v-alert type="warning" variant="tonal" icon="mdi-cloud-alert">
+          {{ cloudConnectionNote }}
+        </v-alert>
+      </v-col>
+    </v-row>
+
     <!-- Another row looks like the same hardware -->
     <v-row v-if="device && duplicateGroup">
       <v-col cols="12">
@@ -154,6 +168,10 @@
         <v-icon start icon="mdi-lan" />
         Neighbors
       </v-tab>
+      <v-tab value="history">
+        <v-icon start icon="mdi-timeline-clock-outline" />
+        History
+      </v-tab>
     </v-tabs>
 
     <!-- Loading State -->
@@ -188,6 +206,9 @@
 
     <!-- LLDP/CDP neighbors (Network Map data for this device) -->
     <DeviceNeighborsPanel v-else-if="device && tab === 'neighbors'" :device="device" />
+
+    <!-- Ping/cloud status timelines with backup and restart markers -->
+    <DeviceHistoryPanel v-else-if="device && tab === 'history'" :device="device" />
 
     <!-- Device Content -->
     <template v-else-if="device">
@@ -225,10 +246,30 @@
         <v-col cols="12" md="3">
           <v-card>
             <v-card-text>
-              <div class="text-overline text-grey">Last Seen</div>
-              <div class="text-h6">{{ formatTimestamp(device.lastSeen) }}</div>
-              <div class="text-caption text-grey mt-1">
-                {{ formatRelativeTime(device.lastSeen) }}
+              <div class="d-flex align-center">
+                <div class="text-overline text-grey">Last Seen</div>
+                <v-spacer />
+                <a
+                  v-if="lastSeen.ping"
+                  href="#"
+                  class="text-caption text-warning"
+                  title="Open the History tab"
+                  @click.prevent="tab = 'history'"
+                >
+                  {{ lastSeen.ping.at ? `Ping ${formatRelativeTime(lastSeen.ping.at)}` : 'Never answered ping' }}
+                </a>
+              </div>
+              <div class="text-h6" :title="lastSeen.at ? formatTimestamp(lastSeen.at) : undefined">
+                {{ lastSeen.at ? formatRelativeTime(lastSeen.at) : 'Never' }}
+              </div>
+              <div v-if="lastSeen.by" class="text-caption mt-1 d-flex align-center">
+                <v-icon
+                  size="x-small"
+                  class="mr-1"
+                  :color="lastSeen.current ? 'success' : undefined"
+                  :icon="lastSeen.current ? 'mdi-check-circle' : 'mdi-history'"
+                />
+                <span class="text-medium-emphasis">{{ lastSeen.current ? 'Confirmed by' : 'Last seen by' }} {{ lastSeen.by }}</span>
               </div>
             </v-card-text>
           </v-card>
@@ -630,6 +671,9 @@ import { formatDistanceToNow, format, fromUnixTime } from 'date-fns'
 import DeviceConnectionTest from '@/components/devices/DeviceConnectionTest.vue'
 import DeviceLivePanel from '@/components/devices/DeviceLivePanel.vue'
 import DeviceNeighborsPanel from '@/components/devices/DeviceNeighborsPanel.vue'
+import DeviceHistoryPanel from '@/components/devices/DeviceHistoryPanel.vue'
+import DeviceAddressLookup from '@/components/devices/DeviceAddressLookup.vue'
+import { lastSeenSummary } from '@/models/device-seen'
 import DeviceMergeDialog from '@/components/devices/DeviceMergeDialog.vue'
 import DeviceEditDialog from '@/components/devices/DeviceEditDialog.vue'
 import { useBackupsStore } from '@/stores/backups'
@@ -670,7 +714,7 @@ const lastTestResult = ref(null)
 const lastTest = ref(null)
 
 // Selected tab, kept in the URL (?tab=live) so a live view can be linked.
-const TABS = ['live', 'neighbors']
+const TABS = ['live', 'neighbors', 'history']
 const tab = computed({
   get: () => (TABS.includes(route.query.tab) ? route.query.tab : 'overview'),
   set: (value) => router.replace({ query: { ...route.query, tab: TABS.includes(value) ? value : undefined } }),
@@ -687,6 +731,12 @@ const systemError = computed(() => devicesStore.systemError)
 // { available, reason }. Kept apart from the row, which list fetches replace
 // with rows that don't carry it.
 const systemPollState = ref(null)
+// Other devices with this one's IP (GET /devices/:id sameIpDevices), kept
+// apart from the row for the same reason.
+const sameIpState = ref(null)
+const sameIpDevices = computed(() =>
+  sameIpState.value?.id === route.params.id ? sameIpState.value.value : []
+)
 const systemPoll = computed(() =>
   systemPollState.value?.id === route.params.id ? systemPollState.value.value : null
 )
@@ -805,6 +855,46 @@ const managementChip = computed(() => {
   return { label: 'Direct (unverified)', color: 'grey', variant: 'outlined', icon: 'mdi-lan-connect' }
 })
 
+// When the device was last confirmed alive, and by whom (Last Seen card).
+const lastSeen = computed(() => lastSeenSummary(device.value || {}, { cloudName: cloudPlaneName.value }))
+
+// Ping and the cloud disagree (what makes effectiveStatus() 'warning').
+const cloudStatusWarning = computed(() => {
+  if (!device.value) return null
+  const plane = cloudPlaneName.value
+  if (unreachableFromHere(device.value)) {
+    return {
+      title: `${plane} reports it online, but it doesn't answer ping`,
+      text: `NetHelper can't reach this device from here. Check routing and firewalls between NetHelper and ${device.value.ipAddress || 'its address'}, or whether its IP has changed.`
+    }
+  }
+  if (answersPingButCloudOffline(device.value)) {
+    // A device here with the same IP that is up explains the ping reply.
+    const others = sameIpDevices.value
+    const other = others.find((d) => d.cloudStatus === 'online' && d.managementMode === 'cloud')
+      || others.find((d) => d.status === 'online')
+    return {
+      title: `${plane} reports it offline, but its address answers ping`,
+      text: 'Another device may now use this IP address.',
+      lookup: true,
+      answeredBy: other && {
+        id: other.id,
+        name: other.name,
+        why: other.managementMode === 'cloud' && other.cloudStatus === 'online'
+          ? `${cloudProviderLabel(other.cloudIntegration?.provider)} reports it online`
+          : 'it is online',
+      },
+    }
+  }
+  return null
+})
+
+const cloudConnectionNote = computed(() => {
+  const status = device.value?.cloudConnectionStatus
+  if (!status || status === 'connected') return null
+  return `${cloudPlaneName.value} connection: ${status}`
+})
+
 // Warns when the device's own view of cloud ownership disagrees with how
 // the device record was added to inventory.
 const managementMismatch = computed(() => {
@@ -900,6 +990,7 @@ const fetchDevice = async () => {
   if (route.params.id !== id || !response?.data) return
   fetchedDevice.value = response.data
   systemPollState.value = { id, value: response.data.systemPoll || null }
+  sameIpState.value = { id, value: response.data.sameIpDevices || [] }
   devicesStore.updateDeviceLocally(id, response.data)
 }
 

@@ -160,6 +160,7 @@ class BaseCloudProvider {
   async listInventory()                 // → NormalizedCloudDevice[]        (MVP)
   async getDeviceStatus(serial)         // → { status, lastSeen, raw }      (MVP)
   async getDeviceConfiguration(serial)  // → { text, format, source } or throws CapabilityError (MVP)
+  async findByAddress(ip)               // → AddressHolder[] (its devices + clients with this IP), 'address-lookup'
   supports(capability)                  // 'config-backup' | 'status' | 'inventory' | ...
   // later: getFirmwareInfo, subscribeEvents (Mist WS), executeAction
 }
@@ -566,8 +567,13 @@ which also records the live monitor's): `port.link.up`/`down` when a port's
 state differs between two messages (switch ports from their logical units,
 skipping irb/vme/me0/lo0), `device.restarted` when uptime goes backwards by
 more than a minute, and `cloud.<status>` for every status change the refresh
-writes from a known status (both clouds). The first message after start is a
-baseline. Events stay raw. The device page's Live tab lists them for devices
+or sync writes (both clouds), plus once per device per process start, so a
+steady device's history has a starting state (`recordStateIfChanged` /
+`recordStateOnce`: nothing is recorded when the latest `cloud.*` event already
+says the same). The ping monitor records `ping.online`/`ping.offline` the same
+way (source `ping`). These two prefixes are the status lanes of the device
+page's History tab (`services/device-history.service.js`). The first message
+after start is a baseline. Events stay raw. The device page's Live tab lists them for devices
 without live state; Settings → Cloud Integrations shows each stream's state
 (`eventStream` on `GET /settings/cloud-integrations`).
 

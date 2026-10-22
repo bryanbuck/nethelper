@@ -64,6 +64,47 @@ async function record(device, event, source) {
   return payload;
 }
 
+// "<prefix><deviceId>" for each device whose state this process has already
+// compared with its last recorded event (see recordStateOnce).
+const checkedStates = new Set();
+
+/**
+ * Record `<prefix><state>` unless it is already the device's latest event
+ * with that prefix (e.g. 'ping.' + 'online'). For state lanes in the
+ * device's history: callers report only transitions, plus once per device
+ * per process (recordStateOnce), so a device that never changes still gets
+ * a starting state and a change missed while NetHelper was down is caught.
+ * Never throws.
+ * @returns {Promise<boolean>} whether an event was recorded
+ */
+async function recordStateIfChanged(device, prefix, state, source, data = {}) {
+  checkedStates.add(`${prefix}${device.id}`);
+  try {
+    const last = await getPrisma().deviceEvent.findFirst({
+      where: { deviceId: device.id, type: { startsWith: prefix } },
+      orderBy: { occurredAt: 'desc' },
+      select: { type: true },
+    });
+    if (last?.type === `${prefix}${state}`) return false;
+    await record(device, {
+      type: `${prefix}${state}`,
+      data: { ...(last && { previous: last.type.slice(prefix.length) }), ...data },
+    }, source);
+    return true;
+  } catch (error) {
+    logger.warn(`Could not record ${prefix}${state} for ${device.name}: ${error.message}`);
+    return false;
+  }
+}
+
+/** recordStateIfChanged, at most once per device and prefix per process. */
+async function recordStateOnce(device, prefix, state, source, data = {}) {
+  const key = `${prefix}${device.id}`;
+  if (checkedStates.has(key)) return false;
+  checkedStates.add(key);
+  return recordStateIfChanged(device, prefix, state, source, data);
+}
+
 async function prune() {
   const days = retentionDays();
   const cutoff = new Date(Date.now() - days * DAY_MS);
@@ -85,4 +126,7 @@ function stopPruning() {
   pruneTimer = null;
 }
 
-module.exports = { record, prune, startPruning, stopPruning };
+module.exports = {
+  record, recordStateIfChanged, recordStateOnce, prune, startPruning, stopPruning,
+  _resetCheckedStates: () => checkedStates.clear(),
+};

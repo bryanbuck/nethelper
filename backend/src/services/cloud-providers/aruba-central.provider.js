@@ -5,6 +5,7 @@ const ArubaErrorHandler = require('../../utils/aruba-error-handler');
 const { getRedis } = require('../../config/redis');
 const { detectPlatform } = require('../../utils/device-platform');
 const { parseCentralTopology } = require('../topology/parsers/central');
+const { normalizeMac } = require('../../utils/device-key');
 const { debugLog, Services } = require('../../utils/debug-logger');
 
 const logger = debugLog.createLogger(Services.ARUBA_CENTRAL);
@@ -73,6 +74,33 @@ function centralConfigInSync(value) {
   return null;
 }
 
+/**
+ * A v1alpha1 client (live shape 2026-10-22): status Connected|Disconnected,
+ * lastSeenAt "0" while connected, connectedTo = the switch/AP name.
+ */
+function centralClientHolder(item, lastSeen) {
+  const connected = String(item.status).toLowerCase() === 'connected';
+  return {
+    kind: 'client',
+    // `name` is the MAC when the client has no hostname.
+    name: item.hostName || (normalizeMac(item.name) ? null : item.name) || null,
+    mac: normalizeMac(item.mac),
+    serial: null,
+    model: null,
+    status: connected ? 'connected' : 'disconnected',
+    lastSeen: connected ? new Date() : lastSeen,
+    manufacturer: item.manufacturer || null,
+    connectedTo: {
+      name: item.connectedTo || null,
+      serial: item.connectedDeviceSerial || null,
+      mac: null,
+      port: item.port || null,
+      vlan: item.vlanId ?? null,
+      ssid: String(item.type).toLowerCase() === 'wireless' ? item.network || null : null,
+    },
+  };
+}
+
 /** Classic Central's API gateway (apigw-*): a different API, unreachable with GreenLake tokens. */
 function isClassicGateway(baseUrl) {
   try {
@@ -97,7 +125,7 @@ class ArubaCentralProvider extends BaseCloudProvider {
   }
 
   supports(capability) {
-    return ['inventory', 'status', 'test', 'scope-backup', 'topology'].includes(capability);
+    return ['inventory', 'status', 'test', 'scope-backup', 'topology', 'address-lookup'].includes(capability);
     // NOT 'config-backup': the classic /configuration/v2 endpoint is
     // quarantined (see getDeviceConfiguration). CX configs are still backed
     // up over device REST; AOS-S over SSH.
@@ -265,6 +293,44 @@ class ArubaCentralProvider extends BaseCloudProvider {
       }));
     }
     return parseCentralTopology(replies);
+  }
+
+  /**
+   * Who holds `ip`. Neither list filters by IP (live tenant, 2026-10-22: the
+   * clients `filter` rejects ipv4 and macAddress, and has no `search`), so:
+   * the devices list's free-text `search`, matched exactly here, and the
+   * whole client list, which comes in pages of up to 1000. v1alpha1 clients
+   * (unlike v1) also lists recently disconnected clients, with lastSeenAt.
+   */
+  async findByAddress(ip) {
+    const devices = await this.makeRequest('GET', '/network-monitoring/v1alpha1/devices', {
+      params: { search: ip, limit: 100 },
+      context: 'address_lookup',
+    });
+    const holders = (devices.items || [])
+      .filter((item) => item.ipv4 === ip)
+      .map((item) => {
+        const device = this.normalizeDevice(item);
+        return {
+          kind: 'device', name: device.name, mac: normalizeMac(device.macAddress), serial: device.serial,
+          model: device.model || null, status: device.status, lastSeen: device.lastSeen, manufacturer: null, connectedTo: null,
+        };
+      });
+
+    let next;
+    let pages = 0;
+    do {
+      const page = await this.makeRequest('GET', '/network-monitoring/v1alpha1/clients', {
+        params: { limit: 1000, ...(next && { next }) },
+        context: 'address_lookup',
+      });
+      for (const item of page.items || []) {
+        if (item.ipv4 === ip) holders.push(centralClientHolder(item, this.parseTimestamp(item.lastSeenAt)));
+      }
+      next = page.next;
+      pages += 1;
+    } while (next && pages < 20);
+    return holders;
   }
 
   /**
