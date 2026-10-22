@@ -539,6 +539,8 @@ class SettingsService {
 
     // Credentials or base URL may have changed - drop the cached OAuth token.
     await this.clearIntegrationCache(integration);
+    // An inactive integration no longer syncs, so nothing else would clear it.
+    if (!integration.isActive) this.clearSyncAlert(integration.id);
     this.integrationsChanged();
     return this.sanitizeIntegration(integration);
   }
@@ -594,7 +596,14 @@ class SettingsService {
 
     await this.clearIntegrationCache(integration);
     await prisma.cloudIntegration.delete({ where: { id: integrationId } });
+    this.clearSyncAlert(integrationId);
     this.integrationsChanged();
+  }
+
+  /** Resolve an integration's sync.failed alert (never throws, not awaited). */
+  clearSyncAlert(integrationId) {
+    // Lazy, like integrationsChanged(): keeps this module's load order unchanged.
+    require('./alert.service').clear('sync.failed', { subjectKey: integrationId });
   }
 
   /** Drop any provider-side cached token for an integration (best-effort). */

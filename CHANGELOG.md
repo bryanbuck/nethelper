@@ -11,6 +11,7 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ### Fixed
 - The API rate limit counted requests per client IP, and behind nginx or the dev proxy (without `TRUST_PROXY`) every user shares one IP, so one busy browser could make the whole Devices list fail for everyone with "Too many requests". It now counts per signed-in user (per IP only for requests without a valid token), and a 429 is JSON with `Retry-After`. When it does happen, the Devices table keeps the rows it already shows, says when the API takes requests again, and retries on its own. The default `RATE_LIMIT_MAX_REQUESTS` goes from 300 to 1000 per 15 minutes: one person's busy session measured about 150, and all of a user's tabs now share one count.
+- A "Cloud sync failed" alert for a cloud integration that stopped syncing stayed open forever, because only that integration's next successful sync cleared it. This covers an integration that was deleted or deactivated, and the `ARUBA_CENTRAL_*` environment fallback once a Central integration exists in Settings. Deleting or deactivating an integration now resolves its alert, and every scheduled sync resolves the alerts of integrations it no longer runs.
 
 ### Upgrading
 - An install that sets `RATE_LIMIT_MAX_REQUESTS` keeps its value; remove it (or raise it) to get the new default of 1000. Older `.env` files copied from `.env.example` before 0.9.0-beta.1 may still say 100.

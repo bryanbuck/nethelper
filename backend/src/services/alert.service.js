@@ -204,6 +204,37 @@ class AlertService extends EventEmitter {
     }
   }
 
+  /**
+   * Resolve a rule's unresolved alerts for every subject not in
+   * subjectKeys: subjects that will never report again to clear their own
+   * (a deleted or deactivated cloud integration).
+   */
+  async clearExcept(ruleKey, subjectKeys) {
+    try {
+      const keep = new Set(subjectKeys.map((subjectKey) => dedupKey(ruleKey, { subjectKey })));
+      for (const [key, entry] of this.pending) {
+        if (entry.ruleKey === ruleKey && !keep.has(key)) this.cancelPending(key);
+      }
+      const open = await getPrisma().alert.findMany({
+        where: { rule: ruleKey, status: UNRESOLVED },
+        select: { id: true, openKey: true },
+      });
+      const ids = open.filter((a) => !keep.has(a.openKey)).map((a) => a.id);
+      if (!ids.length) return 0;
+      await getPrisma().alert.updateMany({
+        where: { id: { in: ids } },
+        data: { ...RESOLVE(), resolvedBy: 'auto' },
+      });
+      const alerts = await this.findByIds(ids);
+      await this.emitUpdated(alerts);
+      this.notify('resolved', alerts);
+      return ids.length;
+    } catch (error) {
+      logger.warn(`Alert clear of stale ${ruleKey} failed: ${error.message}`);
+      return 0;
+    }
+  }
+
   /** Drop pending (still settling) raises for a device, e.g. before a merge deletes it. */
   forgetDevice(deviceId, ruleKeys = null) {
     for (const [key, entry] of this.pending) {

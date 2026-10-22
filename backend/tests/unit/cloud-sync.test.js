@@ -9,9 +9,10 @@ const mockPrisma = {
   cloudIntegration: { findUnique: jest.fn(), findMany: jest.fn() },
 };
 jest.mock('../../src/config/database', () => ({ getPrisma: () => mockPrisma }));
-jest.mock('../../src/services/alert.service', () => ({ raise: jest.fn(), clear: jest.fn() }));
+jest.mock('../../src/services/alert.service', () => ({ raise: jest.fn(), clear: jest.fn(), clearExcept: jest.fn() }));
 
 const deviceService = require('../../src/services/device.service');
+const alertService = require('../../src/services/alert.service');
 const CloudProviderFactory = require('../../src/services/cloud-providers/cloud-provider-factory');
 const BaseCloudProvider = require('../../src/services/cloud-providers/base-cloud-provider');
 
@@ -118,6 +119,31 @@ describe('CloudProviderFactory.forDevice without an integration id', () => {
 
     await expect(CloudProviderFactory.forDevice(legacy('juniper'))).rejects.toThrow(/No cloud integration available/);
     expect(env).not.toHaveBeenCalled();
+  });
+});
+
+describe('syncDevicesFromCloud sync.failed alerts', () => {
+  const ok = (id) => ({ id, label: id, listInventory: jest.fn(async () => []) });
+  const failing = (id) => ({ id, label: id, listInventory: jest.fn(async () => { throw new Error('Unable to connect'); }) });
+
+  test('a full sync clears its providers\' alerts and resolves the rest as stale', async () => {
+    jest.spyOn(CloudProviderFactory, 'activeProviders').mockResolvedValue([ok('int-central'), failing('int-mist')]);
+
+    await deviceService.syncDevicesFromCloud();
+
+    expect(alertService.clear).toHaveBeenCalledWith('sync.failed', { subjectKey: 'int-central' });
+    expect(alertService.raise).toHaveBeenCalledWith('sync.failed', expect.objectContaining({ subjectKey: 'int-mist' }));
+    // e.g. env:aruba_central once a real integration exists: never syncs again
+    expect(alertService.clearExcept).toHaveBeenCalledWith('sync.failed', ['int-central', 'int-mist']);
+  });
+
+  test('a single-integration sync leaves the other integrations\' alerts alone', async () => {
+    jest.spyOn(CloudProviderFactory, 'forIntegration').mockResolvedValue(ok('int-central'));
+
+    await deviceService.syncDevicesFromCloud('int-central');
+
+    expect(alertService.clear).toHaveBeenCalledWith('sync.failed', { subjectKey: 'int-central' });
+    expect(alertService.clearExcept).not.toHaveBeenCalled();
   });
 });
 

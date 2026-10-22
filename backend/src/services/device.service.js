@@ -410,6 +410,13 @@ class DeviceService {
       totals.integrations.push(summary);
     }
 
+    // A full sync runs every integration that can sync, so a sync.failed
+    // alert for any other (deleted, deactivated, or the env fallback once a
+    // real integration exists) would never be cleared by a later success.
+    if (!integrationId) {
+      await alertService.clearExcept('sync.failed', providers.map((p) => p.id));
+    }
+
     // Preserve the historical all-or-nothing error for the single-tenant
     // case: if every integration failed, surface the first failure.
     if (totals.integrations.length > 0 && totals.integrations.every((s) => s.error)) {
