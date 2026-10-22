@@ -27,7 +27,7 @@
  *   <name>.anon.json  identifiers anonymised too (serials, MACs, ids, names,
  *                     emails, public IPs, locations), ready to become a fixture
  */
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const fs = require('fs');
 const path = require('path');
 

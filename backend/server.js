@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 
 // Validate configuration before any module reads process.env at load time.
 const { validateEnv } = require('./src/config/env');

@@ -18,7 +18,7 @@
  * under the new key are counted as already rotated and left alone, so re-running
  * the script is safe.
  */
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const { PrismaClient } = require('@prisma/client');
 const encryption = require('../src/utils/encryption');
 const { CLOUD_PROVIDERS } = require('../src/constants/vendors');

@@ -16,7 +16,7 @@
  *       Prints the number of users (deploy/install.sh asks for a first admin
  *       only when it is 0).
  */
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const crypto = require('crypto');
 const readline = require('readline');
 const bcrypt = require('bcryptjs');
