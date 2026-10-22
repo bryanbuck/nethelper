@@ -11,15 +11,6 @@
         </div>
 
         <div class="d-flex align-center ga-2">
-          <v-chip
-            :color="connectionStatus.color"
-            variant="flat"
-            size="small"
-            prepend-icon="mdi-circle"
-          >
-            {{ connectionStatus.text }}
-          </v-chip>
-
           <v-btn
             variant="outlined"
             prepend-icon="mdi-refresh"
@@ -445,7 +436,8 @@ import { cloudProviderLabel } from '@/models/vendors'
 
 const authStore = useAuthStore()
 const discoveryStore = useDiscoveryStore()
-const { connected, connecting } = useWebSocket()
+// Keeps the shared socket open while this page is mounted
+useWebSocket()
 
 // Component state
 const showScanDialog = ref(false)
@@ -500,17 +492,6 @@ const resultHeaders = [
   { title: 'Status', key: 'status' },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' }
 ]
-
-// Computed properties
-const connectionStatus = computed(() => {
-  if (connected.value) {
-    return { text: 'Connected', color: 'success' }
-  } else if (connecting.value) {
-    return { text: 'Connecting...', color: 'warning' }
-  } else {
-    return { text: 'Disconnected', color: 'error' }
-  }
-})
 
 const isAdmin = computed(() => authStore.user?.role === 'admin')
 // Scan, import and ignore are operator+
