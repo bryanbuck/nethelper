@@ -10,15 +10,6 @@
         </div>
         
         <div class="d-flex align-center ga-2">
-          <v-chip 
-            :color="connectionStatus.color" 
-            variant="flat" 
-            size="small"
-            prepend-icon="mdi-circle"
-          >
-            {{ connectionStatus.text }}
-          </v-chip>
-          
           <v-btn 
             v-if="canEdit"
             color="primary" 
@@ -188,7 +179,8 @@ const router = useRouter()
 const devicesStore = useDevicesStore()
 const authStore = useAuthStore()
 const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole))
-const { connected, connecting } = useWebSocket()
+// Keeps the shared socket open while this page is mounted
+useWebSocket()
 
 const snackbar = ref({
   show: false,
@@ -199,16 +191,6 @@ const snackbar = ref({
 
 const refreshInterval = ref(null)
 const previousStats = ref({ total: 0, online: 0, offline: 0, warning: 0 })
-
-const connectionStatus = computed(() => {
-  if (connected.value) {
-    return { text: 'Connected', color: 'success' }
-  } else if (connecting.value) {
-    return { text: 'Connecting...', color: 'warning' }
-  } else {
-    return { text: 'Disconnected', color: 'error' }
-  }
-})
 
 const totalDevicesTrend = computed(() => {
   const current = devicesStore.stats.total
