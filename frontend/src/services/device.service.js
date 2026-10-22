@@ -15,6 +15,32 @@ class DeviceService {
     }
   }
 
+  /**
+   * The History tab's data: { from, to, lanes, markers }.
+   * @param {Object} params - { range: '24h'|'7d'|'30d' } or { from, to }
+   */
+  async getDeviceHistory(id, params = {}) {
+    try {
+      const response = await api.get(`/devices/${id}/history`, { params })
+      return response.data.data
+    } catch (error) {
+      throw handleApiError(error, 'fetching device history')
+    }
+  }
+
+  /**
+   * What else holds this device's IP address:
+   * { ip, mac, macFrom ('neighbor' or a cloud integration's name), sameMac, sources: [{ key, label, status, items }] }.
+   */
+  async lookupAddress(id) {
+    try {
+      const response = await api.get(`/devices/${id}/address-lookup`)
+      return response.data.data
+    } catch (error) {
+      throw handleApiError(error, 'looking up the address')
+    }
+  }
+
   /** Turn always-on live state monitoring on or off. */
   async setLiveMonitoring(id, enabled) {
     try {

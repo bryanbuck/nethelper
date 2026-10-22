@@ -4,6 +4,17 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ## [Unreleased]
 
+### Added
+- **Device History tab**: a timeline per point of view (ping from NetHelper, the device's cloud) and a combined lane that shows when they disagreed (answers ping while the cloud says offline, or the reverse), over 24 hours, 7 days or 30 days. Config backups are marked across all lanes; a backup that found a change shades the window the change happened in. Cloud-reported restarts are marked too. Ping states are recorded from this release on, so earlier time shows as no data. `GET /devices/:id/history`.
+- The device page's **Last Seen** card says when the device was last confirmed alive and by whom (ping, its cloud, or a connection test). A ping reply while the cloud reports the device offline doesn't count as a confirmation, because the address may belong to another device. When ping and the cloud disagree, the card's corner shows ping's own last reply, linked to the History tab.
+- Ping-vs-cloud disagreement on the device page is a warning banner instead of a grey caption. When the cloud reports the device offline but its address answers ping, and another device in NetHelper with the same IP is online, the banner names and links that device as what answers. A "Who has this address?" button in that banner looks the address up: each cloud's devices and clients seen with that IP (Mist and Central; with the switch port or AP a client is on), the host's neighbor table (the answering MAC and its vendor), LLDP/CDP neighbors and the latest discovery scan. The MAC holding the address, from the neighbor table or else from a cloud's client record, is compared with the device's own. It sends nothing to the address, and each cloud costs a few filtered queries, not an inventory read.
+
+### Fixed
+- The API rate limit counted requests per client IP, and behind nginx or the dev proxy (without `TRUST_PROXY`) every user shares one IP, so one busy browser could make the whole Devices list fail for everyone with "Too many requests". It now counts per signed-in user (per IP only for requests without a valid token), and a 429 is JSON with `Retry-After`. When it does happen, the Devices table keeps the rows it already shows, says when the API takes requests again, and retries on its own.
+
+### Upgrading
+- One migration, `20261022120000_device_seen_sources`, adds three columns to `Device` (`pingLastSeen`, `cloudCheckedAt`, `cloudLastSeen`).
+
 ## [0.9.0-beta.2] — 2026-10-21
 
 Fixes from the first round of beta feedback, a one-step Docker Compose installer, and the first release with prebuilt images and a release tarball. Scope and limitations are unchanged from 0.9.0-beta.1: see [`docs/BETA_NOTES.md`](docs/BETA_NOTES.md).

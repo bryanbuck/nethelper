@@ -2,6 +2,7 @@ const ping = require('ping');
 const { getPrisma } = require('../config/database');
 const logger = require('../utils/logger');
 const alertService = require('./alert.service');
+const deviceEvents = require('./device-events.service');
 const { effectiveStatus } = require('../utils/device-status');
 
 class PingMonitorService {
@@ -176,7 +177,7 @@ class PingMonitorService {
       // Get current ping stats for success rate calculation
       const device = await prisma.device.findUnique({
         where: { id: deviceId },
-        select: { pingSuccessRate: true },
+        select: { pingSuccessRate: true, pingLastSeen: true },
       });
 
       // Calculate new success rate (exponential moving average)
@@ -197,6 +198,7 @@ class PingMonitorService {
       // Update lastSeen timestamp when device is alive (successful ping)
       if (alive) {
         updateData.lastSeen = new Date();
+        updateData.pingLastSeen = updateData.lastSeen;
       }
 
       await prisma.device.update({
@@ -213,6 +215,7 @@ class PingMonitorService {
 
         if (newStatus === 'online') alertService.clear('device.offline', { subjectKey: deviceId, deviceId });
       }
+      await this.recordPingState(deviceId, deviceName, newStatus, currentStatus !== newStatus, device.pingLastSeen);
 
       // Every offline check, not only the transition, so a device that was
       // already offline when alerting started still gets an alert. Repeats
@@ -236,6 +239,20 @@ class PingMonitorService {
       logger.error(`Error updating device status for ${deviceName}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Record a settled ping state (online/offline) as a DeviceEvent for the
+   * device's history: on every change, and once per device per process.
+   * 'warning' (a missed check or two) is not one, so a blip that recovers
+   * records nothing.
+   */
+  async recordPingState(deviceId, deviceName, status, changed, lastReply) {
+    if (status !== 'online' && status !== 'offline') return;
+    const device = { id: deviceId, name: deviceName };
+    const data = status === 'offline' && lastReply ? { lastReply } : {};
+    if (changed) await deviceEvents.recordStateIfChanged(device, 'ping.', status, 'ping', data);
+    else await deviceEvents.recordStateOnce(device, 'ping.', status, 'ping', data);
   }
 
   /**

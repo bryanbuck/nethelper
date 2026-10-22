@@ -1,6 +1,8 @@
 const deviceService = require('../services/device.service');
 const deviceMerge = require('../services/device-merge.service');
 const deviceCredentials = require('../services/device-credential.service');
+const deviceHistory = require('../services/device-history.service');
+const addressLookup = require('../services/address-lookup.service');
 const CloudProviderFactory = require('../services/cloud-providers/cloud-provider-factory');
 const { getPrisma } = require('../config/database');
 const devicePollerService = require('../services/device-poller.service');
@@ -436,6 +438,34 @@ class DeviceController {
         data: events,
         nextBefore: events.length === limit ? events[events.length - 1].occurredAt : null,
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Status lanes (ping, cloud, combined) and markers (backups, restarts) for
+   * the History tab. Query: range=24h|7d|30d (default 24h), or from/to.
+   */
+  async getDeviceHistory(req, res, next) {
+    try {
+      const history = await deviceHistory.getHistory(req.params.deviceId, req.query);
+      if (!history) return res.status(404).json({ success: false, error: 'Device not found' });
+      res.json({ success: true, data: history });
+    } catch (error) {
+      if (error instanceof deviceHistory.HistoryError) {
+        return res.status(400).json({ success: false, error: error.message });
+      }
+      next(error);
+    }
+  }
+
+  /** What else holds this device's IP address: see address-lookup.service.js. */
+  async lookupAddress(req, res, next) {
+    try {
+      const result = await addressLookup.lookup(req.params.deviceId);
+      if (!result) return res.status(404).json({ success: false, error: 'Device not found' });
+      res.json({ success: true, data: result });
     } catch (error) {
       next(error);
     }

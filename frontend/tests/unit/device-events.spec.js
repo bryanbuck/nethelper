@@ -11,6 +11,8 @@ describe('device event labels', () => {
       'device.restarted',
       // cloud-status.service.js: cloud.<DeviceStatus>
       'cloud.online', 'cloud.offline', 'cloud.warning', 'cloud.maintenance',
+      // ping-monitor.service.js: ping.online|offline
+      'ping.online', 'ping.offline',
     ]
     expect(recorded.filter((type) => !DEVICE_EVENTS[type])).toEqual([])
   })

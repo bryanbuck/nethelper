@@ -195,6 +195,10 @@ model Device {
 
   firmwareVersion String?
   lastSeen        DateTime? // Last seen timestamp (updated by both ping monitoring and Aruba Central sync)
+  // Per-source "seen alive" times, so the device page can say who saw it when.
+  pingLastSeen    DateTime? // Last ping reply (ping monitor)
+  cloudCheckedAt  DateTime? // Last time NetHelper read this device's status from its cloud (refresh or sync)
+  cloudLastSeen   DateTime? // When the cloud last saw it alive; while cloudStatus is online, cloudCheckedAt is newer
   metadata        Json?
   apiCredentialId String?
   // Last connection test of THIS device (POST /device-api/test/:id or a
@@ -232,7 +236,7 @@ model DeviceEvent {
   type       String
   port       String?
   data       Json     @default("{}")
-  source     String // push | poll | resync (live monitor) | cloud (cloud status refresh, cloud event stream)
+  source     String // push | poll | resync (live monitor) | cloud (cloud status refresh, sync, cloud event stream) | ping (ping monitor)
   occurredAt DateTime @default(now())
 
   @@index([deviceId, occurredAt])

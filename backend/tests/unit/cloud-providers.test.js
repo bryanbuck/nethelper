@@ -609,3 +609,78 @@ describe('ArubaCentralProvider scope backups', () => {
     await expect(provider.getScopeConfiguration(GLOBAL)).rejects.toMatchObject({ statusCode: 403 });
   });
 });
+
+// Shapes from live replies (2026-10-22), anonymised.
+describe('findByAddress', () => {
+  beforeEach(() => axios.mockReset());
+
+  test('Mist searches devices, wired and wireless clients by IP and maps each', async () => {
+    const mist = new MistProvider({
+      id: 'int-2', provider: 'juniper_mist', name: 'Mist', baseUrl: 'https://api.mist.com',
+      credentials: { apiToken: 'token', orgId: 'org-1' },
+    });
+    const replies = {
+      devices: { results: [{ mac: '5c5b35000002', model: 'AP33', last_hostname: 'JNAP-01', ip: '172.16.10.100', timestamp: 1792702028 }] },
+      wired_clients: {
+        results: [{
+          mac: '5c5b35000002', last_hostname: 'JNAP-01', manufacture: 'Mist Systems, Inc.', timestamp: 1792700314,
+          last_device_mac: '5c5b35000001', last_port_id: 'ge-0/0/1', last_vlan: 1,
+          device_mac_port: [
+            { device_mac: '5c5b35000009', port_id: 'ge-0/0/7', ip: '172.16.10.5', vlan: 9, when: '2026-10-22T21:00:00.000+0000' },
+            { device_mac: '5c5b35000001', port_id: 'mge-0/0/0', ip: '172.16.10.100', vlan: 1, when: '2026-10-22T20:18:34.402+0000' },
+          ],
+        }],
+      },
+      clients: { results: [{ mac: 'aabbccddeeff', last_hostname: 'phone', last_ap: '5c5b35000002', last_ssid: 'Home', timestamp: 1792700000 }] },
+    };
+    axios.mockImplementation(async (config) => ({ data: replies[config.url.split('/')[7]] }));
+
+    const holders = await mist.findByAddress('172.16.10.100');
+
+    expect(axios.mock.calls.map(([config]) => config.url.replace('https://api.mist.com', ''))).toEqual([
+      '/api/v1/orgs/org-1/devices/search', '/api/v1/orgs/org-1/wired_clients/search', '/api/v1/orgs/org-1/clients/search',
+    ]);
+    axios.mock.calls.forEach(([config]) => expect(config.params).toMatchObject({ ip: '172.16.10.100', duration: '7d' }));
+    expect(holders).toEqual([
+      expect.objectContaining({ kind: 'device', name: 'JNAP-01', mac: '5c:5b:35:00:00:02', model: 'AP33' }),
+      expect.objectContaining({
+        kind: 'client', mac: '5c:5b:35:00:00:02', manufacturer: 'Mist Systems, Inc.',
+        lastSeen: new Date('2026-10-22T20:18:34.402Z'),
+        // the port where it held this IP, not its latest one
+        connectedTo: expect.objectContaining({ mac: '5c:5b:35:00:00:01', port: 'mge-0/0/0', vlan: 1 }),
+      }),
+      expect.objectContaining({ kind: 'client', name: 'phone', connectedTo: expect.objectContaining({ mac: '5c:5b:35:00:00:02', ssid: 'Home' }) }),
+    ]);
+  });
+
+  test('Central matches the device search exactly and reads the client list for the IP', async () => {
+    const central = new ArubaCentralProvider({
+      id: 'int-1', provider: 'aruba_central', name: 'Central', baseUrl: 'https://central.example.com',
+      credentials: { clientId: 'c', clientSecret: 's' },
+    });
+    const makeRequest = jest.spyOn(central, 'makeRequest').mockImplementation(async (method, endpoint, { params }) => {
+      if (endpoint.endsWith('/devices')) {
+        // free-text search: also matches .40
+        return { items: [
+          { serialNumber: 'SN1', deviceName: 'Sw-CoreA', macAddress: 'aa:bb:cc:00:00:01', ipv4: '192.168.252.4', status: 'ONLINE', model: 'CX-6300F', deviceType: 'SWITCH' },
+          { serialNumber: 'SN2', deviceName: 'Sw-Other', ipv4: '192.168.252.40', status: 'ONLINE', deviceType: 'SWITCH' },
+        ] };
+      }
+      return params.next
+        ? { items: [{ mac: '00:50:56:86:eb:83', name: '00:50:56:86:eb:83', ipv4: '192.168.252.4', status: 'Disconnected', lastSeenAt: '2026-10-22T19:42:10.646Z', type: 'Wired', connectedTo: 'Sw-Studio', connectedDeviceSerial: 'SN3', port: '1/1/3', vlanId: '10', manufacturer: 'VMware, Inc.' }] }
+        : { items: [{ mac: '00:00:5e:00:01:01', ipv4: '192.168.99.11', status: 'Connected' }], next: 2 };
+    });
+
+    const holders = await central.findByAddress('192.168.252.4');
+
+    expect(makeRequest.mock.calls[0][2].params).toEqual({ search: '192.168.252.4', limit: 100 });
+    expect(makeRequest.mock.calls[2][2].params).toEqual({ limit: 1000, next: 2 });
+    expect(holders).toEqual([
+      expect.objectContaining({ kind: 'device', name: 'Sw-CoreA', serial: 'SN1', mac: 'aa:bb:cc:00:00:01', status: 'online' }),
+      expect.objectContaining({
+        kind: 'client', name: null, mac: '00:50:56:86:eb:83', status: 'disconnected', lastSeen: new Date('2026-10-22T19:42:10.646Z'),
+        connectedTo: expect.objectContaining({ name: 'Sw-Studio', serial: 'SN3', port: '1/1/3', vlan: '10', ssid: null }),
+      }),
+    ]);
+  });
+});

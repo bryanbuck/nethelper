@@ -7,6 +7,10 @@ const mockPrisma = {
     findUnique: jest.fn(async () => ({ pingSuccessRate: 50 })),
     update: jest.fn(async () => ({})),
   },
+  deviceEvent: {
+    findFirst: jest.fn(async () => null),
+    create: jest.fn(async ({ data }) => ({ id: 'e1', occurredAt: new Date(), ...data })),
+  },
 };
 jest.mock('../../src/config/database', () => ({ getPrisma: () => mockPrisma }));
 jest.mock('../../src/services/alert.service', () => ({ raise: jest.fn(), clear: jest.fn() }));
@@ -86,5 +90,34 @@ describe('ping monitor', () => {
 
     expect(alertService.raise).toHaveBeenCalledWith('device.offline', expect.objectContaining({ title: 'sw is offline' }), expect.anything());
     expect(socket.emit).toHaveBeenCalledWith('device:status:update', expect.objectContaining({ status: 'offline' }));
+  });
+
+  test('a successful ping stamps pingLastSeen', async () => {
+    await pingMonitor.updateDeviceStatus('d2', 'sw', true, 3, 0, 'online', { managementMode: 'direct' });
+
+    const { data } = mockPrisma.device.update.mock.calls[0][0];
+    expect(data.pingLastSeen).toBeInstanceOf(Date);
+    expect(data.lastSeen).toBe(data.pingLastSeen);
+  });
+
+  test('a settled transition is recorded once as a ping event, with the last reply', async () => {
+    const lastReply = new Date('2026-10-22T10:00:00Z');
+    mockPrisma.device.findUnique.mockResolvedValueOnce({ pingSuccessRate: 50, pingLastSeen: lastReply });
+    mockPrisma.deviceEvent.findFirst.mockResolvedValueOnce({ type: 'ping.online' });
+
+    await pingMonitor.updateDeviceStatus('d2', 'sw', false, null, 2, 'warning', { managementMode: 'direct' });
+
+    expect(mockPrisma.deviceEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      deviceId: 'd2', type: 'ping.offline', source: 'ping', data: { previous: 'online', lastReply },
+    }) });
+  });
+
+  test('a blip (warning) records nothing, and a repeat of the last recorded state records nothing', async () => {
+    await pingMonitor.updateDeviceStatus('d2', 'sw', false, null, 0, 'online', { managementMode: 'direct' });
+    expect(mockPrisma.deviceEvent.findFirst).not.toHaveBeenCalled();
+
+    mockPrisma.deviceEvent.findFirst.mockResolvedValueOnce({ type: 'ping.online' });
+    await pingMonitor.updateDeviceStatus('d2', 'sw', true, 3, 1, 'warning', { managementMode: 'direct' });
+    expect(mockPrisma.deviceEvent.create).not.toHaveBeenCalled();
   });
 });

@@ -9,6 +9,7 @@
  *   - statusCode     : HTTP status code, or 0 for network/connection errors
  *   - isRecoverable  : whether the user can retry without logging out
  *   - validationErrors: (422 only) field-level validation detail from the server
+ *   - retryAfter     : (429 only) seconds until the API takes requests again
  *   - originalError  : the raw axios error
  *   - action         : the action string passed by the caller
  *
@@ -16,6 +17,12 @@
  * @param {string} action - Short description of what was being attempted
  * @returns {Error} Enhanced error object
  */
+function formatWait(seconds) {
+  if (seconds < 60) return `${seconds} second${seconds === 1 ? '' : 's'}`
+  const minutes = Math.ceil(seconds / 60)
+  return `${minutes} minute${minutes === 1 ? '' : 's'}`
+}
+
 export function handleApiError(error, action = 'completing the request') {
   const enhancedError = new Error()
 
@@ -92,12 +99,18 @@ export function handleApiError(error, action = 'completing the request') {
       enhancedError.validationErrors = responseData.errors
       break
 
-    case 429:
+    case 429: {
+      // NetHelper's own API limit (per signed-in user), from Retry-After.
+      const retryAfter = Number(error.response.headers?.['retry-after'])
+      enhancedError.retryAfter = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null
       enhancedError.message = `Rate limit exceeded while ${action}.`
-      enhancedError.userMessage = 'Too many requests. Please wait a moment and try again.'
+      enhancedError.userMessage = enhancedError.retryAfter
+        ? `Too many requests to NetHelper's API. It takes requests again in ${formatWait(enhancedError.retryAfter)}.`
+        : 'Too many requests to NetHelper\'s API. Please wait a moment and try again.'
       enhancedError.type = 'RATE_LIMIT'
       enhancedError.isRecoverable = true
       break
+    }
 
     case 500:
     case 502:

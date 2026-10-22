@@ -95,3 +95,23 @@ describe('deviceService.getDevices', () => {
     expect(fields).toEqual(expect.arrayContaining(['name', 'serial', 'ipAddress', 'model', 'location', 'macAddress']));
   });
 });
+
+describe('deviceService.findSameIpDevices', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('lists other devices with the IP, with their displayed status', async () => {
+    mockPrisma.device.findMany.mockResolvedValue([
+      row({ id: 'd2', name: 'Sw-CoreA', managementMode: 'cloud', pingStatus: 'online', cloudStatus: 'online' }),
+    ]);
+
+    const others = await deviceService.findSameIpDevices({ id: 'd1', ipAddress: '192.168.252.4' });
+
+    expect(mockPrisma.device.findMany.mock.calls[0][0].where).toEqual({ ipAddress: '192.168.252.4', id: { not: 'd1' } });
+    expect(others).toEqual([expect.objectContaining({ id: 'd2', name: 'Sw-CoreA', status: 'online' })]);
+  });
+
+  test('a device without an IP has none, without a query', async () => {
+    expect(await deviceService.findSameIpDevices({ id: 'd1', ipAddress: null })).toEqual([]);
+    expect(mockPrisma.device.findMany).not.toHaveBeenCalled();
+  });
+});
