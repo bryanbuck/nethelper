@@ -159,6 +159,70 @@ Deferred:
 
 ---
 
+### 2a. Cloud alarms (read-only mirror of Mist / Central active alarms)
+**Priority**: Medium
+**Status**: On hold (2026-10-22). Researched and probed live. Each cloud needs compromises, so no code until the open questions below are answered. Add findings to the log as they come in.
+
+**Goal.** Show the alarms the clouds already raise, without creating NetHelper `Alert` rows (that would duplicate actionable items owned in the vendor cloud):
+- When each alarm appeared and cleared, on the device History tab.
+- The active alarms from every cloud on the dashboard, gone when the cloud clears them.
+- A local silence that hides one alarm occurrence, so a recurrence of the same alarm type shows again.
+
+Never write acks or clears back to the cloud.
+
+**Design so far** (full draft: `~/.claude/plans/nested-chasing-lerdorf.md`, local):
+- **Provider capability `alarms`**: `listActiveAlarms()` returns a normalized alarm: `externalId`, type/name, a common severity scale, raised/last-seen times, summary, site, device serials/MACs.
+- **Polling job**: 5 min, with its own env vars, diffing the active set per integration.
+  - A new id records a `DeviceEvent` `alarm.raised`; a gone id records `alarm.cleared`.
+  - Use the `alarm.` prefix, **never `cloud.`**: the cloud status lane and `recordStateIfChanged` treat every `cloud.*` event as a status state.
+  - A failed read clears nothing.
+  - At startup, rebuild the active set from `alarm.raised` events with no matching clear.
+  - Retention and device merge come free with `DeviceEvent`.
+- **Silences** (the user's choices, 2026-10-22): team-wide (operator+, records who and why); one row per `(integrationId, externalId)`, deleted once that occurrence clears. Mirror device-related alarms only (Mist infrastructure/marvis groups, Central System/LAN/WLAN/WAN/Routing/Cluster), widened later through one per-provider constant.
+- **Views**: a "Cloud alarms" interval row on the History tab (like the Config row), a dashboard card, and `GET /api/v1/cloud-alarms`.
+
+**Findings log** (newest last; add dated entries):
+- 2026-10-22, API docs:
+  - Mist `GET /api/v1/orgs/{org}/alarms/search`: time window (`duration`, default `1d`) plus `acked`/`group`/`severity`/`type`; no status filter; `next` paging. Alarm fields: `id` (UUID), `type`, `group`, `severity`, `timestamp`, `last_seen`, `count` (incidents in one alarm window), `status` open\|resolved + `resolved_time`, `switches`/`aps`/`gateways` (MACs), `hostnames`, `acked`. Rate limit 5000 calls/h per token.
+  - New Central `GET /network-notifications/v1/alerts`: OData `filter` on `status` (Active\|Deferred\|Cleared), `siteId`, `category`, `deviceType`; cursor `next`, `limit` ≤ 100.
+  - Central webhook and stream payloads carry `alertId` (same id through Add → Update/Cleared, so a recurrence is a new id), `impactedEntities.deviceSerial` and `additionalDetails[].deviceSerial`. The stream is `wss://<host>/network-notifications/v1/alert-events`: protobuf inside CloudEvents, same OAuth token, **Advance tier only**.
+- 2026-10-22, live, Central ("Home Network"):
+  - The list works, and `filter=status eq 'Active'` / `status in ('Active','Deferred')` work (one transient 502). 2 active, 15 cleared.
+  - Item fields: `id` (UUID; the docs' `"22071893000:…"` example is wrong), `key` (UUIDv3, distinct per subject, e.g. per OSPF peer; whether it survives a recurrence is unconfirmed, as no subject repeated), `name`, `category`, `deviceType`, `severity`, `priority`, `status`, `summary`, `createdAt`, `updatedAt` (`""` while active), `clearedReason`, `siteName`, `deferredUntil`, `notes`, `rootCause`, `action`.
+  - **No serial, siteId or MAC.** The device appears only in `summary` text ("…stopped receiving data from gateway AVGW.").
+  - `alerts/classification?type=impacted_devices` returns counts per alert type only, no serials.
+  - **7 of 15 cleared alerts were cleared by timer** (`clearedReason: "Due to clear alert timer configuration"`) and one by "Device went offline", so a Central clear does not always mean the problem is gone.
+- 2026-10-22, live, Mist ("Buck Home"):
+  - `alarms/search?duration=30d`: 0 results.
+  - The org's alarm template "Default" has `rules: {}`, and its sites set no template of their own, so Mist generates nothing until rules are enabled in Mist.
+  - `GET /api/v1/const/alarm_defs` (248 types): only the marvis group's examples carry `status`, and marvis needs a VNA license. The 157 infrastructure types are point events that come in pairs (`switch_down`/`switch_reconnected`, `sw_alarm_chassis_*`/`*_clear`, `*_down`/`*_up`), and most of the clear/up/reconnected types are `default_enabled: false`.
+- 2026-10-22, tooling: `probe-cloud.js`'s anonymiser does not scrub identifiers inside free text. Central `summary` kept hostnames, a serial and a public IP, so scrub by hand (or fix the anonymiser) before committing alarm fixtures.
+
+**Open questions** (answer these before planning code):
+- [ ] **Mist**: with alarm rules enabled (including the clear/up/reconnected types), capture real infrastructure alarms. Is there really no `status`? Does a pair share anything besides device MAC + type (port or peer in `reasons`)? Is a recurrence a new `id`? Does the org WebSocket serve an alarms channel (`probe-cloud.js --stream '/orgs/<org>/alarms'`)?
+- [ ] **Mist**: is there any VNA/Marvis licence in reach (status-based alarms)?
+- [ ] **Central**: have recent API releases added device serial/siteId to the alerts list, or an alert detail endpoint? Is the Advance tier (alert stream) an option?
+- [ ] **Central**: when a subject recurs, does `key` stay the same while `id` changes? Does `Deferred` show up when an alert is deferred in the UI?
+- [ ] **Central device mapping** if REST stays serial-less: link only when exactly one of the integration's device names in the alert's site appears as a whole word in `summary`, else show the alert site-level (dashboard only)? Or dashboard-only for Central?
+- [ ] **Central timer clears**: show `clearedReason` on the timeline so a timer clear isn't read as recovery? Cross-check against our own cloud/ping status?
+- [ ] **Mist active state** without `status`: treat known down/up pairs as one open interval until the pair arrives, point markers for the rest, and also clear device-offline alarms when Mist reports the device online?
+
+**Re-probe commands** (from `backend/`, `--out` outside the repo):
+```
+node scripts/probe-cloud.js --integration "Buck Home" --out <dir> --no-builtin \
+  --get '/api/v1/orgs/<org>/alarms/search?duration=7d&limit=100' --get /api/v1/orgs/<org>/alarmtemplates
+node scripts/probe-cloud.js --integration "Home Network" --out <dir> \
+  --get "/network-notifications/v1/alerts?limit=100&filter=status in ('Active','Deferred')"
+```
+Two `--get`s with the same path but different queries write to the same file, so use a separate `--out` for each.
+
+#### Related Documentation
+- [Mist Orgs Alarms API (OpenAPI)](https://raw.githubusercontent.com/api-evangelist/mist/refs/heads/main/openapi/mist-orgs-alarms-api-openapi.yml)
+- [New Central: List all alerts](https://developer.arubanetworks.com/new-central/reference/getalertlistv1), [alert stream](https://developer.arubanetworks.com/new-central/docs/alerts), [alert webhooks](https://developer.arubanetworks.com/new-central/docs/alert-with-webhooks), [streaming getting started](https://developer.arubanetworks.com/new-central/docs/streaming-api-getting-started)
+- Related: item 1 (Central webhooks, deferred) and item 2 (our own alerts).
+
+---
+
 ### 3. Live Device State & Performance Dashboards
 **Priority**: Medium
 **Status**: 🔨 Started 2026-10-15 (branch `feat/live-state`): live port/PoE state for AOS-CX
