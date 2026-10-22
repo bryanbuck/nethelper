@@ -59,7 +59,7 @@ Generate secrets with `openssl rand -hex 32`.
 | `JWT_EXPIRES_IN` | `1h` | Access token lifetime. |
 | `JWT_REFRESH_EXPIRES_IN` | `7d` | Refresh token lifetime. Logout and password changes revoke it earlier. |
 | `RATE_LIMIT_WINDOW` | `15` | Minutes. |
-| `RATE_LIMIT_MAX_REQUESTS` | `300` | Requests per window across `/api`, counted per signed-in user (per client IP for requests without a valid token). A limited request gets a JSON 429 with `Retry-After`. |
+| `RATE_LIMIT_MAX_REQUESTS` | `1000` | Requests per window across `/api`, counted per signed-in user (per client IP for requests without a valid token). It catches a runaway client, not attackers (failed logins have their own limit below): one person's busiest 15 minutes measured about 150 requests, and every tab a user has open counts toward the same total. A limited request gets a JSON 429 with `Retry-After`. |
 | `AUTH_RATE_LIMIT_MAX` | `10` | **Failed** login, refresh, and change-password attempts per IP per window. |
 
 ### Logging

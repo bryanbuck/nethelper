@@ -172,6 +172,8 @@ Shipped on the branch (design: `MULTI_VENDOR_ROADMAP.md` §8c):
 
 Deferred:
 - ✅ "Who has this address?" (2026-10-22): device page banner button, `services/address-lookup.service.js`. Clouds answer through the providers' `findByAddress(ip)` (Mist and Central, 2026-10-22): their devices and the clients seen with the IP, with the switch port or AP; a client's MAC stands in for the neighbor table's when the address is off the host's segment.
+- ⏳ Undecided (2026-10-22): when the cloud reports a device offline and another online device in NetHelper has its IP (`sameIpDevices`), that device most likely answers the ping, so this one could show as plain `offline` instead of `warning`. Changes `effectiveStatus()`/`statusWhere` in both tiers (parity-tested) and so the list filter, groups and automations.
+- ⏳ The device page shows "Failed to Load Device" on a 429; it should keep the page and retry after `Retry-After`, as the Devices table does (`DeviceTable.vue`).
 - ⏳ Mist wireless client search (`/orgs/:id/clients/search`) is mapped from the spec; no wireless client was seen in the live org to check the field names.
 - ⏳ Probing the address itself (nmap on one host: reverse DNS, SSH/HTTPS banners and certificate subject) was left out as too heavy; the lookup above covers what NetHelper already holds.
 - ⏳ Who changed a device's config, and exactly when: Mist org audit logs (`/orgs/:id/logs`) and the Central audit trail name the admin; AOS-CX and Junos log commits locally (`show accounting`/`show system commit`). Today the History tab only brackets a change between two backups.

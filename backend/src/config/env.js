@@ -48,7 +48,7 @@ const schema = Joi.object({
   BODY_LIMIT: Joi.string().default('2mb'),
 
   RATE_LIMIT_WINDOW: Joi.number().integer().min(1).default(15),
-  RATE_LIMIT_MAX_REQUESTS: Joi.number().integer().min(1).default(300),
+  RATE_LIMIT_MAX_REQUESTS: Joi.number().integer().min(1).default(1000),
   AUTH_RATE_LIMIT_MAX: Joi.number().integer().min(1).default(10),
 
   LOG_LEVEL: Joi.string().valid('error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly').default('info'),
