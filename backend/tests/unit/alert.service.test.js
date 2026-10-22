@@ -209,6 +209,21 @@ test('resolve by hand frees the subject; clearDevice resolves a device\'s live a
   expect(mockAlerts.filter((x) => x.status !== 'resolved').map((x) => x.rule)).toEqual(['device.offline']);
 });
 
+test('clearExcept resolves a rule\'s alerts for subjects no longer reporting, and drops their pending raises', async () => {
+  const sync = (subjectKey) => ({ subjectKey, title: 't', message: 'm' });
+  await alerts.raise('sync.failed', sync('env:aruba_central'));
+  await alerts.raise('sync.failed', sync('int-central'));
+  await alerts.raise('device.offline', offline());
+  await alerts.updateRule('sync.failed', { settleSeconds: 60 });
+  await alerts.raise('sync.failed', sync('int-gone'));
+
+  expect(await alerts.clearExcept('sync.failed', ['int-central'])).toBe(1);
+  expect(mockAlerts.filter((x) => x.status !== 'resolved').map((x) => x.openKey))
+    .toEqual(['sync.failed:int-central', 'device.offline:d1']);
+  expect(mockAlerts[0]).toMatchObject({ resolvedBy: 'auto', openKey: null });
+  expect(alerts.pending.has('sync.failed:int-gone')).toBe(false);
+});
+
 test('mergeDevices resolves the sources\' open alerts and moves their history', async () => {
   await alerts.raise('device.offline', offline());
   await alerts.mergeDevices(mockPrisma, ['d1'], 'target');

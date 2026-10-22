@@ -22,8 +22,10 @@ jest.mock('../../src/services/cloud-providers/cloud-provider-factory', () => ({
   forIntegration: jest.fn(async () => ({ testConnection: async () => ({ success: true, message: 'ok' }) })),
   invalidate: jest.fn(),
 }));
+jest.mock('../../src/services/alert.service', () => ({ clear: jest.fn() }));
 
 const settingsService = require('../../src/services/settings.service');
+const alertService = require('../../src/services/alert.service');
 
 test('every admin sees an integration another admin created', async () => {
   const list = await settingsService.getCloudIntegrations();
@@ -35,4 +37,21 @@ test('testing an integration finds it by id alone', async () => {
   const result = await settingsService.testCloudIntegration('mist-1');
   expect(result.success).toBe(true);
   expect(mockPrisma.cloudIntegration.findFirst.mock.calls[0][0].where).toEqual({ id: 'mist-1' });
+});
+
+describe('an integration that stops syncing resolves its sync.failed alert', () => {
+  beforeEach(() => alertService.clear.mockClear());
+
+  test('deactivating clears it; an edit that keeps it active does not', async () => {
+    await settingsService.updateCloudIntegration('mist-1', { name: 'Renamed', isActive: true });
+    expect(alertService.clear).not.toHaveBeenCalled();
+
+    await settingsService.updateCloudIntegration('mist-1', { isActive: false });
+    expect(alertService.clear).toHaveBeenCalledWith('sync.failed', { subjectKey: 'mist-1' });
+  });
+
+  test('deleting clears it', async () => {
+    await settingsService.deleteCloudIntegration('mist-1');
+    expect(alertService.clear).toHaveBeenCalledWith('sync.failed', { subjectKey: 'mist-1' });
+  });
 });
