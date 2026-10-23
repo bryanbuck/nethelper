@@ -28,6 +28,7 @@ const ROUTERS = [
   ['backups', 'backup.routes'],
   ['topology', 'topology.routes'],
   ['alerts', 'alert.routes'],
+  ['activity', 'activity.routes'],
   ['automations', 'automation.routes'],
   ['schedules', 'schedule.routes'],
   ['executions', 'execution.routes'],

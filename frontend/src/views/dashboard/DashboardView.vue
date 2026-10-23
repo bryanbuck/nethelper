@@ -90,10 +90,7 @@
         </v-col>
         
         <v-col cols="12" lg="4">
-          <RecentDevicesList 
-            :max-items="8"
-            @view-all="$router.push('/devices')"
-          />
+          <RecentActivityCard :max-items="8" />
         </v-col>
       </v-row>
 
@@ -173,7 +170,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useWebSocket } from '@/composables/useWebSocket'
 import StatsCard from '@/components/dashboard/StatsCard.vue'
 import DeviceStatusChart from '@/components/dashboard/DeviceStatusChart.vue'
-import RecentDevicesList from '@/components/dashboard/RecentDevicesList.vue'
+import RecentActivityCard from '@/components/dashboard/RecentActivityCard.vue'
 
 const router = useRouter()
 const devicesStore = useDevicesStore()

@@ -78,6 +78,16 @@ const routes = [
     }
   },
   {
+    path: '/activity',
+    name: 'Activity',
+    component: () => import('@/views/activity/ActivityView.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Activity',
+      icon: 'mdi-timeline-clock-outline'
+    }
+  },
+  {
     path: '/devices/firmware',
     name: 'FirmwareStatus',
     component: FirmwareStatusView,

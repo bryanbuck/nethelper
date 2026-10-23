@@ -1,6 +1,7 @@
 const { body, param, query, validationResult } = require('express-validator');
 const { VENDORS, PLATFORMS } = require('../constants/vendors');
 const { ALERT_RULES, SEVERITIES, MAX_SETTLE_SECONDS } = require('../constants/alert-rules');
+const { ACTIVITY_CATEGORIES } = require('../constants/activity');
 
 const DEVICE_TYPES = ['access_point', 'switch', 'gateway', 'controller', 'other'];
 const VENDOR_IDS = Object.keys(VENDORS);
@@ -411,6 +412,18 @@ const validateAlerts = {
   ],
 };
 
+const validateActivity = {
+  list: [
+    query('categories').optional().custom((value) => String(value).split(',').every((c) => ACTIVITY_CATEGORIES.includes(c.trim())))
+      .withMessage(`categories must be one or more of ${ACTIVITY_CATEGORIES.join(', ')}`),
+    query('deviceId').optional().isUUID(),
+    query('vendor').optional().isIn(VENDOR_IDS),
+    query('before').optional().isISO8601().withMessage('before must be an ISO timestamp'),
+    query('limit').optional().isInt({ min: 1, max: 200 }).toInt(),
+    handleValidationErrors,
+  ],
+};
+
 const validateOptionalUUID = (paramName) => [
   param(paramName).optional().isUUID().withMessage(`Invalid ${paramName}`),
   handleValidationErrors,
@@ -427,6 +440,7 @@ module.exports = {
   validateBackup,
   validateTopology,
   validateAlerts,
+  validateActivity,
   validateQuery,
   validateUUID,
   validateOptionalUUID,

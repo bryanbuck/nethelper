@@ -4,6 +4,12 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ## [Unreleased]
 
+### Added
+- **Activity** page (`/activity`, in the menu): a rolling feed of what happened to your devices lately, newest first, grouped by day. It shows ping and cloud status changes, restarts, config changes found by backups, and device alerts opening and clearing. Port link and PoE changes are available as a filter but off by default, and repeated changes on the same device or port within ten minutes are folded into one "flapping" line. Filter by kind, vendor or device; it updates live. `GET /api/v1/activity`.
+
+### Changed
+- The dashboard's **Recent Activity** card shows the newest items of the Activity feed. It used to list devices by when they were last seen, and only those on the Devices table page that was loaded.
+
 ## [0.9.0-beta.3] — 2026-10-22
 
 A device History tab and "who has this address?" lookup, a System Status page for admins, a Configuration Change automation trigger, a per-user API rate limit, and fixes from a review of the changes since beta.2. Scope and limitations are unchanged: see [`docs/BETA_NOTES.md`](docs/BETA_NOTES.md).

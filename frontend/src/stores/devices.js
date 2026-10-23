@@ -78,13 +78,6 @@ export const useDevicesStore = defineStore('devices', () => {
     return types
   })
 
-  const recentDevices = computed(() => 
-    devices.value
-      .filter(device => device.lastSeen)
-      .sort((a, b) => new Date(b.lastSeen) - new Date(a.lastSeen))
-      .slice(0, 10)
-  )
-
   async function fetchDevices() {
     loading.value = true
     error.value = null
@@ -480,7 +473,6 @@ export const useDevicesStore = defineStore('devices', () => {
     offlineDevices,
     warningDevices,
     devicesByType,
-    recentDevices,
     fetchDevices,
     fetchDevicesWithPagination,
     ensureAllDevices,

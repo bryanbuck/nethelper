@@ -57,6 +57,11 @@ const allNavigationItems = [
     to: '/map'
   },
   {
+    title: 'Activity',
+    icon: 'mdi-timeline-clock-outline',
+    to: '/activity'
+  },
+  {
     title: 'Alerts',
     icon: 'mdi-bell',
     to: '/alerts'

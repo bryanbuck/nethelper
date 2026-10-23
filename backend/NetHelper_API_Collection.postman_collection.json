@@ -2436,6 +2436,55 @@
       ]
     },
     {
+      "name": "activity",
+      "item": [
+        {
+          "name": "GET /activity",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/activity",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "activity"
+              ],
+              "query": [
+                {
+                  "key": "categories",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "deviceId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "vendor",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "before",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "automations",
       "item": [
         {
