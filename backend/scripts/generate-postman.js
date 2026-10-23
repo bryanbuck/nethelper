@@ -32,6 +32,7 @@ const ROUTERS = [
   ['schedules', 'schedule.routes'],
   ['executions', 'execution.routes'],
   ['settings', 'settings.routes'],
+  ['system', 'system.routes'],
 ];
 
 const SECRET_FIELD = /password|secret|token|apikey|privatekey|passphrase/i;
@@ -241,4 +242,4 @@ if (require.main === module) {
   process.exit(0);
 }
 
-module.exports = { buildCollection, render, OUTPUT };
+module.exports = { buildCollection, render, OUTPUT, ROUTERS };

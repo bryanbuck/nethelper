@@ -122,14 +122,23 @@
       />
     </template>
 
-    <div class="status-meta d-none d-sm-flex">
+    <!-- Admins open System Status from here; everyone else sees the connection state. -->
+    <component
+      :is="authStore.isAdmin ? 'button' : 'div'"
+      class="status-meta d-none d-sm-flex"
+      :class="{ 'status-meta--link': authStore.isAdmin }"
+      :type="authStore.isAdmin ? 'button' : undefined"
+      :title="authStore.isAdmin ? `System status · ${connectionLabel}` : connectionLabel"
+      :aria-label="authStore.isAdmin ? 'System status' : undefined"
+      @click="authStore.isAdmin && router.push('/system')"
+    >
       <span
         class="status-meta__dot"
         :class="`status-meta__dot--${store.connection}`"
-        :title="connectionLabel"
       />
       <span>NetHelper {{ version }} · Beta</span>
-    </div>
+      <v-icon v-if="authStore.isAdmin" size="14" class="status-meta__icon">mdi-monitor-dashboard</v-icon>
+    </component>
   </v-footer>
 
   <!-- Critical alerts only: everything else stays in the bar. -->
@@ -167,12 +176,14 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotificationsStore } from '@/stores/notifications'
+import { useAuthStore } from '@/stores/auth'
 
 defineProps({
   version: { type: String, default: '' }
 })
 
 const store = useNotificationsStore()
+const authStore = useAuthStore()
 const router = useRouter()
 
 const historyOpen = ref(false)
@@ -313,6 +324,24 @@ function runAction(item) {
   font-size: 0.75rem;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   white-space: nowrap;
+}
+.status-meta--link {
+  height: 26px;
+  padding: 0 8px;
+  margin-left: 4px;
+  border-radius: 4px;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  transition: background-color 0.2s;
+}
+.status-meta--link:hover {
+  background: rgba(var(--v-theme-on-surface), var(--v-hover-opacity));
+  color: rgb(var(--v-theme-on-surface));
+}
+.status-meta--link:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary-text));
+}
+.status-meta__icon {
+  opacity: var(--v-medium-emphasis-opacity);
 }
 .status-meta__dot {
   width: 8px;

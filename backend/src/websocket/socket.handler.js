@@ -76,6 +76,27 @@ function initializeSocket(server) {
       });
     });
 
+    // System Status page (admins only). Sockets carry only the user id, so
+    // the role is read on subscribe; the ack carries the current snapshot.
+    socket.on('subscribe:system-status', async (_payload, ack) => {
+      const reply = typeof ack === 'function' ? ack : () => {};
+      try {
+        const { getPrisma } = require('../config/database');
+        const user = await getPrisma().user.findUnique({ where: { id: socket.userId }, select: { role: true } });
+        if (user?.role !== 'admin') return reply({ ok: false, error: 'Admins only' });
+        const systemStatus = require('../services/system-status.service');
+        socket.join(systemStatus.SYSTEM_STATUS_ROOM);
+        reply({ ok: true, snapshot: await systemStatus.snapshot() });
+      } catch (error) {
+        logger.warn(`System status subscribe failed: ${error.message}`);
+        reply({ ok: false, error: error.message });
+      }
+    });
+
+    socket.on('unsubscribe:system-status', () => {
+      socket.leave(require('../services/system-status.service').SYSTEM_STATUS_ROOM);
+    });
+
     socket.on('subscribe:automation', (automationId) => {
       socket.join(`automation:${automationId}`);
       logger.debug(`User ${socket.userId} subscribed to automation ${automationId}`);

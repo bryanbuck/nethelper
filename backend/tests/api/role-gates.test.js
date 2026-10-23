@@ -23,6 +23,7 @@ const ROUTERS = {
   users: require('../../src/routes/users.routes'),
   topology: require('../../src/routes/topology.routes'),
   alerts: require('../../src/routes/alert.routes'),
+  system: require('../../src/routes/system.routes'),
 };
 
 // Reads that are still restricted, because the response carries secrets or
@@ -36,6 +37,7 @@ const RESTRICTED_READS = [
   'GET /backups/scopes/:scopeBackupId/diff/:otherId',
   'GET /settings/git-backup',
   'GET /users/',
+  'GET /system/',
 ];
 
 // Operator-level actions that only admins may take.
@@ -62,6 +64,7 @@ const ADMIN_ONLY = [
   'PUT /users/:id',
   'POST /users/:id/reset-password',
   'DELETE /users/:id',
+  'GET /system/',
 ];
 
 const UUID = '00000000-0000-4000-8000-000000000000';

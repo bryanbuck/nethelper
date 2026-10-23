@@ -9,13 +9,20 @@ const { createFakePrisma } = require('../helpers/fake-prisma');
 const mockPrisma = createFakePrisma();
 jest.mock('../../src/config/database', () => ({ getPrisma: () => mockPrisma }));
 
-const { render, OUTPUT } = require('../../scripts/generate-postman');
+const path = require('path');
+const { render, OUTPUT, ROUTERS } = require('../../scripts/generate-postman');
 
 describe('Postman collection', () => {
   const committed = fs.readFileSync(OUTPUT, 'utf8');
 
   test('matches the route tables (run node scripts/generate-postman.js)', () => {
     expect(committed).toBe(render());
+  });
+
+  test('covers every router app.js mounts', () => {
+    const app = fs.readFileSync(path.join(__dirname, '../../src/app.js'), 'utf8');
+    const mounted = [...app.matchAll(/require\('\.\/routes\/([\w.-]+)'\)/g)].map((m) => m[1]).sort();
+    expect(ROUTERS.map(([, file]) => file).sort()).toEqual(mounted);
   });
 
   test('carries no credentials', () => {

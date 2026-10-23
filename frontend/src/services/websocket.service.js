@@ -181,10 +181,6 @@ class WebSocketService {
     this.socket.on('alert:new', (data) => this.handleNewAlert(data))
     this.socket.on('alert:updated', (data) => this.handleAlertUpdated(data))
 
-    // Additional system events
-    this.socket.on('metrics:update', (data) => this.handleMetricsUpdate(data))
-    this.socket.on('system:maintenance', (data) => this.handleSystemMaintenance(data))
-
     console.log('WebSocket event handlers registered')
   }
 
@@ -521,57 +517,6 @@ class WebSocketService {
    */
   handleAlertUpdated(data) {
     this.stores.alerts.handleUpdated(data)
-  }
-
-  /**
-   * Handle metrics update events
-   * @param {Object} data - Metrics data
-   */
-  handleMetricsUpdate(data) {
-    console.log('Metrics update received:', data)
-    
-    try {
-      // Update device statistics if included
-      if (data.deviceMetrics) {
-        this.stores.devices.updateStats()
-      }
-      
-      // Update execution statistics if included
-      if (data.executionMetrics) {
-        // This would update execution stats in the store
-        // Implementation depends on specific metrics structure
-      }
-      
-    } catch (error) {
-      console.error('Error handling metrics update:', error)
-    }
-  }
-
-  /**
-   * Handle system maintenance events
-   * @param {Object} data - Maintenance data
-   */
-  handleSystemMaintenance(data) {
-    console.log('System maintenance event:', data)
-    
-    try {
-      const { type, message, scheduledAt, duration } = data
-      
-      this.stores.notifications.addNotification({
-        type: 'warning',
-        title: 'System Maintenance',
-        message: message || 'System maintenance scheduled',
-        persistent: true,
-        metadata: {
-          maintenanceType: type,
-          scheduledAt,
-          duration
-        }
-      })
-      
-    } catch (error) {
-      console.error('Error handling system maintenance:', error)
-    }
   }
 
   notifyConnectionFailed() {

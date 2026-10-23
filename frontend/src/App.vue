@@ -84,6 +84,12 @@ const allNavigationItems = [
     adminOnly: true
   },
   {
+    title: 'System Status',
+    icon: 'mdi-monitor-dashboard',
+    to: '/system',
+    adminOnly: true
+  },
+  {
     title: 'Settings',
     icon: 'mdi-cog',
     to: '/settings'

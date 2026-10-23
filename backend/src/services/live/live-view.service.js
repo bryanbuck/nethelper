@@ -38,6 +38,13 @@ class LiveViewService {
     this.pollers = new Map(); // deviceId -> { timer, previous, previousAt }
   }
 
+  /** Counts for the System Status page: devices on a Live tab and their viewers. */
+  stats() {
+    let viewers = 0;
+    for (const set of this.viewers.values()) viewers += set.size;
+    return { devices: this.viewers.size, viewers };
+  }
+
   /**
    * Start watching a device for one viewer (a socket id).
    * @returns {Promise<Object>} the current state snapshot (may be empty while connecting)

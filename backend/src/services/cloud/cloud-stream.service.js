@@ -311,6 +311,18 @@ class CloudStreamService {
     for (const stream of this.streams.values()) stream.sweep(now);
   }
 
+  /** Every open stream with its integration, for the System Status page. */
+  stats() {
+    return {
+      enabled: enabled(),
+      streams: [...this.streams.entries()].map(([integrationId, stream]) => ({
+        integrationId,
+        label: stream.label,
+        ...stream.status(),
+      })),
+    };
+  }
+
   /** The stream state of one integration, or null when it has none. */
   status(integrationId) {
     return this.streams.get(integrationId)?.status() || null;

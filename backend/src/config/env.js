@@ -76,6 +76,8 @@ const schema = Joi.object({
   DEVICE_EVENT_RETENTION_DAYS: Joi.number().integer().min(1).default(30),
   ALERT_RETENTION_DAYS: Joi.number().integer().min(1).default(90),
   EXECUTION_RETENTION_DAYS: Joi.number().integer().min(1).default(90),
+  // System Status page sample interval (milliseconds; the last hour is kept in memory).
+  SYSTEM_SAMPLE_INTERVAL_MS: Joi.number().integer().min(1000).default(5000),
 
   // Scheduled cloud sync and the lighter cloud status refresh (jobs/device-sync.job.js). Milliseconds.
   CLOUD_SYNC_ENABLED: Joi.string().valid('true', 'false').default('true'),

@@ -108,6 +108,12 @@ Production writes JSON logs to stdout. Values under secret-looking keys (passwor
 | `ALERT_RETENTION_DAYS` | `90` | Resolved alerts older than this are deleted daily. |
 | `EXECUTION_RETENTION_DAYS` | `90` | Finished automation runs (Run History) older than this are deleted daily. |
 
+### System Status page
+
+| Variable | Default | Notes |
+|---|---|---|
+| `SYSTEM_SAMPLE_INTERVAL_MS` | `5000` | Milliseconds between samples of process, request, socket and queue stats (minimum 1000). The last hour is kept in memory and lost on restart. Database, Redis, disk and usage figures are read at most once a minute, and only while an admin has the page open. |
+
 ### Cloud sync and status
 
 | Variable | Default | Notes |
