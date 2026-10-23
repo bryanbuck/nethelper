@@ -598,6 +598,20 @@ Admin-only page at `/system`, opened from the version indicator at the right of 
 
 ---
 
+### 14. Activity feed (fleet-wide device activity)
+**Priority**: Medium
+**Status**: ✅ Built 2026-10-23 on `feat/activity-feed` (not yet released)
+
+A rolling feed of what happened to the managed devices, at `/activity` (nav item) and in the dashboard's Recent Activity card (which used to be just the loaded table page sorted by `lastSeen`). Separate from the status bar, which is about NetHelper itself. `GET /api/v1/activity` (`services/activity.service.js`, any signed-in role, read-only) merges rows other services already write: `DeviceEvent` status changes (ping/cloud) and restarts, `ConfigBackup` successes that found a change, and device alerts opened/resolved. Noise control: a device's first ping/cloud state (no `data.previous`) is a History starting point, not news; a device's first successful backup is a capture, not a change; the ping/cloud offline alert rules are left out (their status events say it) and so are resolutions by merge; port link/PoE/live-monitor events are a separate `port` category, off by default; repeats of one kind on one device/port within 10 minutes fold into one "flapping" item with a count. Filters: categories, vendor, device (kept in the URL); paging by `before`. The page refetches its newest items a few seconds after a relevant `device:event`, `backup:completed` (with changes) or `alert:*`.
+
+**Deferred**:
+- Device-group and free-text filters; a link from the device page to its filtered feed.
+- Sync results (devices adopted, possible duplicates, devices that left a cloud) and discovery imports as feed items: they aren't stored per device today.
+- Folding spans one page only: a flap split across a page boundary shows as two items.
+- Per-port noise rules (e.g. show uplink ports only) once ports carry a role.
+
+---
+
 ## ✅ Completed Items
 
 Recently shipped (details in the sections above): Automated Device Discovery (item 4), Configuration Backup Scheduling (item 5), Direct-managed device support / SSH config pull (5a), Central-managed detection core (5b), Multi-Vendor Phases 0–2 (5c).

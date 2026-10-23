@@ -36,7 +36,6 @@ describe('devices store', () => {
     expect(store.devices).toHaveLength(4)
     expect(store.stats).toEqual({ total: 4, online: 1, offline: 1, warning: 1 })
     expect(store.devicesByType.switch.map((d) => d.id)).toEqual(['1', '2'])
-    expect(store.recentDevices.map((d) => d.id)).toEqual(['2', '1'])
     expect(store.loading).toBe(false)
     expect(store.lastSync).toBeInstanceOf(Date)
   })

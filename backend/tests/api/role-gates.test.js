@@ -23,6 +23,7 @@ const ROUTERS = {
   users: require('../../src/routes/users.routes'),
   topology: require('../../src/routes/topology.routes'),
   alerts: require('../../src/routes/alert.routes'),
+  activity: require('../../src/routes/activity.routes'),
   system: require('../../src/routes/system.routes'),
 };
 
