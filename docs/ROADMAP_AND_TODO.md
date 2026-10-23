@@ -512,6 +512,44 @@ Built-in themes only. Users can't define their own. See "Themes" in `CLAUDE.md` 
 
 ---
 
+### 12. Scale-out (larger fleets, multiple backend instances)
+**Priority**: High
+**Status**: Not Started (planned 2026-10-22)
+**Estimated effort**: Large (phased; each work item below ships on its own)
+
+**Targets**: thousands of switches and APs, 10,000s of connected network clients (end-user devices on the managed network), and at most 100–200 signed-in NetHelper users, usually far fewer. NetHelper stores no network clients; only the on-demand address lookup reads them.
+
+**Architecture decision**: keep nginx (or a load balancer/ingress) in front of Express. Express could serve the SPA (hashed, immutable-cached assets are not a load problem), but nginx does TLS and slow-client buffering, and becomes the load balancer once there is more than one backend (WebSocket upgrade, sticky sessions).
+
+**Work items**, in priority order:
+1. **Multi-instance readiness** (the blocker). Several parts hold single-instance state in memory: the live monitor (`live/state-monitor.service.js`), alert settle timers (`alert.service.js`), cloud event streams (`cloud/cloud-stream.service.js`), the API rate-limit store (`middleware/rate-limit.js`, express-rate-limit's default MemoryStore), and Socket.io (no adapter, so an emit reaches only that instance's clients). Needs `@socket.io/redis-adapter`, a Redis rate-limit store, leader election or sharding (a Redis lock) for the monitor, streams and alert timers, and sticky sessions in nginx.
+2. **Ping monitor throughput** (`ping-monitor.service.js`): lockstep batches of 20, a 5 s timeout, a 500 ms pause between batches, and one `ping` process per check. One offline device holds its whole batch for the timeout. Options: a bounded concurrency pool instead of lockstep batches, a shorter timeout for devices already known offline, skipping a cycle while the previous one still runs, or a raw-ICMP/fping-style sweep.
+3. **API / worker split**: Bull processors run in the API process, on the event loop that answers HTTP. Add a worker entrypoint (e.g. `WORKER_ROLE=api|worker|all`, default `all`) so jobs scale separately; the queues are already shared through Redis.
+4. **Per-device job distribution**: a config backup run handles one device at a time (the run loop in `config-backup.service.js`); give it a concurrency setting like `TOPOLOGY_CONCURRENCY`. Live monitoring is capped at `LIVE_MAX_CONNECTIONS` (200) per process; spread it across workers once item 1 exists.
+5. **Socket fan-out** (Low at ≤200 sessions): `device:status:update` and `device:event` are global broadcasts. Scope them to subscribed clients only if large fleets make them noisy.
+
+#### Current limits (estimated from code defaults, not load-tested)
+Replace an estimate with a measured value when one exists.
+
+| Area | Practical limit today | Why | Tunable |
+|---|---|---|---|
+| Backend instances | **1** | In-memory state (item 1) | — |
+| Ping monitoring (60 s cycle) | **~500 devices** dependable; ~2,000 if all answer, ~220 if every batch holds an offline device | Batches of 20; an offline device costs the 5 s timeout; 500 ms between batches | `PING_MONITOR_BATCH_SIZE`, `PING_MONITOR_TIMEOUT`, `PING_MONITOR_INTERVAL` |
+| Config backup run | **~1,000–2,000 devices** in a 6 h window, at ~10–20 s per device | One device at a time | none yet (item 4) |
+| Live monitoring | **200 devices** | Hard cap; one WebSocket per device, one process | `LIVE_MAX_CONNECTIONS` |
+| Topology collection | thousands per 6 h cycle | 4 devices in parallel; cloud neighbors read in bulk per integration | `TOPOLOGY_CONCURRENCY` (max 32), `TOPOLOGY_INTERVAL` |
+| Central address lookup | **20,000 clients** | Walks the whole client list sequentially, 20 pages × 1000; clients past the cap are missed without a warning | code constant (`aruba-central.provider.js` `findByAddress`) |
+| Mist address lookup | no client-count limit | IP-filtered searches (`limit: 20`) | — |
+| Mist API budget | 5,000 requests/hour per org | The status refresh is one paged read (1000 per page) every 5 min; per-device calls (config backups) count against the budget | `CLOUD_STATUS_INTERVAL`, `CLOUD_SYNC_INTERVAL` |
+| Mist list pagination | 100,000 items per list | 100 pages × 1000, then a logged warning | code constant (`mist.provider.js`) |
+| Discovery sweep | /16 accepted, but a /16 likely exceeds the nmap timeout; ~/20 is practical | nmap `-sn -T4`, one scan at a time | `DISCOVERY_SCAN_TIMEOUT` |
+| Network Map | a few hundred nodes per view | vue-flow + dagre render every node | the map's site filter |
+| Full-inventory pickers | ~5,000 devices | `devicesStore.ensureAllDevices()` loads every row; the device table itself is server-paginated | — |
+| Signed-in users | 100–200 is fine | Stateless JWTs; 1000 requests per 15 min per user | `RATE_LIMIT_MAX_REQUESTS` |
+| Database connections | Prisma's default pool (CPUs × 2 + 1) | Can contend under heavy job load | `connection_limit` in `DATABASE_URL` |
+
+---
+
 ## 🎯 How to Use This File
 
 ### Adding New Items
