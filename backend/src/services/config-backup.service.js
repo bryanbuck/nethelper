@@ -1,6 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
+const { EventEmitter } = require('events');
 const { CronExpressionParser } = require('cron-parser');
 const { getPrisma } = require('../config/database');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
@@ -43,6 +44,10 @@ class ConfigBackupService {
   constructor() {
     this.storageDir = process.env.BACKUP_STORAGE_PATH
       || path.resolve(__dirname, '../../storage/config-backups');
+    // In-process events (not Socket.io): 'changed' when a backup finds a
+    // device's config differs from its previous successful backup. The
+    // automation Configuration Change trigger listens to it.
+    this.events = new EventEmitter();
   }
 
   emit(event, data) {
@@ -275,6 +280,19 @@ class ConfigBackupService {
         ...(warning && { warning }),
       });
       alertService.clear('backup.failed', { subjectKey: `device:${device.id}` });
+      // A first backup has nothing to compare with: not a change to act on.
+      if (previous && hasChanges) {
+        try {
+          this.events.emit('changed', {
+            device: fullDevice || device,
+            backupId: updated.id,
+            previousBackupId: previous.id,
+            changedKinds: captured.filter((a) => previousByKind[a.kind] !== a.checksum).map((a) => a.kind),
+          });
+        } catch (listenerError) {
+          logger.warn(`Config change listener failed for ${device.name}: ${listenerError.message}`);
+        }
+      }
       return 'success';
     } catch (error) {
       // A CapabilityError means the device's platform genuinely has nothing to

@@ -448,8 +448,9 @@ class WebSocketService {
   handleAutomationStarted(data) {
     try {
       this.stores.executions.handleStarted(data)
-      // Only runs someone started by hand announce themselves; schedules and
-      // alert triggers run unattended and speak up only when they fail.
+      // Only runs someone started by hand announce themselves; schedules,
+      // alert and config change triggers run unattended and speak up only
+      // when they fail.
       if (data.trigger === 'manual') {
         this.stores.notifications.addAutomationNotification('started', {
           id: data.automationId,

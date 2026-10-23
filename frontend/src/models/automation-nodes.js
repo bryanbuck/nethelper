@@ -7,6 +7,7 @@
 export const RUNNABLE_NODES = new Set([
   'trigger:manual',
   'trigger:alert',
+  'trigger:config-change',
   'trigger:schedule',
   'condition:device-property',
   'condition:alert-severity',
@@ -45,6 +46,12 @@ export const ALERT_SEVERITY_OPERATORS = [
 export const ALERT_TRIGGER_EVENTS = [
   { title: 'An alert opens', value: 'opened' },
   { title: 'An alert resolves', value: 'resolved' }
+]
+
+// ConfigBackupArtifact kinds a Configuration Change trigger can be limited to
+export const CONFIG_CHANGE_KINDS = [
+  { title: 'CLI config', value: 'cli' },
+  { title: 'Structured (JSON)', value: 'structured' }
 ]
 
 // Placeholders the Raise alert title/message accept

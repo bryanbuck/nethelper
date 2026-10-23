@@ -231,6 +231,13 @@ const triggerNodes = [
     color: 'success'
   },
   {
+    type: 'config-change',
+    label: 'Config Change',
+    description: 'When a backup finds a configuration change',
+    icon: 'mdi-file-compare',
+    color: 'success'
+  },
+  {
     type: 'device-status',
     label: 'Device Status',
     description: 'Trigger on device state change',

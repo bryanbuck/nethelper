@@ -357,6 +357,45 @@ describe('backupDevice', () => {
     expect(mockDb.backups[2].hasChanges).toBe(true);
   });
 
+  test("emits 'changed' only for a change against an earlier backup, naming the changed kinds", async () => {
+    const device = addDevice({ vendor: 'aruba', platform: 'aos-cx', serial: 'CX4' });
+    const changes = [];
+    const listener = (change) => changes.push(change);
+    configBackupService.events.on('changed', listener);
+    try {
+      devicePoller.backupPoller.mockResolvedValue({ running_config: { a: 1 }, running_config_cli: 'hostname cx\n' });
+      await configBackupService.backupDevice(device); // first backup: nothing to compare with
+      await configBackupService.backupDevice(device); // unchanged
+      expect(changes).toEqual([]);
+
+      devicePoller.backupPoller.mockResolvedValue({ running_config: { a: 2 }, running_config_cli: 'hostname cx\n' });
+      await configBackupService.backupDevice(device);
+      expect(changes).toEqual([expect.objectContaining({
+        backupId: mockDb.backups[2].id,
+        previousBackupId: mockDb.backups[1].id,
+        changedKinds: ['structured'],
+      })]);
+      expect(changes[0].device.id).toBe(device.id);
+    } finally {
+      configBackupService.events.off('changed', listener);
+    }
+  });
+
+  test("a throwing 'changed' listener never fails the backup", async () => {
+    const device = addDevice({ vendor: 'aruba', platform: 'aos-s', serial: 'S9' });
+    const listener = () => { throw new Error('boom'); };
+    configBackupService.events.on('changed', listener);
+    try {
+      sshDeviceService.getRunningConfig.mockResolvedValue('hostname a\n');
+      await configBackupService.backupDevice(device);
+      sshDeviceService.getRunningConfig.mockResolvedValue('hostname b\n');
+      expect(await configBackupService.backupDevice(device)).toBe(true);
+      expect(mockDb.backups[1]).toMatchObject({ status: 'success', hasChanges: true });
+    } finally {
+      configBackupService.events.off('changed', listener);
+    }
+  });
+
   test('a pre-artifact JSON-only row compares by kind, so new CLI is a change', async () => {
     const device = addDevice({ vendor: 'aruba', platform: 'aos-cx', serial: 'CX3' });
     const json = JSON.stringify({ a: 1 }, null, 2);

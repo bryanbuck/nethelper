@@ -16,7 +16,7 @@ router.get('/', [
   query('status').optional().isIn(['pending', 'running', 'success', 'failed', 'cancelled']),
   query('automationId').optional().isUUID(),
   query('deviceId').optional().isUUID(),
-  query('trigger').optional().isIn(['manual', 'schedule', 'alert']),
+  query('trigger').optional().isIn(['manual', 'schedule', 'alert', 'config-change']),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);

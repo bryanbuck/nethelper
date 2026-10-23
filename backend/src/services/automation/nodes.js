@@ -7,7 +7,9 @@
  * run(ctx, config) -> result }. Conditions return true or false (the branch
  * taken); a thrown error fails the node.
  *
- * ctx: { automation: {id, name}, device?, alert?, executionId }
+ * ctx: { automation: {id, name}, device?, alert?, configChange?, executionId }
+ * (configChange: { backupId, previousBackupId, changedKinds } on a
+ * Configuration Change run)
  */
 
 const { CronExpressionParser } = require('cron-parser');
@@ -18,6 +20,7 @@ const { ALERT_RULES, SEVERITIES } = require('../../constants/alert-rules');
 
 const AUTOMATION_RULE = 'automation.raised';
 const ALERT_EVENTS = ['opened', 'resolved'];
+const CONFIG_KINDS = ['cli', 'structured']; // ConfigBackupArtifact kinds
 
 // Device fields a condition can test (what NetHelper actually stores).
 const DEVICE_PROPERTIES = {
@@ -91,6 +94,12 @@ function alertTriggerMatches(config, event, alert) {
   return true;
 }
 
+/** Does a Configuration Change trigger's config match this change? Group membership is checked by the caller. */
+function configChangeTriggerMatches(config, change) {
+  if (!config.kinds?.length) return true;
+  return (change.changedKinds || []).some((kind) => config.kinds.includes(kind));
+}
+
 const NODES = {
   'trigger:manual': {
     validate: validateTargets,
@@ -123,6 +132,22 @@ const NODES = {
       return errors;
     },
     run: (ctx) => ({ alertId: ctx.alert?.id, rule: ctx.alert?.rule }),
+  },
+
+  'trigger:config-change': {
+    validate(config) {
+      const errors = [];
+      if (config.deviceGroupId != null && typeof config.deviceGroupId !== 'string') errors.push('deviceGroupId must be an id');
+      if (config.kinds != null && !(Array.isArray(config.kinds) && config.kinds.every((k) => CONFIG_KINDS.includes(k)))) {
+        errors.push(`kinds must be a list of ${CONFIG_KINDS.join(', ')}`);
+      }
+      return errors;
+    },
+    run: (ctx) => ({
+      backupId: ctx.configChange?.backupId,
+      previousBackupId: ctx.configChange?.previousBackupId,
+      changedKinds: ctx.configChange?.changedKinds,
+    }),
   },
 
   'condition:device-property': {
@@ -211,7 +236,7 @@ const NODES = {
   },
 };
 
-/** Is deviceId a member of the device group (alert triggers can be scoped to a group)? */
+/** Is deviceId a member of the device group (alert and config change triggers can be scoped to a group)? */
 async function deviceInGroup(deviceId, groupId) {
   if (!deviceId) return false;
   const n = await getPrisma().device.count({ where: { id: deviceId, deviceGroups: { some: { id: groupId } } } });
@@ -224,6 +249,7 @@ module.exports = {
   DEVICE_PROPERTIES,
   automationSubject,
   alertTriggerMatches,
+  configChangeTriggerMatches,
   deviceInGroup,
   render,
   parseSchedule,

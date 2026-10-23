@@ -2,7 +2,7 @@
  * Runs one automation for one device (or none) through the graph engine
  * (services/automation/engine.js).
  *
- * Job 'run': { automationId, executionId?, deviceId?, alertId?, trigger }.
+ * Job 'run': { automationId, executionId?, deviceId?, alertId?, configChange?, trigger }.
  * Run Now and schedules create the Execution row up front (executionId);
  * alert-triggered runs create it here. A run cancelled while pending never
  * starts; one cancelled while running stops before its next step.
@@ -25,7 +25,7 @@ function emit(event, payload) {
   }
 }
 
-async function runAutomation({ automationId, executionId, deviceId, alertId, trigger }) {
+async function runAutomation({ automationId, executionId, deviceId, alertId, configChange, trigger }) {
   const prisma = getPrisma();
   const automation = await prisma.automation.findUnique({
     where: { id: automationId },
@@ -62,7 +62,7 @@ async function runAutomation({ automationId, executionId, deviceId, alertId, tri
   try {
     if (!automation.enabled) throw new Error('The automation is disabled');
     if (alertId && !alert) throw new Error('The alert that triggered this run no longer exists');
-    const result = await engine.run(automation, { device, alert, executionId: execution.id, shouldStop });
+    const result = await engine.run(automation, { device, alert, configChange, executionId: execution.id, shouldStop });
     status = result.status;
     output = { trigger, results: result.results };
     if (status === 'failed') error = result.results.filter((r) => r.status === 'failed').map((r) => `${r.label}: ${r.error}`).join('; ');
