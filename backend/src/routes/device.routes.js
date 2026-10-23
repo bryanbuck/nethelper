@@ -107,8 +107,9 @@ router.get('/:deviceId/events', deviceController.getDeviceEvents);
 // History tab: ping/cloud status lanes and backup/restart markers over a window
 router.get('/:deviceId/history', validateUUID('deviceId'), deviceController.getDeviceHistory);
 
-// What else holds this device's IP address (other devices, clouds, neighbor table, LLDP, discovery)
-router.get('/:deviceId/address-lookup', validateUUID('deviceId'), deviceController.lookupAddress);
+// What else holds this device's IP address (other devices, clouds, neighbor table, LLDP, discovery).
+// Operator+: it spends cloud API quota and returns cloud client records.
+router.get('/:deviceId/address-lookup', authorize('admin', 'operator'), validateUUID('deviceId'), deviceController.lookupAddress);
 
 // Network Map: this device's LLDP/CDP neighbors
 router.get('/:deviceId/neighbors', validateUUID('deviceId'), topologyController.getDeviceNeighbors);

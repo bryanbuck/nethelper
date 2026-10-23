@@ -683,4 +683,20 @@ describe('findByAddress', () => {
       }),
     ]);
   });
+
+  test('Central stops paging the client list at the first connected holder', async () => {
+    const central = new ArubaCentralProvider({
+      id: 'int-1', provider: 'aruba_central', name: 'Central', baseUrl: 'https://central.example.com',
+      credentials: { clientId: 'c', clientSecret: 's' },
+    });
+    const makeRequest = jest.spyOn(central, 'makeRequest').mockImplementation(async (method, endpoint) => (
+      endpoint.endsWith('/devices')
+        ? { items: [] }
+        : { items: [{ mac: '00:50:56:86:eb:83', ipv4: '192.168.252.4', status: 'Connected' }], next: 'more' }
+    ));
+
+    const holders = await central.findByAddress('192.168.252.4');
+    expect(makeRequest).toHaveBeenCalledTimes(2); // device search + one client page
+    expect(holders).toEqual([expect.objectContaining({ kind: 'client', status: 'connected' })]);
+  });
 });

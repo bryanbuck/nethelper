@@ -20,6 +20,7 @@ jest.mock('../../src/websocket/socket.handler', () => {
 });
 jest.mock('../../src/services/cloud-providers/cloud-provider-factory', () => ({
   activeProviders: jest.fn(async () => []),
+  activeIntegrations: jest.fn(async () => ({ providers: [], skipped: [] })),
   ENV_ARUBA_INTEGRATION_ID: 'env-aruba-central',
 }));
 
@@ -281,7 +282,7 @@ describe('scheduled jobs', () => {
   test('a scheduled sync with no cloud integration is skipped quietly', async () => {
     const queue = fakeQueue();
     deviceSyncJob(queue);
-    CloudProviderFactory.activeProviders.mockResolvedValue([]);
+    CloudProviderFactory.activeIntegrations.mockResolvedValue({ providers: [], skipped: [] });
     const sync = jest.spyOn(deviceService, 'syncDevicesFromCloud');
 
     const result = await queue.processors.syncDevices({ id: 1, data: {}, opts: { repeat: { every: 3600000 } }, attemptsMade: 0 });
@@ -291,10 +292,20 @@ describe('scheduled jobs', () => {
     expect(socket.emit).not.toHaveBeenCalled();
   });
 
+  test('a scheduled sync still runs when every integration fails to load, so each gets an alert', async () => {
+    const queue = fakeQueue();
+    deviceSyncJob(queue);
+    CloudProviderFactory.activeIntegrations.mockResolvedValue({ providers: [], skipped: [{ id: 'int-1', name: 'Mist', error: 'Failed to decrypt data' }] });
+    const sync = jest.spyOn(deviceService, 'syncDevicesFromCloud').mockResolvedValue({ total: 0, integrations: [] });
+
+    await queue.processors.syncDevices({ id: 3, data: {}, opts: { repeat: { every: 3600000 } }, attemptsMade: 0 });
+    expect(sync).toHaveBeenCalled();
+  });
+
   test('sync results carry their trigger, so the UI can stay quiet about scheduled ones', async () => {
     const queue = fakeQueue();
     deviceSyncJob(queue);
-    CloudProviderFactory.activeProviders.mockResolvedValue([{}]);
+    CloudProviderFactory.activeIntegrations.mockResolvedValue({ providers: [{}], skipped: [] });
     jest.spyOn(deviceService, 'syncDevicesFromCloud').mockResolvedValue({ total: 2, integrations: [] });
 
     await queue.processors.syncDevices({ id: 2, data: {}, opts: { repeat: { every: 3600000 } }, attemptsMade: 0 });

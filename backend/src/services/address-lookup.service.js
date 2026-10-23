@@ -32,6 +32,25 @@ const logger = require('../utils/logger');
 
 const execFileAsync = promisify(execFile);
 
+// Cloud answers per (integration, address), kept briefly and shared by
+// concurrent lookups: Central pages through its whole client list for each
+// one, against a tenant quota that sync and the status refresh also use.
+const CLOUD_CACHE_MS = 60 * 1000;
+const cloudCache = new Map(); // `${integrationId}:${ip}` -> { at, promise }
+
+function cachedFindByAddress(provider, ip, now = Date.now()) {
+  if (!provider.id) return provider.findByAddress(ip);
+  const key = `${provider.id}:${ip}`;
+  const hit = cloudCache.get(key);
+  if (hit && now - hit.at < CLOUD_CACHE_MS) return hit.promise;
+  for (const [k, entry] of cloudCache) if (now - entry.at >= CLOUD_CACHE_MS) cloudCache.delete(k);
+  const promise = provider.findByAddress(ip);
+  cloudCache.set(key, { at: now, promise });
+  // A failure isn't kept: the next lookup tries again.
+  promise.catch(() => { if (cloudCache.get(key)?.promise === promise) cloudCache.delete(key); });
+  return promise;
+}
+
 const found = (key, label, items, extra = {}) => ({ key, label, status: items.length ? 'found' : 'none', items, ...extra });
 const skipped = (key, label, reason) => ({ key, label, status: 'skipped', reason, items: [] });
 
@@ -119,7 +138,7 @@ async function cloudRecords(prisma, device) {
       return;
     }
     try {
-      for (const holder of await provider.findByAddress(device.ipAddress)) {
+      for (const holder of await cachedFindByAddress(provider, device.ipAddress)) {
         const self = holder.kind === 'device'
           && ((device.serial && holder.serial === device.serial) || (ownMac && holder.mac === ownMac));
         if (!self) matches.push({ holder, integration });
@@ -289,4 +308,4 @@ async function lookup(deviceId) {
   };
 }
 
-module.exports = { lookup };
+module.exports = { lookup, CLOUD_CACHE_MS, _resetCache: () => cloudCache.clear() };

@@ -317,19 +317,26 @@ class ArubaCentralProvider extends BaseCloudProvider {
         };
       });
 
+    // The client list can't be filtered by IP, so it is paged through; stop at
+    // the first connected client holding the address (one holds it at a
+    // time), which on a busy tenant usually saves most of the pages.
     let next;
     let pages = 0;
+    let connected = false;
     do {
       const page = await this.makeRequest('GET', '/network-monitoring/v1alpha1/clients', {
         params: { limit: 1000, ...(next && { next }) },
         context: 'address_lookup',
       });
       for (const item of page.items || []) {
-        if (item.ipv4 === ip) holders.push(centralClientHolder(item, this.parseTimestamp(item.lastSeenAt)));
+        if (item.ipv4 !== ip) continue;
+        const holder = centralClientHolder(item, this.parseTimestamp(item.lastSeenAt));
+        holders.push(holder);
+        if (holder.status === 'connected') connected = true;
       }
       next = page.next;
       pages += 1;
-    } while (next && pages < 20);
+    } while (next && !connected && pages < 20);
     return holders;
   }
 

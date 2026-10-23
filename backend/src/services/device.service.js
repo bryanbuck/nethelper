@@ -40,6 +40,14 @@ const SORT_FIELDS = {
 };
 const DEFAULT_ORDER = [{ pingStatus: 'asc' }, { name: 'asc' }];
 
+// Why an active integration couldn't be loaded, in words an admin can act on.
+function skippedReason(error) {
+  if (/decrypt|encrypted text|ENCRYPTION_KEY/i.test(error || '')) {
+    return `its credentials can't be decrypted (${error}). If ENCRYPTION_KEY changed, run npm run key:rotate, or re-enter the credentials in Settings.`;
+  }
+  return `it can't be loaded: ${error}`;
+}
+
 function deviceOrderBy(sortBy, sortOrder) {
   const dir = sortOrder === 'desc' ? 'desc' : 'asc';
   const order = SORT_FIELDS[sortBy] ? SORT_FIELDS[sortBy](dir) : DEFAULT_ORDER;
@@ -363,11 +371,25 @@ class DeviceService {
    * @returns {Promise<{created, updated, total, integrations: Array}>}
    */
   async syncDevicesFromCloud(integrationId = null) {
-    const providers = integrationId
-      ? [await CloudProviderFactory.forIntegration(integrationId)]
-      : await CloudProviderFactory.activeProviders();
+    const { providers, skipped } = integrationId
+      ? { providers: [await CloudProviderFactory.forIntegration(integrationId)], skipped: [] }
+      : await CloudProviderFactory.activeIntegrations();
+
+    // An active integration that can't be loaded (credentials that won't
+    // decrypt, an unimplemented provider) hasn't recovered: alert on it.
+    for (const integration of skipped) {
+      alertService.raise('sync.failed', {
+        subjectKey: integration.id,
+        title: `Device sync failed for ${integration.name}`,
+        message: skippedReason(integration.error),
+        data: { integrationId: integration.id },
+      });
+    }
 
     if (providers.length === 0) {
+      if (skipped.length) {
+        throw new Error(`No cloud integration could be loaded: ${skipped.map((s) => `${s.name} (${skippedReason(s.error)})`).join('; ')}`);
+      }
       throw new Error('No active cloud integrations configured. Add one in Settings.');
     }
 
@@ -414,7 +436,7 @@ class DeviceService {
     // alert for any other (deleted, deactivated, or the env fallback once a
     // real integration exists) would never be cleared by a later success.
     if (!integrationId) {
-      await alertService.clearExcept('sync.failed', providers.map((p) => p.id));
+      await alertService.clearExcept('sync.failed', [...providers.map((p) => p.id), ...skipped.map((s) => s.id)]);
     }
 
     // Preserve the historical all-or-nothing error for the single-tenant

@@ -211,7 +211,7 @@ class PingMonitorService {
         logger.info(`Device ${deviceName} status changed: ${currentStatus || 'unknown'} -> ${newStatus}`);
 
         // Emit WebSocket event for real-time UI updates
-        this.emitStatusUpdate(deviceId, deviceName, newStatus, responseTime, cloud);
+        this.emitStatusUpdate(deviceId, deviceName, newStatus, responseTime, cloud, updateData.pingLastSeen);
 
         if (newStatus === 'online') alertService.clear('device.offline', { subjectKey: deviceId, deviceId });
       }
@@ -281,8 +281,9 @@ class PingMonitorService {
    * @param {string} status - New status
    * @param {number|null} responseTime - Response time
    * @param {Object} [cloud] - { managementMode, cloudStatus }, for the displayed status
+   * @param {Date} [pingLastSeen] - set when this check got a reply
    */
-  emitStatusUpdate(deviceId, deviceName, status, responseTime, cloud = {}) {
+  emitStatusUpdate(deviceId, deviceName, status, responseTime, cloud = {}, pingLastSeen = undefined) {
     try {
       // Lazy load socket to avoid circular dependency issues
       const { getIO } = require('../websocket/socket.handler');
@@ -297,6 +298,7 @@ class PingMonitorService {
           pingStatus: status,
           pingResponseTime: responseTime,
           pingLastChecked: new Date(),
+          ...(pingLastSeen && { pingLastSeen }),
         });
       }
     } catch (error) {

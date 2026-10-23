@@ -92,6 +92,14 @@ describe('ping monitor', () => {
     expect(socket.emit).toHaveBeenCalledWith('device:status:update', expect.objectContaining({ status: 'offline' }));
   });
 
+  test('a device that starts answering sends its pingLastSeen with the transition', async () => {
+    await pingMonitor.updateDeviceStatus('d2', 'sw', true, 3, 0, 'offline', { managementMode: 'direct' });
+
+    expect(socket.emit).toHaveBeenCalledWith('device:status:update', expect.objectContaining({
+      pingStatus: 'online', pingLastSeen: expect.any(Date),
+    }));
+  });
+
   test('a successful ping stamps pingLastSeen', async () => {
     await pingMonitor.updateDeviceStatus('d2', 'sw', true, 3, 0, 'online', { managementMode: 'direct' });
 

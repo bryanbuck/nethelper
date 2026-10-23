@@ -16,7 +16,7 @@ jest.mock('child_process', () => ({ execFile: jest.fn() }));
 
 const { execFile } = require('child_process');
 const CloudProviderFactory = require('../../src/services/cloud-providers/cloud-provider-factory');
-const { lookup } = require('../../src/services/address-lookup.service');
+const { lookup, _resetCache } = require('../../src/services/address-lookup.service');
 
 const THIS = { id: 'd1', name: 'Sw-Agg', serial: 'SN1', ipAddress: '192.168.252.4', macAddress: 'AA:BB:CC:00:00:01' };
 const neighbor = (stdout) => execFile.mockImplementation((cmd, args, opts, cb) => cb(null, { stdout, stderr: '' }));
@@ -24,6 +24,7 @@ const source = (result, key) => result.sources.find((s) => s.key === key);
 
 beforeEach(() => {
   jest.clearAllMocks();
+  _resetCache();
   mockPrisma.device.findUnique.mockResolvedValue(THIS);
   mockPrisma.device.findMany.mockResolvedValue([]);
   mockPrisma.deviceLink.findMany.mockResolvedValue([]);
@@ -163,5 +164,21 @@ describe('address lookup', () => {
     const result = await lookup('d1');
     expect(source(result, 'lldp')).toMatchObject({ status: 'skipped' });
     expect(source(result, 'discovery').status).toBe('none');
+  });
+
+  test('a cloud answer is reused for a minute and shared by concurrent lookups; a failure is not kept', async () => {
+    const findByAddress = jest.fn(async () => [client()]);
+    CloudProviderFactory.activeProviders.mockResolvedValue([{ id: 'int-c', ...provider('Home Central', findByAddress) }]);
+
+    await Promise.all([lookup('d1'), lookup('d1')]);
+    await lookup('d1');
+    expect(findByAddress).toHaveBeenCalledTimes(1);
+
+    _resetCache();
+    const flaky = jest.fn().mockRejectedValueOnce(new Error('429')).mockResolvedValue([client()]);
+    CloudProviderFactory.activeProviders.mockResolvedValue([{ id: 'int-c', ...provider('Home Central', flaky) }]);
+    expect(source(await lookup('d1'), 'cloud').reason).toMatch(/Couldn't read: Home Central/);
+    expect(source(await lookup('d1'), 'cloud').status).toBe('found');
+    expect(flaky).toHaveBeenCalledTimes(2);
   });
 });

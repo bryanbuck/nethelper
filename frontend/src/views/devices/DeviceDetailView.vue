@@ -118,7 +118,7 @@
             {{ cloudPlaneName }} still lists this device's last known address.
           </template>
           <template v-else>{{ cloudStatusWarning.text }}</template>
-          <DeviceAddressLookup v-if="cloudStatusWarning.lookup && !cloudStatusWarning.answeredBy" :device-id="device.id" />
+          <DeviceAddressLookup v-if="canEdit && cloudStatusWarning.lookup && !cloudStatusWarning.answeredBy" :device-id="device.id" />
           <div v-if="cloudConnectionNote" class="mt-1">{{ cloudConnectionNote }}</div>
         </v-alert>
       </v-col>

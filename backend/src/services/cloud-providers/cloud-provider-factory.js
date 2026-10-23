@@ -98,6 +98,16 @@ class CloudProviderFactory {
    * @returns {Promise<BaseCloudProvider[]>}
    */
   static async activeProviders(where = {}) {
+    return (await this.activeIntegrations(where)).providers;
+  }
+
+  /**
+   * Like activeProviders(), plus the active integrations that could not be
+   * instantiated, so a caller can report them instead of treating them as
+   * gone (a full sync raises sync.failed for each).
+   * @returns {Promise<{ providers: BaseCloudProvider[], skipped: Array<{ id, name, provider, error }> }>}
+   */
+  static async activeIntegrations(where = {}) {
     const rows = await getPrisma().cloudIntegration.findMany({
       where: { isActive: true, ...where },
       orderBy: { createdAt: 'asc' },
@@ -105,10 +115,11 @@ class CloudProviderFactory {
 
     if (rows.length === 0) {
       const envIntegration = this.envArubaIntegration();
-      return envIntegration ? [this.instantiate(envIntegration)] : [];
+      return { providers: envIntegration ? [this.instantiate(envIntegration)] : [], skipped: [] };
     }
 
     const providers = [];
+    const skipped = [];
     for (const row of rows) {
       try {
         providers.push(this.instantiate(row));
@@ -116,9 +127,10 @@ class CloudProviderFactory {
         // One bad integration (unimplemented provider, mangled credentials)
         // must not take down sync for the others.
         logger.warn(`Skipping cloud integration "${row.name}" (${row.provider}): ${error.message}`);
+        skipped.push({ id: row.id, name: row.name, provider: row.provider, error: error.message });
       }
     }
-    return providers;
+    return { providers, skipped };
   }
 
   /** @param {Object} integration - CloudIntegration row (encrypted or env-sourced credentials) */
