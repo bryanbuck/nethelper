@@ -88,6 +88,37 @@
               />
             </div>
 
+            <!-- Configuration Change Trigger -->
+            <div v-if="nodeConfig.triggerType === 'config-change'">
+              <v-alert type="info" variant="tonal" density="compact" class="mb-4">
+                Changes are found when a config backup runs (scheduled, manual, or a Create Backup step),
+                so this fires as often as your backup schedule. A device's first backup never fires it.
+              </v-alert>
+              <v-select
+                v-model="nodeConfig.config.kinds"
+                label="Configuration kinds"
+                :items="CONFIG_CHANGE_KINDS"
+                variant="outlined"
+                multiple
+                chips
+                closable-chips
+                hint="Leave empty for any change."
+                persistent-hint
+                class="mb-4"
+              />
+              <v-select
+                v-model="nodeConfig.config.deviceGroupId"
+                label="Only devices in group"
+                :items="deviceGroups"
+                item-title="name"
+                item-value="id"
+                variant="outlined"
+                clearable
+                hint="Optional. The run gets the changed device."
+                persistent-hint
+              />
+            </div>
+
             <!-- Device Status Trigger -->
             <div v-if="nodeConfig.triggerType === 'device-status'">
               <v-select
@@ -634,6 +665,7 @@ import {
   DEVICE_PROPERTY_OPERATORS,
   ALERT_SEVERITY_OPERATORS,
   ALERT_TRIGGER_EVENTS,
+  CONFIG_CHANGE_KINDS,
   TEMPLATE_HINT
 } from '@/models/automation-nodes'
 
@@ -705,6 +737,7 @@ const markRunnable = (kind, items) => items.map((item) => (
 
 const triggerTypes = markRunnable('trigger', [
   { title: 'Alert', value: 'alert' },
+  { title: 'Configuration Change', value: 'config-change' },
   { title: 'Device Status Change', value: 'device-status' },
   { title: 'Scheduled Event', value: 'schedule' },
   { title: 'Threshold Alert', value: 'threshold' },

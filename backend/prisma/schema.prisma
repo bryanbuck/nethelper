@@ -417,7 +417,7 @@ model Execution {
   duration     Int? // Duration in milliseconds
   output       Json?
   error        String?
-  trigger      String? // manual | schedule | alert:opened | alert:resolved
+  trigger      String? // manual | schedule | alert:opened | alert:resolved | config-change
   triggeredBy  User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
   userId       String?
   createdAt    DateTime        @default(now())

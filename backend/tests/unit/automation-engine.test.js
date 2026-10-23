@@ -13,7 +13,8 @@ jest.mock('../../src/services/alert.service', () => mockAlertService);
 jest.mock('../../src/services/config-backup.service', () => mockBackup);
 
 const { run } = require('../../src/services/automation/engine');
-const { alertTriggerMatches, render } = require('../../src/services/automation/nodes');
+const { alertTriggerMatches, configChangeTriggerMatches, render } = require('../../src/services/automation/nodes');
+const { validate } = require('../../src/services/automation/engine');
 
 const node = (id, type, subtype, config = {}, extra = {}) => ({
   id, type, data: { label: id, [`${type}Type`]: subtype, config, ...extra },
@@ -112,6 +113,29 @@ test('alert trigger matching: event, rules, severity floor, never automation ale
   expect(alertTriggerMatches({ rules: ['live.poe-fault'] }, 'opened', alert)).toBe(false);
   expect(alertTriggerMatches({ minSeverity: 'critical' }, 'opened', { ...alert, severity: 'warning' })).toBe(false);
   expect(alertTriggerMatches({}, 'opened', { ...alert, rule: 'automation.raised' })).toBe(false);
+});
+
+test('a config change run backs up its device and reports the change', async () => {
+  const configChange = { backupId: 'b2', previousBackupId: 'b1', changedKinds: ['cli'] };
+  const result = await run(automation([
+    node('t', 'trigger', 'config-change', { kinds: ['cli'] }), node('b', 'action', 'create-backup'), edge('t', 'b'),
+  ]), { device, configChange });
+  expect(result.status).toBe('success');
+  expect(result.results[0]).toMatchObject({ status: 'ok', result: configChange });
+  expect(mockBackup.backupDevice).toHaveBeenCalledWith(device, { trigger: 'automation' });
+});
+
+test('config change trigger: validation and kind matching', () => {
+  const graph = (config) => [node('t', 'trigger', 'config-change', config)];
+  expect(validate(graph({})).errors).toEqual([]);
+  expect(validate(graph({ kinds: ['cli', 'structured'], deviceGroupId: 'g1' })).errors).toEqual([]);
+  expect(validate(graph({ kinds: ['yaml'] })).errors).toEqual([expect.stringMatching(/kinds must be/)]);
+  expect(validate([...graph({}), node('k', 'action', 'acknowledge-alert'), edge('t', 'k')]).errors)
+    .toEqual([expect.stringMatching(/needs an Alert trigger/)]);
+
+  expect(configChangeTriggerMatches({}, { changedKinds: ['structured'] })).toBe(true);
+  expect(configChangeTriggerMatches({ kinds: ['cli'] }, { changedKinds: ['structured'] })).toBe(false);
+  expect(configChangeTriggerMatches({ kinds: ['cli'] }, { changedKinds: ['cli', 'structured'] })).toBe(true);
 });
 
 test('templates fill known fields and blank unknown ones', () => {

@@ -11,7 +11,8 @@ export const EXECUTION_STATUSES = [
 export const EXECUTION_TRIGGERS = [
   { value: 'manual', title: 'Run now', icon: 'mdi-play' },
   { value: 'schedule', title: 'Schedule', icon: 'mdi-clock' },
-  { value: 'alert', title: 'Alert', icon: 'mdi-bell-alert' }
+  { value: 'alert', title: 'Alert', icon: 'mdi-bell-alert' },
+  { value: 'config-change', title: 'Config change', icon: 'mdi-file-compare' }
 ]
 
 // Per-step result statuses (engine output)

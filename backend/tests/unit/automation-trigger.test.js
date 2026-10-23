@@ -1,6 +1,6 @@
 /**
- * services/automation/trigger.service: alert events queue runs for the
- * active automations whose Alert trigger matches.
+ * services/automation/trigger.service: alert events and config changes queue
+ * runs for the active automations whose trigger matches.
  */
 const { EventEmitter } = require('events');
 
@@ -11,16 +11,20 @@ const mockPrisma = {
 };
 const mockQueue = { add: jest.fn(async () => ({})) };
 const mockAlertService = new EventEmitter();
+const mockBackupEvents = new EventEmitter();
 jest.mock('../../src/config/database', () => ({ getPrisma: () => mockPrisma }));
 jest.mock('../../src/config/bull', () => ({ getQueue: () => mockQueue }));
 jest.mock('../../src/services/alert.service', () => mockAlertService);
+jest.mock('../../src/services/config-backup.service', () => ({ events: mockBackupEvents }));
 
 const { AutomationTriggerService } = require('../../src/services/automation/trigger.service');
 
-const automationRow = (id, triggerConfig, extra = {}) => ({
+const automationRow = (id, triggerConfig, extra = {}, triggerType = 'alert') => ({
   id,
-  elements: [{ id: 't', type: 'trigger', data: { triggerType: 'alert', config: triggerConfig, ...extra } }],
+  elements: [{ id: 't', type: 'trigger', data: { triggerType, config: triggerConfig, ...extra } }],
 });
+const configRow = (id, triggerConfig, extra) => automationRow(id, triggerConfig, extra, 'config-change');
+const change = { device: { id: 'd1' }, backupId: 'b2', previousBackupId: 'b1', changedKinds: ['cli'] };
 const offline = { id: 'x1', rule: 'device.offline', severity: 'critical', deviceId: 'd1' };
 
 let triggers;
@@ -75,4 +79,55 @@ test('caches automations until invalidated', async () => {
   triggers.invalidate();
   await triggers.handle('opened', offline);
   expect(mockPrisma.automation.findMany).toHaveBeenCalledTimes(2);
+});
+
+describe('Configuration Change trigger', () => {
+  test('queues a run per matching automation, with the change and a dedup job id', async () => {
+    mockRows.push(
+      configRow('c1', {}),
+      configRow('c2', { kinds: ['structured'] }),
+      configRow('c3', { kinds: ['cli', 'structured'] }),
+      configRow('off', {}, { enabled: false }),
+      automationRow('a1', { event: 'opened' }),
+    );
+    await triggers.handleConfigChange(change);
+    expect(mockQueue.add.mock.calls.map((c) => c[1].automationId)).toEqual(['c1', 'c3']);
+    expect(mockQueue.add).toHaveBeenCalledWith('run', {
+      automationId: 'c1',
+      deviceId: 'd1',
+      configChange: { backupId: 'b2', previousBackupId: 'b1', changedKinds: ['cli'] },
+      trigger: 'config-change',
+    }, expect.objectContaining({ jobId: 'config:c1:b2', attempts: 1 }));
+  });
+
+  test('alert automations ignore config changes, and the other way round', async () => {
+    mockRows.push(configRow('c1', {}), automationRow('a1', { event: 'opened' }));
+    await triggers.handle('opened', offline);
+    expect(mockQueue.add.mock.calls.map((c) => c[1].automationId)).toEqual(['a1']);
+    mockQueue.add.mockClear();
+    await triggers.handleConfigChange(change);
+    expect(mockQueue.add.mock.calls.map((c) => c[1].automationId)).toEqual(['c1']);
+  });
+
+  test('a device-group scope needs the device in that group', async () => {
+    mockRows.push(configRow('c1', { deviceGroupId: 'g1' }));
+    await triggers.handleConfigChange(change);
+    expect(mockQueue.add).not.toHaveBeenCalled();
+    mockPrisma.device.count.mockResolvedValueOnce(1);
+    await triggers.handleConfigChange(change);
+    expect(mockQueue.add).toHaveBeenCalledTimes(1);
+  });
+
+  test("listens to the backup service's 'changed' event once started", async () => {
+    mockRows.push(configRow('c1', {}));
+    triggers.start();
+    mockBackupEvents.emit('changed', change);
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+    expect(mockQueue.add).toHaveBeenCalledTimes(1);
+    triggers.stop();
+    mockBackupEvents.emit('changed', change);
+    await new Promise((r) => setImmediate(r));
+    expect(mockQueue.add).toHaveBeenCalledTimes(1);
+  });
 });

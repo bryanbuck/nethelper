@@ -41,6 +41,7 @@ const nodeLabel = computed(() => {
   
   const triggerTypes = {
     'alert': 'Alert',
+    'config-change': 'Configuration Change',
     'device-status': 'Device Status Change',
     'schedule': 'Scheduled Event',
     'threshold': 'Threshold Alert',
@@ -67,6 +68,8 @@ const nodeSubtitle = computed(() => {
       return 'Manual execution'
     case 'alert':
       return props.data.config.event === 'resolved' ? 'When an alert resolves' : 'When an alert opens'
+    case 'config-change':
+      return 'When a backup finds a change'
     default:
       return 'Configure trigger'
   }
@@ -86,6 +89,10 @@ const nodeDescription = computed(() => {
       return `HTTP ${props.data.config.method} to ${props.data.config.endpoint}`
     case 'alert':
       return props.data.config.rules?.length ? props.data.config.rules.join(', ') : 'Any alert rule'
+    case 'config-change':
+      return props.data.config.kinds?.length === 1
+        ? `${props.data.config.kinds[0] === 'cli' ? 'CLI config' : 'Structured config'} only`
+        : 'Any configuration'
     default:
       return ''
   }
@@ -96,6 +103,7 @@ const nodeIcon = computed(() => {
   
   const triggerIcons = {
     'alert': 'mdi-bell-alert',
+    'config-change': 'mdi-file-compare',
     'device-status': 'mdi-router-wireless',
     'schedule': 'mdi-clock',
     'threshold': 'mdi-chart-line',

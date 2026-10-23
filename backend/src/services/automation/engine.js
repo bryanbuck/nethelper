@@ -47,7 +47,7 @@ function outgoing(graph, node) {
 
 /**
  * @param {{ id, name, elements }} automation
- * @param {{ device?, alert?, executionId?, shouldStop?: () => Promise<boolean> }} context
+ * @param {{ device?, alert?, configChange?, executionId?, shouldStop?: () => Promise<boolean> }} context
  * @returns {Promise<{ status: 'success'|'failed'|'cancelled', results: Array }>}
  */
 async function run(automation, context = {}) {
