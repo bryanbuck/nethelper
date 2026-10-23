@@ -82,7 +82,7 @@ Preparing the dev-environment build for a private, in-house beta. Deploy targets
 
 ## 🐞 Beta feedback
 
-**Status**: started 2026-10-20. Bugs found in beta testing are GitHub Issues in the private repo, labeled `beta` (`gh issue list -l beta`). A fix closes its issue from the commit (`Fixes #N`) and adds a line under `[Unreleased]` in `CHANGELOG.md`. Released fixes: everything up to #23 shipped in `v0.9.0-beta.2` (2026-10-21, the first tag published by `.github/workflows/release.yml`: GHCR images and a release tarball); #25–#28 are open. New fixes go under `[Unreleased]` until the next tag.
+**Status**: started 2026-10-20. Bugs found in beta testing are GitHub Issues in the private repo, labeled `beta` (`gh issue list -l beta`). A fix closes its issue from the commit (`Fixes #N`) and adds a line under `[Unreleased]` in `CHANGELOG.md`. Released fixes: everything up to #23 shipped in `v0.9.0-beta.2` (2026-10-21, the first tag published by `.github/workflows/release.yml`: GHCR images and a release tarball); #45, #47, #48, #49 and most of #46 shipped in `v0.9.0-beta.3` (2026-10-22); #25–#28, #46 (the rest), #50–#52 are open. New fixes go under `[Unreleased]` until the next tag.
 
 - ✅ #1 (2026-10-20): dead buttons on the device page; header consolidated, edit dialog shared (`components/devices/DeviceEditDialog.vue`).
 - ✅ #2, #5, #6, #7, #24 (2026-10-21): Devices table server pagination/sorting (`GET /devices` `limit`/`page`/`sortBy`/`sortOrder`, fleet-wide `summary`; store `ensureAllDevices()` for pickers), Remove row action (admin), buttons hidden from roles the API refuses, per-section Settings errors.
@@ -585,7 +585,7 @@ When an item is completed:
 
 ### 13. System Status page
 **Priority**: Medium
-**Status**: ✅ Shipped 2026-10-22 on `feat/system-status`
+**Status**: ✅ Shipped 2026-10-22 in `v0.9.0-beta.3`
 
 Admin-only page at `/system`, opened from the version indicator at the right of the status bar (and the Admin nav). `services/system-status.service.js` samples every `SYSTEM_SAMPLE_INTERVAL_MS` (5 s) and keeps the last hour in memory: process CPU/memory, event-loop lag, API requests per interval (`middleware/request-metrics.js`: counts by status class, p50/p95 latency), sockets and signed-in users, and every Bull queue's waiting/active/delayed/failed counts plus jobs finished per interval. At most once a minute, and only while someone watches: Postgres size, connections and largest tables, Redis INFO, free disk for the backup and log directories, backup storage totals, usage counts (devices by status and vendor, users by role, alerts, last 24 h runs/backups/events), repeatable-job next runs, and the live monitor / live view / cloud stream / alert-settle state. Live over the `system:status` socket room; HTTP polling when the socket is down. A failing source shows its error and the others still report.
 
