@@ -4,6 +4,10 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ## [Unreleased]
 
+## [0.9.0-beta.3] — 2026-10-22
+
+A device History tab and "who has this address?" lookup, a System Status page for admins, a Configuration Change automation trigger, a per-user API rate limit, and fixes from a review of the changes since beta.2. Scope and limitations are unchanged: see [`docs/BETA_NOTES.md`](docs/BETA_NOTES.md).
+
 ### Added
 - **Device History tab**: a timeline per point of view (ping from NetHelper, the device's cloud) and a combined lane that shows when they disagreed (answers ping while the cloud says offline, or the reverse), over 24 hours, 7 days or 30 days. Config backups are marked across all lanes; a backup that found a change shades the window the change happened in. Cloud-reported restarts are marked too. Ping states are recorded from this release on, so earlier time shows as no data. `GET /devices/:id/history`.
 - The device page's **Last Seen** card says when the device was last confirmed alive and by whom (ping, its cloud, or a connection test). A ping reply while the cloud reports the device offline doesn't count as a confirmation, because the address may belong to another device. When ping and the cloud disagree, the card's corner shows ping's own last reply, linked to the History tab.
@@ -25,7 +29,8 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 - The API rate limit counted requests per client IP, and behind nginx or the dev proxy (without `TRUST_PROXY`) every user shares one IP, so one busy browser could make the whole Devices list fail for everyone with "Too many requests". It now counts per signed-in user (per IP only for requests without a valid token), and a 429 is JSON with `Retry-After`. When it does happen, the Devices table keeps the rows it already shows, says when the API takes requests again, and retries on its own. The default `RATE_LIMIT_MAX_REQUESTS` goes from 300 to 1000 per 15 minutes: one person's busy session measured about 150, and all of a user's tabs now share one count.
 - A "Cloud sync failed" alert for a cloud integration that stopped syncing stayed open forever, because only that integration's next successful sync cleared it. This covers an integration that was deleted or deactivated, and the `ARUBA_CENTRAL_*` environment fallback once a Central integration exists in Settings. Deleting or deactivating an integration now resolves its alert, and every scheduled sync resolves the alerts of integrations it no longer runs.
 
-### Upgrading
+### Upgrading from 0.9.0-beta.2
+- Take a database backup first: migrations are forward-only. **Docker Compose**: run `deploy/install.sh` from the new tree (it keeps your `.env` values). **Bare metal**: follow "Upgrading" in [`deploy/README.md`](deploy/README.md).
 - Viewers lose the "Who has this address?" button (`GET /devices/:id/address-lookup` is now operator+).
 - An install that sets `RATE_LIMIT_MAX_REQUESTS` keeps its value; remove it (or raise it) to get the new default of 1000. Older `.env` files copied from `.env.example` before 0.9.0-beta.1 may still say 100.
 - One migration, `20261022120000_device_seen_sources`, adds three columns to `Device` (`pingLastSeen`, `cloudCheckedAt`, `cloudLastSeen`).
