@@ -23,8 +23,11 @@ async function processDeviceSync(job) {
   const trigger = job.opts?.repeat ? 'scheduled' : 'manual';
   try {
     const integrationId = job.data?.integrationId || null;
-    if (trigger === 'scheduled' && !(await CloudProviderFactory.activeProviders()).length) {
-      return { skipped: 'no active cloud integrations' };
+    // Nothing configured: skip quietly. Integrations that exist but can't be
+    // loaded still run the sync, which raises sync.failed for each.
+    if (trigger === 'scheduled') {
+      const { providers, skipped } = await CloudProviderFactory.activeIntegrations();
+      if (!providers.length && !skipped.length) return { skipped: 'no active cloud integrations' };
     }
     logger.progress('Starting device sync job', { jobId: job.id, integrationId, trigger });
 

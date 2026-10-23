@@ -105,10 +105,26 @@ async function recordStateOnce(device, prefix, state, source, data = {}) {
   return recordStateIfChanged(device, prefix, state, source, data);
 }
 
+// Each device's newest event per state lane, kept by prune whatever its age:
+// it is the lane's starting state, and a device that hasn't changed in longer
+// than the retention would otherwise show "No data" on its History tab.
+async function latestStateEventIds(prisma) {
+  const rows = await prisma.$queryRaw`
+    SELECT DISTINCT ON ("deviceId", split_part("type", '.', 1)) "id"
+    FROM "DeviceEvent"
+    WHERE "type" LIKE 'ping.%' OR "type" LIKE 'cloud.%'
+    ORDER BY "deviceId", split_part("type", '.', 1), "occurredAt" DESC`;
+  return rows.map((r) => r.id);
+}
+
 async function prune() {
   const days = retentionDays();
   const cutoff = new Date(Date.now() - days * DAY_MS);
-  const { count } = await getPrisma().deviceEvent.deleteMany({ where: { occurredAt: { lt: cutoff } } });
+  const prisma = getPrisma();
+  const keep = await latestStateEventIds(prisma);
+  const { count } = await prisma.deviceEvent.deleteMany({
+    where: { occurredAt: { lt: cutoff }, ...(keep.length && { id: { notIn: keep } }) },
+  });
   if (count) logger.info(`Pruned ${count} device event(s) older than ${days} days`);
   return count;
 }

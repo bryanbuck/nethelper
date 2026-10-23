@@ -192,9 +192,15 @@
             <v-text-field
               v-model="formData.apiKey"
               label="API Key (Optional)"
+              :type="showApiKey ? 'text' : 'password'"
               variant="outlined"
               prepend-inner-icon="mdi-key"
+              :append-inner-icon="showApiKey ? 'mdi-eye' : 'mdi-eye-off'"
+              :hint="dialogMode === 'edit' && editingItem?.apiKey ? 'Leave blank to keep the current key' : ''"
+              persistent-hint
+              autocomplete="new-password"
               class="mb-2"
+              @click:append-inner="showApiKey = !showApiKey"
             ></v-text-field>
 
             <v-text-field
@@ -409,6 +415,7 @@ const formRef = ref(null)
 const formValid = ref(false)
 const showPassword = ref(false)
 const showSecret = ref(false)
+const showApiKey = ref(false)
 
 // Form data
 const formData = ref({
@@ -491,7 +498,7 @@ const openEditDialog = (item) => {
     type: item.type,
     username: item.username || '',
     password: '', // Don't populate password for security
-    apiKey: item.apiKey || '',
+    apiKey: '', // Don't populate the key: the list only has its mask
     apiSecret: '', // Don't populate secret for security
     notes: item.notes || '',
   }
@@ -519,13 +526,17 @@ const saveCredential = async () => {
   if (!formValid.value) return
 
   try {
-    // Prepare data - only include password/secret if they were provided
+    // Prepare data - only include password/key/secret if they were provided
     const data = {
       name: formData.value.name,
       type: formData.value.type,
       username: formData.value.username,
-      apiKey: formData.value.apiKey,
       notes: formData.value.notes,
+    }
+
+    // Only include the API key if provided
+    if (formData.value.apiKey) {
+      data.apiKey = formData.value.apiKey
     }
 
     // Only include password if provided

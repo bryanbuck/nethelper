@@ -127,7 +127,7 @@ describe('syncDevicesFromCloud sync.failed alerts', () => {
   const failing = (id) => ({ id, label: id, listInventory: jest.fn(async () => { throw new Error('Unable to connect'); }) });
 
   test('a full sync clears its providers\' alerts and resolves the rest as stale', async () => {
-    jest.spyOn(CloudProviderFactory, 'activeProviders').mockResolvedValue([ok('int-central'), failing('int-mist')]);
+    jest.spyOn(CloudProviderFactory, 'activeIntegrations').mockResolvedValue({ providers: [ok('int-central'), failing('int-mist')], skipped: [] });
 
     await deviceService.syncDevicesFromCloud();
 
@@ -135,6 +135,44 @@ describe('syncDevicesFromCloud sync.failed alerts', () => {
     expect(alertService.raise).toHaveBeenCalledWith('sync.failed', expect.objectContaining({ subjectKey: 'int-mist' }));
     // e.g. env:aruba_central once a real integration exists: never syncs again
     expect(alertService.clearExcept).toHaveBeenCalledWith('sync.failed', ['int-central', 'int-mist']);
+  });
+
+  test('an integration that can\'t be loaded raises sync.failed instead of being resolved as gone', async () => {
+    jest.spyOn(CloudProviderFactory, 'activeIntegrations').mockResolvedValue({
+      providers: [ok('int-central')],
+      skipped: [{ id: 'int-mist', name: 'Mist', provider: 'juniper_mist', error: 'Failed to decrypt data' }],
+    });
+
+    await deviceService.syncDevicesFromCloud();
+
+    expect(alertService.raise).toHaveBeenCalledWith('sync.failed', expect.objectContaining({
+      subjectKey: 'int-mist',
+      message: expect.stringMatching(/can't be decrypted.*key:rotate/),
+    }));
+    expect(alertService.clearExcept).toHaveBeenCalledWith('sync.failed', ['int-central', 'int-mist']);
+  });
+
+  test('with every integration unloadable, a full sync alerts on each and fails with the reason', async () => {
+    jest.spyOn(CloudProviderFactory, 'activeIntegrations').mockResolvedValue({
+      providers: [],
+      skipped: [{ id: 'int-x', name: 'Future', provider: 'cisco_meraki', error: 'Cloud provider "cisco_meraki" is not implemented yet' }],
+    });
+
+    await expect(deviceService.syncDevicesFromCloud()).rejects.toThrow(/No cloud integration could be loaded: Future/);
+    expect(alertService.raise).toHaveBeenCalledWith('sync.failed', expect.objectContaining({ subjectKey: 'int-x' }));
+  });
+
+  test('activeIntegrations reports the rows it skipped; activeProviders keeps returning the rest', async () => {
+    CloudProviderFactory.activeIntegrations.mockRestore?.(); // spied by the tests above
+    mockPrisma.cloudIntegration.findMany.mockResolvedValue([
+      { id: 'int-mist', provider: 'juniper_mist', name: 'Mist', baseUrl: 'https://api.mist.com', credentials: {} },
+      { id: 'int-x', provider: 'not_a_provider', name: 'Odd', credentials: {} },
+    ]);
+
+    const { providers, skipped } = await CloudProviderFactory.activeIntegrations();
+    expect(providers.map((p) => p.id)).toEqual(['int-mist']);
+    expect(skipped).toEqual([{ id: 'int-x', name: 'Odd', provider: 'not_a_provider', error: expect.stringMatching(/not implemented/) }]);
+    expect((await CloudProviderFactory.activeProviders()).map((p) => p.id)).toEqual(['int-mist']);
   });
 
   test('a single-integration sync leaves the other integrations\' alerts alone', async () => {

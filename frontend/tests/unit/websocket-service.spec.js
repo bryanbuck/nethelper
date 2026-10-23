@@ -131,4 +131,15 @@ describe('websocket service', () => {
   test('request() rejects when there is no connected socket', async () => {
     await expect(service.request('subscribe:device-live', 'id')).rejects.toThrow('Real-time connection is not available')
   })
+
+  test('a status update patches the Last Seen fields it carries, and nothing else', () => {
+    const updateDeviceLocally = vi.fn()
+    service.stores = { ...service.stores, devices: { updateDeviceLocally }, topology: null }
+    service.handleDeviceStatusUpdate({
+      deviceId: 'd1', status: 'online', cloudStatus: 'online', cloudLastSeen: 'a', cloudCheckedAt: 'b', pingLastSeen: 'c', extra: 1
+    })
+    expect(updateDeviceLocally).toHaveBeenCalledWith('d1', {
+      status: 'online', cloudStatus: 'online', cloudLastSeen: 'a', cloudCheckedAt: 'b', pingLastSeen: 'c'
+    })
+  })
 })

@@ -5,6 +5,9 @@ const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory')
 const { CLOUD_PROVIDERS } = require('../constants/vendors');
 const gitBackupService = require('./git-backup.service');
 
+// What maskCredential() returns in place of a stored secret.
+const SECRET_MASK = '***';
+
 class SettingsService {
   /**
    * Get all API credentials (shared across all users)
@@ -175,15 +178,12 @@ class SettingsService {
         ...(updateData.metadata !== undefined && { metadata: updateData.metadata }),
       };
 
-      // Only encrypt and update password/apiKey/apiSecret if provided
-      if (updateData.password !== undefined) {
-        encryptedUpdateData.password = updateData.password ? encryption.encrypt(updateData.password) : null;
-      }
-      if (updateData.apiKey !== undefined) {
-        encryptedUpdateData.apiKey = updateData.apiKey ? encryption.encrypt(updateData.apiKey) : null;
-      }
-      if (updateData.apiSecret !== undefined) {
-        encryptedUpdateData.apiSecret = updateData.apiSecret ? encryption.encrypt(updateData.apiSecret) : null;
+      // Only encrypt and update password/apiKey/apiSecret if provided. The
+      // mask maskCredential() hands out means "unchanged", never a new value.
+      for (const field of ['password', 'apiKey', 'apiSecret']) {
+        const value = updateData[field];
+        if (value === undefined || value === SECRET_MASK) continue;
+        encryptedUpdateData[field] = value ? encryption.encrypt(value) : null;
       }
 
       const credential = await prisma.apiCredential.update({
@@ -327,9 +327,9 @@ class SettingsService {
       name: credential.name,
       type: credential.type,
       username: credential.username,
-      password: credential.password ? '***' : null,
-      apiKey: credential.apiKey ? '***' : null,
-      apiSecret: credential.apiSecret ? '***' : null,
+      password: credential.password ? SECRET_MASK : null,
+      apiKey: credential.apiKey ? SECRET_MASK : null,
+      apiSecret: credential.apiSecret ? SECRET_MASK : null,
       notes: credential.notes,
       lastTested: credential.lastTested,
       lastTestStatus: credential.lastTestStatus,

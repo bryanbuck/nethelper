@@ -38,6 +38,7 @@ const RESTRICTED_READS = [
   'GET /settings/git-backup',
   'GET /users/',
   'GET /system/',
+  'GET /devices/:deviceId/address-lookup',
 ];
 
 // Operator-level actions that only admins may take.

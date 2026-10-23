@@ -219,11 +219,15 @@ class WebSocketService {
    */
   handleDeviceStatusUpdate(data) {
     try {
-      // From the ping monitor (pingStatus, ...) or the cloud status refresh
-      // (cloudStatus, lastSeen). `status` is the displayed one (it accounts
-      // for both). Patch only what the event carries.
+      // From the ping monitor (pingStatus, pingLastSeen, ...) or the cloud
+      // status refresh (cloudStatus, lastSeen, cloudLastSeen, cloudCheckedAt).
+      // `status` is the displayed one (it accounts for both). Patch only what
+      // the event carries; the device page's Last Seen card reads the *Seen ones.
       const { deviceId } = data
-      const fields = ['status', 'pingStatus', 'pingResponseTime', 'pingLastChecked', 'cloudStatus', 'lastSeen']
+      const fields = [
+        'status', 'pingStatus', 'pingResponseTime', 'pingLastChecked', 'pingLastSeen',
+        'cloudStatus', 'lastSeen', 'cloudLastSeen', 'cloudCheckedAt'
+      ]
       const patch = Object.fromEntries(fields.filter((key) => data[key] !== undefined).map((key) => [key, data[key]]))
       if (!patch.status && patch.pingStatus) patch.status = patch.pingStatus
 
