@@ -190,6 +190,17 @@ const routes = [
     }
   },
   {
+    path: '/system',
+    name: 'SystemStatus',
+    component: () => import('@/views/system/SystemStatusView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresRole: 'admin',
+      title: 'System Status',
+      icon: 'mdi-monitor-dashboard'
+    }
+  },
+  {
     path: '/settings/device-api-testing',
     name: 'DeviceApiTesting',
     component: DeviceApiTestingView,

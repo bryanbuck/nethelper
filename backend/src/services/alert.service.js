@@ -333,6 +333,11 @@ class AlertService extends EventEmitter {
     return { items, total, page, limit };
   }
 
+  /** Raises waiting out their rule's settle time (in memory). */
+  pendingCount() {
+    return this.pending.size;
+  }
+
   /** Counts of unresolved alerts: by status, and by severity (all, and not yet acknowledged). */
   async summary() {
     const rows = await getPrisma().alert.groupBy({

@@ -6,13 +6,15 @@ import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
 import { vi } from 'vitest'
-import { h } from 'vue'
+import { h, reactive } from 'vue'
 import { VApp } from 'vuetify/components'
 import StatusBar from '@/components/common/StatusBar.vue'
 import { useNotificationsStore } from '@/stores/notifications'
 
 const push = vi.fn()
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
+const auth = reactive({ isAdmin: false })
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => auth }))
 
 globalThis.ResizeObserver ??= class { observe () {} unobserve () {} disconnect () {} }
 
@@ -24,6 +26,7 @@ const mountBar = () => mount({ render: () => h(VApp, () => h(StatusBar, { versio
 describe('StatusBar', () => {
   beforeEach(() => {
     sessionStorage.clear()
+    auth.isAdmin = false
     setActivePinia(createPinia())
   })
 
@@ -43,6 +46,19 @@ describe('StatusBar', () => {
 
     await wrapper.find('button[title="Dismiss"]').trigger('click')
     expect(wrapper.text()).toContain('No new activity')
+    wrapper.unmount()
+  })
+
+  test('the version indicator opens System Status for admins only', async () => {
+    const wrapper = mountBar()
+    expect(wrapper.find('button[aria-label="System status"]').exists()).toBe(false)
+
+    auth.isAdmin = true
+    await wrapper.vm.$nextTick()
+    const button = wrapper.find('button[aria-label="System status"]')
+    expect(button.exists()).toBe(true)
+    await button.trigger('click')
+    expect(push).toHaveBeenCalledWith('/system')
     wrapper.unmount()
   })
 })

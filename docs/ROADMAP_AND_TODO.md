@@ -524,7 +524,7 @@ Built-in themes only. Users can't define their own. See "Themes" in `CLAUDE.md` 
 **Architecture decision**: keep nginx (or a load balancer/ingress) in front of Express. Express could serve the SPA (hashed, immutable-cached assets are not a load problem), but nginx does TLS and slow-client buffering, and becomes the load balancer once there is more than one backend (WebSocket upgrade, sticky sessions).
 
 **Work items**, in priority order:
-1. **Multi-instance readiness** (the blocker). Several parts hold single-instance state in memory: the live monitor (`live/state-monitor.service.js`), alert settle timers (`alert.service.js`), cloud event streams (`cloud/cloud-stream.service.js`), the API rate-limit store (`middleware/rate-limit.js`, express-rate-limit's default MemoryStore), and Socket.io (no adapter, so an emit reaches only that instance's clients). Needs `@socket.io/redis-adapter`, a Redis rate-limit store, leader election or sharding (a Redis lock) for the monitor, streams and alert timers, and sticky sessions in nginx.
+1. **Multi-instance readiness** (the blocker). Several parts hold single-instance state in memory: the live monitor (`live/state-monitor.service.js`), alert settle timers (`alert.service.js`), cloud event streams (`cloud/cloud-stream.service.js`), the API rate-limit store (`middleware/rate-limit.js`, express-rate-limit's default MemoryStore), the System Status sampler (`system-status.service.js`, item 13: each instance would report only itself), and Socket.io (no adapter, so an emit reaches only that instance's clients). Needs `@socket.io/redis-adapter`, a Redis rate-limit store, leader election or sharding (a Redis lock) for the monitor, streams and alert timers, and sticky sessions in nginx.
 2. **Ping monitor throughput** (`ping-monitor.service.js`): lockstep batches of 20, a 5 s timeout, a 500 ms pause between batches, and one `ping` process per check. One offline device holds its whole batch for the timeout. Options: a bounded concurrency pool instead of lockstep batches, a shorter timeout for devices already known offline, skipping a cycle while the previous one still runs, or a raw-ICMP/fping-style sweep.
 3. **API / worker split**: Bull processors run in the API process, on the event loop that answers HTTP. Add a worker entrypoint (e.g. `WORKER_ROLE=api|worker|all`, default `all`) so jobs scale separately; the queues are already shared through Redis.
 4. **Per-device job distribution**: a config backup run handles one device at a time (the run loop in `config-backup.service.js`); give it a concurrency setting like `TOPOLOGY_CONCURRENCY`. Live monitoring is capped at `LIVE_MAX_CONNECTIONS` (200) per process; spread it across workers once item 1 exists.
@@ -579,6 +579,21 @@ When an item is completed:
 2. Add completion date
 3. Move to "Completed" section at bottom of file
 4. Link to relevant PRs/commits
+
+---
+
+### 13. System Status page
+**Priority**: Medium
+**Status**: ✅ Shipped 2026-10-22 on `feat/system-status`
+
+Admin-only page at `/system`, opened from the version indicator at the right of the status bar (and the Admin nav). `services/system-status.service.js` samples every `SYSTEM_SAMPLE_INTERVAL_MS` (5 s) and keeps the last hour in memory: process CPU/memory, event-loop lag, API requests per interval (`middleware/request-metrics.js`: counts by status class, p50/p95 latency), sockets and signed-in users, and every Bull queue's waiting/active/delayed/failed counts plus jobs finished per interval. At most once a minute, and only while someone watches: Postgres size, connections and largest tables, Redis INFO, free disk for the backup and log directories, backup storage totals, usage counts (devices by status and vendor, users by role, alerts, last 24 h runs/backups/events), repeatable-job next runs, and the live monitor / live view / cloud stream / alert-settle state. Live over the `system:status` socket room; HTTP polling when the socket is down. A failing source shows its error and the others still report.
+
+**Deferred**:
+- Persisted history (survive restarts, longer than an hour).
+- Per-route latency and slowest endpoints.
+- Alert rules on the same signals (queue backlog, failed jobs, memory, disk free, event-loop lag).
+- Aggregation across instances (item 12).
+- Cloud API budget use per integration (overlaps item 8).
 
 ---
 

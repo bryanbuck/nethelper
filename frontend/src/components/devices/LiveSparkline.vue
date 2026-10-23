@@ -25,7 +25,7 @@
       class="tip text-caption"
       :style="{ left: `${Math.min(coords[hover].x, width - 90)}px` }"
     >
-      {{ format(points[hover].bps) }} · {{ time(points[hover].at) }}
+      {{ format(value(points[hover])) }} · {{ time(points[hover].at) }}
     </div>
   </div>
 </template>
@@ -33,26 +33,29 @@
 <script setup>
 import { ref, computed } from 'vue'
 
-// One series (total throughput of one port), so no legend: the table column
-// names it. Values are real samples only; fewer than two points renders text.
+// One series (total throughput of one port, or one System Status figure), so
+// no legend: the surrounding label names it. Values are real samples only;
+// fewer than two points renders text; a null value is drawn as zero.
 const props = defineProps({
-  points: { type: Array, default: () => [] }, // [{ at, bps }]
+  points: { type: Array, default: () => [] }, // [{ at, [valueKey]: number }]
   width: { type: Number, default: 120 },
   height: { type: Number, default: 28 },
   format: { type: Function, default: (v) => String(v) },
   label: { type: String, default: 'Throughput' },
+  valueKey: { type: String, default: 'bps' },
 })
 
 const hover = ref(null)
 const PAD = 4
+const value = (point) => point[props.valueKey] ?? 0
 
 const coords = computed(() => {
   const n = props.points.length
-  const max = Math.max(1, ...props.points.map((p) => p.bps))
+  const max = Math.max(1, ...props.points.map(value))
   const h = props.height - PAD * 2
   return props.points.map((p, i) => ({
     x: n > 1 ? PAD + (i * (props.width - PAD * 2)) / (n - 1) : PAD,
-    y: PAD + h - (p.bps / max) * h,
+    y: PAD + h - (value(p) / max) * h,
   }))
 })
 
@@ -60,7 +63,7 @@ const path = computed(() => coords.value.map((c) => `${c.x.toFixed(1)},${c.y.toF
 
 const ariaLabel = computed(() => {
   const last = props.points[props.points.length - 1]
-  return last ? `${props.label}, latest ${props.format(last.bps)}` : props.label
+  return last ? `${props.label}, latest ${props.format(value(last))}` : props.label
 })
 
 function onMove(event) {

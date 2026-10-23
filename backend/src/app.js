@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const { apiLimiter } = require('./middleware/rate-limit');
+const { requestMetrics } = require('./middleware/request-metrics');
 
 // Import routes
 // This section imports all the route modules that define the API endpoints for different functional areas.
@@ -20,6 +21,7 @@ const backupRoutes = require('./routes/backup.routes');
 const userRoutes = require('./routes/users.routes');
 const topologyRoutes = require('./routes/topology.routes');
 const alertRoutes = require('./routes/alert.routes');
+const systemRoutes = require('./routes/system.routes');
 
 // Import middleware
 // This section imports custom middleware functions that will be applied to requests.
@@ -29,6 +31,7 @@ const logger = require('./utils/logger');
 const { allowedOrigins } = require('./config/cors');
 const { getPrisma } = require('./config/database');
 const { getRedis } = require('./config/redis');
+const { withTimeout } = require('./utils/with-timeout');
 const { version } = require('../package.json');
 
 const app = express();
@@ -66,6 +69,10 @@ app.use(compression());
 const bodyLimit = process.env.BODY_LIMIT || '2mb';
 app.use(express.json({ limit: bodyLimit }));
 app.use(express.urlencoded({ extended: true, limit: bodyLimit }));
+
+// Request counts and latency for the System Status page (before the rate
+// limiter, so 429s are counted too).
+app.use(requestMetrics);
 
 // Rate limiting
 // Limits how many API requests one signed-in user (or, without a valid token,
@@ -139,13 +146,9 @@ app.get('/health', (req, res) => {
 // checks and load balancers use this; /health stays a cheap liveness probe.
 // Reports only up/down per dependency, never connection details.
 app.get('/health/ready', async (req, res) => {
-  const withTimeout = (promise) => Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000).unref()),
-  ]);
   const check = async (fn) => {
     try {
-      await withTimeout(fn());
+      await withTimeout(fn(), 3000);
       return 'up';
     } catch {
       return 'down';
@@ -181,6 +184,7 @@ app.use(`${apiPrefix}/backups`, backupRoutes);
 app.use(`${apiPrefix}/users`, userRoutes);
 app.use(`${apiPrefix}/topology`, topologyRoutes);
 app.use(`${apiPrefix}/alerts`, alertRoutes);
+app.use(`${apiPrefix}/system`, systemRoutes);
 
 // 404 handler
 // Catch-all middleware that handles requests to undefined routes by returning a standardized

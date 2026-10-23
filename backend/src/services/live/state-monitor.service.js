@@ -296,6 +296,21 @@ class StateMonitorService {
     this.holders = new Map(); // deviceId -> Set<holder>
   }
 
+  /** Counts for the System Status page. */
+  stats() {
+    let connected = 0;
+    let always = 0;
+    for (const monitor of this.monitors.values()) if (monitor.connected) connected += 1;
+    for (const holders of this.holders.values()) if (holders.has('always')) always += 1;
+    return {
+      enabled: config().enabled,
+      monitors: this.monitors.size,
+      connected,
+      always,
+      limit: config().maxConnections,
+    };
+  }
+
   /** Boot: watch every device with liveMonitoring on, staggered. */
   async start() {
     const cfg = config();

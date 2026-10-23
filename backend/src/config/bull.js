@@ -2,6 +2,8 @@ const Queue = require('bull');
 const logger = require('../utils/logger');
 
 const queues = {};
+// Jobs finished per queue since the last takeThroughput() (System Status page).
+const throughput = {};
 
 /**
  * Creates a new Bull queue with standardized configuration for job processing.
@@ -33,7 +35,13 @@ function createQueue(name) {
     logger.error(`Queue ${name} error:`, error);
   });
 
+  throughput[name] = { completed: 0, failed: 0 };
+  queue.on('completed', () => {
+    throughput[name].completed += 1;
+  });
+
   queue.on('failed', (job, err) => {
+    throughput[name].failed += 1;
     logger.error(`Job ${job.id} in queue ${name} failed:`, err);
   });
 
@@ -95,8 +103,29 @@ async function closeQueues() {
   logger.info('Job queues closed');
 }
 
+/** Every initialized queue as [{ name, queue }], name being the Bull queue name. */
+function listQueues() {
+  return Object.values(queues).map((queue) => ({ name: queue.name, queue }));
+}
+
+/**
+ * Completed/failed job counts per queue since the previous call, then reset.
+ * Counts only jobs this process ran (single instance).
+ */
+function takeThroughput() {
+  const taken = {};
+  for (const [name, counts] of Object.entries(throughput)) {
+    taken[name] = { ...counts };
+    counts.completed = 0;
+    counts.failed = 0;
+  }
+  return taken;
+}
+
 module.exports = {
   initializeQueues,
   getQueue,
   closeQueues,
+  listQueues,
+  takeThroughput,
 };

@@ -3442,6 +3442,28 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "system",
+      "item": [
+        {
+          "name": "GET /system",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/system",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "system"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
     }
   ]
 }
