@@ -15,7 +15,6 @@ const AutomationsView = () => import('@/views/automations/AutomationsView.vue')
 const AutomationBuilderView = () => import('@/views/automations/AutomationBuilderView.vue')
 const ExecutionsView = () => import('@/views/automations/ExecutionsView.vue')
 const SettingsView = () => import('@/views/settings/SettingsView.vue')
-const DeviceApiTestingView = () => import('@/views/settings/DeviceApiTestingView.vue')
 
 const routes = [
   // Default redirect
@@ -211,18 +210,9 @@ const routes = [
     }
   },
   {
+    // Now a Settings tab
     path: '/settings/device-api-testing',
-    name: 'DeviceApiTesting',
-    component: DeviceApiTestingView,
-    meta: {
-      requiresAuth: true,
-      title: 'Device API Testing',
-      icon: 'mdi-test-tube',
-      breadcrumb: [
-        { text: 'Settings', to: '/settings' },
-        { text: 'Device API Testing', disabled: true }
-      ]
-    }
+    redirect: { path: '/settings', query: { tab: 'testing' } }
   },
 
   // 404 catch-all

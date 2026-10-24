@@ -55,6 +55,14 @@ function deviceOrderBy(sortBy, sortOrder) {
   return [...order, { id: 'asc' }];
 }
 
+/** A duplicate group name as a 409 that names it, instead of Prisma's generic one. */
+function groupNameTaken(error, name) {
+  if (error?.code !== 'P2002') return error;
+  const conflict = new Error(`A group named "${name}" already exists`);
+  conflict.statusCode = 409;
+  return conflict;
+}
+
 class DeviceService {
   /**
    * List devices. Without options.limit, returns every matching row (an
@@ -65,7 +73,7 @@ class DeviceService {
   async getDevices(filters = {}, options = {}) {
     try {
       const prisma = getPrisma();
-      const { type, status, location, search, platform, credential } = filters;
+      const { type, status, location, search, platform, credential, group } = filters;
 
       const where = {};
 
@@ -75,6 +83,9 @@ class DeviceService {
       if (credential === 'none') where.apiCredentialId = null;
       else if (credential === 'any') where.apiCredentialId = { not: null };
       else if (credential) where.apiCredentialId = credential;
+      // group: 'none' | a DeviceGroup id
+      if (group === 'none') where.deviceGroups = { none: {} };
+      else if (group) where.deviceGroups = { some: { id: group } };
       // The same status the list shows (ping first, then the cloud; see utils/device-status.js)
       if (status) where.OR = statusWhere(status).OR;
       if (location) where.location = { contains: location, mode: 'insensitive' };
@@ -735,7 +746,7 @@ class DeviceService {
       return group;
     } catch (error) {
       logger.error('Create device group error', { error: error.message, stack: error.stack });
-      throw error;
+      throw groupNameTaken(error, groupData.name);
     }
   }
 
@@ -773,8 +784,28 @@ class DeviceService {
       return group;
     } catch (error) {
       logger.error('Update device group error', { error: error.message, stack: error.stack });
-      throw error;
+      throw groupNameTaken(error, updateData.name);
     }
+  }
+
+  /**
+   * Add devices to a group and take others out, leaving the other members as
+   * they are (the Devices table's bulk action). Unknown device ids are a 404.
+   * @returns {Promise<{ id, name, deviceCount }>}
+   */
+  async updateGroupMembers(groupId, { add = [], remove = [] } = {}) {
+    const group = await getPrisma().deviceGroup.update({
+      where: { id: groupId },
+      data: {
+        devices: {
+          ...(add.length && { connect: add.map((id) => ({ id })) }),
+          ...(remove.length && { disconnect: remove.map((id) => ({ id })) }),
+        },
+      },
+      select: { id: true, name: true, _count: { select: { devices: true } } },
+    });
+    logger.success('Device group members changed', { groupId, added: add.length, removed: remove.length });
+    return { id: group.id, name: group.name, deviceCount: group._count.devices };
   }
 
   async deleteDeviceGroup(groupId) {

@@ -189,6 +189,47 @@
             </v-data-table>
           </v-card-text>
         </v-card>
+
+        <!-- What sync and earlier polls recorded (Device.firmwareVersion); no device is contacted -->
+        <v-card class="mt-4">
+          <v-card-title class="d-flex align-center">
+            <v-icon start>mdi-history</v-icon>
+            Recorded versions
+          </v-card-title>
+          <v-card-subtitle class="text-wrap">
+            The firmware each device last reported: cloud devices at every sync and status refresh,
+            direct devices when they are polled. Polling above reads the switches' images now.
+          </v-card-subtitle>
+          <v-card-text>
+            <div v-if="versionCounts.length" class="d-flex flex-wrap ga-2 mb-4">
+              <v-chip
+                v-for="v in versionCounts"
+                :key="v.version"
+                size="small"
+                :variant="recordedSearch === v.version ? 'flat' : 'tonal'"
+                :color="v.version === UNKNOWN ? undefined : 'primary'"
+                @click="recordedSearch = recordedSearch === v.version ? '' : v.version"
+              >
+                {{ v.version }} · {{ v.count }}
+              </v-chip>
+            </div>
+            <v-data-table
+              :headers="recordedHeaders"
+              :items="recordedRows"
+              :search="recordedSearch"
+              :loading="devicesStore.loading && !recordedRows.length"
+              density="compact"
+              item-value="id"
+            >
+              <template #item.name="{ item }">
+                <router-link :to="`/devices/${item.id}`" class="text-decoration-none">{{ item.name }}</router-link>
+              </template>
+              <template #no-data>
+                <div class="text-center text-medium-emphasis py-4">No devices yet</div>
+              </template>
+            </v-data-table>
+          </v-card-text>
+        </v-card>
       </v-col>
     </v-row>
   </v-container>
@@ -200,6 +241,7 @@ import { useDevicesStore } from '@/stores/devices'
 import { useAuthStore } from '@/stores/auth'
 import { format } from 'date-fns'
 import { toCsv, downloadCsv } from '@/utils/csv'
+import { PlatformInfo } from '@/models/vendors'
 
 const devicesStore = useDevicesStore()
 const authStore = useAuthStore()
@@ -235,6 +277,29 @@ const summary = computed(() => {
   const successful = firmwareData.value.filter(d => d.success).length
   const failed = total - successful
   return { total, successful, failed }
+})
+
+// Recorded versions, from the inventory (loaded on mount)
+const UNKNOWN = 'Not reported'
+const recordedSearch = ref('')
+const recordedHeaders = [
+  { title: 'Device', key: 'name', sortable: true },
+  { title: 'Platform', key: 'platformLabel', sortable: true },
+  { title: 'Model', key: 'model', sortable: true },
+  { title: 'Firmware', key: 'firmware', sortable: true }
+]
+const recordedRows = computed(() => (devicesStore.devicesComplete ? devicesStore.devices : []).map((d) => ({
+  id: d.id,
+  name: d.name,
+  platformLabel: PlatformInfo[d.platform]?.label || d.platform || '',
+  model: d.model || '',
+  firmware: d.firmwareVersion || UNKNOWN
+})))
+const versionCounts = computed(() => {
+  const counts = new Map()
+  for (const row of recordedRows.value) counts.set(row.firmware, (counts.get(row.firmware) || 0) + 1)
+  return [...counts].map(([version, count]) => ({ version, count }))
+    .sort((a, b) => (a.version === UNKNOWN) - (b.version === UNKNOWN) || b.count - a.count)
 })
 
 async function pollFirmware() {

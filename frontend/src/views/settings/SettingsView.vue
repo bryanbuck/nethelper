@@ -23,17 +23,13 @@
               <v-icon start>mdi-key-variant</v-icon>
               API Credentials
             </v-tab>
-            <v-tab value="general">
-              <v-icon start>mdi-cog</v-icon>
-              General
-            </v-tab>
             <v-tab value="alerts">
               <v-icon start>mdi-bell</v-icon>
               Alerts
             </v-tab>
-            <v-tab value="advanced">
-              <v-icon start>mdi-tune</v-icon>
-              Advanced
+            <v-tab v-if="canTest" value="testing">
+              <v-icon start>mdi-test-tube</v-icon>
+              Connection Test
             </v-tab>
           </v-tabs>
 
@@ -66,16 +62,6 @@
               </v-card-text>
             </v-window-item>
 
-            <!-- General Settings Tab -->
-            <v-window-item value="general">
-              <v-card-text>
-                <div class="text-h6 mb-4">General Settings</div>
-                <p class="text-medium-emphasis">
-                  General application settings will be available here in future updates.
-                </p>
-              </v-card-text>
-            </v-window-item>
-
             <!-- Alerts Tab -->
             <v-window-item value="alerts">
               <v-card-text>
@@ -85,13 +71,12 @@
               </v-card-text>
             </v-window-item>
 
-            <!-- Advanced Settings Tab -->
-            <v-window-item value="advanced">
+            <!-- Manual connection test (POST /device-api/test-manual is operator+) -->
+            <v-window-item v-if="canTest" value="testing">
               <v-card-text>
-                <div class="text-h6 mb-4">Advanced Settings</div>
-                <p class="text-medium-emphasis">
-                  Advanced configuration options will be available here in future updates.
-                </p>
+                <ErrorBoundary :show-details="isDevelopment">
+                  <DeviceApiTestingView />
+                </ErrorBoundary>
               </v-card-text>
             </v-window-item>
           </v-window>
@@ -109,6 +94,7 @@ import CloudIntegrations from '@/components/settings/CloudIntegrations.vue'
 import GitBackupSettings from '@/components/settings/GitBackupSettings.vue'
 import ApiCredentials from '@/components/settings/ApiCredentials.vue'
 import AlertRules from '@/components/settings/AlertRules.vue'
+import DeviceApiTestingView from '@/views/settings/DeviceApiTestingView.vue'
 import { useAuthStore } from '@/stores/auth'
 import debugLog, { DebugCategory } from '@/utils/debug'
 
@@ -118,8 +104,12 @@ const authStore = useAuthStore()
 
 const isDevelopment = computed(() => import.meta.env.DEV)
 
-// Active tab state - defaults to 'credentials' or route query param
-const activeTab = ref(route.query.tab || 'credentials')
+const canTest = computed(() => ['admin', 'operator'].includes(authStore.userRole))
+
+// Active tab state - defaults to 'credentials' or route query param (an old
+// or unavailable tab, e.g. the removed General/Advanced, falls back)
+const tabs = computed(() => ['credentials', 'alerts', ...(canTest.value ? ['testing'] : [])])
+const activeTab = ref(tabs.value.includes(route.query.tab) ? route.query.tab : 'credentials')
 
 // Watch for tab changes and update URL
 const updateUrlTab = (tab) => {

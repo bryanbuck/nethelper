@@ -60,9 +60,17 @@ router.put(
   deviceController.updateDeviceGroup
 );
 
+router.post(
+  '/groups/:groupId/members',
+  authorize('admin', 'operator'),
+  validateDeviceGroup.members,
+  deviceController.updateGroupMembers
+);
+
 router.delete(
   '/groups/:groupId',
   authorize('admin'),
+  validateDeviceGroup.remove,
   deviceController.deleteDeviceGroup
 );
 

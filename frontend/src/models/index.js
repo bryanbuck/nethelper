@@ -22,7 +22,6 @@ import Execution, {
   ExecutionStatusInfo, 
   ExecutionTrigger 
 } from './Execution.js'
-import DeviceGroup from './DeviceGroup.js'
 import AuditLog, { 
   AuditAction, 
   AuditEntity, 
@@ -39,7 +38,6 @@ export {
   Automation,
   Schedule,
   Execution,
-  DeviceGroup,
   AuditLog,
   
   // User-related enums and constants
@@ -83,7 +81,6 @@ export default {
   Automation,
   Schedule,
   Execution,
-  DeviceGroup,
   AuditLog,
   
   // Grouped constants
@@ -138,7 +135,6 @@ export default {
         Automation,
         Schedule,
         Execution,
-        DeviceGroup,
         AuditLog
       }
       

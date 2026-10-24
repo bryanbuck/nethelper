@@ -48,6 +48,7 @@ A mock follows the spec, but real equipment is where response-shape surprises sh
 - **Cisco Meraki and Catalyst.** They appear as "coming soon" and can't be configured. A Meraki device marked "direct" reports "no transport".
 - **Pushing configuration, restore, or rollback.** Backups are read-only.
 - **SSH key authentication to devices.** Only passwords, and no enable/privileged-mode escalation. (The Git mirror *can* use an SSH key.)
+- **Device groups** are managed on the Devices page (**Groups**, and **Group** on a table selection). Automation triggers use them to pick devices.
 - **Automations are experimental.** Only some builder nodes run: Manual, Schedule and Alert triggers, Device Property and Alert Severity conditions, and Create Backup and Raise/Clear/Acknowledge Alert actions. Other nodes are marked "not runnable yet", and a workflow that uses them can be saved but not run or activated. Every run is listed under Automations → Run History.
 - **Status history.** The dashboard shows current status only.
 - **Self-service account recovery.** There's no "forgot password". An admin resets it from the Users page, or on the server with `npm run user:manage`.
