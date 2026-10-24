@@ -119,6 +119,53 @@ class DeviceService {
     }
   }
 
+  // Device groups (automation triggers and targets use them)
+  async getDeviceGroups() {
+    try {
+      const response = await api.get('/devices/groups')
+      return response.data.data || []
+    } catch (error) {
+      throw handleApiError(error, 'fetching device groups')
+    }
+  }
+
+  async createDeviceGroup({ name, description }) {
+    try {
+      const response = await api.post('/devices/groups', { name, description })
+      return response.data.data
+    } catch (error) {
+      throw handleApiError(error, 'creating the device group')
+    }
+  }
+
+  /** Rename or re-describe a group; membership changes go through updateGroupMembers. */
+  async updateDeviceGroup(groupId, { name, description }) {
+    try {
+      const response = await api.put(`/devices/groups/${groupId}`, { name, description })
+      return response.data.data
+    } catch (error) {
+      throw handleApiError(error, 'updating the device group')
+    }
+  }
+
+  async deleteDeviceGroup(groupId) {
+    try {
+      await api.delete(`/devices/groups/${groupId}`)
+    } catch (error) {
+      throw handleApiError(error, 'deleting the device group')
+    }
+  }
+
+  /** Add and/or remove devices, leaving the group's other members alone. */
+  async updateGroupMembers(groupId, { add = [], remove = [] }) {
+    try {
+      const response = await api.post(`/devices/groups/${groupId}/members`, { add, remove })
+      return response.data.data
+    } catch (error) {
+      throw handleApiError(error, 'changing the group\'s devices')
+    }
+  }
+
   /** Fleet-wide status counts ({ total, online, offline, warning }) without the rows. */
   async getStatusSummary() {
     try {

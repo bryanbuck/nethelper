@@ -228,6 +228,18 @@
                 />
               </v-col>
 
+              <v-col cols="12" sm="6" md="3">
+                <v-select
+                  v-model="filters.group"
+                  label="Group"
+                  :items="groupFilterOptions"
+                  variant="outlined"
+                  density="compact"
+                  clearable
+                  @update:model-value="applyFilters"
+                />
+              </v-col>
+
               <v-col cols="12" sm="6" md="3" class="d-flex align-center">
                 <v-btn
                   variant="outlined"
@@ -279,6 +291,15 @@
                 @click="credentialDialog = true"
               >
                 Credential
+              </v-btn>
+              <v-btn
+                v-if="canEdit"
+                variant="outlined"
+                size="small"
+                prepend-icon="mdi-folder-plus-outline"
+                @click="groupDialog = true"
+              >
+                Group
               </v-btn>
               <v-btn
                 v-if="canEdit && selectedItems.length >= 2"
@@ -568,6 +589,12 @@
       :device-ids="selectedItems"
       @assigned="refreshTable"
     />
+
+    <DeviceGroupMembershipDialog
+      v-model="groupDialog"
+      :device-ids="selectedItems"
+      @changed="refreshTable"
+    />
   </div>
 </template>
 
@@ -584,6 +611,8 @@ import { debounce } from 'lodash-es'
 import ConnectionStatusBadge from './ConnectionStatusBadge.vue'
 import DeviceMergeDialog from './DeviceMergeDialog.vue'
 import DeviceCredentialDialog from './DeviceCredentialDialog.vue'
+import DeviceGroupMembershipDialog from './DeviceGroupMembershipDialog.vue'
+import { useGroupsStore } from '@/stores/groups'
 import { cloudProviderLabel, platformOptions } from '@/models/vendors'
 import { unreachableFromHere, answersPingButCloudOffline, DeviceTypeInfo, deviceTypeInfo } from '@/models/Device'
 import { VendorInfo, PlatformInfo } from '@/models/vendors'
@@ -597,9 +626,12 @@ const { connected: wsConnected, connecting: wsConnecting } = useWebSocket()
 const tableProps = defineProps({
   // The status filter, two-way (v-model:status-filter) so the Devices page
   // stat cards can set it and show which one is active
-  statusFilter: { type: String, default: null }
+  statusFilter: { type: String, default: null },
+  // The group filter, two-way like the status filter: the page's Groups
+  // dialog sets it ("Show devices"); 'none' lists devices in no group
+  groupFilter: { type: String, default: null }
 })
-const emit = defineEmits(['edit-device', 'update:statusFilter'])
+const emit = defineEmits(['edit-device', 'update:statusFilter', 'update:groupFilter'])
 
 // Component state
 const selectedItems = ref([])
@@ -612,7 +644,8 @@ const filters = ref({
   type: null,
   location: null,
   platform: null,
-  credential: null
+  credential: null,
+  group: tableProps.groupFilter || null
 })
 
 // Table options
@@ -711,6 +744,13 @@ const credentialFilterOptions = computed(() => [
   ...(settingsStore.apiCredentials || []).map((c) => ({ title: c.name, value: c.id }))
 ])
 
+// Group filter: devices in no group, or in one group
+const groupsStore = useGroupsStore()
+const groupFilterOptions = computed(() => [
+  { title: 'No group', value: 'none' },
+  ...groupsStore.sorted.map((g) => ({ title: g.name, value: g.id }))
+])
+
 // Locations seen on loaded rows (the backend matches "contains", so a typed
 // value works too). Remembered across loads so filtering doesn't shrink the list.
 const knownLocations = ref(new Set())
@@ -746,6 +786,7 @@ const onSearchInput = debounce(() => {
 
 const applyFilters = () => {
   emit('update:statusFilter', filters.value.status || null)
+  emit('update:groupFilter', filters.value.group || null)
   loadItems({
     ...tableOptions.value,
     page: 1
@@ -758,15 +799,24 @@ const clearFilters = () => {
     type: null,
     location: null,
     platform: null,
-    credential: null
+    credential: null,
+    group: null
   }
   searchInput.value = ''
   emit('update:statusFilter', null)
+  emit('update:groupFilter', null)
   loadItems({
     ...tableOptions.value,
     page: 1
   })
 }
+
+watch(() => tableProps.groupFilter, (group) => {
+  if ((group || null) === (filters.value.group || null)) return
+  filters.value.group = group || null
+  if (group) showFilters.value = true
+  applyFilters()
+})
 
 watch(() => tableProps.statusFilter, (status) => {
   if ((status || null) === (filters.value.status || null)) return
@@ -862,6 +912,7 @@ const bulkLiveMonitoring = async (enabled) => {
 
 // Merge: the selection can span table pages, so fetch rows not on this one.
 const credentialDialog = ref(false)
+const groupDialog = ref(false)
 const mergeDialog = ref(false)
 const mergeCandidates = ref([])
 const mergeLoading = ref(false)
@@ -1065,6 +1116,8 @@ onMounted(() => {
   if (canEdit.value && !settingsStore.apiCredentials?.length) {
     settingsStore.fetchApiCredentials().catch(() => {})
   }
+  groupsStore.ensureGroups().catch(() => {})
+  if (filters.value.group) showFilters.value = true
   loadItems({
     page: 1,
     itemsPerPage: 10,

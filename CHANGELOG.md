@@ -7,7 +7,11 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 ### Added
 - **Activity** page (`/activity`, in the menu): a rolling feed of what happened to your devices lately, newest first, grouped by day. It shows ping and cloud status changes, restarts, config changes found by backups, and device alerts opening and clearing. Port link and PoE changes are available as a filter but off by default, and repeated changes on the same device or port within ten minutes are folded into one "flapping" line. Filter by kind, vendor or device; it updates live. `GET /api/v1/activity`.
 
+- **Device groups** on the Devices page: **Groups** lists them with their device and automation counts, creates and renames them (operators), deletes them (admins), and "Show devices" filters the table to one. Select devices in the table and choose **Group** to add them to a group (type a new name to create one) or take them out. The table has a Group filter, including "No group". Automations' Manual and Schedule targets and their Alert and Configuration Change filters use these groups; until now they could only be made through the API. `POST /devices/groups/:id/members`, `GET /devices?group=`. (#26)
+- **Firmware Status** shows the firmware version every device last reported (from cloud sync, status refreshes and polls) without polling anything, with a count per version. (#25)
+
 ### Changed
+- **Firmware Status** is linked from the Devices page header; until now it could only be opened by typing its address. Settings drops its two empty tabs (General, Advanced) and gains **Connection Test** (operators and admins): the manual device connection test that used to live at an unlinked address, which now opens this tab. The test was marked "Admin Only" but has always been open to operators. (#25)
 - The dashboard's **Recent Activity** card shows the newest items of the Activity feed. It used to list devices by when they were last seen, and only those on the Devices table page that was loaded.
 
 ### Fixed

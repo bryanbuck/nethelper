@@ -140,6 +140,22 @@ const validateDeviceGroup = {
     body('deviceIds').optional().isArray(),
     handleValidationErrors,
   ],
+
+  members: [
+    param('groupId').isUUID().withMessage('Invalid group ID'),
+    body('add').optional().isArray({ max: 5000 }).withMessage('add must be a list of device IDs'),
+    body('add.*').isUUID().withMessage('Invalid device ID'),
+    body('remove').optional().isArray({ max: 5000 }).withMessage('remove must be a list of device IDs'),
+    body('remove.*').isUUID().withMessage('Invalid device ID'),
+    body().custom((value) => (value?.add?.length || value?.remove?.length) > 0)
+      .withMessage('Name devices to add or remove'),
+    handleValidationErrors,
+  ],
+
+  remove: [
+    param('groupId').isUUID().withMessage('Invalid group ID'),
+    handleValidationErrors,
+  ],
 };
 
 // Query validation rules

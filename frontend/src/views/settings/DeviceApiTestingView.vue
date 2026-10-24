@@ -1,15 +1,9 @@
 <template>
   <div class="device-api-testing">
-    <!-- Page Header -->
+    <!-- Intro (shown as the Settings → Connection Test tab) -->
     <div class="mb-6">
-      <div class="d-flex align-center mb-2">
-        <v-icon icon="mdi-test-tube" size="x-large" color="primary" class="mr-3" />
-        <div>
-          <h1 class="text-h4">Device API Testing</h1>
-          <v-chip color="info" size="small" class="ml-2">Admin Only</v-chip>
-        </div>
-      </div>
-      <p class="text-body-1 text-medium-emphasis">
+      <div class="text-h6 mb-1">Device connection test</div>
+      <p class="text-body-2 text-medium-emphasis mb-0">
         Test device API connectivity without requiring devices to be in the database.
         This diagnostic tool helps validate credentials and troubleshoot connection issues.
       </p>
@@ -443,13 +437,9 @@ onMounted(() => {
 }
 
 pre {
-  background-color: #f5f5f5;
+  background-color: rgba(var(--v-theme-on-surface), 0.05);
   padding: 8px;
   border-radius: 4px;
   overflow-x: auto;
-}
-
-.v-theme--dark pre {
-  background-color: #1e1e1e;
 }
 </style>

@@ -2,7 +2,7 @@
   <div class="devices-view">
     <v-container fluid class="pa-4">
       <!-- Header Section -->
-      <div class="d-flex align-center justify-space-between mb-6">
+      <div class="d-flex flex-wrap align-center justify-space-between ga-2 mb-6">
         <div>
           <h1 class="text-h4 font-weight-bold mb-1">Device Management</h1>
           <p class="text-subtitle-1 text-medium-emphasis mb-0">
@@ -11,6 +11,20 @@
         </div>
         
         <div class="d-flex align-center ga-2">
+          <v-btn
+            variant="outlined"
+            prepend-icon="mdi-chip"
+            to="/devices/firmware"
+          >
+            Firmware Status
+          </v-btn>
+          <v-btn
+            variant="outlined"
+            prepend-icon="mdi-folder-multiple-outline"
+            @click="groupsDialog = true"
+          >
+            Groups
+          </v-btn>
           <v-btn
             v-if="canEdit"
             color="secondary"
@@ -74,6 +88,7 @@
       <DeviceTable
         ref="deviceTable"
         v-model:status-filter="statusFilter"
+        v-model:group-filter="groupFilter"
         @edit-device="handleEditDevice"
       />
 
@@ -253,6 +268,8 @@
       </v-card>
     </v-dialog>
 
+    <DeviceGroupsDialog v-model="groupsDialog" @show-devices="groupFilter = $event" />
+
     <DeviceEditDialog
       v-model="showEditDialog"
       :device="editingDevice"
@@ -288,6 +305,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useWebSocket } from '@/composables/useWebSocket'
 import DeviceTable from '@/components/devices/DeviceTable.vue'
 import DeviceEditDialog from '@/components/devices/DeviceEditDialog.vue'
+import DeviceGroupsDialog from '@/components/devices/DeviceGroupsDialog.vue'
 import { vendorOptions, platformOptions } from '@/models/vendors'
 import { useDeviceForm, deviceTypes, managementModeOptions, deviceFormRules as rules } from '@/composables/useDeviceForm'
 
@@ -484,6 +502,18 @@ watch(statusFilter, (status) => {
 watch(() => route.query.status, (status) => {
   const next = STATUSES.includes(status) ? status : null
   if (next !== statusFilter.value) statusFilter.value = next
+})
+
+// Group filter (?group=<id>|none), set from the table or the Groups dialog
+const groupsDialog = ref(false)
+const groupFilter = ref(typeof route.query.group === 'string' ? route.query.group : null)
+watch(groupFilter, (group) => {
+  if ((route.query.group || null) === group) return
+  router.replace({ query: { ...route.query, group: group || undefined } })
+})
+watch(() => route.query.group, (group) => {
+  const next = typeof group === 'string' ? group : null
+  if (next !== groupFilter.value) groupFilter.value = next
 })
 
 // Initialize

@@ -814,6 +814,42 @@
           "response": []
         },
         {
+          "name": "POST /devices/groups/:groupId/members",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/devices/groups/:groupId/members",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                "groups",
+                ":groupId",
+                "members"
+              ],
+              "variable": [
+                {
+                  "key": "groupId",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"add\": [\n    \"<uuid>\"\n  ],\n  \"remove\": [\n    \"<uuid>\"\n  ],\n  \"\": \"<string>\"\n}"
+            },
+            "description": "Required: ."
+          },
+          "response": []
+        },
+        {
           "name": "DELETE /devices/groups/:groupId",
           "request": {
             "method": "DELETE",

@@ -10,8 +10,8 @@ const ArubaErrorHandler = require('../utils/aruba-error-handler');
 class DeviceController {
   async getDevices(req, res, next) {
     try {
-      const { type, status, location, search, platform, credential, page, limit, sortBy, sortOrder } = req.query;
-      const filters = { type, status, location, search, platform, credential };
+      const { type, status, location, search, platform, credential, group, page, limit, sortBy, sortOrder } = req.query;
+      const filters = { type, status, location, search, platform, credential, group };
 
       // limit asks for one page (the Devices table); without it, every device
       if (limit) {
@@ -244,6 +244,17 @@ class DeviceController {
         data: group,
         message: 'Device group updated successfully',
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /** Bulk add/remove devices to or from one group (POST /devices/groups/:groupId/members). */
+  async updateGroupMembers(req, res, next) {
+    try {
+      const { add = [], remove = [] } = req.body;
+      const group = await deviceService.updateGroupMembers(req.params.groupId, { add, remove });
+      res.json({ success: true, data: group });
     } catch (error) {
       next(error);
     }
