@@ -161,6 +161,7 @@ class BaseCloudProvider {
   async getDeviceStatus(serial)         // → { status, lastSeen, raw }      (MVP)
   async getDeviceConfiguration(serial)  // → { text, format, source } or throws CapabilityError (MVP)
   async findByAddress(ip)               // → AddressHolder[] (its devices + clients with this IP), 'address-lookup'
+  async listAlarms({ since })           // → { alarms: NormalizedAlarm[], activeIds|null }, 'alarms' (read-only mirror)
   supports(capability)                  // 'config-backup' | 'status' | 'inventory' | ...
   // later: getFirmwareInfo, subscribeEvents (Mist WS), executeAction
 }

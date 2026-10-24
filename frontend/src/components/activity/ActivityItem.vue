@@ -22,6 +22,9 @@
         {{ item.device.name }}
       </router-link>
       <span v-else-if="item.device" class="activity-device text-medium-emphasis" title="Device no longer exists">{{ item.device.name }}</span>
+      <span v-else-if="item.siteName" class="activity-site text-medium-emphasis" title="Site: the alarm names no single device">
+        <v-icon size="x-small" icon="mdi-map-marker-outline" />{{ item.siteName }}
+      </span>
       <span class="activity-label">{{ info.label }}</span>
     </v-list-item-title>
     <v-list-item-subtitle v-if="info.detail" class="activity-detail">{{ info.detail }}</v-list-item-subtitle>
@@ -68,6 +71,10 @@ const clockTime = (value) => new Date(value).toLocaleTimeString([], { hour: '2-d
 
 .activity-device:hover {
   text-decoration: underline;
+}
+
+.activity-site {
+  font-weight: 500;
 }
 
 .activity-detail {

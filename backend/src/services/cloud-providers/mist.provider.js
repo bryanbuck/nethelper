@@ -55,6 +55,21 @@ const NEIGHBOR_FIELDS = ['mac', 'serial', 'status', 'name', 'hostname', 'lldp_st
 // wireless to two weeks; one window keeps the answers comparable.
 const ADDRESS_WINDOW = '7d';
 
+// Alarm groups the mirror reads: device and site infrastructure, and Marvis
+// (VNA licence; the only group with open/resolved status).
+const ALARM_GROUPS = ['infrastructure', 'marvis'];
+// Infrastructure alarms NetHelper already records itself: device offline and
+// back (cloud status refresh) and restarts (event stream).
+const ALARM_SKIP_TYPES = new Set([
+  'device_down', 'device_reconnected', 'device_restarted',
+  'switch_down', 'switch_reconnected', 'switch_restarted',
+  'gateway_down', 'gateway_reconnected',
+]);
+const ALARM_SEVERITY = { critical: 'critical', major: 'critical', warn: 'warning', warning: 'warning', minor: 'warning' };
+// GET /api/v1/const/alarm_defs per API host: display names, read once per process.
+const alarmDefsCache = new Map();
+const humanizeType = (type) => type.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+
 const fromEpoch = (seconds) => (seconds ? new Date(seconds * 1000) : null);
 const first = (value) => (Array.isArray(value) ? value[0] : value) || null;
 
@@ -115,7 +130,7 @@ class MistProvider extends BaseCloudProvider {
   }
 
   supports(capability) {
-    return ['inventory', 'status', 'test', 'config-backup', 'scope-backup', 'topology', 'events', 'address-lookup'].includes(capability);
+    return ['inventory', 'status', 'test', 'config-backup', 'scope-backup', 'topology', 'events', 'address-lookup', 'alarms'].includes(capability);
   }
 
   get orgId() {
@@ -387,6 +402,69 @@ class MistProvider extends BaseCloudProvider {
       ...wired.map((client) => mistWiredHolder(client, ip)),
       ...wireless.map(mistWirelessHolder),
     ];
+  }
+
+  /** alarm type -> display name; a failed read falls back to the type. */
+  async alarmDisplayNames() {
+    const host = this.integration.baseUrl;
+    if (!alarmDefsCache.has(host)) {
+      try {
+        const defs = await this.request('GET', '/api/v1/const/alarm_defs', { context: 'alarms' });
+        alarmDefsCache.set(host, new Map((Array.isArray(defs) ? defs : []).map((d) => [d.key, d.display])));
+      } catch (error) {
+        logger.warn(`Mist alarm definitions unavailable (${error.message}); using alarm types as names`);
+        return new Map();
+      }
+    }
+    return alarmDefsCache.get(host);
+  }
+
+  /**
+   * Org alarms since `since` (search_after paging). Infrastructure alarms
+   * are point events without a status; marvis ones carry open/resolved.
+   * Mist has no "active" list, so activeIds is null.
+   */
+  async listAlarms({ since }) {
+    const [names, rows] = await Promise.all([
+      this.alarmDisplayNames(),
+      this.searchAll(`/api/v1/orgs/${this.orgId}/alarms/search`, {
+        params: { start: Math.floor(new Date(since).getTime() / 1000), end: Math.ceil(Date.now() / 1000) },
+        context: 'alarms',
+      }),
+    ]);
+    const alarms = rows
+      .filter((a) => ALARM_GROUPS.includes(a.group) && !ALARM_SKIP_TYPES.has(a.type))
+      .map((a) => this.normalizeAlarm(a, names));
+    return { alarms, activeIds: null };
+  }
+
+  normalizeAlarm(a, names = new Map()) {
+    const stateful = a.status === 'open' || a.status === 'resolved';
+    const reasons = Array.isArray(a.reasons) ? a.reasons.filter(Boolean) : [];
+    const resolved = a.status === 'resolved';
+    return {
+      externalId: a.id,
+      type: a.type,
+      name: names.get(a.type) || humanizeType(a.type),
+      category: a.group || null,
+      severity: ALARM_SEVERITY[String(a.severity).toLowerCase()] || 'info',
+      stateful,
+      status: stateful ? (resolved ? 'cleared' : 'active') : 'event',
+      raisedAt: fromEpoch(a.timestamp) || new Date(),
+      lastSeenAt: fromEpoch(a.last_seen) || fromEpoch(a.timestamp) || new Date(),
+      clearedAt: resolved ? fromEpoch(a.resolved_time) || new Date() : null,
+      clearedReason: null,
+      summary: reasons.join('; ') || null,
+      siteName: null,
+      count: Number(a.count) || 1,
+      serials: [],
+      macs: [...(a.switches || []), ...(a.aps || []), ...(a.gateways || [])].map(normalizeMac).filter(Boolean),
+      hostnames: (a.hostnames || []).filter(Boolean),
+      data: {
+        ...(a.site_id && { siteId: a.site_id }),
+        ...(a.port_ids?.length && { ports: a.port_ids }),
+      },
+    };
   }
 
   /** The org inventory record of one device, by serial. */

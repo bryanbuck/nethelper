@@ -220,6 +220,7 @@ model Device {
   topologyState   DeviceTopologyState?
   topologyChanges TopologyChange[]
   alerts          Alert[]
+  cloudAlarms     CloudAlarm[]
 
   @@index([apiCredentialId])
   @@index([cloudIntegrationId])
@@ -588,6 +589,45 @@ model ConfigBackupArtifact {
 // a Central group. This is where AP configuration lives. integrationId is a
 // plain column (no FK) and the names are denormalized, so history survives
 // deleting the integration, the same way ConfigBackup outlives its device.
+// An alarm a cloud raised (Mist org alarms, Central alerts), mirrored
+// read-only by services/cloud-alarm.service.js for the Activity feed. Never
+// acked or cleared in the cloud. stateful: the cloud says when it clears
+// (Central, Mist marvis); otherwise it is a point event (Mist infrastructure)
+// and status stays 'event'. deviceId is set when the alarm names one device
+// we know; a deleted device leaves the alarm site-level. integrationId is a
+// plain column: the env-var Central integration has no row, and history
+// outlives an integration. Pruned after CLOUD_ALARM_RETENTION_DAYS.
+model CloudAlarm {
+  id            String    @id @default(uuid())
+  integrationId String
+  provider      String // CloudProviderType value
+  externalId    String // the cloud's id for this occurrence
+  type          String // Mist alarm type / Central alert name
+  name          String
+  category      String?
+  severity      String // critical | warning | info
+  stateful      Boolean   @default(false)
+  status        String // active | cleared | event
+  device        Device?   @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  deviceId      String?
+  siteName      String?
+  summary       String?
+  count         Int       @default(1)
+  raisedAt      DateTime
+  lastSeenAt    DateTime
+  clearedAt     DateTime?
+  clearedReason String?
+  data          Json      @default("{}")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([integrationId, externalId])
+  @@index([raisedAt])
+  @@index([clearedAt])
+  @@index([deviceId])
+  @@index([integrationId, status])
+}
+
 model ScopeBackup {
   id              String            @id @default(uuid())
   integrationId   String

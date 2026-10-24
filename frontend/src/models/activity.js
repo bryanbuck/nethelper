@@ -6,16 +6,18 @@
 
 import { eventInfo } from '@/models/device-events'
 import { ALERT_RULE_LABELS, severityMeta, alertLink } from '@/models/alerts'
+import { cloudProviderLabel } from '@/models/vendors'
 
 export const ACTIVITY_CATEGORIES = [
   { value: 'status', title: 'Status', icon: 'mdi-lan-check', hint: 'Ping and cloud status changes' },
   { value: 'restart', title: 'Restarts', icon: 'mdi-restart', hint: 'Devices that restarted' },
   { value: 'config', title: 'Config changes', icon: 'mdi-file-compare', hint: 'Backups that found a changed config' },
   { value: 'alert', title: 'Alerts', icon: 'mdi-bell-outline', hint: 'Device alerts opened and cleared' },
+  { value: 'cloud-alarm', title: 'Cloud alarms', icon: 'mdi-cloud-alert-outline', hint: 'Alarms raised by Mist and Aruba Central' },
   { value: 'port', title: 'Ports', icon: 'mdi-ethernet', hint: 'Port link, PoE, and live-monitor changes (chatty)' },
 ]
 
-export const DEFAULT_ACTIVITY_CATEGORIES = ['status', 'restart', 'config', 'alert']
+export const DEFAULT_ACTIVITY_CATEGORIES = ['status', 'restart', 'config', 'alert', 'cloud-alarm']
 
 const BACKUP_TRIGGERS = { manual: 'manual backup', scheduled: 'scheduled backup', automation: 'automation backup' }
 
@@ -53,6 +55,8 @@ export function activityInfo(item) {
     }
   }
 
+  if (item.kind === 'cloud-alarm') return cloudAlarmInfo(item, deviceLink)
+
   if (item.kind === 'alert') {
     const rule = ALERT_RULE_LABELS[item.rule] || item.rule
     const link = alertLink({ rule: item.rule, deviceId: item.deviceId })
@@ -89,6 +93,44 @@ export function activityInfo(item) {
     label: item.count > 1 ? `${item.port ? `Port ${item.port}` : capitalize(familyLabel(item.type))} flapping` : label,
     detail: details.join(' · '),
     link: deviceLink && (item.category === 'port' ? { ...deviceLink, query: { tab: 'live' } } : { ...deviceLink, query: { tab: 'history' } }),
+  }
+}
+
+const ALARM_SEVERITY = {
+  critical: { icon: 'mdi-cloud-alert', color: 'error' },
+  warning: { icon: 'mdi-cloud-alert-outline', color: 'warning' },
+  info: { icon: 'mdi-cloud-outline', color: 'info' },
+}
+// Central clears many alerts on a timer, whether or not the problem went away.
+const TIMER_CLEAR = /clear alert timer/i
+
+function cloudAlarmInfo(item, deviceLink) {
+  const provider = cloudProviderLabel(item.provider)
+  const times = item.count > 1 ? ` ×${item.count}` : ''
+  const spread = item.count > 1 ? `${item.count} in ${durationLabel(new Date(item.at) - new Date(item.since))}` : null
+  if (item.type === 'cloud-alarm.cleared') {
+    let reason = item.clearedReason
+    if (!reason) reason = `No longer active in ${provider}`
+    else if (TIMER_CLEAR.test(reason)) reason = `Cleared by ${provider}'s timer; the problem may not be fixed`
+    return {
+      icon: 'mdi-cloud-check-outline',
+      color: TIMER_CLEAR.test(item.clearedReason || '') ? 'medium-emphasis' : 'success',
+      label: `${provider} cleared: ${item.name}${times}`,
+      detail: [spread, reason].filter(Boolean).join(' · '),
+      link: deviceLink,
+    }
+  }
+  const severity = ALARM_SEVERITY[item.severity] || ALARM_SEVERITY.info
+  return {
+    ...severity,
+    label: `${provider}: ${item.name}${times}`,
+    detail: [
+      spread,
+      item.summary,
+      item.incidents > 1 ? `${item.incidents} incidents` : null,
+      item.ports?.length ? `ports ${item.ports.join(', ')}` : null,
+    ].filter(Boolean).join(' · '),
+    link: deviceLink,
   }
 }
 

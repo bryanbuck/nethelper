@@ -9,11 +9,14 @@
  *   capture also has hasChanges set and is left out (nothing changed).
  * - Alert: opened and resolved, for rules about one device. The ping and
  *   cloud offline rules are left out: their status events already say it.
+ * - CloudAlarm: alarms the clouds raised (services/cloud-alarm.service.js),
+ *   and when stateful ones cleared. One the mirror couldn't tie to a device
+ *   is about its site (`siteName`, `device` null).
  *
  * Noise control: a device's first ping/cloud state (data.previous unset) is
  * a starting point for its History lanes, not news, and is left out. Changes
- * of one kind on one device/port within FLAP_WINDOW_MS of each other are
- * folded into one item with a count.
+ * of one kind on one device/port, or one cloud alarm on one device/site,
+ * within FLAP_WINDOW_MS of each other are folded into one item with a count.
  *
  * Paging: `before` (ISO) returns items strictly older; the response's
  * `nextBefore` continues it.
@@ -21,6 +24,7 @@
 
 const { Prisma } = require('@prisma/client');
 const { getPrisma } = require('../config/database');
+const { CLOUD_PROVIDERS } = require('../constants/vendors');
 const {
   ACTIVITY_CATEGORIES: CATEGORIES, DEFAULT_ACTIVITY_CATEGORIES: DEFAULT_CATEGORIES,
 } = require('../constants/activity');
@@ -56,8 +60,12 @@ function categoryOf(type) {
 }
 
 // Changes that fold into one item when they repeat: same device, port, and
-// family (ping, cloud, monitor, port.link, port.poe, port.admin).
+// family (ping, cloud, monitor, port.link, port.poe, port.admin); or the
+// same cloud alarm raised (or cleared) on the same device or site.
 function flapKey(item) {
+  if (item.kind === 'cloud-alarm') {
+    return `alarm|${item.deviceId || `site:${item.siteName || ''}`}|${item.provider}|${item.name}|${item.type}`;
+  }
   if (item.kind !== 'event' || item.category === 'restart') return null;
   const parts = item.type.split('.');
   const family = parts[0] === 'port' ? `${parts[0]}.${parts[1]}` : parts[0];
@@ -233,6 +241,53 @@ async function alertItems(prisma, opts, deviceWhere, timeWhere) {
   };
 }
 
+async function cloudAlarmItems(prisma, opts, alarmWhere, timeWhere) {
+  if (!opts.categories.includes('cloud-alarm')) return { rows: [], full: false };
+  const select = {
+    id: true, provider: true, name: true, category: true, severity: true, stateful: true, status: true,
+    deviceId: true, siteName: true, summary: true, count: true, raisedAt: true, clearedAt: true, clearedReason: true, data: true,
+  };
+  const [raised, cleared] = await Promise.all([
+    prisma.cloudAlarm.findMany({
+      where: { ...alarmWhere, ...(timeWhere && { raisedAt: timeWhere }) },
+      orderBy: { raisedAt: 'desc' },
+      take: opts.limit,
+      select,
+    }),
+    prisma.cloudAlarm.findMany({
+      where: { ...alarmWhere, stateful: true, clearedAt: timeWhere || { not: null } },
+      orderBy: { clearedAt: 'desc' },
+      take: opts.limit,
+      select,
+    }),
+  ]);
+  const item = (a, phase) => ({
+    id: `cloud-alarm:${a.id}:${phase}`,
+    kind: 'cloud-alarm',
+    category: 'cloud-alarm',
+    type: `cloud-alarm.${phase}`,
+    at: phase === 'raised' ? a.raisedAt : a.clearedAt,
+    deviceId: a.deviceId,
+    siteName: a.siteName,
+    alarmId: a.id,
+    provider: a.provider,
+    name: a.name,
+    alarmCategory: a.category,
+    severity: a.severity,
+    summary: a.summary,
+    stateful: a.stateful,
+    status: a.status,
+    // Incidents the cloud folded into this one alarm (Mist), not our folding.
+    incidents: a.count,
+    ...(a.data?.ports && { ports: a.data.ports }),
+    ...(phase === 'cleared' && { clearedReason: a.clearedReason }),
+  });
+  return {
+    full: raised.length === opts.limit || cleared.length === opts.limit,
+    rows: [...raised.map((a) => item(a, 'raised')), ...cleared.map((a) => item(a, 'cleared'))],
+  };
+}
+
 /**
  * One page of the feed.
  * @param {{categories?: string[], deviceId?: string, vendor?: string, before?: string, limit?: number}} options
@@ -243,12 +298,16 @@ async function list(options) {
   const prisma = getPrisma();
 
   let deviceWhere = {};
+  let alarmWhere = {};
   if (opts.deviceId) {
     deviceWhere = { deviceId: opts.deviceId };
+    alarmWhere = deviceWhere;
   } else if (opts.vendor) {
     const ids = await prisma.device.findMany({ where: { vendor: opts.vendor }, select: { id: true } });
-    if (!ids.length) return { items: [], nextBefore: null, categories: opts.categories };
     deviceWhere = { deviceId: { in: ids.map((d) => d.id) } };
+    // A site-level alarm belongs to the vendor of the cloud that raised it.
+    const providers = Object.values(CLOUD_PROVIDERS).filter((p) => p.vendor === opts.vendor).map((p) => p.id);
+    alarmWhere = { OR: [deviceWhere, { deviceId: null, provider: { in: providers } }] };
   }
   const timeWhere = opts.before ? { lt: opts.before } : null;
 
@@ -256,6 +315,7 @@ async function list(options) {
     eventItems(prisma, opts, deviceWhere, timeWhere),
     configItems(prisma, opts, deviceWhere, timeWhere),
     alertItems(prisma, opts, deviceWhere, timeWhere),
+    cloudAlarmItems(prisma, opts, alarmWhere, timeWhere),
   ]);
   const merged = sources.flatMap((s) => s.rows).sort((a, b) => new Date(b.at) - new Date(a.at));
 

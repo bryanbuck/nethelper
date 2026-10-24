@@ -122,6 +122,9 @@ Production writes JSON logs to stdout. Values under secret-looking keys (passwor
 | `CLOUD_SYNC_INTERVAL` | `3600000` | Milliseconds between scheduled syncs (1 hour; minimum 300000). Only failures reach the status bar. |
 | `CLOUD_STATUS_ENABLED` | `true` | Status refresh between syncs: status, IP, firmware, connection and config state for devices sync already created. Never adds devices. |
 | `CLOUD_STATUS_INTERVAL` | `300000` | Milliseconds between refreshes (5 minutes; minimum 60000). Mist: one API call per 1,000 devices; Central: one per 100. |
+| `CLOUD_ALARMS_ENABLED` | `true` | Copy the alarms each cloud raises (Mist org alarms, Aruba Central alerts) into the Activity feed, read-only: nothing is acknowledged or cleared in the cloud. Alarm types that repeat what NetHelper records itself (device offline/online, restarts) are left out. Mist raises only the types enabled in its org alarm template. |
+| `CLOUD_ALARM_INTERVAL` | `300000` | Milliseconds between alarm polls (5 minutes; minimum 60000). Mist: one search call per 1,000 alarms; Central: two calls (active alerts and recent alerts) per 100. |
+| `CLOUD_ALARM_RETENTION_DAYS` | `30` | Cloud alarms raised longer ago than this are deleted daily; a Central alert still active is kept. |
 | `CLOUD_STREAM_ENABLED` | `true` | Juniper Mist event stream: one outbound WebSocket per Mist org. A device starting or stopping reporting triggers the status refresh at once (at most every 30 s per org), and port link changes and restarts are recorded as device events. Needs outbound HTTPS to `api-ws.<region>.mist.com`. |
 
 ### Network Map (topology)
