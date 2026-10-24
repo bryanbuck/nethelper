@@ -35,20 +35,6 @@ function initializeSocket(server) {
   io.on('connection', (socket) => {
     logger.info(`User ${socket.userId} connected via WebSocket`);
 
-    // Join user-specific room
-    socket.join(`user:${socket.userId}`);
-
-    // Handle events
-    socket.on('subscribe:device', (deviceId) => {
-      socket.join(`device:${deviceId}`);
-      logger.debug(`User ${socket.userId} subscribed to device ${deviceId}`);
-    });
-
-    socket.on('unsubscribe:device', (deviceId) => {
-      socket.leave(`device:${deviceId}`);
-      logger.debug(`User ${socket.userId} unsubscribed from device ${deviceId}`);
-    });
-
     // Live tab: port/PoE state + counters for one device (services/live/).
     // The ack carries the current snapshot, or { ok: false, error } when the
     // device can't be watched (no IP, no credential, unsupported platform).
@@ -97,11 +83,6 @@ function initializeSocket(server) {
       socket.leave(require('../services/system-status.service').SYSTEM_STATUS_ROOM);
     });
 
-    socket.on('subscribe:automation', (automationId) => {
-      socket.join(`automation:${automationId}`);
-      logger.debug(`User ${socket.userId} subscribed to automation ${automationId}`);
-    });
-
     socket.on('disconnect', () => {
       logger.info(`User ${socket.userId} disconnected`);
       const liveView = require('../services/live/live-view.service');
@@ -121,29 +102,7 @@ function getIO() {
   return io;
 }
 
-// Helper functions for emitting events
-function emitDeviceUpdate(deviceId, data) {
-  if (io) {
-    io.to(`device:${deviceId}`).emit('device:update', data);
-  }
-}
-
-function emitAutomationUpdate(automationId, data) {
-  if (io) {
-    io.to(`automation:${automationId}`).emit('automation:update', data);
-  }
-}
-
-function emitUserNotification(userId, notification) {
-  if (io) {
-    io.to(`user:${userId}`).emit('notification', notification);
-  }
-}
-
 module.exports = {
   initializeSocket,
   getIO,
-  emitDeviceUpdate,
-  emitAutomationUpdate,
-  emitUserNotification,
 };

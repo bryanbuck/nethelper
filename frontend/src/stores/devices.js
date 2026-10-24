@@ -96,6 +96,21 @@ export const useDevicesStore = defineStore('devices', () => {
     }
   }
 
+  /**
+   * The fleet-wide status counts only (GET /devices?limit=1), for views that
+   * show counts but no rows (the dashboard). The held rows are left alone.
+   */
+  async function fetchStatusSummary() {
+    loading.value = true
+    try {
+      const summary = await deviceService.getStatusSummary()
+      if (summary) stats.value = { ...summary }
+      return stats.value
+    } finally {
+      loading.value = false
+    }
+  }
+
   /** For views that need every device (pickers, lookups): fetch unless held. */
   async function ensureAllDevices() {
     if (!devicesComplete.value) await fetchDevices()
@@ -496,6 +511,7 @@ export const useDevicesStore = defineStore('devices', () => {
     updateDeviceStatus,
     updateDeviceLocally,
     applyCloudCheck,
+    fetchStatusSummary,
     addDevice,
     removeDevice,
     updateDevice,

@@ -243,7 +243,7 @@ onMounted(() => {
                 variant="outlined"
                 @click="logout"
               >
-                <v-icon left>mdi-logout</v-icon>
+                <v-icon start>mdi-logout</v-icon>
                 Sign Out
               </v-btn>
             </div>

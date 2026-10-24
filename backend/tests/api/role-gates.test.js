@@ -45,7 +45,6 @@ const RESTRICTED_READS = [
 // Operator-level actions that only admins may take.
 const ADMIN_ONLY = [
   'DELETE /devices/:deviceId',
-  'POST /devices/:deviceId/command',
   'DELETE /devices/groups/:groupId',
   'POST /settings/cloud-integrations',
   'PUT /settings/cloud-integrations/:id',

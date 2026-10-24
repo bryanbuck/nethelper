@@ -5,6 +5,7 @@ vi.mock('@/services/device.service', () => ({
   default: {
     getDevices: vi.fn(),
     getDevicesWithPagination: vi.fn(),
+    getStatusSummary: vi.fn(),
     createDevice: vi.fn(),
     deleteDevice: vi.fn()
   }
@@ -38,6 +39,19 @@ describe('devices store', () => {
     expect(store.devicesByType.switch.map((d) => d.id)).toEqual(['1', '2'])
     expect(store.loading).toBe(false)
     expect(store.lastSync).toBeInstanceOf(Date)
+  })
+
+  test('fetchStatusSummary sets the fleet counts and leaves the held rows alone (#51)', async () => {
+    deviceService.getStatusSummary.mockResolvedValue({ total: 900, online: 850, offline: 30, warning: 20 })
+    const store = useDevicesStore()
+    store.devices = DEVICES.slice(0, 2)
+
+    await store.fetchStatusSummary()
+
+    expect(store.stats).toEqual({ total: 900, online: 850, offline: 30, warning: 20 })
+    expect(store.devices.map((d) => d.id)).toEqual(['1', '2'])
+    expect(deviceService.getDevices).not.toHaveBeenCalled()
+    expect(store.loading).toBe(false)
   })
 
   test('fetchDevices records and rethrows errors', async () => {

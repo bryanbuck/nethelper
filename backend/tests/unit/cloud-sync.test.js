@@ -189,10 +189,9 @@ test('base provider operations nobody implements are CapabilityErrors, not TypeE
   const provider = new BaseCloudProvider({ id: 'x', provider: 'juniper_mist', name: 'X', baseUrl: 'https://x', credentials: {} });
 
   for (const call of [
-    () => provider.getDeviceStats('S', 'cpu', '1h'),
-    () => provider.executeCommand('S', 'show version'),
-    () => provider.updateDeviceConfiguration('S', {}),
-    () => provider.backupConfiguration('S'),
+    () => provider.getDeviceConfiguration('S'),
+    () => provider.listNeighbors(),
+    () => provider.findByAddress('10.0.0.1'),
   ]) {
     await expect(call()).rejects.toMatchObject({ name: 'CapabilityError' });
   }

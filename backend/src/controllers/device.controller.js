@@ -3,7 +3,6 @@ const deviceMerge = require('../services/device-merge.service');
 const deviceCredentials = require('../services/device-credential.service');
 const deviceHistory = require('../services/device-history.service');
 const addressLookup = require('../services/address-lookup.service');
-const CloudProviderFactory = require('../services/cloud-providers/cloud-provider-factory');
 const { getPrisma } = require('../config/database');
 const devicePollerService = require('../services/device-poller.service');
 const ArubaErrorHandler = require('../utils/aruba-error-handler');
@@ -154,84 +153,6 @@ class DeviceController {
       if (error instanceof deviceCredentials.CredentialAssignError) {
         return res.status(error.statusCode).json({ success: false, error: error.message });
       }
-      next(error);
-    }
-  }
-
-  /** Device row + its cloud provider for cloud-plane endpoints below. */
-  async deviceProvider(deviceId) {
-    const device = await getPrisma().device.findUnique({ where: { id: deviceId } });
-    if (!device) {
-      const error = new Error('Device not found');
-      error.statusCode = 404;
-      throw error;
-    }
-    return { device, provider: await CloudProviderFactory.forDevice(device) };
-  }
-
-  async getDeviceStats(req, res, next) {
-    try {
-      const { deviceId } = req.params;
-      const { metric, duration } = req.query;
-
-      const { device, provider } = await deviceController.deviceProvider(deviceId);
-      const stats = await provider.getDeviceStats(device.serial, metric, duration);
-      
-      res.json({
-        success: true,
-        data: stats,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async updateDeviceConfiguration(req, res, next) {
-    try {
-      const { deviceId } = req.params;
-      const { configuration } = req.body;
-
-      const { device, provider } = await deviceController.deviceProvider(deviceId);
-      const result = await provider.updateDeviceConfiguration(device.serial, configuration);
-      
-      res.json({
-        success: true,
-        data: result,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async backupDeviceConfiguration(req, res, next) {
-    try {
-      const { deviceId } = req.params;
-
-      const { device, provider } = await deviceController.deviceProvider(deviceId);
-      const backup = await provider.backupConfiguration(device.serial);
-      
-      res.json({
-        success: true,
-        data: backup,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async executeCommand(req, res, next) {
-    try {
-      const { deviceId } = req.params;
-      const { command } = req.body;
-
-      const { device, provider } = await deviceController.deviceProvider(deviceId);
-      const result = await provider.executeCommand(device.serial, command);
-      
-      res.json({
-        success: true,
-        data: result,
-      });
-    } catch (error) {
       next(error);
     }
   }

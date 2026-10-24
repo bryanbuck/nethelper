@@ -119,6 +119,17 @@ class DeviceService {
     }
   }
 
+  /** Fleet-wide status counts ({ total, online, offline, warning }) without the rows. */
+  async getStatusSummary() {
+    try {
+      const response = await api.get('/devices', { params: { limit: 1 } })
+      return response.data.summary || null
+    } catch (error) {
+      console.error('Error fetching the device status summary:', error)
+      throw handleApiError(error, 'fetching device status counts')
+    }
+  }
+
   async getDevicesWithPagination(options = {}) {
     const {
       page = 1,
@@ -215,16 +226,6 @@ class DeviceService {
     } catch (error) {
       console.error('Error syncing devices:', error)
       throw handleApiError(error, 'syncing devices')
-    }
-  }
-
-  async getDeviceStats(id) {
-    try {
-      const response = await api.get(`/devices/${id}/stats`)
-      return response.data
-    } catch (error) {
-      console.error('Error fetching device stats:', error)
-      throw handleApiError(error, 'fetching device statistics')
     }
   }
 

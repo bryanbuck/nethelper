@@ -27,18 +27,6 @@ const handleValidationErrors = (req, res, next) => {
 
 // Device validation rules
 const validateDevice = {
-  updateConfiguration: [
-    param('deviceId').isUUID().withMessage('Invalid device ID'),
-    body('configuration').isObject().withMessage('Configuration must be an object'),
-    handleValidationErrors,
-  ],
-
-  executeCommand: [
-    param('deviceId').isUUID().withMessage('Invalid device ID'),
-    body('command').trim().isLength({ min: 1 }).withMessage('Command is required'),
-    handleValidationErrors,
-  ],
-
   merge: [
     body('targetId').isUUID().withMessage('Invalid device ID to keep'),
     body('sourceIds').isArray({ min: 1, max: 20 }).withMessage('sourceIds must list the devices to merge'),

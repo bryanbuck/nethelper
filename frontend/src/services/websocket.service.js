@@ -12,7 +12,6 @@ import { useDiscoveryStore } from '@/stores/discovery'
 import { useBackupsStore } from '@/stores/backups'
 import { useTopologyStore } from '@/stores/topology'
 import { useAlertsStore } from '@/stores/alerts'
-import { Device } from '@/models'
 
 // One activity-log slot for the socket state: lost/restored/failed replace each other.
 const CONNECTION_ENTRY_ID = 'socket-connection'
@@ -152,11 +151,9 @@ class WebSocketService {
    * Setup all WebSocket event handlers
    */
   setupEventHandlers() {
-    // Device update events
-    this.socket.on('device:update', (data) => this.handleDeviceUpdate(data))
+    // Device status and sync events
     this.socket.on('device:status:update', (data) => this.handleDeviceStatusUpdate(data))
     this.socket.on('cloud:status:checked', (data) => this.handleCloudStatusChecked(data))
-    this.socket.on('device:api:status', (data) => this.handleDeviceApiStatus(data))
     this.socket.on('device:sync:completed', (data) => this.handleDeviceSyncCompleted(data))
     this.socket.on('device:sync:failed', (data) => this.handleDeviceSyncFailed(data))
 
@@ -183,35 +180,6 @@ class WebSocketService {
     this.socket.on('alert:updated', (data) => this.handleAlertUpdated(data))
 
     console.log('WebSocket event handlers registered')
-  }
-
-  /**
-   * Handle device update events
-   * @param {Object} data - Device update data
-   */
-  handleDeviceUpdate(data) {
-    console.log('Device update received:', data)
-
-    try {
-      const { deviceId, device, changes } = data
-
-      if (device) {
-        // Full device update
-        const deviceInstance = Device.fromApiResponse(device)
-        this.stores.devices.updateDevice(deviceId, deviceInstance.toJSON())
-      } else if (changes) {
-        // Partial update
-        this.stores.devices.updateDevice(deviceId, changes)
-
-        // Handle status changes
-        if (changes.status) {
-          this.stores.devices.updateDeviceStatus(deviceId, changes.status)
-        }
-      }
-
-    } catch (error) {
-      console.error('Error handling device update:', error)
-    }
   }
 
   /**
@@ -277,39 +245,6 @@ class WebSocketService {
       this.stores.notifications.showError(`${what} failed: ${data.error || 'Unknown error'}`, 'Device Sync')
     } catch (error) {
       console.error('Error handling device sync failed:', error)
-    }
-  }
-
-  /**
-   * Handle device API status update events
-   * @param {Object} data - API status data
-   */
-  handleDeviceApiStatus(data) {
-    console.log('Device API status update:', data)
-
-    try {
-      const {
-        deviceId,
-        status,
-        lastCommunication,
-        responseTime,
-        successRate,
-        consecutiveFailures,
-        error
-      } = data
-
-      // Use local update (no API call) to avoid unnecessary requests
-      this.stores.devices.updateDeviceLocally(deviceId, {
-        apiStatus: status,
-        apiLastCommunication: lastCommunication,
-        apiResponseTime: responseTime,
-        apiSuccessRate: successRate,
-        apiConsecutiveFailures: consecutiveFailures,
-        apiError: error
-      })
-
-    } catch (error) {
-      console.error('Error handling device API status:', error)
     }
   }
 

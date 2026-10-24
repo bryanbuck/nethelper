@@ -15,7 +15,12 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 - The device page's **Last Seen** card keeps "Confirmed by <cloud> N minutes ago" current while the page is open: each status refresh now tells open pages when it read the cloud. (#46)
 - The **History** tab no longer draws a slower reply for an older range under the newer range's toggle (switching 30 days → 24 hours quickly), and it reloads every 5 minutes while visible so the window keeps reaching "now". (#52)
 - "Who has this address?" no longer shows a lookup that finished after you moved to another device on that device's banner. (#52)
+- The dashboard no longer reloads the whole device inventory every 30 seconds. Its cards read the server's status counts, refreshed a few seconds after status changes arrive and every 5 minutes otherwise (paused while the tab is hidden). Settings → API Credentials no longer loads every device on each visit; the credential test dialog reads only that credential's devices when it opens. (#51)
+- Firmware Status's error message can be closed again, and button and title icons have their usual gap before the label. (#27)
 - The device page no longer shows "Failed to Load Device" when the API rate limit is hit; it waits and loads again on its own, as the Devices table does.
+
+### Removed
+- Four device API routes that could never succeed, because no cloud provider implements them: `PUT /devices/:id/configuration`, `POST /devices/:id/backup`, `POST /devices/:id/command` and `GET /devices/:id/stats`. Backups run through `POST /backups/run`, and NetHelper never writes configuration to devices. Also removed: frontend service methods for routes that don't exist, two empty files, and socket listeners for events the server never sends. One of those listeners would have written a device back to the API from every open browser if the event had ever been sent. (#28)
 
 ### Upgrading from 0.9.0-beta.3
 - Take a database backup first: migrations are forward-only. **Docker Compose**: run `deploy/install.sh` from the new tree (it keeps your `.env` values). **Bare metal**: follow "Upgrading" in [`deploy/README.md`](deploy/README.md).

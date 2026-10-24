@@ -75,32 +75,6 @@ router.put('/:deviceId', authorize('admin', 'operator'), validateDevice.update, 
 // Delete device
 router.delete('/:deviceId', authorize('admin'), deviceController.deleteDevice);
 
-// Get device statistics
-router.get('/:deviceId/stats', deviceController.getDeviceStats);
-
-// Update device configuration
-router.put(
-  '/:deviceId/configuration',
-  authorize('admin', 'operator'),
-  validateDevice.updateConfiguration,
-  deviceController.updateDeviceConfiguration
-);
-
-// Backup device configuration
-router.post(
-  '/:deviceId/backup',
-  authorize('admin', 'operator'),
-  deviceController.backupDeviceConfiguration
-);
-
-// Execute command on device
-router.post(
-  '/:deviceId/command',
-  authorize('admin'),
-  validateDevice.executeCommand,
-  deviceController.executeCommand
-);
-
 // Live state: recent port/PoE events, and the always-on monitoring toggle
 router.get('/:deviceId/events', deviceController.getDeviceEvents);
 
