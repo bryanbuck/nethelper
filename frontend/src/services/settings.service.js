@@ -172,6 +172,56 @@ const settingsService = {
    * @returns {Promise} Test result
    */
   /**
+   * Alert notification channels (admin only). Webhook URLs and header values
+   * come back as '***'; sending '***' (or nothing) keeps the stored value.
+   * @returns {Promise<{ data: Array, emailConfigured: boolean }>}
+   */
+  async getNotificationChannels() {
+    try {
+      const response = await api.get('/settings/notification-channels')
+      return response.data
+    } catch (error) {
+      throw handleApiError(error, 'fetching notification channels')
+    }
+  },
+
+  async createNotificationChannel(payload) {
+    try {
+      const response = await api.post('/settings/notification-channels', payload)
+      return response.data.data
+    } catch (error) {
+      throw handleApiError(error, 'creating the notification channel')
+    }
+  },
+
+  async updateNotificationChannel(id, payload) {
+    try {
+      const response = await api.put(`/settings/notification-channels/${id}`, payload)
+      return response.data.data
+    } catch (error) {
+      throw handleApiError(error, 'updating the notification channel')
+    }
+  },
+
+  async deleteNotificationChannel(id) {
+    try {
+      await api.delete(`/settings/notification-channels/${id}`)
+    } catch (error) {
+      throw handleApiError(error, 'deleting the notification channel')
+    }
+  },
+
+  /** Send a sample notification now. @returns {Promise<{ success: boolean, error?: string }>} */
+  async testNotificationChannel(id) {
+    try {
+      const response = await api.post(`/settings/notification-channels/${id}/test`)
+      return response.data.data
+    } catch (error) {
+      throw handleApiError(error, 'testing the notification channel')
+    }
+  },
+
+  /**
    * Get the Git backup mirror configuration (secrets masked) and its field catalog.
    */
   async getGitBackupConfig() {

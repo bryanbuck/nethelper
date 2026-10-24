@@ -7,6 +7,7 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 ### Added
 - **Activity** page (`/activity`, in the menu): a rolling feed of what happened to your devices lately, newest first, grouped by day. It shows ping and cloud status changes, restarts, config changes found by backups, and device alerts opening and clearing. Port link and PoE changes are available as a filter but off by default, and repeated changes on the same device or port within ten minutes are folded into one "flapping" line. Filter by kind, vendor or device; it updates live. `GET /api/v1/activity`.
 
+- **Alert notifications by email and webhook** (Settings → Notifications, admins): send alerts to email recipients or a webhook (Slack, Teams, or any JSON receiver) with a minimum severity and, optionally, only some rules. Each channel gets one message when an alert opens and one when it resolves, never for repeats; failed deliveries are retried and shown on the channel, and **Test** sends a sample. Webhook URLs and headers are stored encrypted and never shown again. Email needs `SMTP_HOST` (and `SMTP_USER`/`SMTP_PASS` if your server wants a login); `APP_BASE_URL` sets the link in messages.
 - **Device groups** on the Devices page: **Groups** lists them with their device and automation counts, creates and renames them (operators), deletes them (admins), and "Show devices" filters the table to one. Select devices in the table and choose **Group** to add them to a group (type a new name to create one) or take them out. The table has a Group filter, including "No group". Automations' Manual and Schedule targets and their Alert and Configuration Change filters use these groups; until now they could only be made through the API. `POST /devices/groups/:id/members`, `GET /devices?group=`. (#26)
 - **Firmware Status** shows the firmware version every device last reported (from cloud sync, status refreshes and polls) without polling anything, with a count per version. (#25)
 
@@ -28,7 +29,8 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ### Upgrading from 0.9.0-beta.3
 - Take a database backup first: migrations are forward-only. **Docker Compose**: run `deploy/install.sh` from the new tree (it keeps your `.env` values). **Bare metal**: follow "Upgrading" in [`deploy/README.md`](deploy/README.md).
-- One migration, `20261023120000_cloud_status_check`, adds the `CloudStatusCheck` table (one row per cloud integration).
+- Two migrations: `20261023120000_cloud_status_check` adds the `CloudStatusCheck` table (one row per cloud integration), and `20261023150000_notification_channels` adds `NotificationChannel`.
+- Email notifications read `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` and `APP_BASE_URL`. Docker Compose now passes them from `deploy/.env` (see `deploy/.env.example`); on bare metal add them to `/etc/nethelper/backend.env`. `SLACK_WEBHOOK_URL` was never used and is gone from the examples: use a webhook channel instead.
 
 ## [0.9.0-beta.3] — 2026-10-22
 

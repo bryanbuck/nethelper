@@ -134,13 +134,14 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  automations         Automation[]
-  executions          Execution[]
-  apiCredentials      ApiCredential[]
-  arubaCentralConfigs ArubaCentralConfig[]
-  cloudIntegrations   CloudIntegration[]
-  gitBackupConfigs    GitBackupConfig[]
-  acknowledgedAlerts  Alert[]
+  automations          Automation[]
+  executions           Execution[]
+  apiCredentials       ApiCredential[]
+  arubaCentralConfigs  ArubaCentralConfig[]
+  cloudIntegrations    CloudIntegration[]
+  gitBackupConfigs     GitBackupConfig[]
+  notificationChannels NotificationChannel[]
+  acknowledgedAlerts   Alert[]
 }
 
 model Device {
@@ -652,6 +653,31 @@ model CloudIntegration {
 model CloudStatusCheck {
   integrationId String   @id
   checkedAt     DateTime
+}
+
+// Where alert notifications go (services/notification-channel.service.js):
+// email recipients or a webhook. One notification when a matching alert opens
+// and one when it resolves, never on a bump. rules empty = every built-in
+// rule (automation.raised only when named). Secrets in config are
+// field-encrypted: the webhook url and header values.
+model NotificationChannel {
+  id                 String    @id @default(uuid())
+  name               String
+  type               String // email | webhook
+  // email: { recipients: [address] }; webhook: { url*, urlHint, headers: { name: value* } } (* = encrypted)
+  config             Json
+  minSeverity        String    @default("warning") // info | warning | critical
+  rules              String[]  @default([])
+  enabled            Boolean   @default(true)
+  lastDeliveryAt     DateTime?
+  lastDeliveryStatus String? // success | failed
+  lastDeliveryError  String?
+  createdBy          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId             String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([userId])
 }
 
 // Git mirror for configuration backups. A single active row configures the

@@ -14,7 +14,7 @@
       Only administrators can change alert rules.
     </p>
     <p class="text-caption text-medium-emphasis">
-      Alerts appear in the app only for now; email and webhook delivery are planned.
+      To send alerts by email or to a webhook as well, add a channel under <strong>Notifications</strong> (administrators).
       Live-monitor rules apply only to devices with <strong>Always monitor</strong> on.
     </p>
 

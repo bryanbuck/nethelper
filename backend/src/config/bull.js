@@ -74,6 +74,7 @@ async function initializeQueues() {
   require('../jobs/discovery.job')(queues.discovery);
   require('../jobs/config-backup.job')(queues.configBackup);
   require('../jobs/topology.job')(queues.topology);
+  require('../jobs/notification.job')(queues.notification);
 
   logger.info('All job queues initialized');
 }

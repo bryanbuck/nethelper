@@ -1,243 +1,128 @@
+/**
+ * Delivery of alert notifications: email over SMTP and webhook POSTs, plus
+ * the message text both use. notification-channel.service.js decides what
+ * goes where; this module only sends, and throws on failure so the Bull job
+ * can retry and the channel can show why.
+ *
+ * Email uses SMTP_* from the environment (an unauthenticated relay needs only
+ * SMTP_HOST). Webhook URLs carry their secret in the path (Slack, Teams), so
+ * they are never logged.
+ */
+
 const nodemailer = require('nodemailer');
+const axios = require('axios');
+const { ALERT_RULES } = require('../constants/alert-rules');
 const logger = require('../utils/logger');
+
+const WEBHOOK_TIMEOUT_MS = 5000;
+
+/** The public address of the web UI, for links in notifications ('' when unknown). */
+function appBaseUrl(env = process.env) {
+  const candidates = [env.APP_BASE_URL, (env.CORS_ORIGINS || '').split(',')[0], env.FRONTEND_URL];
+  const url = candidates.map((c) => (c || '').trim()).find(Boolean) || '';
+  return url.replace(/\/+$/, '');
+}
+
+const ruleLabel = (rule) => ALERT_RULES[rule]?.label || rule;
+
+/**
+ * Subject, plain text and webhook payload for one alert notification.
+ * @param {'opened'|'resolved'|'test'} event
+ * @param {object} alert - snapshot: id, rule, severity, title, message, device {id,name}|null, port, firstSeenAt, resolvedAt, occurrences
+ */
+function formatAlert(event, alert, baseUrl = appBaseUrl()) {
+  const url = baseUrl ? `${baseUrl}/alerts` : null;
+  const severity = (alert.severity || 'info').toUpperCase();
+  const subject = event === 'resolved'
+    ? `[Resolved] ${alert.title}`
+    : `${event === 'test' ? '[Test] ' : ''}[${severity}] ${alert.title}`;
+  const lines = [
+    event === 'resolved' ? `Resolved: ${alert.title}` : alert.title,
+    alert.message,
+    '',
+    `Rule: ${ruleLabel(alert.rule)}`,
+    `Severity: ${alert.severity}`,
+    ...(alert.device ? [`Device: ${alert.device.name}${alert.port ? ` (port ${alert.port})` : ''}`] : []),
+    `Opened: ${new Date(alert.firstSeenAt).toISOString()}`,
+    ...(alert.resolvedAt ? [`Resolved: ${new Date(alert.resolvedAt).toISOString()}`] : []),
+    ...(url ? ['', url] : []),
+  ].filter((line) => line !== undefined && line !== null);
+  const text = lines.join('\n');
+  const payload = {
+    event: `alert.${event}`,
+    // Slack and Teams incoming webhooks show `text` as the message.
+    text: `${subject}${alert.message ? `\n${alert.message}` : ''}${url ? `\n${url}` : ''}`,
+    alert: {
+      id: alert.id,
+      rule: alert.rule,
+      ruleLabel: ruleLabel(alert.rule),
+      severity: alert.severity,
+      title: alert.title,
+      message: alert.message,
+      device: alert.device || null,
+      port: alert.port || null,
+      occurrences: alert.occurrences ?? 1,
+      firstSeenAt: alert.firstSeenAt,
+      resolvedAt: alert.resolvedAt || null,
+      url,
+    },
+    sentAt: new Date().toISOString(),
+  };
+  return { subject, text, payload };
+}
 
 class NotificationService {
   constructor() {
-    this.emailTransporter = null;
-    this.initializeEmailTransporter();
+    this.transport = null;
   }
 
-  initializeEmailTransporter() {
-    try {
-      if (process.env.SMTP_HOST && process.env.SMTP_USER) {
-        this.emailTransporter = nodemailer.createTransport({
-          host: process.env.SMTP_HOST,
-          port: parseInt(process.env.SMTP_PORT) || 587,
-          secure: false, // true for 465, false for other ports
-          auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS,
-          },
-        });
+  /** SMTP is usable: SMTP_HOST is set (credentials optional). */
+  emailConfigured() {
+    return Boolean(process.env.SMTP_HOST);
+  }
 
-        logger.info('Email transporter initialized');
-      } else {
-        logger.warn('Email configuration not provided. Email notifications disabled.');
-      }
-    } catch (error) {
-      logger.error('Failed to initialize email transporter:', error);
+  emailTransport() {
+    if (!this.emailConfigured()) {
+      throw new Error('Email is not configured on the server (set SMTP_HOST, see docs/CONFIGURATION.md)');
     }
-  }
-
-  async sendEmail(to, subject, text, html = null) {
-    try {
-      if (!this.emailTransporter) {
-        logger.warn('Email transporter not available. Skipping email notification.');
-        return false;
-      }
-
-      const mailOptions = {
-        from: process.env.SMTP_FROM || 'nethelper@localhost',
-        to,
-        subject,
-        text,
-        html: html || text,
-      };
-
-      const result = await this.emailTransporter.sendMail(mailOptions);
-      logger.info('Email sent successfully', { to, subject, messageId: result.messageId });
-      return true;
-    } catch (error) {
-      logger.error('Failed to send email:', error, { to, subject });
-      return false;
-    }
-  }
-
-  async notifyAutomationComplete(automation, execution, user) {
-    try {
-      const subject = `Automation "${automation.name}" ${execution.status}`;
-      const deviceInfo = execution.device ? ` on device ${execution.device.name}` : '';
-      
-      let text = `Hello ${user.name},\n\n`;
-      text += `Your automation "${automation.name}" has ${execution.status}${deviceInfo}.\n\n`;
-      
-      if (execution.status === 'success') {
-        text += 'The automation completed successfully.\n';
-      } else if (execution.status === 'failed') {
-        text += `The automation failed with error: ${execution.error || 'Unknown error'}\n`;
-      }
-      
-      text += `\nExecution details:\n`;
-      text += `- Started: ${execution.startedAt ? execution.startedAt.toISOString() : 'N/A'}\n`;
-      text += `- Completed: ${execution.completedAt ? execution.completedAt.toISOString() : 'N/A'}\n`;
-      text += `- Duration: ${execution.duration ? `${execution.duration}ms` : 'N/A'}\n`;
-      
-      text += '\nBest regards,\nAruba Automation Platform';
-
-      return await this.sendEmail(user.email, subject, text);
-    } catch (error) {
-      logger.error('Failed to send automation notification:', error);
-      return false;
-    }
-  }
-
-  async notifyAutomationFailed(automation, execution, user, error) {
-    try {
-      const subject = `Automation "${automation.name}" Failed`;
-      const deviceInfo = execution.device ? ` on device ${execution.device.name}` : '';
-      
-      let text = `Hello ${user.name},\n\n`;
-      text += `Your automation "${automation.name}" has failed${deviceInfo}.\n\n`;
-      text += `Error details:\n${error}\n\n`;
-      
-      if (execution.output) {
-        text += `Output:\n${JSON.stringify(execution.output, null, 2)}\n\n`;
-      }
-      
-      text += 'Please check the automation configuration and try again.\n\n';
-      text += 'Best regards,\nAruba Automation Platform';
-
-      return await this.sendEmail(user.email, subject, text);
-    } catch (error) {
-      logger.error('Failed to send automation failure notification:', error);
-      return false;
-    }
-  }
-
-  async notifyDeviceOffline(device, users = []) {
-    try {
-      if (users.length === 0) {
-        logger.warn('No users to notify about device offline status');
-        return false;
-      }
-
-      const subject = `Device Alert: ${device.name} is Offline`;
-      
-      let text = `Device Alert\n\n`;
-      text += `Device "${device.name}"${device.serial ? ` (${device.serial})` : ''} has gone offline.\n\n`;
-      text += `Device details:\n`;
-      text += `- Type: ${device.type}\n`;
-      text += `- Model: ${device.model}\n`;
-      text += `- IP Address: ${device.ipAddress || 'N/A'}\n`;
-      text += `- Location: ${device.location || 'N/A'}\n`;
-      text += `- Last seen: ${device.lastSeen ? device.lastSeen.toISOString() : 'N/A'}\n\n`;
-      text += 'Please check the device connectivity and resolve any issues.\n\n';
-      text += 'Best regards,\nAruba Automation Platform';
-
-      const emailPromises = users.map(user => 
-        this.sendEmail(user.email, subject, text)
-      );
-
-      const results = await Promise.allSettled(emailPromises);
-      const successCount = results.filter(r => r.status === 'fulfilled' && r.value).length;
-      
-      logger.info('Device offline notifications sent', { 
-        device: device.name, 
-        total: users.length, 
-        success: successCount 
+    if (!this.transport) {
+      const port = parseInt(process.env.SMTP_PORT, 10) || 587;
+      this.transport = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port,
+        secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : port === 465,
+        ...(process.env.SMTP_USER && { auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } }),
       });
-
-      return successCount > 0;
-    } catch (error) {
-      logger.error('Failed to send device offline notifications:', error);
-      return false;
     }
+    return this.transport;
   }
 
-  async notifyScheduledAutomationFailed(automation, schedule, error) {
+  async sendEmail(recipients, subject, text) {
+    const result = await this.emailTransport().sendMail({
+      from: process.env.SMTP_FROM || 'nethelper@localhost',
+      to: recipients.join(', '),
+      subject,
+      text,
+    });
+    logger.info('Notification email sent', { recipients: recipients.length, messageId: result.messageId });
+  }
+
+  /** POST JSON; any non-2xx or network failure throws (without the URL). */
+  async postWebhook(url, headers, payload) {
     try {
-      // For scheduled automations, we don't have a specific user context
-      // So we might want to notify admins or automation owners
-      logger.error('Scheduled automation failed', {
-        automationId: automation.id,
-        automationName: automation.name,
-        scheduleId: schedule.id,
-        error: error.message,
+      await axios.post(url, payload, {
+        headers: { 'Content-Type': 'application/json', ...headers },
+        timeout: WEBHOOK_TIMEOUT_MS,
+        maxRedirects: 0,
       });
-
-      // TODO: Implement admin notification logic
-      // This could send to all admin users or the automation creator
-      
-      return true;
-    } catch (notificationError) {
-      logger.error('Failed to send scheduled automation failure notification:', notificationError);
-      return false;
-    }
-  }
-
-  async sendSystemAlert(level, message, details = {}) {
-    try {
-      logger[level]('System alert', { message, ...details });
-
-      // TODO: Implement system alert notifications
-      // This could integrate with external monitoring systems
-      // or send alerts to admin users
-
-      return true;
     } catch (error) {
-      logger.error('Failed to send system alert:', error);
-      return false;
-    }
-  }
-
-  // Webhook notifications (for future integration)
-  async sendWebhook(url, payload) {
-    try {
-      const axios = require('axios');
-      
-      const response = await axios.post(url, payload, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        timeout: 10000,
-      });
-
-      logger.info('Webhook sent successfully', { url, status: response.status });
-      return true;
-    } catch (error) {
-      logger.error('Failed to send webhook:', error, { url });
-      return false;
-    }
-  }
-
-  // Slack notifications (for future integration)
-  async sendSlackNotification(channel, message, webhookUrl = null) {
-    try {
-      if (!webhookUrl && !process.env.SLACK_WEBHOOK_URL) {
-        logger.warn('Slack webhook URL not configured');
-        return false;
-      }
-
-      const url = webhookUrl || process.env.SLACK_WEBHOOK_URL;
-      const payload = {
-        channel,
-        text: message,
-        username: 'Aruba Automation',
-        icon_emoji: ':robot_face:',
-      };
-
-      return await this.sendWebhook(url, payload);
-    } catch (error) {
-      logger.error('Failed to send Slack notification:', error);
-      return false;
-    }
-  }
-
-  // Test notification connectivity
-  async testEmailConnection() {
-    try {
-      if (!this.emailTransporter) {
-        throw new Error('Email transporter not configured');
-      }
-
-      const result = await this.emailTransporter.verify();
-      logger.info('Email connection test successful');
-      return result;
-    } catch (error) {
-      logger.error('Email connection test failed:', error);
-      throw error;
+      const status = error.response?.status;
+      throw new Error(status ? `The webhook answered HTTP ${status}` : `The webhook could not be reached (${error.code || error.message})`);
     }
   }
 }
 
 module.exports = new NotificationService();
+module.exports.formatAlert = formatAlert;
+module.exports.appBaseUrl = appBaseUrl;
+module.exports.WEBHOOK_TIMEOUT_MS = WEBHOOK_TIMEOUT_MS;

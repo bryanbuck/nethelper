@@ -129,7 +129,7 @@ Preparing the dev-environment build for a private, in-house beta. Deploy targets
 
 ### 2. Device Alerting
 **Priority**: Medium
-**Status**: 🔨 v1 shipped 2026-10-16 (branch `feature/alerts`): stateful, in-app alerts
+**Status**: 🔨 v1 shipped 2026-10-16 (branch `feature/alerts`): stateful, in-app alerts; email/webhook notification channels 2026-10-23
 
 Shipped (`services/alert.service.js`, rules in `constants/alert-rules.js`, page `/alerts`):
 - ✅ Stateful alerts: one unresolved alert per condition and subject (`Alert.openKey` unique), occurrences counted, auto-resolve when the condition clears, acknowledge/resolve by operators. Resolved alerts pruned after `ALERT_RETENTION_DAYS` (90).
@@ -138,15 +138,13 @@ Shipped (`services/alert.service.js`, rules in `constants/alert-rules.js`, page 
 - ✅ Fixed on the way: a PoE port leaving a fault for a state other than delivering emitted no event; it now emits `port.poe.down`.
 - ✅ Automations and alerts (2026-10-16): an Alert trigger (opened/resolved, rule filter, minimum severity, optional device group) starts automations; Raise/Clear/Acknowledge Alert steps. Automation alerts use rule `automation.raised` with a key shared across automations (one raises on "opened", another clears on "resolved"); an automation never clears a built-in alert and never triggers on `automation.raised`. See item 3a below for the engine.
 
-Next: **notification channels** (phase 7 of the cloud plan, branch `feature/alert-notify`; not started as of 2026-10-19). Alerts are in-app only today.
-- [ ] **Model** `NotificationChannel`: `type` email|webhook, `name`, `config` JSON (email: recipients; webhook: URL plus optional headers), `minSeverity`, `rules` filter (empty = all), `enabled`, `createdById`. Webhook URLs and any header values are secrets: field-encrypted like `CloudIntegration.credentials`, never returned unmasked. Add the model to `OWNED_MODELS` in `services/user-lifecycle.js`. Migration plus the data-model summary in `CLAUDE.md`.
-- [ ] **Delivery**: the alert service's in-process `opened`/`resolved` events (already used by `automation/trigger.service.js`) queue one job per matching channel on a new Bull `notifications` queue, with retries and backoff. Notify once on open and once on resolve, never on a bump. Skip `automation.raised` unless a channel names it. A failed delivery is logged and visible on the channel, never an alert (no loops).
-- [ ] **Email**: reuse the nodemailer transport in `notification.service.js` (SMTP from env: `SMTP_HOST`/`PORT`/`USER`/`PASS`/`FROM`). It only starts when `SMTP_USER` is set, so allow an unauthenticated relay too. Add the vars to `config/env.js`. Subject: severity, rule label, device. Body: message, time, link to `/alerts`.
-- [ ] **Webhook**: POST a generic JSON payload (`event` opened|resolved, alert id/rule/severity/title/message/device/time) with a `text` field that Slack and Teams incoming webhooks display as-is. Timeout of a few seconds. Allow only http(s), and warn on plain http.
-- [ ] **API** (admin only): `settings/notification-channels` CRUD plus `POST /:id/test` (sends a sample, returns the result). Add the routes to the `ADMIN_ONLY` list in `tests/api/role-gates.test.js` and to the API surface in `CLAUDE.md`.
-- [ ] **UI**: Settings → Notifications (`components/settings/NotificationChannels.vue`, admin only): list with last delivery status, add/edit dialog (type, target, minimum severity, rules from `models/alerts.js`), test-send button, enable switch.
-- [ ] **Tests**: channel matching (severity, rules), one notification per open/resolve, secrets masked in API replies, payload shape, retries, role gates. Then a live check: a test send reaches a real mailbox/webhook, and a `device.offline` alert notifies once on open and once on resolve.
-- [ ] **Docs**: this item, `docs/CONFIGURATION.md` (SMTP), `docs/BETA_NOTES.md`, `CLAUDE.md` (services, data model, API).
+- ✅ **Notification channels** (2026-10-23, branch `feat/alert-notify`): email and webhook delivery of alerts, Settings → Notifications (admin only).
+  - Model `NotificationChannel` (`type` email|webhook, `config`, `minSeverity`, `rules` (empty = every built-in rule; `automation.raised` only when named), `enabled`, last delivery status/error; migration `20261023150000_notification_channels`; in `OWNED_MODELS`). Webhook URL and header values field-encrypted; the API returns `***` and a URL hint (scheme + host), and a blank or `***` value on update keeps the stored secret.
+  - Delivery: `services/notification-channel.service.js` listens to the alert service's `opened`/`resolved` events (never a bump) and queues one `deliver` job per matching channel on the existing Bull `notification` queue (`jobs/notification.job.js`; 3 attempts, exponential backoff from 10 s). The channel records success, or the failure on the last attempt; a failed delivery is logged, never an alert. Channels are cached in memory (60 s, dropped on every write).
+  - Email: `services/notification.service.js` (rewritten; the old uncalled helpers that swallowed errors and logged webhook URLs are gone): nodemailer from `SMTP_HOST`/`PORT`/`SECURE`/`USER`/`PASS`/`FROM`, only `SMTP_HOST` required. Webhook: JSON POST (`event` `alert.opened|resolved|test`, `text` for Slack/Teams, `alert{…}` with a link built from `APP_BASE_URL`, else the first `CORS_ORIGINS`), 5 s timeout, no redirects, http(s) only (http flagged in the UI). Errors never carry the URL.
+  - API (admin only): `GET`/`POST /settings/notification-channels`, `PUT`/`DELETE /:id`, `POST /:id/test` (sends a sample now; not retried or recorded). UI `components/settings/NotificationChannels.vue` (store `stores/notificationChannels.js`): list with last delivery, add/edit, enable switch, Test, and a warning when email channels exist but SMTP isn't set.
+  - Docker Compose passes the SMTP vars and `APP_BASE_URL` from `deploy/.env`; the bare-metal env template lists them.
+  - ⏳ Live check (the user, 2026-10-23): a test send to a real mailbox and a Slack/Teams webhook, then a `device.offline` alert notifying once on open and once on resolve. Checked so far against a local HTTP listener only.
 - ⏳ Later: SMS/PagerDuty, per-user subscriptions, digests/quiet hours.
 
 Also open from the cloud plan (2026-10-19), to check on hardware:

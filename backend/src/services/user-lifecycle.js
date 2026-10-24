@@ -14,7 +14,7 @@
  */
 
 // Models whose userId is a required "created by" relation to User.
-const OWNED_MODELS = ['apiCredential', 'cloudIntegration', 'gitBackupConfig', 'arubaCentralConfig', 'automation'];
+const OWNED_MODELS = ['apiCredential', 'cloudIntegration', 'gitBackupConfig', 'arubaCentralConfig', 'automation', 'notificationChannel'];
 
 /**
  * @param {PrismaClient} prisma

@@ -48,6 +48,7 @@ A mock follows the spec, but real equipment is where response-shape surprises sh
 - **Cisco Meraki and Catalyst.** They appear as "coming soon" and can't be configured. A Meraki device marked "direct" reports "no transport".
 - **Pushing configuration, restore, or rollback.** Backups are read-only.
 - **SSH key authentication to devices.** Only passwords, and no enable/privileged-mode escalation. (The Git mirror *can* use an SSH key.)
+- **Alerts can reach you outside the app.** An admin adds email recipients or a webhook (Slack, Teams, or any JSON receiver) under Settings → Notifications, with a minimum severity and optionally only some rules. Each channel gets one message when an alert opens and one when it resolves; **Test** sends a sample. Email needs `SMTP_HOST` on the server (`docs/CONFIGURATION.md`).
 - **Device groups** are managed on the Devices page (**Groups**, and **Group** on a table selection). Automation triggers use them to pick devices.
 - **Automations are experimental.** Only some builder nodes run: Manual, Schedule and Alert triggers, Device Property and Alert Severity conditions, and Create Backup and Raise/Clear/Acknowledge Alert actions. Other nodes are marked "not runnable yet", and a workflow that uses them can be saved but not run or activated. Every run is listed under Automations → Run History.
 - **Status history.** The dashboard shows current status only.

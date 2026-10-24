@@ -26,6 +26,7 @@ const liveViewService = require('./src/services/live/live-view.service');
 const alertService = require('./src/services/alert.service');
 const systemStatusService = require('./src/services/system-status.service');
 const automationTriggers = require('./src/services/automation/trigger.service');
+const notificationChannels = require('./src/services/notification-channel.service');
 const automationSchedules = require('./src/services/automation/schedule.service');
 const { version } = require('./package.json');
 
@@ -82,6 +83,8 @@ async function startServer() {
     systemStatusService.start();
     automationTriggers.start();
     automationSchedules.start();
+    // Email/webhook notifications for alerts opening and resolving
+    notificationChannels.start();
 
     // Start server
     server.listen(PORT, BIND_ADDRESS, () => {
@@ -109,6 +112,7 @@ async function startServer() {
       deviceEvents.stopPruning();
       automationTriggers.stop();
       automationSchedules.stop();
+      notificationChannels.stop();
       alertService.stop();
       systemStatusService.stop();
       // io.close() disconnects WebSocket clients and closes the HTTP server;

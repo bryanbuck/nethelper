@@ -146,8 +146,8 @@ Production writes JSON logs to stdout. Values under secret-looking keys (passwor
 
 | Variable | Notes |
 |---|---|
-| `SMTP_HOST`, `SMTP_PORT` (587), `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Email notifications; turned on when `SMTP_HOST` and `SMTP_USER` are set. |
-| `SLACK_WEBHOOK_URL` | Slack notifications. |
+| `SMTP_HOST`, `SMTP_PORT` (587), `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` (`nethelper@localhost`) | Email for alert notification channels (Settings → Notifications). Only `SMTP_HOST` is required: leave `SMTP_USER`/`SMTP_PASS` empty for a relay that accepts mail without a login. `SMTP_SECURE=true` for TLS from the first byte (port 465, the default there); otherwise STARTTLS is used when the server offers it. Read once at startup. Docker Compose passes these from `deploy/.env`. Webhook channels need none of this. |
+| `APP_BASE_URL` | The web UI's public address (e.g. `https://nethelper.example.com`), used for the link in notifications. Defaults to the first `CORS_ORIGINS` entry, then `FRONTEND_URL`; with none, notifications carry no link. |
 | `ARUBA_CENTRAL_BASE_URL`, `_CLIENT_ID`, `_CLIENT_SECRET`, `_WORKSPACE_ID` | **Legacy.** When no cloud integration exists and the first two are set, a single Central integration is built from these (a New Central cluster URL and a GreenLake API client; `_WORKSPACE_ID` only for a GreenLake-platform client). `_CUSTOMER_ID` is no longer used. Prefer Settings → Cloud Integrations. |
 
 ### Scripts and containers only

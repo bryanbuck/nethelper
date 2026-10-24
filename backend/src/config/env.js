@@ -87,6 +87,17 @@ const schema = Joi.object({
   // Push streams from clouds that offer one (Mist WebSocket; services/cloud/).
   CLOUD_STREAM_ENABLED: Joi.string().valid('true', 'false').default('true'),
 
+  // Alert notifications by email (services/notification.service.js). Only
+  // SMTP_HOST is required; SMTP_USER/SMTP_PASS for a server that needs a login.
+  SMTP_HOST: Joi.string().allow('').optional(),
+  SMTP_PORT: Joi.number().port().empty('').optional(),
+  SMTP_SECURE: Joi.string().valid('true', 'false', '').optional(),
+  SMTP_USER: Joi.string().allow('').optional(),
+  SMTP_PASS: Joi.string().allow('').optional(),
+  SMTP_FROM: Joi.string().allow('').optional(),
+  // The web UI's public address, for links in notifications (else the first CORS_ORIGINS entry).
+  APP_BASE_URL: Joi.string().uri({ scheme: ['http', 'https'] }).allow('').optional(),
+
   // Network Map neighbor collection (services/topology/). Interval in milliseconds.
   TOPOLOGY_ENABLED: Joi.string().valid('true', 'false').default('true'),
   TOPOLOGY_INTERVAL: Joi.number().integer().min(300000).default(21600000),

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const settingsController = require('../controllers/settings.controller');
+const notificationChannels = require('../controllers/notification-channel.controller');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
 const { validateApiCredential, validateUUID } = require('../middleware/validation.middleware');
 
@@ -124,5 +125,13 @@ router.get('/git-backup', authorize('admin'), settingsController.getGitBackupCon
 router.put('/git-backup', authorize('admin'), settingsController.saveGitBackupConfig);
 router.post('/git-backup/test', authorize('admin'), settingsController.testGitBackupConfig);
 router.delete('/git-backup', authorize('admin'), settingsController.deleteGitBackupConfig);
+
+// Alert notification channels (email / webhook), admin only: webhook URLs
+// and recipients are sensitive, and channels apply to everyone's alerts.
+router.get('/notification-channels', authorize('admin'), notificationChannels.list);
+router.post('/notification-channels', authorize('admin'), notificationChannels.create);
+router.put('/notification-channels/:id', authorize('admin'), validateUUID('id'), notificationChannels.update);
+router.delete('/notification-channels/:id', authorize('admin'), validateUUID('id'), notificationChannels.remove);
+router.post('/notification-channels/:id/test', authorize('admin'), validateUUID('id'), notificationChannels.test);
 
 module.exports = router;
