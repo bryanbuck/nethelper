@@ -49,7 +49,7 @@ const STATS_FIELDS = ['mac', 'ip', 'version', 'last_seen', 'status', 'uptime', '
 const mistConfigInSync = (value) => (value === 'NO_CHANGE' ? true : null);
 
 // What the neighbor read needs: an AP's LLDP view of its uplink.
-const NEIGHBOR_FIELDS = ['mac', 'serial', 'status', 'name', 'hostname', 'lldp_stat', 'lldp_stats'];
+const NEIGHBOR_FIELDS = ['mac', 'serial', 'status', 'name', 'hostname', 'lldp_stat', 'lldp_stats', 'if_stat'];
 
 // How far back findByAddress searches. Wired client search defaults to a day,
 // wireless to two weeks; one window keeps the answers comparable.

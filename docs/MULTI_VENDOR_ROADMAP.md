@@ -460,7 +460,8 @@ opens one session per device.
 **Storage:**
 - `DeviceLink`: one row per local port and remote chassis/port.
 - `DeviceTopologyState`: status `ok | skipped | unsupported | failed`, with a
-  reason and the device's own chassis id/sysName.
+  reason and the device's own chassis id/sysName, plus the device's VLAN
+  snapshot (`vlans`, `vlanSource`, `vlanCollectedAt`, `vlanError`; below).
 - `TopologyChange`: `link.added | removed | changed`.
 - `MapLayout`: shared node positions per `all` / `site:<location>`.
 
@@ -477,6 +478,28 @@ MAC or IP so the map can import it. AOS-CX endpoints such as phones may
 advertise an IP as their chassis id; their MAC then comes from `mac_addr`.
 Links reported from both ends merge into one edge. Edges are oriented
 gateway → switch → AP → endpoint for layered layout.
+
+**VLAN overlay (2026-10-24).** The topology pass also reads each device's VLAN
+membership, so links and VLANs always come from the same moment (config
+backups can be days older):
+- AOS-CX REST: `GET system/vlans?depth=2&attributes=id,name` and
+  `system/interfaces?…&attributes=name,type,vlan_mode,vlan_tag,vlan_trunks,interfaces,routing,ip4_address`
+  (`parsers/aos-cx-vlans.js`; a LAG's members inherit its membership; SVIs
+  with an address are "routed"). Spec-derived until checked on the 6200F.
+- Mist: `port_mode`/`vlan_ids` from the same `/stats/ports/search` rows (the
+  effective membership, already resolved from templates) and irb from device
+  stats `if_stat`. A trunk's native VLAN is unknown. A Mist-managed EX read over
+  NETCONF still takes Mist's VLANs from the run's shared read.
+- Other transports: none yet (`vlans` cleared). A failed VLAN read keeps the
+  last snapshot and records `vlanError`; it never fails the link collection.
+
+The snapshot (`vlan-membership.js`) holds the VLAN table, ports keyed by
+normalized name, and routed VLANs. `vlan-analysis.js` adds `edge.vlans` to the
+graph (`carried`, `pruned` = both switches have the VLAN but one port drops it,
+`native` mismatch, `known` ends) and `graph.vlans` (per VLAN: devices, routing
+devices, islands). Unknown is never guessed: an end without data never makes a
+VLAN pruned, and a group touching such a link is never an island. The
+frontend mirrors `edgeStatus` in `models/topology-vlans.js` (parity-tested).
 
 **Cloud planes (2026-10-19):** a cloud-managed device that no direct transport
 reaches (no IP or credential, or not a platform NetHelper reads locally: APs,

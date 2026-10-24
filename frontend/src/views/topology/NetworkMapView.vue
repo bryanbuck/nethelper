@@ -60,6 +60,33 @@
           clearable
           style="max-width: 280px; min-width: 200px"
         />
+        <v-autocomplete
+          v-model="vlanModel"
+          :items="vlanItems"
+          item-title="title"
+          item-value="value"
+          label="VLAN"
+          density="compact"
+          variant="outlined"
+          prepend-inner-icon="mdi-lan"
+          hide-details
+          clearable
+          :no-data-text="vlans.length ? 'No matching VLAN' : 'No VLAN data yet (AOS-CX and Mist switches report it on a topology refresh)'"
+          style="max-width: 240px; min-width: 160px"
+        />
+        <v-tooltip location="bottom" text="Mark links where a VLAN both switches have is not allowed on one side, or the untagged VLANs differ">
+          <template #activator="{ props: tip }">
+            <v-switch
+              v-bind="tip"
+              v-model="showMismatches"
+              :label="mismatchCount ? `VLAN mismatches (${mismatchCount})` : 'VLAN mismatches'"
+              density="compact"
+              color="warning"
+              hide-details
+              :disabled="selectedVlan !== null"
+            />
+          </template>
+        </v-tooltip>
         <v-spacer />
         <v-btn variant="text" prepend-icon="mdi-history" @click="openChanges">
           Changes
@@ -126,13 +153,40 @@
           Devices with no neighbor source show a
           <v-icon size="14">mdi-lan-pending</v-icon> marker.
         </v-alert>
+        <div v-if="selectedVlan !== null && !showNoLinksHint" class="map-legend">
+          <div class="text-subtitle-2">
+            {{ selectedVlanEntry ? vlanTitle(selectedVlanEntry) : `VLAN ${selectedVlan}` }}
+            <v-chip v-if="selectedVlanEntry?.names.length > 1" size="x-small" color="warning" variant="tonal" class="ml-1">
+              names differ
+            </v-chip>
+          </div>
+          <div class="text-caption text-medium-emphasis">
+            {{ selectedVlanEntry ? vlanSummaryText(selectedVlanEntry) : 'No device on this map carries it.' }}
+          </div>
+          <div class="d-flex flex-wrap ga-3 mt-1 text-caption">
+            <span><span class="swatch swatch-carried" /> carried</span>
+            <span><span class="swatch swatch-pruned" /> not allowed on one side</span>
+            <span><span class="swatch swatch-unknown" /> no VLAN data</span>
+            <span><v-icon size="14" color="primary">mdi-router</v-icon> routed here</span>
+          </div>
+        </div>
+        <div v-else-if="showMismatches && !showNoLinksHint" class="map-legend">
+          <div class="text-subtitle-2">VLAN mismatches</div>
+          <div class="text-caption text-medium-emphasis">
+            {{ mismatchCount ? `${mismatchCount} link${mismatchCount === 1 ? '' : 's'} marked. Click one for details.` : 'No mismatches on links with VLAN data at both ends.' }}
+          </div>
+        </div>
         <TopologyCanvas
           ref="canvas"
           :graph="graph"
           :saved-positions="topologyStore.layout.positions"
           :draggable="canEdit"
           :selected-id="selected?.id || null"
+          :vlan="selectedVlan"
+          :vlan-roles="vlanRoles"
+          :show-mismatches="showMismatches"
           @node-click="selectNode"
+          @edge-click="selectEdge"
           @pane-click="selected = null"
           @moved="onMoved"
         />
@@ -165,6 +219,15 @@
             <template v-if="selected.data.topology?.collectedAt" #append>
               <span class="text-caption text-medium-emphasis">{{ formatTime(selected.data.topology.collectedAt) }}</span>
             </template>
+          </v-list-item>
+          <v-list-item prepend-icon="mdi-lan" subtitle="VLANs" class="wrap-title">
+            <template #title>{{ nodeVlanText(selected.data.vlans) }}</template>
+            <div v-if="selected.data.vlans?.routed?.length" class="text-caption text-medium-emphasis">
+              Routed: {{ selected.data.vlans.routed.map((r) => r.ip ? `${r.vlan} (${r.ip})` : r.vlan).join(', ') }}
+            </div>
+            <div v-if="selected.data.vlans?.error" class="text-caption text-warning">
+              Last VLAN read failed: {{ selected.data.vlans.error }}
+            </div>
           </v-list-item>
         </v-list>
         <v-divider />
@@ -211,6 +274,63 @@
           >
             Live
           </v-btn>
+        </div>
+      </template>
+
+      <!-- Link -->
+      <template v-else-if="panel === 'edge' && selectedEdge">
+        <v-list-item class="py-3" :title="edgeTitle(selectedEdge)" subtitle="Link">
+          <template #prepend>
+            <v-icon>mdi-connection</v-icon>
+          </template>
+          <template #append>
+            <v-btn icon="mdi-close" variant="text" size="small" @click="closePanel" />
+          </template>
+        </v-list-item>
+        <v-divider />
+        <v-list density="compact">
+          <v-list-item
+            v-for="end in edgeEnds(selectedEdge)"
+            :key="end.id"
+            :title="end.name"
+            :subtitle="`Port ${end.port || '?'}${end.known ? '' : ' · no VLAN data'}`"
+            @click="focus(end.id)"
+          >
+            <template #prepend>
+              <v-icon size="18">{{ end.ghost ? 'mdi-help-network-outline' : 'mdi-lan' }}</v-icon>
+            </template>
+          </v-list-item>
+        </v-list>
+        <v-divider />
+        <div class="pa-4 text-body-2 d-flex flex-column ga-2">
+          <div v-if="selectedVlan !== null">
+            <strong>VLAN {{ selectedVlan }}:</strong> {{ edgeStatusText(edgeVlanStatus(selectedEdge, selectedVlan, nodesById)) }}
+          </div>
+          <template v-if="selectedEdge.vlans && edgeEnds(selectedEdge).some((e) => e.known)">
+            <div>
+              <div class="text-subtitle-2">Carried</div>
+              {{ selectedEdge.vlans.carried.length ? vlanRangeText(selectedEdge.vlans.carried) : 'None' }}
+            </div>
+            <div v-if="selectedEdge.vlans.pruned.length">
+              <div class="text-subtitle-2 text-warning">Not allowed on one side</div>
+              <div v-for="p in selectedEdge.vlans.pruned" :key="p.vlan">
+                VLAN {{ p.vlan }}: both switches have it, but {{ endName(selectedEdge, p.side) }} port
+                {{ endPort(selectedEdge, p.side) || '?' }} doesn't pass it
+              </div>
+            </div>
+            <div v-if="selectedEdge.vlans.native">
+              <div class="text-subtitle-2 text-warning">Untagged VLAN differs</div>
+              <div v-for="end in edgeEnds(selectedEdge)" :key="end.id">
+                {{ end.name }} {{ end.port }}: {{ nativeText(selectedEdge.vlans.native[end.id]) }}
+              </div>
+            </div>
+            <div v-if="edgeEnds(selectedEdge).some((e) => !e.known)" class="text-caption text-medium-emphasis">
+              One end has no VLAN data, so only what both ends report is compared.
+            </div>
+          </template>
+          <div v-else class="text-medium-emphasis">
+            No VLAN data for either end. AOS-CX switches (over REST) and Mist switches report it on a topology refresh.
+          </div>
         </div>
       </template>
 
@@ -341,10 +461,16 @@ import { useNotificationsStore } from '@/stores/notifications'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { DeviceTypeInfo } from '@/models/Device'
 import { VendorInfo, liveStateMode } from '@/models/vendors'
+import {
+  edgeVlanStatus, edgeMismatch, vlanNodeRoles, vlanTitle, vlanSummaryText, vlanRangeText, nativeText
+} from '@/models/topology-vlans'
+import { useRoute, useRouter } from 'vue-router'
 import TopologyCanvas from '@/components/topology/TopologyCanvas.vue'
 import ImportDiscoveredDialog from '@/components/discovery/ImportDiscoveredDialog.vue'
 
 const topologyStore = useTopologyStore()
+const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const notifications = useNotificationsStore()
 // Holds the shared socket open: topology progress and ping status arrive on it.
@@ -359,6 +485,10 @@ const pendingPositions = ref(null)
 const changesWindow = ref(24 * 7)
 const selectedChanges = ref([])
 const searchModel = ref(null)
+const selectedEdge = ref(null)
+const showMismatches = ref(false)
+const initialVlan = parseInt(route.query.vlan, 10)
+const selectedVlan = ref(initialVlan >= 1 && initialVlan <= 4094 ? initialVlan : null)
 
 const showImport = ref(false)
 const importTarget = ref(null)
@@ -384,6 +514,18 @@ const searchItems = computed(() => graph.value.nodes
     title: [n.data.name, n.data.ipAddress || n.data.mgmtIp].filter(Boolean).join(' · '),
     value: n.id
   })))
+
+// --- VLAN overlay ---
+
+const vlans = computed(() => graph.value.vlans || [])
+const vlanItems = computed(() => vlans.value.map((v) => ({ title: vlanTitle(v), value: v.id })))
+const vlanModel = computed({
+  get: () => selectedVlan.value,
+  set: (value) => { selectedVlan.value = value ?? null }
+})
+const selectedVlanEntry = computed(() => vlans.value.find((v) => v.id === selectedVlan.value) || null)
+const vlanRoles = computed(() => vlanNodeRoles(selectedVlanEntry.value, graph.value.nodes))
+const mismatchCount = computed(() => graph.value.edges.filter((e) => edgeMismatch(e)).length)
 
 const progressText = computed(() => {
   const p = topologyStore.progress
@@ -425,6 +567,33 @@ const selectedLinks = computed(() => {
 })
 
 // --- helpers ---
+
+function nodeVlanText(v) {
+  if (!v) return 'Not read (AOS-CX REST and Mist switches only, for now)'
+  if (!v.source) return 'No VLAN data'
+  return `${vlanRangeText(v.ids) || 'None'} · via ${v.source}${v.collectedAt ? `, ${formatTime(v.collectedAt)}` : ''}`
+}
+
+function edgeEnds(edge) {
+  return [
+    { id: edge.source, port: edge.sourcePort },
+    { id: edge.target, port: edge.targetPort }
+  ].map((end) => {
+    const node = nodesById.value.get(end.id)
+    return { ...end, name: node?.data.name || end.id, ghost: node?.kind === 'ghost', known: !!edge.vlans?.known?.[end.id] }
+  })
+}
+
+const endName = (edge, id) => edgeEnds(edge).find((e) => e.id === id)?.name || id
+const endPort = (edge, id) => edgeEnds(edge).find((e) => e.id === id)?.port
+const edgeTitle = (edge) => edgeEnds(edge).map((e) => e.name).join(' ↔ ')
+
+const edgeStatusText = (status) => ({
+  carried: 'carried across this link',
+  pruned: 'not allowed on one side of this link',
+  absent: 'not carried on this link',
+  unknown: 'unknown: an end has no VLAN data'
+}[status])
 
 const typeInfo = (type) => DeviceTypeInfo[type] || { icon: 'mdi-help-network', color: 'grey' }
 
@@ -477,6 +646,7 @@ async function load() {
 }
 
 async function selectNode(node) {
+  selectedEdge.value = null
   selected.value = nodesById.value.get(node.id) || null
   panel.value = selected.value ? 'node' : null
   selectedChanges.value = []
@@ -495,9 +665,16 @@ async function selectNode(node) {
   }
 }
 
+function selectEdge(edge) {
+  selected.value = null
+  selectedEdge.value = graph.value.edges.find((e) => e.id === edge?.id) || null
+  panel.value = selectedEdge.value ? 'edge' : null
+}
+
 function closePanel() {
   panel.value = null
   selected.value = null
+  selectedEdge.value = null
 }
 
 function focus(nodeId) {
@@ -567,6 +744,12 @@ watch(() => [topologyStore.site, topologyStore.includeDiscovered], () => {
 
 watch(changesWindow, (hours) => topologyStore.fetchChanges({ sinceHours: hours }).catch(() => {}))
 
+// The selected VLAN lives in the URL, so a VLAN view can be linked.
+watch(selectedVlan, (vlan) => {
+  if (vlan !== null) showMismatches.value = false
+  router.replace({ query: { ...route.query, vlan: vlan ?? undefined } })
+})
+
 watch(searchModel, (id) => {
   if (id) focus(id)
 })
@@ -609,6 +792,38 @@ onMounted(load)
   right: 12px;
   z-index: 5;
   max-width: 720px;
+}
+
+.map-legend {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 5;
+  max-width: 460px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.swatch {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  vertical-align: middle;
+  border-top: 3px solid rgb(var(--v-theme-primary));
+}
+
+.swatch-pruned {
+  border-top-style: dashed;
+  border-top-color: rgb(var(--v-theme-warning));
+}
+
+.swatch-unknown {
+  border-top-width: 2px;
+  border-top-style: dotted;
+  border-top-color: rgba(var(--v-theme-on-surface), 0.45);
 }
 
 .empty-state {

@@ -320,16 +320,22 @@ model DeviceLink {
 // Per-device topology collection status, plus the device's own LLDP identity
 // so the far end's view of it can be matched back to this row.
 model DeviceTopologyState {
-  device        Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-  deviceId      String    @id
-  status        String // ok | skipped (needs IP/credential) | unsupported (no source for the platform) | failed
-  reason        String? // why it was skipped, unsupported or failed
-  source        String? // transport that answered: AOS-CX REST, Junos NETCONF, SSH
-  chassisId     String? // normalized MAC, when the device advertises one
-  sysName       String?
-  neighborCount Int       @default(0)
-  collectedAt   DateTime  @default(now())
-  lastSuccessAt DateTime?
+  device          Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId        String    @id
+  status          String // ok | skipped (needs IP/credential) | unsupported (no source for the platform) | failed
+  reason          String? // why it was skipped, unsupported or failed
+  source          String? // transport that answered: AOS-CX REST, Junos NETCONF, SSH
+  chassisId       String? // normalized MAC, when the device advertises one
+  sysName         String?
+  neighborCount   Int       @default(0)
+  collectedAt     DateTime  @default(now())
+  lastSuccessAt   DateTime?
+  // VLAN membership read in the same pass (topology/vlan-membership.js shape);
+  // null where the transport gives none. A failed VLAN read keeps the last one.
+  vlans           Json?
+  vlanSource      String?
+  vlanCollectedAt DateTime?
+  vlanError       String?
 }
 
 // A link appearing, disappearing or changing between collections. Pruned after
