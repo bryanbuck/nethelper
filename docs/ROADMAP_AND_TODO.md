@@ -163,7 +163,7 @@ Deferred:
 
 ### 2a. Cloud alarms (read-only mirror of Mist / Central active alarms)
 **Priority**: Medium
-**Status**: 🚧 Feed-first version built 2026-10-23 on `feat/cloud-alarms` (not yet merged). The active-alarm dashboard card, the History tab row and local silences below are still deferred; the open questions below still apply to them.
+**Status**: ✅ Feed-first version merged to `master` 2026-10-23 (`6925242`), not yet released. The active-alarm dashboard card, the History tab row and local silences below are still deferred; the open questions below still apply to them.
 
 **What was built (2026-10-23)**, a smaller first step than the design below, chosen because the Activity feed (item 14) asks only "what happened, when", which fits what both clouds return:
 - `CloudAlarm` table (migration `cloud_alarms`), not `DeviceEvent`: a Central alert names no device in a field, and `DeviceEvent` needs one. `deviceId` is optional (`SetNull` on delete, re-pointed on merge); `integrationId` is a plain column.
