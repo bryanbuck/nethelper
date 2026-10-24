@@ -1,5 +1,6 @@
 const deviceService = require('../services/device.service');
 const cloudStatusService = require('../services/cloud-status.service');
+const cloudAlarmService = require('../services/cloud-alarm.service');
 const CloudProviderFactory = require('../services/cloud-providers/cloud-provider-factory');
 const { debugLog, Services } = require('../utils/debug-logger');
 
@@ -73,6 +74,14 @@ async function processStatusRefresh() {
   return { results };
 }
 
+// Cloud alarm mirror: new and cleared alarms from every cloud that has them.
+async function processAlarmPoll() {
+  const results = await cloudAlarmService.pollAll();
+  const raised = results.reduce((sum, r) => sum + (r.raised || 0), 0);
+  if (raised) logger.info('Cloud alarm poll', { raised });
+  return { results };
+}
+
 const SCHEDULES = [
   {
     name: 'syncDevices',
@@ -85,6 +94,12 @@ const SCHEDULES = [
     jobId: 'cloud-status-recurring',
     enabled: () => process.env.CLOUD_STATUS_ENABLED !== 'false',
     interval: () => parseInt(process.env.CLOUD_STATUS_INTERVAL, 10) || 300000,
+  },
+  {
+    name: 'pollCloudAlarms',
+    jobId: 'cloud-alarms-recurring',
+    enabled: () => process.env.CLOUD_ALARMS_ENABLED !== 'false',
+    interval: () => parseInt(process.env.CLOUD_ALARM_INTERVAL, 10) || 300000,
   },
 ];
 
@@ -117,6 +132,7 @@ async function schedule(queue) {
 module.exports = (queue) => {
   queue.process('syncDevices', processDeviceSync);
   queue.process('refreshStatuses', processStatusRefresh);
+  queue.process('pollCloudAlarms', processAlarmPoll);
   schedule(queue).catch((error) => logger.error('Could not schedule cloud sync jobs', { error: error.message }));
   logger.success('Device sync job processor initialized');
 };

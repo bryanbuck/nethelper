@@ -103,18 +103,21 @@ export function useActivityFeed({ categories, deviceId = ref(null), vendor = ref
   const onDeviceEvent = (e) => { if (wanted(categoryOfEvent(e?.type), e?.deviceId)) scheduleRefresh() }
   const onBackup = (e) => { if (!e?.scope && e?.hasChanges && wanted('config', e?.deviceId)) scheduleRefresh() }
   const onAlert = () => { if (wanted('alert')) scheduleRefresh() }
+  const onCloudAlarms = () => { if (wanted('cloud-alarm')) scheduleRefresh() }
 
   const { on, off } = useWebSocket()
   on('device:event', onDeviceEvent)
   on('backup:completed', onBackup)
   on('alert:new', onAlert)
   on('alert:updated', onAlert)
+  on('cloud:alarms', onCloudAlarms)
   onUnmounted(() => {
     clearTimeout(refreshTimer)
     off('device:event', onDeviceEvent)
     off('backup:completed', onBackup)
     off('alert:new', onAlert)
     off('alert:updated', onAlert)
+    off('cloud:alarms', onCloudAlarms)
   })
 
   watch([categories, deviceId, vendor], load, { deep: true, immediate: true })

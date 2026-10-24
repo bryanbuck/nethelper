@@ -8,6 +8,7 @@ const mockPrisma = {
   deviceEvent: { findMany: jest.fn() },
   configBackup: { findMany: jest.fn(), groupBy: jest.fn() },
   alert: { findMany: jest.fn() },
+  cloudAlarm: { findMany: jest.fn() },
 };
 jest.mock('../../src/config/database', () => ({ getPrisma: () => mockPrisma }));
 
@@ -24,12 +25,13 @@ beforeEach(() => {
   mockPrisma.configBackup.findMany.mockResolvedValue([]);
   mockPrisma.configBackup.groupBy.mockResolvedValue([]);
   mockPrisma.alert.findMany.mockResolvedValue([]);
+  mockPrisma.cloudAlarm.findMany.mockResolvedValue([]);
   mockPrisma.device.findMany.mockResolvedValue([{ id: 'd1', name: 'SW1', type: 'switch', vendor: 'aruba', platform: 'aos-cx' }]);
 });
 
 describe('parseOptions', () => {
   test('defaults leave port changes out', () => {
-    expect(parseOptions({}).categories).toEqual(['status', 'restart', 'config', 'alert']);
+    expect(parseOptions({}).categories).toEqual(['status', 'restart', 'config', 'alert', 'cloud-alarm']);
   });
   test('bad input is refused', () => {
     expect(() => parseOptions({ categories: ['nope'] })).toThrow(/Unknown categories/);
@@ -135,11 +137,36 @@ describe('list', () => {
     expect(items[2].device).toEqual({ id: 'd3', name: 'Gone', deleted: true });
   });
 
-  test('before pages strictly older; vendor narrows to its devices', async () => {
+  test('before pages strictly older; vendor narrows to its devices and its cloud', async () => {
     mockPrisma.device.findMany.mockResolvedValueOnce([{ id: 'd9' }]);
     await list({ vendor: 'juniper', before: t('10:00').toISOString() });
     const where = mockPrisma.deviceEvent.findMany.mock.calls[0][0].where;
     expect(where.deviceId).toEqual({ in: ['d9'] });
     expect(where.occurredAt).toEqual({ lt: t('10:00') });
+    // A site-level alarm counts for the vendor of the cloud that raised it.
+    expect(mockPrisma.cloudAlarm.findMany.mock.calls[0][0].where).toEqual({
+      OR: [{ deviceId: { in: ['d9'] } }, { deviceId: null, provider: { in: ['juniper_mist'] } }],
+      raisedAt: { lt: t('10:00') },
+    });
+  });
+
+  test('cloud alarms: raised and cleared items; repeats on one subject fold', async () => {
+    const row = (id, at, extra = {}) => ({
+      id, provider: 'aruba_central', name: 'OSPF Peer Down', category: 'Routing', severity: 'warning', stateful: true,
+      status: 'cleared', deviceId: 'd1', siteName: 'HQ', summary: `peer ${id} down`, count: 1, raisedAt: at,
+      clearedAt: t('11:00'), clearedReason: 'Due to clear alert timer configuration', data: {}, ...extra,
+    });
+    mockPrisma.cloudAlarm.findMany.mockImplementation(async ({ orderBy }) => (orderBy.raisedAt
+      ? [row('c3', t('10:04')), row('c2', t('10:02')), row('c1', t('10:00')), row('s1', t('09:00'), { deviceId: null, status: 'active', clearedAt: null })]
+      : [row('c3', t('10:04'))]));
+
+    const { items } = await list({ categories: ['cloud-alarm'] });
+    expect(items.map((i) => [i.id, i.count])).toEqual([
+      ['cloud-alarm:c3:cleared', undefined],
+      ['cloud-alarm:c3:raised', 3],
+      ['cloud-alarm:s1:raised', undefined],
+    ]);
+    expect(items[0]).toMatchObject({ clearedReason: 'Due to clear alert timer configuration', provider: 'aruba_central' });
+    expect(items[2]).toMatchObject({ device: null, siteName: 'HQ' });
   });
 });

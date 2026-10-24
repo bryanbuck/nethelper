@@ -128,7 +128,7 @@ describe('merge', () => {
     expect(ops[0]).toBe('device.updateMany');
     expect(calls[0][1]).toEqual({ where: { id: { in: ['d-cloud'] } }, data: { serial: null } });
     expect(ops).toEqual(expect.arrayContaining([
-      'deviceEvent.updateMany', 'execution.updateMany', 'configBackup.updateMany',
+      'deviceEvent.updateMany', 'cloudAlarm.updateMany', 'execution.updateMany', 'configBackup.updateMany',
       'discoveredDevice.updateMany', 'topologyChange.updateMany', 'backupSchedule.update', 'alert.updateMany',
     ]));
     expect(ops.indexOf('device.deleteMany')).toBeLessThan(ops.indexOf('device.update'));

@@ -163,7 +163,15 @@ Deferred:
 
 ### 2a. Cloud alarms (read-only mirror of Mist / Central active alarms)
 **Priority**: Medium
-**Status**: On hold (2026-10-22). Researched and probed live. Each cloud needs compromises, so no code until the open questions below are answered. Add findings to the log as they come in.
+**Status**: 🚧 Feed-first version built 2026-10-23 on `feat/cloud-alarms` (not yet merged). The active-alarm dashboard card, the History tab row and local silences below are still deferred; the open questions below still apply to them.
+
+**What was built (2026-10-23)**, a smaller first step than the design below, chosen because the Activity feed (item 14) asks only "what happened, when", which fits what both clouds return:
+- `CloudAlarm` table (migration `cloud_alarms`), not `DeviceEvent`: a Central alert names no device in a field, and `DeviceEvent` needs one. `deviceId` is optional (`SetNull` on delete, re-pointed on merge); `integrationId` is a plain column.
+- Provider capability `alarms`, `listAlarms({ since })` → `{ alarms, activeIds }`. **Mist**: org alarm search, groups `infrastructure` and `marvis`, point events (`status: 'event'`) unless the alarm carries `status`; display names from `/const/alarm_defs`. **Central**: the active/deferred list (authoritative active set, so a stored alert missing from it clears with no reason) plus a newest-first sweep back to `since`.
+- Left out because NetHelper records them itself: Mist `device_/switch_/gateway_` down/reconnected and `device_/switch_restarted`; Central System alerts named "… Offline". Central "Switch Reboot" is kept.
+- `services/cloud-alarm.service.js`, polled by `pollCloudAlarms` on the cloud queue (`CLOUD_ALARMS_ENABLED`, `CLOUD_ALARM_INTERVAL` 5 min, `CLOUD_ALARM_RETENTION_DAYS` 30; a restart backfills from the newest stored alarm, at most 7 days). Device link only on a unique match: serial (also as a word in Central's summary, e.g. "Switch Reboot"), MAC, hostname, then device name as a whole word in the summary (not names that are IPs or under 3 characters). Otherwise the alarm is about its site. Socket `cloud:alarms`.
+- Activity feed category `cloud-alarm` (on by default): raised items, cleared items for stateful alarms with the reason (a Central timer clear says the problem may not be fixed), repeats of one alarm on one device/site within 10 minutes folded.
+- First live poll (2026-10-23): Central "Home Network" stored its active "IPsec SA Down" site-level (its summary names two gateways). Mist "Buck Home" still returns nothing until alarm rules are enabled in its template.
 
 **Goal.** Show the alarms the clouds already raise, without creating NetHelper `Alert` rows (that would duplicate actionable items owned in the vendor cloud):
 - When each alarm appeared and cleared, on the device History tab.
@@ -601,7 +609,7 @@ Admin-only page at `/system`, opened from the version indicator at the right of 
 
 ### 14. Activity feed (fleet-wide device activity)
 **Priority**: Medium
-**Status**: ✅ Built 2026-10-23 on `feat/activity-feed` (not yet released)
+**Status**: ✅ Merged to `master` 2026-10-23 (`eef1049`), not yet released. Cloud alarms joined it as a category on 2026-10-23 (item 2a).
 
 A rolling feed of what happened to the managed devices, at `/activity` (nav item) and in the dashboard's Recent Activity card (which used to be just the loaded table page sorted by `lastSeen`). Separate from the status bar, which is about NetHelper itself. `GET /api/v1/activity` (`services/activity.service.js`, any signed-in role, read-only) merges rows other services already write: `DeviceEvent` status changes (ping/cloud) and restarts, `ConfigBackup` successes that found a change, and device alerts opened/resolved. Noise control: a device's first ping/cloud state (no `data.previous`) is a History starting point, not news; a device's first successful backup is a capture, not a change; the ping/cloud offline alert rules are left out (their status events say it) and so are resolutions by merge; port link/PoE/live-monitor events are a separate `port` category, off by default; repeats of one kind on one device/port within 10 minutes fold into one "flapping" item with a count. Filters: categories, vendor, device (kept in the URL); paging by `before`. The page refetches its newest items a few seconds after a relevant `device:event`, `backup:completed` (with changes) or `alert:*`.
 

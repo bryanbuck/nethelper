@@ -21,6 +21,15 @@ const logger = debugLog.createLogger(Services.ARUBA_CENTRAL);
 // tokens"). A Central-scoped API client gets its token from HPE SSO; a
 // GreenLake-platform-scoped client from its workspace's token URL. Both are
 // client_credentials grants and both tokens work against New Central only.
+// Alerts (network-notifications). The list carries no serial, MAC or site
+// id: the device appears only in the summary text. Device-offline alerts
+// repeat what the cloud status refresh records, so they are left out.
+const ALERTS_ENDPOINT = '/network-notifications/v1/alerts';
+const ALERT_PAGE_LIMIT = 100; // the API's maximum
+const ALERT_MAX_PAGES = 10;
+const isOfflineAlert = (item) => item.category === 'System' && /offline$/i.test(item.name || '');
+const ALERT_SEVERITY = { critical: 'critical', major: 'warning', minor: 'warning', warning: 'warning' };
+
 const CENTRAL_TOKEN_URL = 'https://sso.common.cloud.hpe.com/as/token.oauth2';
 const glpTokenUrl = (workspaceId) =>
   `https://global.api.greenlake.hpe.com/authorization/v2/oauth2/${encodeURIComponent(workspaceId)}/token`;
@@ -125,7 +134,7 @@ class ArubaCentralProvider extends BaseCloudProvider {
   }
 
   supports(capability) {
-    return ['inventory', 'status', 'test', 'scope-backup', 'topology', 'address-lookup'].includes(capability);
+    return ['inventory', 'status', 'test', 'scope-backup', 'topology', 'address-lookup', 'alarms'].includes(capability);
     // NOT 'config-backup': the classic /configuration/v2 endpoint is
     // quarantined (see getDeviceConfiguration). CX configs are still backed
     // up over device REST; AOS-S over SSH.
@@ -338,6 +347,74 @@ class ArubaCentralProvider extends BaseCloudProvider {
       pages += 1;
     } while (next && !connected && pages < 20);
     return holders;
+  }
+
+  /**
+   * Alerts: every active/deferred one (the authoritative active set), plus a
+   * sweep of the newest-first list back to `since`, which catches alerts
+   * that came and went between polls and how recent ones cleared.
+   */
+  async listAlarms({ since }) {
+    const pages = async (params, stop = () => false) => {
+      const items = [];
+      let next;
+      for (let page = 0; page < ALERT_MAX_PAGES; page++) {
+        const data = await this.makeRequest('GET', ALERTS_ENDPOINT, {
+          params: { ...params, limit: ALERT_PAGE_LIMIT, ...(next && { next }) },
+          context: 'alarms',
+        });
+        const batch = data?.items || [];
+        items.push(...batch);
+        next = data?.next;
+        if (!next || !batch.length || stop(batch)) break;
+      }
+      return items;
+    };
+    const cutoff = new Date(since).getTime();
+    const [active, recent] = await Promise.all([
+      pages({ filter: "status in ('Active','Deferred')" }),
+      pages({}, (batch) => batch.some((item) => new Date(item.createdAt).getTime() < cutoff)),
+    ]);
+
+    const byId = new Map();
+    for (const item of [...recent.filter((i) => new Date(i.createdAt).getTime() >= cutoff), ...active]) {
+      if (item?.id) byId.set(item.id, item);
+    }
+    return {
+      alarms: [...byId.values()].filter((item) => !isOfflineAlert(item)).map((item) => this.normalizeAlarm(item)),
+      activeIds: active.filter((item) => !isOfflineAlert(item)).map((item) => item.id),
+    };
+  }
+
+  normalizeAlarm(item) {
+    const cleared = item.status === 'Cleared';
+    const raisedAt = this.parseTimestamp(item.createdAt) || new Date();
+    const updatedAt = this.parseTimestamp(item.updatedAt);
+    return {
+      externalId: item.id,
+      type: item.name,
+      name: item.name,
+      category: item.category || null,
+      severity: ALERT_SEVERITY[String(item.severity).toLowerCase()] || 'info',
+      stateful: true,
+      status: cleared ? 'cleared' : 'active',
+      raisedAt,
+      lastSeenAt: updatedAt || raisedAt,
+      clearedAt: cleared ? updatedAt || new Date() : null,
+      clearedReason: cleared ? item.clearedReason || null : null,
+      summary: item.summary || null,
+      siteName: item.siteName || null,
+      count: 1,
+      serials: [],
+      macs: [],
+      hostnames: [],
+      data: {
+        ...(item.key && { key: item.key }),
+        ...(item.priority && { priority: item.priority }),
+        ...(item.deviceType && { deviceType: item.deviceType }),
+        ...(item.status === 'Deferred' && { deferred: true }),
+      },
+    };
   }
 
   /**

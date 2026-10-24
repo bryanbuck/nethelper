@@ -40,6 +40,33 @@ describe('models/activity', () => {
       .toBe('Alert cleared: Backup failed')
   })
 
+  test('cloud alarms: raised, folded, and cleared by timer or by dropping out', () => {
+    const raised = activityInfo({
+      kind: 'cloud-alarm', type: 'cloud-alarm.raised', provider: 'juniper_mist', name: 'Switch Bad Optics', severity: 'warning',
+      summary: 'rx power low', incidents: 3, ports: ['xe-0/1/0'], device,
+    })
+    expect(raised).toMatchObject({
+      label: 'Mist: Switch Bad Optics', color: 'warning', detail: 'rx power low · 3 incidents · ports xe-0/1/0',
+    })
+    expect(raised.link).toEqual({ path: '/devices/d1' })
+
+    const folded = activityInfo({
+      kind: 'cloud-alarm', type: 'cloud-alarm.raised', provider: 'aruba_central', name: 'OSPF Peer Down', severity: 'warning',
+      count: 4, at: '2026-10-22T10:03:00Z', since: '2026-10-22T10:00:00Z', siteName: 'HQ', device: null,
+    })
+    expect(folded.label).toBe('Central: OSPF Peer Down ×4')
+    expect(folded.detail).toBe('4 in 3 min')
+    expect(folded.link).toBeNull()
+
+    const timer = activityInfo({
+      kind: 'cloud-alarm', type: 'cloud-alarm.cleared', provider: 'aruba_central', name: 'Switch Reboot',
+      clearedReason: 'Due to clear alert timer configuration', device,
+    })
+    expect(timer).toMatchObject({ color: 'medium-emphasis', detail: "Cleared by Central's timer; the problem may not be fixed" })
+    expect(activityInfo({ kind: 'cloud-alarm', type: 'cloud-alarm.cleared', provider: 'aruba_central', name: 'X', device }).detail)
+      .toBe('No longer active in Central')
+  })
+
   test('a deleted device has no link', () => {
     expect(activityInfo({ kind: 'config', trigger: 'manual', device: { id: 'x', name: 'Gone', deleted: true } }).link).toBeNull()
   })

@@ -287,6 +287,7 @@ class DeviceMergeService {
       // serial is unique: free it on the sources before the target takes it.
       await tx.device.updateMany({ where: { id: { in: ids } }, data: { serial: null } });
       await tx.deviceEvent.updateMany({ where: { deviceId: { in: ids } }, data: { deviceId: targetId } });
+      await tx.cloudAlarm.updateMany({ where: { deviceId: { in: ids } }, data: { deviceId: targetId } });
       await alertService.mergeDevices(tx, ids, targetId);
       await tx.execution.updateMany({ where: { deviceId: { in: ids } }, data: { deviceId: targetId } });
       // deviceSerial and file paths stay: they say where each backup's files

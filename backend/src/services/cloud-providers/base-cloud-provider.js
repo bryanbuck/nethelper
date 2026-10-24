@@ -137,6 +137,25 @@ class BaseCloudProvider {
   }
 
   /**
+   * Alarms the cloud raised since `since`, for the read-only mirror
+   * (services/cloud-alarm.service.js). Device-related alarms only; types
+   * that only repeat what NetHelper already records (device offline/online,
+   * restarts) are left out by the provider.
+   * @param {{ since: Date }} options
+   * @returns {Promise<{ alarms: NormalizedAlarm[], activeIds: string[]|null }>}
+   *   activeIds: every stateful alarm the cloud holds active now (a stored
+   *   active alarm missing from it has cleared), or null when the provider
+   *   has no such list. NormalizedAlarm = { externalId, type, name,
+   *   category, severity: 'critical'|'warning'|'info', stateful,
+   *   status: 'active'|'cleared'|'event', raisedAt, lastSeenAt, clearedAt,
+   *   clearedReason, summary, siteName, count, serials: [], macs: [],
+   *   hostnames: [], data }
+   */
+  async listAlarms(options) { // eslint-disable-line no-unused-vars
+    this.unsupported('alarms');
+  }
+
+  /**
    * Channels for openEventStream(), e.g. one per site. Read again when the
    * stream reconnects and periodically, so new sites are picked up.
    * @returns {Promise<string[]>}
@@ -171,7 +190,7 @@ class BaseCloudProvider {
 
   /**
    * Capability probe used by transport routing and the UI.
-   * @param {string} capability - 'inventory' | 'status' | 'config-backup' | 'scope-backup' | 'topology' | 'events' | 'address-lookup' | 'test'
+   * @param {string} capability - 'inventory' | 'status' | 'config-backup' | 'scope-backup' | 'topology' | 'events' | 'address-lookup' | 'alarms' | 'test'
    * @returns {boolean}
    */
   supports(capability) { // eslint-disable-line no-unused-vars
