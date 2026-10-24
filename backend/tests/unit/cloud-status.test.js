@@ -7,6 +7,7 @@ jest.mock('axios');
 jest.mock('../../src/config/redis', () => ({ getRedis: jest.fn() }));
 const mockPrisma = {
   device: { findMany: jest.fn(), updateMany: jest.fn(async () => ({ count: 1 })) },
+  cloudStatusCheck: { findUnique: jest.fn(async () => null), upsert: jest.fn(async () => ({})) },
   deviceEvent: {
     findFirst: jest.fn(async () => null),
     create: jest.fn(async ({ data }) => ({ id: 'e1', occurredAt: new Date(), ...data })),
@@ -50,8 +51,12 @@ const report = (over = {}) => ({
   cloudConnectionStatus: 'connected', configInSync: true, configStatus: 'NO_CHANGE', ...over,
 });
 
+// device:status:update emits; every refresh also sends one cloud:status:checked.
+const statusEmits = () => socket.emit.mock.calls.filter(([event]) => event === 'device:status:update');
+
 beforeEach(() => {
   jest.clearAllMocks();
+  mockPrisma.cloudStatusCheck.findUnique.mockReset().mockResolvedValue(null);
   axios.mockReset();
   mockPrisma.deviceEvent.findFirst.mockReset().mockResolvedValue({ type: 'cloud.online' });
   require('../../src/services/device-events.service')._resetCheckedStates();
@@ -194,23 +199,63 @@ describe('refreshProvider', () => {
     const summary = await cloudStatus.refreshProvider(provider(new Map([['SN000002', report()]])));
 
     expect(summary).toMatchObject({ updated: 0, statusChanges: 0 });
-    expect(socket.emit).not.toHaveBeenCalled();
+    expect(statusEmits()).toEqual([]);
     expect(mockPrisma.deviceEvent.create).not.toHaveBeenCalled();
     expect(alertService.clear).not.toHaveBeenCalled();
   });
 
-  test('an unchanged device costs only the bulk cloudCheckedAt stamp, no event and no alert call', async () => {
-    mockPrisma.device.findMany.mockResolvedValue([row({ cloudStatus: 'online', cloudConnectionStatus: 'connected' })]);
+  test('unchanged devices cost no device write: one integration stamp and one broadcast per refresh (#50)', async () => {
+    mockPrisma.device.findMany.mockResolvedValue([
+      row({ cloudStatus: 'online', cloudConnectionStatus: 'connected' }),
+      row({ id: 'd2', serial: 'SN000003', cloudStatus: 'online', cloudConnectionStatus: 'connected' }),
+    ]);
+    const p = provider(new Map([['SN000002', report()], ['SN000003', report()]]));
 
-    await cloudStatus.refreshProvider(provider(new Map([['SN000002', report()]])));
+    await cloudStatus.refreshProvider(p);
 
-    expect(mockPrisma.device.updateMany).toHaveBeenCalledTimes(1);
-    expect(mockPrisma.device.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: ['d1'] } }, data: { cloudCheckedAt: expect.any(Date) },
+    expect(mockPrisma.device.updateMany).not.toHaveBeenCalled();
+    expect(mockPrisma.cloudStatusCheck.upsert).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.cloudStatusCheck.upsert).toHaveBeenCalledWith({
+      where: { integrationId: p.id },
+      create: { integrationId: p.id, checkedAt: expect.any(Date) },
+      update: { checkedAt: expect.any(Date) },
     });
-    expect(socket.emit).not.toHaveBeenCalled();
+    expect(socket.emit).toHaveBeenCalledTimes(1);
+    expect(socket.emit).toHaveBeenCalledWith('cloud:status:checked', { integrationId: p.id, checkedAt: expect.any(Date) });
     expect(alertService.raise).not.toHaveBeenCalled();
     expect(alertService.clear).not.toHaveBeenCalled();
+  });
+
+  test('a device going offline keeps the previous refresh as its last sighting online', async () => {
+    const previous = new Date('2026-10-23T10:00:00Z');
+    mockPrisma.cloudStatusCheck.findUnique.mockResolvedValue({ integrationId: 'int-mist', checkedAt: previous });
+    mockPrisma.device.findMany.mockResolvedValue([row({
+      cloudStatus: 'online', cloudConnectionStatus: 'connected', cloudCheckedAt: new Date('2026-10-23T08:00:00Z'),
+    })]);
+
+    await cloudStatus.refreshProvider(provider(new Map([['SN000002', report({ status: 'offline', lastSeen: null })]])));
+
+    expect(mockPrisma.device.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ cloudStatus: 'offline', cloudLastSeen: previous }),
+    }));
+  });
+
+  test('withCloudChecks: an online cloud device reads its integration\'s last refresh', async () => {
+    const stamp = new Date('2026-10-23T10:00:00Z');
+    mockPrisma.cloudStatusCheck.findMany = jest.fn(async () => [
+      { integrationId: 'int-mist', checkedAt: stamp },
+      { integrationId: 'env-aruba-central', checkedAt: stamp },
+    ]);
+    const older = new Date('2026-10-23T09:00:00Z');
+    const newer = new Date('2026-10-23T11:00:00Z');
+    const rows = await deviceService.withCloudChecks([
+      { id: 'a', managementMode: 'cloud', cloudStatus: 'online', cloudIntegrationId: 'int-mist', cloudCheckedAt: older },
+      { id: 'b', managementMode: 'cloud', cloudStatus: 'online', cloudIntegrationId: 'int-mist', cloudCheckedAt: newer },
+      { id: 'c', managementMode: 'cloud', cloudStatus: 'offline', cloudIntegrationId: 'int-mist', cloudCheckedAt: older },
+      { id: 'd', managementMode: 'cloud', cloudStatus: 'online', cloudIntegrationId: null, cloudCheckedAt: null },
+      { id: 'e', managementMode: 'direct', cloudStatus: 'online', cloudIntegrationId: null, cloudCheckedAt: null },
+    ]);
+    expect(rows.map((r) => r.cloudCheckedAt)).toEqual([stamp, newer, older, stamp, null]);
   });
 
   test('a device going out of sync opens the config alert', async () => {
@@ -221,7 +266,7 @@ describe('refreshProvider', () => {
     expect(alertService.raise).toHaveBeenCalledWith('device.cloud-config', expect.objectContaining({
       subjectKey: 'd1', title: 'JNEX-01 config is out of sync', message: expect.stringContaining('"Out of sync"'),
     }), { bump: false });
-    expect(socket.emit).not.toHaveBeenCalled(); // no status change
+    expect(statusEmits()).toEqual([]); // no status change
   });
 
   test('one integration failing does not stop the others', async () => {
@@ -289,7 +334,7 @@ describe('scheduled jobs', () => {
 
     expect(result).toEqual({ skipped: 'no active cloud integrations' });
     expect(sync).not.toHaveBeenCalled();
-    expect(socket.emit).not.toHaveBeenCalled();
+    expect(statusEmits()).toEqual([]);
   });
 
   test('a scheduled sync still runs when every integration fails to load, so each gets an alert', async () => {

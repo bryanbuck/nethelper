@@ -10,6 +10,17 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 ### Changed
 - The dashboard's **Recent Activity** card shows the newest items of the Activity feed. It used to list devices by when they were last seen, and only those on the Devices table page that was loaded.
 
+### Fixed
+- The cloud status refresh no longer rewrites every cloud-managed device row each time it runs (every 5 minutes, and as often as every 30 seconds with the Mist event stream). It records one time per integration instead, so a large Mist org no longer churns the device table, and a device's `updatedAt` again means its record changed. (#50)
+- The device page's **Last Seen** card keeps "Confirmed by <cloud> N minutes ago" current while the page is open: each status refresh now tells open pages when it read the cloud. (#46)
+- The **History** tab no longer draws a slower reply for an older range under the newer range's toggle (switching 30 days → 24 hours quickly), and it reloads every 5 minutes while visible so the window keeps reaching "now". (#52)
+- "Who has this address?" no longer shows a lookup that finished after you moved to another device on that device's banner. (#52)
+- The device page no longer shows "Failed to Load Device" when the API rate limit is hit; it waits and loads again on its own, as the Devices table does.
+
+### Upgrading from 0.9.0-beta.3
+- Take a database backup first: migrations are forward-only. **Docker Compose**: run `deploy/install.sh` from the new tree (it keeps your `.env` values). **Bare metal**: follow "Upgrading" in [`deploy/README.md`](deploy/README.md).
+- One migration, `20261023120000_cloud_status_check`, adds the `CloudStatusCheck` table (one row per cloud integration).
+
 ## [0.9.0-beta.3] — 2026-10-22
 
 A device History tab and "who has this address?" lookup, a System Status page for admins, a Configuration Change automation trigger, a per-user API rate limit, and fixes from a review of the changes since beta.2. Scope and limitations are unchanged: see [`docs/BETA_NOTES.md`](docs/BETA_NOTES.md).

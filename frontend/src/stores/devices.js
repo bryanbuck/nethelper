@@ -251,6 +251,17 @@ export const useDevicesStore = defineStore('devices', () => {
     }
   }
 
+  // A cloud status refresh read every device of one integration as of
+  // checkedAt (`cloud:status:checked`; integrationId null is the env-var
+  // Central fallback). The cloud confirmed the online ones as of then.
+  function applyCloudCheck(integrationId, checkedAt) {
+    for (const device of devices.value) {
+      if (device.managementMode !== 'cloud' || device.cloudStatus !== 'online') continue
+      if ((device.cloudIntegrationId || null) !== (integrationId || null)) continue
+      device.cloudCheckedAt = checkedAt
+    }
+  }
+
   // Counts the held rows; skipped while they are one table page (the stats
   // are then the server's fleet-wide summary), unless forced.
   function updateStats(force = false) {
@@ -484,6 +495,7 @@ export const useDevicesStore = defineStore('devices', () => {
     createDevice,
     updateDeviceStatus,
     updateDeviceLocally,
+    applyCloudCheck,
     addDevice,
     removeDevice,
     updateDevice,

@@ -7,7 +7,7 @@
       <v-btn-toggle v-model="range" mandatory density="compact" variant="outlined" divided>
         <v-btn v-for="r in RANGES" :key="r.value" :value="r.value" size="small">{{ r.label }}</v-btn>
       </v-btn-toggle>
-      <v-btn icon="mdi-refresh" variant="text" size="small" :loading="loading" aria-label="Refresh" @click="load" />
+      <v-btn icon="mdi-refresh" variant="text" size="small" :loading="loading" aria-label="Refresh" @click="load()" />
     </v-card-title>
 
     <v-card-subtitle class="pb-2 history-subtitle">
@@ -139,21 +139,44 @@ const loading = ref(false)
 const error = ref(null)
 const hover = ref(null)
 
+// The range the shown history was loaded for: labels follow the data, not
+// the toggle, while a new range loads.
+const loadedRange = ref(range.value)
+const lastLoaded = ref(0)
+
+// Only the newest request's reply is shown: switching 30 days → 24 h quickly
+// (or a socket reload racing a range change) must not draw the slower reply.
+let requestSeq = 0
 const load = async () => {
+  const seq = ++requestSeq
+  const requested = range.value
   loading.value = true
   error.value = null
   try {
-    history.value = await deviceService.getDeviceHistory(props.device.id, { range: range.value })
+    const data = await deviceService.getDeviceHistory(props.device.id, { range: requested })
+    if (seq !== requestSeq) return
+    history.value = data
+    loadedRange.value = requested
+    lastLoaded.value = Date.now()
   } catch (err) {
-    error.value = err.userMessage || err.message || 'Failed to load history'
+    if (seq === requestSeq) error.value = err.userMessage || err.message || 'Failed to load history'
   } finally {
-    loading.value = false
+    if (seq === requestSeq) loading.value = false
   }
 }
 
 watch(range, load)
 watch(() => props.device.id, load)
 onMounted(load)
+
+// The window ends at load time, so reload every few minutes while the page is
+// visible (and on return to a tab hidden that long) to keep "now" at the right edge.
+const REFRESH_MS = 5 * 60 * 1000
+const refreshIfStale = () => {
+  if (document.visibilityState === 'visible' && !loading.value && Date.now() - lastLoaded.value >= REFRESH_MS) load()
+}
+const refreshTimer = setInterval(refreshIfStale, REFRESH_MS)
+document.addEventListener('visibilitychange', refreshIfStale)
 
 // New states and backups arrive over the socket; reload (debounced) so the
 // lanes stay current while the tab is open.
@@ -174,6 +197,8 @@ onSocket('backup:completed', onBackup)
 onSocket('backup:failed', onBackup)
 onUnmounted(() => {
   clearTimeout(reloadTimer)
+  clearInterval(refreshTimer)
+  document.removeEventListener('visibilitychange', refreshIfStale)
   offSocket('device:event', onDeviceEvent)
   offSocket('backup:completed', onBackup)
   offSocket('backup:failed', onBackup)
@@ -194,7 +219,7 @@ const hasCombined = computed(() => history.value?.lanes.some((l) => l.key === 'c
 const cloudLane = computed(() => history.value?.lanes.find((l) => l.key === 'cloud'))
 const laneLabel = (lane) => (lane.key === 'combined' ? 'Both agree?' : lane.label)
 
-const fmt = (t) => format(new Date(t), range.value === '24h' ? 'HH:mm' : 'MMM d, HH:mm')
+const fmt = (t) => format(new Date(t), loadedRange.value === '24h' ? 'HH:mm' : 'MMM d, HH:mm')
 const duration = (from, to) => formatDistanceStrict(new Date(from), new Date(to))
 
 const segmentLines = (lane, seg) => {

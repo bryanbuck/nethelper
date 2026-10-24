@@ -142,4 +142,19 @@ describe('websocket service', () => {
       status: 'online', cloudStatus: 'online', cloudLastSeen: 'a', cloudCheckedAt: 'b', pingLastSeen: 'c'
     })
   })
+
+  test('a cloud status check stamps that integration\'s online cloud devices only', async () => {
+    const { useDevicesStore } = await import('@/stores/devices')
+    const store = useDevicesStore()
+    store.devices = [
+      { id: 'a', managementMode: 'cloud', cloudStatus: 'online', cloudIntegrationId: 'i1', cloudCheckedAt: 'old' },
+      { id: 'b', managementMode: 'cloud', cloudStatus: 'offline', cloudIntegrationId: 'i1', cloudCheckedAt: 'old' },
+      { id: 'c', managementMode: 'cloud', cloudStatus: 'online', cloudIntegrationId: 'i2', cloudCheckedAt: 'old' },
+      { id: 'd', managementMode: 'cloud', cloudStatus: 'online', cloudIntegrationId: null, cloudCheckedAt: 'old' },
+    ]
+    service.stores = { ...service.stores, devices: store }
+    service.handleCloudStatusChecked({ integrationId: 'i1', checkedAt: 'new' })
+    service.handleCloudStatusChecked({ integrationId: null, checkedAt: 'env' })
+    expect(store.devices.map((d) => d.cloudCheckedAt)).toEqual(['new', 'old', 'old', 'env'])
+  })
 })

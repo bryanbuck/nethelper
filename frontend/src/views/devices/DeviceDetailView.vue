@@ -186,6 +186,16 @@
       </v-col>
     </v-row>
 
+    <!-- Rate-limited before the device ever loaded: retried automatically -->
+    <v-row v-else-if="rateLimitRetryAt && !device">
+      <v-col cols="12">
+        <v-alert type="warning" variant="tonal">
+          <v-alert-title>Too many requests</v-alert-title>
+          NetHelper is limiting requests right now. The device loads again automatically in a moment.
+        </v-alert>
+      </v-col>
+    </v-row>
+
     <!-- Error State -->
     <v-row v-else-if="error">
       <v-col cols="12">
@@ -994,8 +1004,25 @@ const fetchDevice = async () => {
   devicesStore.updateDeviceLocally(id, response.data)
 }
 
+// A rate-limited load keeps the page (and any row already held) and retries
+// once the API takes requests again (Retry-After, capped at 2 minutes), as
+// the Devices table does.
+const rateLimitRetryAt = ref(null)
+let rateLimitTimer = null
+const retryAfterRateLimit = (err, id) => {
+  const waitMs = Math.min((err.retryAfter || 30) * 1000 + 500, 120000)
+  rateLimitRetryAt.value = Date.now() + waitMs
+  clearTimeout(rateLimitTimer)
+  rateLimitTimer = setTimeout(() => {
+    rateLimitRetryAt.value = null
+    if (route.params.id === id) loadDevice()
+  }, waitMs)
+}
+
 const loadDevice = async () => {
   const id = route.params.id
+  clearTimeout(rateLimitTimer)
+  rateLimitRetryAt.value = null
   loading.value = true
   error.value = null
   devicesStore.clearSystemData()
@@ -1013,6 +1040,10 @@ const loadDevice = async () => {
     // opens a device session (POST /devices/poll is operator+)
     if (canEdit.value && systemPoll.value?.available) await refreshSystemInfo()
   } catch (err) {
+    if (err?.type === 'RATE_LIMIT') {
+      if (route.params.id === id) retryAfterRateLimit(err, id)
+      return
+    }
     console.error('Failed to load device:', err)
     error.value = err.userMessage || err.message || 'Failed to load device details'
   } finally {
@@ -1153,6 +1184,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopBackupWait()
+  clearTimeout(rateLimitTimer)
   // Clear system data when leaving the page
   devicesStore.clearSystemData()
 })

@@ -197,7 +197,7 @@ model Device {
   lastSeen        DateTime? // Last seen timestamp (updated by both ping monitoring and Aruba Central sync)
   // Per-source "seen alive" times, so the device page can say who saw it when.
   pingLastSeen    DateTime? // Last ping reply (ping monitor)
-  cloudCheckedAt  DateTime? // Last time NetHelper read this device's status from its cloud (refresh or sync)
+  cloudCheckedAt  DateTime? // Last sync read of this device's status; reads take the newer of this and its integration's CloudStatusCheck
   cloudLastSeen   DateTime? // When the cloud last saw it alive; while cloudStatus is online, cloudCheckedAt is newer
   metadata        Json?
   apiCredentialId String?
@@ -641,6 +641,17 @@ model CloudIntegration {
 
   @@index([provider, isActive])
   @@index([userId])
+}
+
+// When the status refresh last read each integration's device statuses
+// (cloud-status.service). Kept apart from CloudIntegration so the stamp, written
+// up to every 30 s, neither bumps its updatedAt (the event stream's change
+// fingerprint) nor rewrites every Device row. A device the cloud reports online
+// was confirmed as of this time (device.service derives Device.cloudCheckedAt).
+// integrationId is a plain column: the env-var Central fallback has no row.
+model CloudStatusCheck {
+  integrationId String   @id
+  checkedAt     DateTime
 }
 
 // Git mirror for configuration backups. A single active row configures the
