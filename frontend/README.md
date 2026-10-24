@@ -49,4 +49,4 @@ New features follow the `devices` pattern: a singleton service in `services/`, a
 
 ## Stack
 
-Vue 3 (Composition API), Vuetify 3, Pinia, Vue Router 4, Vite 6, axios, socket.io-client, Chart.js (vue-chartjs), and Vue Flow for the automation builder.
+Vue 3 (Composition API), Vuetify 3, Pinia, Vue Router 5, Vite 8, axios, socket.io-client, Chart.js (vue-chartjs), and Vue Flow for the automation builder.

@@ -62,10 +62,13 @@ export default defineConfig(({ mode }) => {
       }
     },
     // Production bundles drop console.log/info/debug (warn/error stay, for
-    // field diagnostics) and debugger statements.
-    esbuild: mode === 'production'
-      ? { pure: ['console.log', 'console.info', 'console.debug'], drop: ['debugger'] }
-      : {},
+    // field diagnostics): Rolldown treats them as pure, so unused calls go.
+    // The Oxc minifier drops debugger statements by default.
+    build: {
+      rolldownOptions: mode === 'production'
+        ? { treeshake: { manualPureFunctions: ['console.log', 'console.info', 'console.debug'] } }
+        : {}
+    },
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url))
