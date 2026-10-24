@@ -1,0 +1,29 @@
+{
+  "_comment": "Spec-derived (AOS-CX 10.10 REST schema), not a live capture: GET /system/vlans?depth=2&attributes=id,name and /system/interfaces?depth=2&attributes=name,type,vlan_mode,vlan_tag,vlan_trunks,interfaces,routing,ip4_address. Reference attributes appear in three shapes on purpose (URI, id map, expanded object).",
+  "vlans": {
+    "1": { "id": 1, "name": "DEFAULT_VLAN_1" },
+    "10": { "id": 10, "name": "users" },
+    "20": { "id": 20, "name": "voice" },
+    "30": { "id": 30, "name": "cameras" },
+    "99": { "id": 99, "name": "mgmt" }
+  },
+  "interfaces": {
+    "1/1/1": { "name": "1/1/1", "type": "system", "routing": false, "vlan_mode": "access", "vlan_tag": "/rest/v10.10/system/vlans/10", "vlan_trunks": [] },
+    "1/1/49": {
+      "name": "1/1/49", "type": "system", "routing": false, "vlan_mode": "native-untagged",
+      "vlan_tag": { "1": "/rest/v10.10/system/vlans/1" },
+      "vlan_trunks": { "10": "/rest/v10.10/system/vlans/10", "20": "/rest/v10.10/system/vlans/20" }
+    },
+    "1/1/50": { "name": "1/1/50", "type": "system", "routing": false, "vlan_mode": "native-untagged", "vlan_tag": { "id": 1, "name": "DEFAULT_VLAN_1" }, "vlan_trunks": {} },
+    "1/1/51": { "name": "1/1/51", "type": "system", "routing": false, "vlan_mode": "access", "vlan_tag": "/rest/v10.10/system/vlans/1", "vlan_trunks": [] },
+    "1/1/52": { "name": "1/1/52", "type": "system", "routing": true, "ip4_address": "192.0.2.1/31" },
+    "lag1": {
+      "name": "lag1", "type": "lag", "routing": false, "vlan_mode": "native-tagged",
+      "vlan_tag": "/rest/v10.10/system/vlans/99",
+      "vlan_trunks": ["/rest/v10.10/system/vlans/10", "/rest/v10.10/system/vlans/30"],
+      "interfaces": { "1/1/51": "/rest/v10.10/system/interfaces/1%2F1%2F51" }
+    },
+    "vlan1": { "name": "vlan1", "type": "vlan", "routing": true },
+    "vlan10": { "name": "vlan10", "type": "vlan", "routing": true, "ip4_address": "10.0.10.2/24" }
+  }
+}

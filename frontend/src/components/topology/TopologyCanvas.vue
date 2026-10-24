@@ -12,7 +12,9 @@
       :max-zoom="2"
       :default-edge-options="{ type: 'default' }"
       class="vue-flow-container"
+      :class="{ 'vlan-overlay': vlan !== null }"
       @node-click="({ node }) => emit('node-click', node)"
+      @edge-click="({ edge }) => emit('edge-click', edge.data)"
       @pane-click="emit('pane-click')"
       @node-drag-stop="onDragStop"
       @nodes-initialized="onInitialized"
@@ -36,6 +38,10 @@
  * comes from utils/topologyLayout.js (dagre + saved positions). Nodes can be
  * dragged when `draggable`; `moved` reports every node's position after a
  * drag so the view can offer "Save layout".
+ *
+ * VLAN overlay: with `vlan` set, edges are styled by whether they pass it
+ * (models/topology-vlans.js) and nodes by `vlanRoles`; `showMismatches`
+ * marks every link with a pruned VLAN or a native mismatch.
  */
 import { ref, computed, watch, markRaw, nextTick } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
@@ -51,15 +57,19 @@ import DeviceNode from './nodes/DeviceNode.vue'
 import GhostNode from './nodes/GhostNode.vue'
 import SubnetGroupNode from './nodes/SubnetGroupNode.vue'
 import { layoutTopology } from '@/utils/topologyLayout'
+import { edgeVlanStatus, edgeMismatch } from '@/models/topology-vlans'
 
 const props = defineProps({
   graph: { type: Object, required: true },
   savedPositions: { type: Object, default: () => ({}) },
   draggable: { type: Boolean, default: false },
-  selectedId: { type: String, default: null }
+  selectedId: { type: String, default: null },
+  vlan: { type: Number, default: null },
+  vlanRoles: { type: Map, default: () => new Map() },
+  showMismatches: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['node-click', 'pane-click', 'moved'])
+const emit = defineEmits(['node-click', 'edge-click', 'pane-click', 'moved'])
 
 const flowId = 'network-map'
 const { fitView, setCenter, findNode } = useVueFlow(flowId)
@@ -94,20 +104,32 @@ const flowNodes = computed(() => props.graph.nodes.map((n) => ({
   id: n.id,
   type: n.kind,
   position: positions.value[n.id] || { x: 0, y: 0 },
-  data: n.data,
+  data: props.vlan === null ? n.data : { ...n.data, vlanRole: props.vlanRoles.get(n.id) || 'unknown' },
+  class: props.vlan === null ? '' : `vlan-role-${props.vlanRoles.get(n.id) || 'unknown'}`,
   selected: n.id === props.selectedId
 })))
 
+const nodesById = computed(() => new Map(props.graph.nodes.map((n) => [n.id, n])))
+
 const flowEdges = computed(() => props.graph.edges.map((e) => {
   const toGhost = e.source.startsWith('ghost:') || e.target.startsWith('ghost:')
+  const status = props.vlan === null ? null : edgeVlanStatus(e, props.vlan, nodesById.value)
+  const mismatch = props.vlan === null && props.showMismatches && edgeMismatch(e)
+  const ports = [e.sourcePort, e.targetPort].filter(Boolean).join(' ↔ ')
   return {
     id: e.id,
     source: e.source,
     target: e.target,
-    label: [e.sourcePort, e.targetPort].filter(Boolean).join(' ↔ '),
+    label: status === 'pruned' || mismatch ? `⚠ ${ports}` : ports,
     labelBgPadding: [4, 2],
     labelBgBorderRadius: 4,
-    class: { 'topo-edge-ghost': toGhost, 'topo-edge-oneway': !e.bidirectional && !toGhost },
+    class: {
+      'topo-edge-ghost': toGhost && !status,
+      'topo-edge-oneway': !e.bidirectional && !toGhost && !status,
+      [`topo-edge-vlan-${status}`]: !!status,
+      'topo-edge-mismatch': !!mismatch,
+      'topo-edge-faded': props.vlan === null && props.showMismatches && !mismatch
+    },
     data: e
   }
 }))
@@ -202,6 +224,20 @@ defineExpose({ relayout, focusNode, fit: () => fitView({ padding: 0.15 }) })
   opacity: 0.6;
 }
 
+:deep(.vlan-role-absent),
+:deep(.vlan-role-unknown) {
+  opacity: 0.35;
+}
+
+:deep(.vlan-role-carries .topo-node),
+:deep(.vlan-role-routes .topo-node) {
+  border-color: rgb(var(--v-theme-primary-text));
+}
+
+:deep(.vlan-role-island .topo-node) {
+  border: 2px dashed rgb(var(--v-theme-warning));
+}
+
 :deep(.topo-title) {
   font-size: 0.875rem;
   font-weight: 600;
@@ -230,6 +266,34 @@ defineExpose({ relayout, focusNode, fit: () => fitView({ padding: 0.15 }) })
 
 :deep(.topo-edge-oneway .vue-flow__edge-path) {
   stroke-dasharray: 2 3;
+}
+
+:deep(.topo-edge-vlan-carried .vue-flow__edge-path) {
+  stroke: rgb(var(--v-theme-primary));
+  stroke-width: 3;
+}
+
+:deep(.topo-edge-vlan-pruned .vue-flow__edge-path),
+:deep(.topo-edge-mismatch .vue-flow__edge-path) {
+  stroke: rgb(var(--v-theme-warning));
+  stroke-width: 3;
+  stroke-dasharray: 8 5;
+}
+
+:deep(.topo-edge-vlan-unknown .vue-flow__edge-path) {
+  stroke-dasharray: 2 4;
+}
+
+:deep(.topo-edge-vlan-absent),
+:deep(.topo-edge-vlan-unknown),
+:deep(.topo-edge-faded) {
+  opacity: 0.3;
+}
+
+:deep(.topo-edge-vlan-pruned .vue-flow__edge-text),
+:deep(.topo-edge-mismatch .vue-flow__edge-text) {
+  fill: rgb(var(--v-theme-warning));
+  font-weight: 600;
 }
 
 :deep(.vue-flow__edge-textbg) {

@@ -25,6 +25,11 @@
           <v-icon v-bind="tip" size="14" class="topo-meta">mdi-lan-pending</v-icon>
         </template>
       </v-tooltip>
+      <v-tooltip v-if="vlanBadge" location="bottom" :text="vlanBadge.text">
+        <template #activator="{ props: tip }">
+          <v-icon v-bind="tip" size="16" :color="vlanBadge.color">{{ vlanBadge.icon }}</v-icon>
+        </template>
+      </v-tooltip>
       <v-chip v-if="data.outOfScope" size="x-small" variant="tonal">{{ data.location || 'other site' }}</v-chip>
     </div>
     <Handle type="source" :position="Position.Bottom" class="topo-handle" />
@@ -52,6 +57,13 @@ const statusInfo = computed(() => {
 })
 
 const hasNeighborData = computed(() => props.data.topology?.status === 'ok')
+
+// Set only while the map's VLAN overlay is on (TopologyCanvas adds vlanRole).
+const vlanBadge = computed(() => ({
+  routes: { icon: 'mdi-router', color: 'primary', text: 'Routes this VLAN (has an address on it)' },
+  island: { icon: 'mdi-lan-disconnect', color: 'warning', text: 'Carries this VLAN with no L2 path to a device that routes it' },
+  unknown: { icon: 'mdi-help-circle-outline', color: undefined, text: props.data.vlans?.error ? `No VLAN data: ${props.data.vlans.error}` : 'No VLAN data for this device' }
+}[props.data.vlanRole] || null))
 
 const neighborHint = computed(() => {
   const t = props.data.topology

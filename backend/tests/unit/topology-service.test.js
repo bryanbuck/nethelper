@@ -59,6 +59,7 @@ const CloudProviderFactory = require('../../src/services/cloud-providers/cloud-p
 const BaseCloudProvider = require('../../src/services/cloud-providers/base-cloud-provider');
 const JunosAPI = require('../../src/services/device-api/junos-api');
 const topology = require('../../src/services/topology/topology.service');
+const { makeVlanSnapshot } = require('../../src/services/topology/vlan-membership');
 
 const cx = {
   id: 'd-cx', name: 'Sw-Studio', type: 'switch', vendor: 'aruba', platform: 'aos-cx', ipAddress: '10.0.0.14', managementMode: 'cloud',
@@ -67,10 +68,12 @@ const neighbor = (localPort, chassisId, portId, sysName) => ({
   localPort, chassisId, portId, sysName, mac: chassisId, capabilities: ['bridge'], protocol: 'lldp',
 });
 
-function stubCx(neighbors) {
+function stubCx(neighbors, extra = {}) {
   devicePoller.withCxSession.mockImplementation(async (_device, _creds, fn) => fn({
     getLldpNeighbors: async () => neighbors,
     getLldpIdentity: async () => ({ chassisId: 'ec:67:94:00:20:00', sysName: 'Sw-Studio' }),
+    getVlanMembership: async () => null,
+    ...extra,
   }));
 }
 
@@ -141,12 +144,32 @@ test('a Mist-managed EX with an IP and a credential is read over NETCONF, not th
     neighbors: [neighbor('mge-0/0/0', 'a8:f7:d9:00:60:0b', 'eth0', 'JNAP-01')],
     identity: { chassisId: '4c:4a:b4:00:40:80', sysName: 'JNEX-01' },
   });
-  const result = await topology.collectDevice({
-    id: 'd-ex', name: 'JNEX-01', type: 'switch', vendor: 'juniper', platform: 'junos', ipAddress: '172.16.10.102', managementMode: 'cloud',
+  const vlans = makeVlanSnapshot({ ports: [{ port: 'mge-0/0/0', mode: 'access', untagged: 1 }] });
+  const listNeighbors = jest.fn(async () => new Map([['SN-EX', { neighbors: [], vlans }]]));
+  CloudProviderFactory.forDevice.mockResolvedValue({
+    integration: { id: 'mist-1' }, label: 'Juniper Mist', supports: () => true, listNeighbors,
   });
-  expect(result).toMatchObject({ status: 'ok', neighbors: 1 });
-  expect(CloudProviderFactory.forDevice).not.toHaveBeenCalled();
+  const result = await topology.collectDevice({
+    id: 'd-ex', name: 'JNEX-01', serial: 'SN-EX', type: 'switch', vendor: 'juniper', platform: 'junos', ipAddress: '172.16.10.102', managementMode: 'cloud',
+  });
+  // Links over NETCONF; the cloud is asked only for its port VLAN view.
+  expect(result).toMatchObject({ status: 'ok', source: 'Junos NETCONF', neighbors: 1 });
   expect(sshDevice.getNeighbors).not.toHaveBeenCalled();
+  expect(mockStore.states.get('d-ex')).toMatchObject({ vlans, vlanSource: 'Juniper Mist', vlanError: null });
+});
+
+test('AOS-CX VLANs are stored with the links; a failed VLAN read keeps the last ones', async () => {
+  const vlans = makeVlanSnapshot({ vlans: [{ id: 10, name: 'users' }], ports: [{ port: '1/1/13', mode: 'trunk', untagged: 1, tagged: [10] }] });
+  stubCx([neighbor('1/1/13', '14:ab:ec:00:10:00', '1/1/6', 'Sw-CoreB')], { getVlanMembership: async () => vlans });
+  await topology.collectDevice(cx);
+  expect(mockStore.states.get('d-cx')).toMatchObject({ vlans, vlanSource: 'AOS-CX REST', vlanError: null });
+
+  stubCx([neighbor('1/1/13', '14:ab:ec:00:10:00', '1/1/6', 'Sw-CoreB')], {
+    getVlanMembership: async () => { throw new Error('HTTP 403'); },
+  });
+  const result = await topology.collectDevice(cx);
+  expect(result.status).toBe('ok');
+  expect(mockStore.states.get('d-cx')).toMatchObject({ vlans, vlanSource: 'AOS-CX REST', vlanError: 'HTTP 403' });
 });
 
 test('AOS-S reads over SSH', async () => {
@@ -155,6 +178,8 @@ test('AOS-S reads over SSH', async () => {
     id: 'd-s', name: 'sw-access', type: 'switch', vendor: 'aruba', platform: 'aos-s', ipAddress: '10.0.0.5',
   });
   expect(result).toMatchObject({ status: 'ok', source: 'SSH', neighbors: 1 });
+  // No VLAN source over SSH yet: nothing stored, nothing stale kept.
+  expect(mockStore.states.get('d-s')).toMatchObject({ vlanSource: null, vlanError: null });
 });
 
 test('saveLayout keeps only finite positions', async () => {

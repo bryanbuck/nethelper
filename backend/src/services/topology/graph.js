@@ -10,10 +10,15 @@
  *
  * Edges: one per physical link. A link reported from both ends is merged, so
  * A→B and B→A become one edge with both port names.
+ *
+ * VLAN overlay (vlan-analysis.js): each edge gets `vlans` (carried, pruned,
+ * native mismatch, which ends we have data for), each device node a
+ * `vlans` summary, and the graph a per-VLAN list for the map's picker.
  */
 
 const { normalizeMac } = require('../../utils/device-key');
 const { normalizePortName } = require('./neighbor');
+const { applyVlanOverlay } = require('./vlan-analysis');
 
 const TIER = { gateway: 0, switch: 1, access_point: 2 };
 const GHOST_TIER = { gateway: 0, switch: 1, access_point: 2, phone: 3, host: 3, unknown: 3 };
@@ -118,8 +123,21 @@ function deviceNode(device, state, extra = {}) {
           lastSuccessAt: state.lastSuccessAt,
         }
         : null,
+      vlans: vlanSummary(state),
       ...extra,
     },
+  };
+}
+
+/** A device node's VLAN summary, or null when nothing was ever read. */
+function vlanSummary(state) {
+  if (!state?.vlans && !state?.vlanError) return null;
+  return {
+    ids: (state.vlans?.vlans || []).map((v) => v.id),
+    routed: state.vlans?.routed || [],
+    source: state.vlanSource || null,
+    collectedAt: state.vlanCollectedAt || null,
+    error: state.vlanError || null,
   };
 }
 
@@ -323,12 +341,18 @@ function serializeEdge(e) {
     protocols: e.protocols,
     bidirectional: e.bidirectional,
     lastSeen: e.lastSeen,
+    vlans: e.vlans || null,
   };
 }
 
 function buildGraphJson(input) {
   const graph = buildGraph(input);
-  return { ...graph, edges: graph.edges.map(serializeEdge) };
+  const snapshots = new Map();
+  for (const state of input.states || []) {
+    if (state.vlans) snapshots.set(`device:${state.deviceId}`, state.vlans);
+  }
+  const vlans = applyVlanOverlay(graph, snapshots);
+  return { ...graph, edges: graph.edges.map(serializeEdge), vlans };
 }
 
 module.exports = {

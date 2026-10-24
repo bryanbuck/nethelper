@@ -4,6 +4,7 @@ const WebSocket = require('ws');
 const BaseDeviceAPI = require('./base-device-api');
 const cxLive = require('./cx-live');
 const cxTopology = require('../topology/parsers/aos-cx');
+const { parseCxVlans } = require('../topology/parsers/aos-cx-vlans');
 const logger = require('../../utils/logger');
 
 // One REST version for every call (login, requests, logout, notifications).
@@ -339,23 +340,6 @@ class CXSwitchAPI extends BaseDeviceAPI {
   }
 
   /**
-   * Get VLAN information
-   * @returns {Promise<Object>} VLAN information
-   */
-  async getVLANs() {
-    try {
-      const response = await this.makeAuthenticatedRequest('GET', '/system/vlans');
-      return response;
-    } catch (error) {
-      logger.error('Failed to get CX VLANs', {
-        device: this.device.name,
-        error: error.message,
-      });
-      throw error;
-    }
-  }
-
-  /**
    * Make an authenticated request to the CX switch API
    * @param {string} method - HTTP method (GET, POST, PUT, DELETE)
    *   (options.accept: Accept header; 'text/plain' on /configs/running-config
@@ -502,6 +486,19 @@ class CXSwitchAPI extends BaseDeviceAPI {
   async getLldpIdentity() {
     const system = await this.makeAuthenticatedRequest('GET', '/system?attributes=hostname,system_mac');
     return cxTopology.parseIdentity(system);
+  }
+
+  /**
+   * VLAN membership per port, the VLAN table and the SVIs, for the Network
+   * Map's VLAN overlay (topology/vlan-membership.js). Two GETs.
+   */
+  async getVlanMembership() {
+    const vlans = await this.makeAuthenticatedRequest('GET', '/system/vlans?depth=2&attributes=id,name');
+    const interfaces = await this.makeAuthenticatedRequest(
+      'GET',
+      '/system/interfaces?depth=2&attributes=name,type,vlan_mode,vlan_tag,vlan_trunks,interfaces,routing,ip4_address'
+    );
+    return parseCxVlans({ interfaces, vlans });
   }
 
   /** CPU and memory percentages from the management module. */

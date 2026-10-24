@@ -85,3 +85,10 @@ chunks as received, with `{ "tx": … }` marking what was typed (`no page`,
 detail`). The CLI draws a VT100 screen, so prompts and echoes arrive between
 cursor moves; `tests/unit/ssh-shell.test.js` replays it. See
 `docs/hardware/AOS_S_NOTES.md`.
+
+`aos-cx-vlans.json` is **spec-derived** (AOS-CX 10.10 REST schema), not a
+capture: the two reads behind the Network Map's VLAN overlay
+(`system/vlans` and the interfaces' `vlan_mode`/`vlan_tag`/`vlan_trunks`/LAG
+`interfaces`/`ip4_address`). Reference attributes appear in three shapes on
+purpose (URI, id map, expanded object) because the live shape at `depth=2` is
+unconfirmed. Replace it with `aos-cx-live/interfaces-vlans.json` from the 6200F.

@@ -9,6 +9,7 @@
  * CDP on Cisco) is on by default.
  */
 
+const { Prisma } = require('@prisma/client');
 const { getPrisma } = require('../../config/database');
 const settingsService = require('../settings.service');
 const sshDeviceService = require('../ssh-device.service');
@@ -64,6 +65,21 @@ function emit(event, payload) {
   }
 }
 
+/**
+ * DeviceTopologyState VLAN columns for a successful collection. A failed
+ * VLAN read keeps the last snapshot (and says why); a transport without
+ * VLAN data clears it, so a stale one never outlives a transport change.
+ */
+function vlanState(result, now) {
+  if (result.vlanError) return { vlanError: result.vlanError };
+  return {
+    vlans: result.vlans || Prisma.DbNull,
+    vlanSource: result.vlans ? result.vlanSource || result.source : null,
+    vlanCollectedAt: result.vlans ? now : null,
+    vlanError: null,
+  };
+}
+
 /** Per-collection-run state: one cloud neighbor read per integration. */
 const newRun = () => ({ cloudNeighbors: new Map() });
 
@@ -84,9 +100,29 @@ class TopologyService {
   }
 
   /**
-   * Read one device's neighbor table over the first transport that answers.
+   * VLANs for a cloud-managed device whose links came over a local transport:
+   * the cloud's port view (Mist), from the read the run shares anyway.
+   * `{ vlans: null }` for a direct device or a cloud without one.
+   */
+  async cloudVlans(device, run) {
+    if (device.managementMode !== 'cloud') return { vlans: null };
+    try {
+      const provider = await CloudProviderFactory.forDevice(device);
+      if (!provider.supports('topology')) return { vlans: null };
+      const entry = (await this.cloudNeighbors(provider, run)).get(device.serial);
+      return entry?.vlans ? { vlans: entry.vlans, vlanSource: provider.label } : { vlans: null };
+    } catch (error) {
+      return { vlans: null, vlanError: `${error.message}` };
+    }
+  }
+
+  /**
+   * Read one device's neighbor table over the first transport that answers,
+   * and its VLAN membership where that transport has it (AOS-CX REST, Mist).
+   * `vlans` is a snapshot (vlan-membership.js), or null when the transport
+   * gives none; `vlanError` is set when the VLAN read failed (links still count).
    * @param {Object} [run] - per-run state from collectAll (shared cloud reads)
-   * @returns {Promise<{neighbors: Object[], identity: {chassisId, sysName}, source: string}>}
+   * @returns {Promise<{neighbors: Object[], identity: {chassisId, sysName}, source: string, vlans: Object|null, vlanError?: string}>}
    * @throws {TopologySkip} when no transport can run; other errors are real failures
    */
   async collectNeighbors(device, run = newRun()) {
@@ -116,13 +152,23 @@ class TopologyService {
             } catch (error) {
               logger.debug(`topology: no LLDP identity from ${device.name}: ${error.message}`);
             }
-            return { neighbors, identity, source: 'AOS-CX REST' };
+            let vlans = null;
+            let vlanError;
+            try {
+              vlans = await api.getVlanMembership();
+            } catch (error) {
+              vlanError = error.message;
+              logger.debug(`topology: no VLANs from ${device.name}: ${error.message}`);
+            }
+            return {
+              neighbors, identity, source: 'AOS-CX REST', vlans, vlanError,
+            };
           });
         }
         if (detectPlatform(device) === 'junos') {
           try {
             const result = await new JunosAPI(device, credentials).getLldpTopology();
-            return { ...result, source: 'Junos NETCONF' };
+            return { ...result, source: 'Junos NETCONF', ...(await this.cloudVlans(device, run)) };
           } catch (error) {
             // NETCONF is off by default on Junos; the SSH CLI is next in the matrix.
             if (error.code !== NetconfClient.NETCONF_UNAVAILABLE) throw error;
@@ -147,7 +193,9 @@ class TopologyService {
             skipped.push(`${provider.label} reports the device offline`);
             continue;
           }
-          return { neighbors: entry.neighbors, identity: entry.identity, source: provider.label };
+          return {
+            neighbors: entry.neighbors, identity: entry.identity, source: provider.label, vlans: entry.vlans ?? null,
+          };
         } catch (error) {
           if (error instanceof CapabilityError) {
             skipped.push(error.message);
@@ -163,7 +211,7 @@ class TopologyService {
           continue;
         }
         const result = await sshDeviceService.getNeighbors(device, credentials);
-        return { ...result, source: 'SSH' };
+        return { ...result, source: 'SSH', vlans: null };
       }
     }
 
@@ -211,6 +259,7 @@ class TopologyService {
       neighborCount: result.neighbors.length,
       collectedAt: now,
       lastSuccessAt: now,
+      ...vlanState(result, now),
     };
     await prisma.$transaction([
       ...creates.map((data) => prisma.deviceLink.create({ data: { ...data, deviceId: device.id } })),

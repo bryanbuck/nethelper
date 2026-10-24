@@ -11,10 +11,17 @@
  *
  * Both are the devices' own LLDP tables relayed by the cloud, so the protocol
  * is `lldp`.
+ *
+ * The same port rows carry each switch port's VLANs (`port_mode`, `vlan_ids`:
+ * Mist's effective membership, already resolved from the org/site templates),
+ * and device stats `if_stat` carries the irb interfaces (`vlan`, `ips`). They
+ * become the entry's `vlans` snapshot (topology/vlan-membership.js). A trunk's
+ * `vlan_ids` don't say which VLAN is native, so its untagged VLAN is unknown.
  */
 
 const { makeNeighbor } = require('../neighbor');
 const { normalizeMac } = require('../../../utils/device-key');
+const { makeVlanSnapshot, vlanIds } = require('../vlan-membership');
 
 /** The AP's LLDP entries by local port: `lldp_stats` when present, else `lldp_stat`. */
 function apLldpEntries(stat) {
@@ -24,9 +31,27 @@ function apLldpEntries(stat) {
   return stat.lldp_stat ? [['', stat.lldp_stat]] : [];
 }
 
+/** VLAN membership of one Mist port row, or null for a port without any. */
+function mistPortVlans(port) {
+  const ids = vlanIds(port.vlan_ids);
+  if (!port.port_id || !ids.length) return null;
+  if (port.port_mode === 'trunk') {
+    return { port: port.port_id, mode: 'trunk', tagged: ids, untaggedKnown: false };
+  }
+  if (port.port_mode === 'access') return { port: port.port_id, mode: 'access', untagged: ids[0] };
+  return null;
+}
+
+/** irb addresses from device stats `if_stat` ({ "irb.0": { vlan, ips } }). */
+function mistRouted(stat) {
+  return Object.values(stat.if_stat || {})
+    .filter((entry) => entry?.port_id === 'irb' && entry.vlan !== undefined && entry.up !== false)
+    .map((entry) => ({ vlan: Number(entry.vlan), ip: (entry.ips || [])[0] || null }));
+}
+
 /**
  * @param {{ stats: Object[], ports: Object[] }} input - org device stats and port search results
- * @returns {Map<string, {neighbors: Object[], identity: {chassisId, sysName}, online: boolean}>} by serial
+ * @returns {Map<string, {neighbors: Object[], identity: {chassisId, sysName}, online: boolean, vlans: Object|null}>} by serial
  */
 function parseMistNeighbors({ stats = [], ports = [] }) {
   const bySerial = new Map();
@@ -56,13 +81,17 @@ function parseMistNeighbors({ stats = [], ports = [] }) {
       neighbors,
       identity: { chassisId: mac, sysName: stat.hostname || stat.name || null },
       online: stat.status === 'connected',
+      vlans: null,
+      vlanInput: { ports: [], routed: mistRouted(stat) },
     });
   }
 
   for (const port of ports) {
-    if (!port?.neighbor_mac && !port?.neighbor_system_name) continue;
-    const entry = bySerial.get(serialByMac.get(normalizeMac(port.mac)));
+    const entry = port && bySerial.get(serialByMac.get(normalizeMac(port.mac)));
     if (!entry) continue;
+    const membership = mistPortVlans(port);
+    if (membership) entry.vlanInput.ports.push(membership);
+    if (!port.neighbor_mac && !port.neighbor_system_name) continue;
     const neighbor = makeNeighbor({
       localPort: port.port_id,
       chassisId: port.neighbor_mac,
@@ -74,6 +103,10 @@ function parseMistNeighbors({ stats = [], ports = [] }) {
     if (neighbor) entry.neighbors.push(neighbor);
   }
 
+  for (const entry of bySerial.values()) {
+    entry.vlans = makeVlanSnapshot(entry.vlanInput);
+    delete entry.vlanInput;
+  }
   return bySerial;
 }
 
