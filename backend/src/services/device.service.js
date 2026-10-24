@@ -137,7 +137,7 @@ class DeviceService {
       });
 
       // Map pingStatus to status field for frontend compatibility
-      const rows = devices.map(device => ({
+      const rows = (await this.withCloudChecks(devices)).map(device => ({
         ...device,
         // Ping first, then the cloud; warning when only ping says it's down
         status: effectiveStatus(device),
@@ -156,6 +156,33 @@ class DeviceService {
       logger.error('Get devices error', { error: error.message, stack: error.stack });
       throw error;
     }
+  }
+
+  /**
+   * Rows with cloudCheckedAt brought up to their integration's last status
+   * refresh (CloudStatusCheck) while the cloud reports them online: the
+   * refresh stamps the integration once instead of every row. The env-var
+   * Central fallback's devices have no integration id.
+   */
+  async withCloudChecks(devices) {
+    const keyOf = (device) => device.cloudIntegrationId || ENV_ARUBA_INTEGRATION_ID;
+    const online = devices.filter((d) => d.managementMode === 'cloud' && d.cloudStatus === 'online');
+    if (!online.length) return devices;
+    let checks;
+    try {
+      checks = await getPrisma().cloudStatusCheck.findMany({
+        where: { integrationId: { in: [...new Set(online.map(keyOf))] } },
+      });
+    } catch (error) {
+      logger.warn(`Could not read cloud status checks: ${error.message}`);
+      return devices;
+    }
+    const checkedAt = new Map(checks.map((c) => [c.integrationId, c.checkedAt]));
+    return devices.map((device) => {
+      const stamp = device.managementMode === 'cloud' && device.cloudStatus === 'online' && checkedAt.get(keyOf(device));
+      if (!stamp || (device.cloudCheckedAt && new Date(device.cloudCheckedAt) >= stamp)) return device;
+      return { ...device, cloudCheckedAt: stamp };
+    });
   }
 
   /** Fleet-wide device counts by effective status (utils/device-status.js). */
@@ -215,8 +242,9 @@ class DeviceService {
       if (!device) return null;
       // Same status mapping as getDevices(), so a fetched row matches a listed one.
       // systemPoll tells the device page whether polling the device can work.
+      const [checked] = await this.withCloudChecks([device]);
       return {
-        ...device,
+        ...checked,
         status: effectiveStatus(device),
         systemPoll: localPollAvailability(device),
         sameIpDevices: await this.findSameIpDevices(device),

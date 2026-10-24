@@ -14,6 +14,9 @@
  * or stop reporting (services/cloud/cloud-stream.service.js). A write is
  * conditional on the status it read, so two overlapping refreshes report a
  * change once.
+ *
+ * Each refresh stamps its integration once (CloudStatusCheck) and broadcasts
+ * `cloud:status:checked`; unchanged devices are never written.
  */
 
 const { getPrisma } = require('../config/database');
@@ -42,6 +45,7 @@ const DEVICE_FIELDS = {
 };
 
 const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+const newest = (a, b) => (!a ? b : !b ? a : new Date(a) > new Date(b) ? a : b) || null;
 
 function emit(event, payload) {
   try {
@@ -76,8 +80,9 @@ function statusPatch(device, report, now = new Date()) {
     patch.lastSeen = lastSeen;
   }
   // cloudLastSeen only matters once the device stops being online (until
-  // then cloudCheckedAt, written in bulk, is the newer answer), so it is
+  // then the integration's last refresh is the newer answer), so it is
   // written on status changes and offline reports, not every refresh.
+  // device.cloudCheckedAt is the last time the cloud was read before this one.
   if (statusChanged && report.status === 'online') {
     patch.cloudLastSeen = lastSeen || now;
   } else if (report.status && report.status !== 'online') {
@@ -109,9 +114,12 @@ class CloudStatusService {
 
     const summary = { integrationId: provider.id, name: provider.label, devices: devices.length, updated: 0, statusChanges: 0 };
     const now = new Date();
+    // The previous refresh is when a device going offline now was last seen online.
+    const previous = await getPrisma().cloudStatusCheck.findUnique({ where: { integrationId: provider.id } })
+      .catch(() => null);
     for (const device of devices) {
       const report = statuses.get(device.serial);
-      const patch = statusPatch(device, report, now);
+      const patch = statusPatch({ ...device, cloudCheckedAt: newest(device.cloudCheckedAt, previous?.checkedAt) }, report, now);
       if (!Object.keys(patch).length) continue;
       try {
         const { count } = await getPrisma().device.updateMany({
@@ -149,14 +157,18 @@ class CloudStatusService {
       const status = statuses.get(device.serial)?.status;
       if (status) await deviceEvents.recordStateOnce(device, 'cloud.', status, 'cloud', { provider: provider.providerType });
     }
-    // One write for every device read this time: "the cloud had a status for
-    // it as of now", which the device page uses as the cloud's last sighting
-    // while it reports the device online.
-    if (devices.length) {
-      await getPrisma().device.updateMany({
-        where: { id: { in: devices.map((d) => d.id) } },
-        data: { cloudCheckedAt: now },
-      }).catch((error) => logger.warn(`cloud-status: could not stamp cloudCheckedAt: ${error.message}`));
+    // One write per refresh, not per device: "the cloud had a status for its
+    // devices as of now". The device page uses it as the cloud's last sighting
+    // of a device it reports online (device.service withCloudChecks()).
+    try {
+      await getPrisma().cloudStatusCheck.upsert({
+        where: { integrationId: provider.id },
+        create: { integrationId: provider.id, checkedAt: now },
+        update: { checkedAt: now },
+      });
+      emit('cloud:status:checked', { integrationId: ownerId, checkedAt: now });
+    } catch (error) {
+      logger.warn(`cloud-status: could not stamp ${provider.label}'s refresh: ${error.message}`);
     }
     return summary;
   }

@@ -10,6 +10,7 @@ const rows = [{
 }];
 const matches = (row, where = {}) => Object.entries(where).every(([k, v]) => row[k] === v);
 const mockPrisma = {
+  cloudStatusCheck: { deleteMany: jest.fn(async () => ({ count: 0 })) },
   cloudIntegration: {
     findMany: jest.fn(async ({ where } = {}) => rows.filter((r) => matches(r, where))),
     findFirst: jest.fn(async ({ where } = {}) => rows.find((r) => matches(r, where)) || null),

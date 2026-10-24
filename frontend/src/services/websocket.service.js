@@ -155,6 +155,7 @@ class WebSocketService {
     // Device update events
     this.socket.on('device:update', (data) => this.handleDeviceUpdate(data))
     this.socket.on('device:status:update', (data) => this.handleDeviceStatusUpdate(data))
+    this.socket.on('cloud:status:checked', (data) => this.handleCloudStatusChecked(data))
     this.socket.on('device:api:status', (data) => this.handleDeviceApiStatus(data))
     this.socket.on('device:sync:completed', (data) => this.handleDeviceSyncCompleted(data))
     this.socket.on('device:sync:failed', (data) => this.handleDeviceSyncFailed(data))
@@ -237,6 +238,18 @@ class WebSocketService {
       if (Object.keys(mapPatch).length) this.stores.topology?.applyDeviceStatus(deviceId, mapPatch)
     } catch (error) {
       console.error('Error handling device status update:', error)
+    }
+  }
+
+  /**
+   * A cloud status refresh finished: one event per integration instead of a
+   * cloudCheckedAt per device, so "Confirmed by <cloud>" stays current.
+   */
+  handleCloudStatusChecked(data) {
+    try {
+      this.stores.devices.applyCloudCheck(data.integrationId, data.checkedAt)
+    } catch (error) {
+      console.error('Error handling cloud status check:', error)
     }
   }
 

@@ -49,14 +49,17 @@ const loading = ref(false)
 const error = ref(null)
 
 const run = async () => {
+  const deviceId = props.deviceId
   loading.value = true
   error.value = null
   try {
-    result.value = await deviceService.lookupAddress(props.deviceId)
+    const reply = await deviceService.lookupAddress(deviceId)
+    // Navigated to another device while it ran: the answer isn't about this one.
+    if (deviceId === props.deviceId) result.value = reply
   } catch (err) {
-    error.value = err.userMessage || err.message || 'The lookup failed'
+    if (deviceId === props.deviceId) error.value = err.userMessage || err.message || 'The lookup failed'
   } finally {
-    loading.value = false
+    if (deviceId === props.deviceId) loading.value = false
   }
 }
 
@@ -66,6 +69,7 @@ const ago = (at) => formatDistanceToNow(new Date(at), { addSuffix: true })
 watch(() => props.deviceId, () => {
   result.value = null
   error.value = null
+  loading.value = false
 })
 
 // The MAC holding the address against the device's own is the strongest

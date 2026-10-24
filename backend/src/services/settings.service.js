@@ -596,6 +596,9 @@ class SettingsService {
 
     await this.clearIntegrationCache(integration);
     await prisma.cloudIntegration.delete({ where: { id: integrationId } });
+    // Its status-refresh stamp (cloud-status.service); harmless if left behind.
+    await prisma.cloudStatusCheck.deleteMany({ where: { integrationId } })
+      .catch((error) => logger.warn(`Could not remove the status stamp of integration ${integrationId}: ${error.message}`));
     this.clearSyncAlert(integrationId);
     this.integrationsChanged();
   }
