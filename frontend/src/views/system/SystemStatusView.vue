@@ -42,11 +42,11 @@
           <v-col v-for="tile in tiles" :key="tile.key" cols="12" sm="6" md="4" xl="2">
             <v-card variant="outlined" class="tile">
               <div class="text-caption text-medium-emphasis">{{ tile.label }}</div>
-              <div class="d-flex flex-wrap align-baseline column-gap-2">
+              <div class="d-flex flex-wrap align-baseline ga-2">
                 <span class="text-h5 font-weight-medium">{{ tile.value }}</span>
                 <span v-if="tile.detail" class="text-caption text-medium-emphasis">{{ tile.detail }}</span>
               </div>
-              <div class="d-flex flex-wrap align-center column-gap-4">
+              <div class="d-flex flex-wrap align-center ga-2">
                 <LiveSparkline
                   :points="tile.points"
                   :value-key="tile.key"
