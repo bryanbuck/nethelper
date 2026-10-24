@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY . .
-ARG VITE_APP_VERSION=0.9.0-beta.3
+ARG VITE_APP_VERSION=0.9.0-beta.4
 ENV VITE_APP_VERSION=${VITE_APP_VERSION}
 RUN npm run build
 

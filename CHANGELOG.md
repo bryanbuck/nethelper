@@ -4,6 +4,8 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ## [Unreleased]
 
+## [0.9.0-beta.4] — 2026-10-24
+
 ### Added
 - **VLANs on the Network Map**: pick a VLAN and the map lights the links that carry it, dashes the links where both switches have it but one side doesn't allow it, marks the devices that route it, and outlines devices that carry it but have no layer-2 path to any of them. **VLAN mismatches** marks every link with a VLAN missing on one side or differing untagged VLANs; click a link for its details. VLANs are read with the neighbors on each topology refresh, from AOS-CX switches (over REST) and Mist switches; other platforms show "no VLAN data" rather than a guess. The selected VLAN stays in the address (`?vlan=20`), so a view can be shared.
 - **Activity** page (`/activity`, in the menu): a rolling feed of what happened to your devices lately, newest first, grouped by day. It shows ping and cloud status changes, restarts, config changes found by backups, and device alerts opening and clearing. Port link and PoE changes are available as a filter but off by default, and repeated changes on the same device or port within ten minutes are folded into one "flapping" line. Filter by kind, vendor or device; it updates live. `GET /api/v1/activity`.
@@ -33,7 +35,9 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ### Upgrading from 0.9.0-beta.3
 - Take a database backup first: migrations are forward-only. **Docker Compose**: run `deploy/install.sh` from the new tree (it keeps your `.env` values). **Bare metal**: follow "Upgrading" in [`deploy/README.md`](deploy/README.md).
-- Two migrations: `20261023120000_cloud_status_check` adds the `CloudStatusCheck` table (one row per cloud integration), and `20261023150000_notification_channels` adds `NotificationChannel`.
+- Four migrations: `20261023120000_cloud_status_check` adds the `CloudStatusCheck` table (one row per cloud integration), `20261023150000_notification_channels` adds `NotificationChannel`, `20261024041008_cloud_alarms` adds `CloudAlarm`, and `20261024120000_topology_vlans` adds the VLAN columns to `DeviceTopologyState`.
+- Cloud alarms are on by default (`CLOUD_ALARMS_ENABLED`, `CLOUD_ALARM_INTERVAL`, `CLOUD_ALARM_RETENTION_DAYS`; see [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)).
+- The Network Map shows VLANs after the first topology refresh on the new version (scheduled every 6 hours, or **Refresh topology** on `/map`).
 - Email notifications read `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` and `APP_BASE_URL`. Docker Compose now passes them from `deploy/.env` (see `deploy/.env.example`); on bare metal add them to `/etc/nethelper/backend.env`. `SLACK_WEBHOOK_URL` was never used and is gone from the examples: use a webhook channel instead.
 
 ## [0.9.0-beta.3] — 2026-10-22

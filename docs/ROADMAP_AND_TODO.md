@@ -20,6 +20,7 @@ Hands-on checks that need real equipment, a real host, or a browser login, which
   - After the Vite 8 / vue-router 5 upgrade: sign-in redirect back to the page you asked for, admin-only pages, `/schedule` and `/settings/device-api-testing` redirects, the dev server's live reload.
 - [ ] **Alert notifications, live** (item 2 below): a Test send to a real mailbox and to a Slack or Teams webhook; then unplug a ping-monitored device and check one message on open and one on resolve.
 - [ ] **`deploy/install.sh` on a real Docker host** ("Simpler install" below): a bridge install, a `--host-network` install, and a re-run as an upgrade; check that `docker compose exec -e NAME` passes the variable through. Optionally `nethelper-admin` on bare metal.
+- [ ] **VLAN overlay on hardware** (shipped untested in `v0.9.0-beta.4`; item 3a below): Refresh topology, then check the 6200F's VLANs on `/map` against `show vlan` / `show interface brief`, and capture the two REST replies as `backend/tests/fixtures/aos-cx-live/interfaces-vlans.json`; check the Mist EX's ports, and whether a Mist trunk port lists every allowed VLAN. Then remove a VLAN from a CX uplink's allowed list, refresh, and check that the link turns dashed with the right port named.
 - [ ] **Junos SSH CLI fallback on hardware** (Phase 7 below): connection test, polls and a backup with NETCONF disabled.
 
 ---
