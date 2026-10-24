@@ -14,6 +14,7 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ### Changed
 - **Firmware Status** is linked from the Devices page header; until now it could only be opened by typing its address. Settings drops its two empty tabs (General, Advanced) and gains **Connection Test** (operators and admins): the manual device connection test that used to live at an unlinked address, which now opens this tab. The test was marked "Admin Only" but has always been open to operators. (#25)
+- Frontend toolchain: Vite 8 (Rolldown bundler; production builds take about a fifth of the time), `@vitejs/plugin-vue` 6 and vue-router 5. Production bundles still drop `console.log`/`info`/`debug`, now through Rolldown's pure-function tree-shaking (Vite 8 no longer applies the old esbuild setting). (#39, #40)
 - The dashboard's **Recent Activity** card shows the newest items of the Activity feed. It used to list devices by when they were last seen, and only those on the Devices table page that was loaded.
 
 ### Fixed
