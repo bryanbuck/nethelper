@@ -9,7 +9,7 @@ const getStatus = vi.fn()
 vi.mock('@/services/system.service', () => ({ default: { getStatus } }))
 
 const { appendSample, compactSample, useSystemStore } = await import('@/stores/system')
-const { formatBytes, formatDuration, perMinute, share } = await import('@/models/system')
+const { formatBytes, formatDuration, perMinute, share, peakOf } = await import('@/models/system')
 
 const sample = (at, extra = {}) => ({
   at,
@@ -110,5 +110,13 @@ describe('system display helpers', () => {
     expect(perMinute(10, 5000)).toBe(120)
     expect(share(1, 4)).toBe(25)
     expect(share(1, 0)).toBeNull()
+  })
+
+  it('peakOf finds the highest sample and skips failed reads', () => {
+    const points = [{ at: 't1', cpu: 2 }, { at: 't2', cpu: null }, { at: 't3', cpu: 7 }, { at: 't4', cpu: 5 }]
+    expect(peakOf(points, 'cpu')).toEqual({ value: 7, at: 't3' })
+    expect(peakOf([{ at: 't1', cpu: null }], 'cpu')).toBeNull()
+    expect(peakOf([], 'cpu')).toBeNull()
+    expect(peakOf(undefined, 'cpu')).toBeNull()
   })
 })

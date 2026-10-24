@@ -42,18 +42,27 @@
           <v-col v-for="tile in tiles" :key="tile.key" cols="12" sm="6" md="4" xl="2">
             <v-card variant="outlined" class="tile">
               <div class="text-caption text-medium-emphasis">{{ tile.label }}</div>
-              <div class="d-flex align-baseline ga-2">
+              <div class="d-flex flex-wrap align-baseline ga-2">
                 <span class="text-h5 font-weight-medium">{{ tile.value }}</span>
                 <span v-if="tile.detail" class="text-caption text-medium-emphasis">{{ tile.detail }}</span>
               </div>
-              <LiveSparkline
-                :points="tile.points"
-                :value-key="tile.key"
-                :format="tile.format"
-                :label="tile.label"
-                :width="200"
-                :height="32"
-              />
+              <div class="d-flex flex-wrap align-center ga-2">
+                <LiveSparkline
+                  :points="tile.points"
+                  :value-key="tile.key"
+                  :format="tile.format"
+                  :label="tile.label"
+                  :width="200"
+                  :height="32"
+                />
+                <span
+                  v-if="tile.peak"
+                  class="peak text-subtitle-1"
+                  :title="`Highest in the last hour, at ${shortClock(tile.peak.at)}`"
+                >
+                  peak <span class="font-weight-medium">{{ tile.format(tile.peak.value) }}</span>
+                </span>
+              </div>
             </v-card>
           </v-col>
         </v-row>
@@ -281,7 +290,7 @@ import { useWebSocket } from '@/composables/useWebSocket'
 import LiveSparkline from '@/components/devices/LiveSparkline.vue'
 import {
   formatBytes, formatDuration, formatNumber, formatPercent, formatMs,
-  perMinute, share, queueLabel, STREAM_STATE_COLORS
+  perMinute, peakOf, share, queueLabel, STREAM_STATE_COLORS
 } from '@/models/system'
 
 useWebSocket()
@@ -342,7 +351,7 @@ const tiles = computed(() => {
       format: formatNumber
     },
     { key: 'backlog', label: 'Queue backlog', value: formatNumber(c.queueBacklog), detail: 'waiting + active + delayed', points, format: formatNumber }
-  ]
+  ].map((tile) => ({ ...tile, peak: peakOf(tile.points, tile.key) }))
 })
 
 const httpLine = computed(() => {
@@ -386,6 +395,7 @@ function ago(iso) {
   return `${formatDuration(seconds)} ago`
 }
 const shortTime = (iso) => (iso ? new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—')
+const shortClock = (iso) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—')
 const fullTime = (iso) => (iso ? new Date(iso).toLocaleString() : '')
 </script>
 
@@ -404,6 +414,14 @@ const fullTime = (iso) => (iso ? new Date(iso).toLocaleString() : '')
 .tile {
   padding: 12px 14px 8px;
   overflow: hidden;
+}
+/* Peak over the history window: accent color, a step smaller than the value. */
+.peak {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  white-space: nowrap;
+}
+.peak > span {
+  color: rgb(var(--v-theme-primary-text));
 }
 
 .facts {

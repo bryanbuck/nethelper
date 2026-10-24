@@ -46,6 +46,21 @@ export function perMinute(count, intervalMs) {
   return (count * 60000) / intervalMs
 }
 
+/**
+ * The highest `point[key]` in a series and when it was sampled, or null when
+ * no point has a value. A null sample is a failed read, not a zero, so it is
+ * skipped.
+ */
+export function peakOf(points, key) {
+  let peak = null
+  for (const point of points || []) {
+    const value = point?.[key]
+    if (value == null || !Number.isFinite(value)) continue
+    if (!peak || value > peak.value) peak = { value, at: point.at }
+  }
+  return peak
+}
+
 /** used / total as a percentage, or null when either is unknown. */
 export function share(used, total) {
   return used == null || !total ? null : (used / total) * 100
