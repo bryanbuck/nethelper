@@ -44,6 +44,17 @@
               <div class="text-caption text-medium-emphasis">{{ tile.label }}</div>
               <div class="d-flex flex-wrap align-baseline column-gap-2">
                 <span class="text-h5 font-weight-medium">{{ tile.value }}</span>
+                <span v-if="tile.detail" class="text-caption text-medium-emphasis">{{ tile.detail }}</span>
+              </div>
+              <div class="d-flex flex-wrap align-center column-gap-4">
+                <LiveSparkline
+                  :points="tile.points"
+                  :value-key="tile.key"
+                  :format="tile.format"
+                  :label="tile.label"
+                  :width="200"
+                  :height="32"
+                />
                 <span
                   v-if="tile.peak"
                   class="peak text-subtitle-1"
@@ -51,16 +62,7 @@
                 >
                   peak <span class="font-weight-medium">{{ tile.format(tile.peak.value) }}</span>
                 </span>
-                <span v-if="tile.detail" class="text-caption text-medium-emphasis">{{ tile.detail }}</span>
               </div>
-              <LiveSparkline
-                :points="tile.points"
-                :value-key="tile.key"
-                :format="tile.format"
-                :label="tile.label"
-                :width="200"
-                :height="32"
-              />
             </v-card>
           </v-col>
         </v-row>
