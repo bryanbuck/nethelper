@@ -6,6 +6,24 @@ The single forward-looking backlog for NetHelper: features and improvements plan
 - **Project conventions** live in [`../CLAUDE.md`](../CLAUDE.md).
 - **Hardware facts** the code depends on live in [`hardware/`](hardware/). Superseded point-in-time docs were deleted on 2026-10-19; git history has them.
 
+## 🧑‍🔧 Waiting on the maintainer
+
+Hands-on checks that need real equipment, a real host, or a browser login, which development sessions can't do themselves. Each item names where its details live; tick it here and update that place when done. Add new ones here rather than only inside a feature's section.
+
+- [ ] **Browser click-through of the beta.4 sprint** (added 2026-10-23):
+  - Device page: the Last Seen card keeps "Confirmed by <cloud> N minutes ago" current with the page left open (#46/#50); switching the History range quickly never shows the wrong window (#52).
+  - Dashboard: the status cards follow a device going offline/online within seconds, without a full reload every 30 s (#51).
+  - Settings → API Credentials: the credential test dialog lists the right devices (#51).
+  - Devices page: Groups (create, rename, delete, "Show devices"), the table's Group bulk action and Group filter, and the automation builder's group pickers listing them (#26); Firmware Status button and its Recorded versions card, the header on a narrow window (#25).
+  - Settings: Connection Test tab (operator/admin), Notifications tab (admin) (#25, item 2).
+  - Icons on the device page buttons have their gap back (#27).
+  - After the Vite 8 / vue-router 5 upgrade: sign-in redirect back to the page you asked for, admin-only pages, `/schedule` and `/settings/device-api-testing` redirects, the dev server's live reload.
+- [ ] **Alert notifications, live** (item 2 below): a Test send to a real mailbox and to a Slack or Teams webhook; then unplug a ping-monitored device and check one message on open and one on resolve.
+- [ ] **`deploy/install.sh` on a real Docker host** ("Simpler install" below): a bridge install, a `--host-network` install, and a re-run as an upgrade; check that `docker compose exec -e NAME` passes the variable through. Optionally `nethelper-admin` on bare metal.
+- [ ] **Junos SSH CLI fallback on hardware** (Phase 7 below): connection test, polls and a backup with NETCONF disabled.
+
+---
+
 > Context: NetHelper is now **multi-vendor** (Aruba/Juniper/Cisco) with a `cloud`/`direct` management model. Some items below were written in the earlier Aruba-Central-only era; where they still apply, read "Aruba Central" as "any cloud provider" and "central/direct" as "cloud/direct." Corrected inline where it matters.
 
 ---
