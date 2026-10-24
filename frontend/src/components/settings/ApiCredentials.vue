@@ -375,7 +375,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useAuthStore } from '@/stores/auth'
-import { useDevicesStore } from '@/stores/devices'
+import settingsService from '@/services/settings.service'
 import { useNotificationsStore } from '@/stores/notifications'
 import { format } from 'date-fns'
 import debugLog, { DebugCategory } from '@/utils/debug'
@@ -385,7 +385,6 @@ const settingsStore = useSettingsStore()
 const authStore = useAuthStore()
 // Adding, editing, deleting and testing credentials are operator+
 const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole))
-const devicesStore = useDevicesStore()
 const notificationStore = useNotificationsStore()
 
 // Table headers
@@ -591,9 +590,11 @@ const testCredential = async (item) => {
   showTestDialog.value = true
 
   try {
-    // Load devices that are using this credential
-    const allDevices = devicesStore.devices
-    devicesUsingCredential.value = allDevices.filter(d => d.apiCredentialId === item.id)
+    // Only this credential's devices, read when the dialog opens (not the
+    // whole inventory on every Settings visit)
+    const response = await settingsService.getApiCredential(item.id)
+    if (itemToTest.value?.id !== item.id) return
+    devicesUsingCredential.value = response?.data?.devices || item.devices || []
   } catch (error) {
     debugLog.error(DebugCategory.SETTINGS, 'Failed to load devices for test:', error)
     notificationStore.showError('Failed to load devices')
@@ -653,9 +654,6 @@ onMounted(async () => {
   try {
     // Load credentials
     await settingsStore.fetchApiCredentials()
-
-    // The test dialog lists every device using a credential
-    await devicesStore.ensureAllDevices()
   } catch (error) {
     debugLog.error(DebugCategory.SETTINGS, 'Failed to load settings data:', error)
 

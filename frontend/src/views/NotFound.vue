@@ -27,7 +27,7 @@
               class="mr-4"
               @click="goHome"
             >
-              <v-icon left>mdi-home</v-icon>
+              <v-icon start>mdi-home</v-icon>
               Go Home
             </v-btn>
             
@@ -36,7 +36,7 @@
               size="large"
               @click="goBack"
             >
-              <v-icon left>mdi-arrow-left</v-icon>
+              <v-icon start>mdi-arrow-left</v-icon>
               Go Back
             </v-btn>
           </v-card-text>

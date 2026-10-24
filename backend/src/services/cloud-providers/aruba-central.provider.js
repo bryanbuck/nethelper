@@ -579,22 +579,6 @@ class ArubaCentralProvider extends BaseCloudProvider {
     this.unsupported('config-backup', 'classic /configuration/v2 endpoints are unverified on New Central tenants');
   }
 
-  async updateDeviceConfiguration(serial, configuration) { // eslint-disable-line no-unused-vars
-    this.unsupported('config-write', 'classic /configuration/v2 endpoints are unverified on New Central tenants');
-  }
-
-  async backupConfiguration(serial) { // eslint-disable-line no-unused-vars
-    this.unsupported('config-backup', 'classic /configuration/v2 endpoints are unverified on New Central tenants');
-  }
-
-  async executeCommand(serial, command) { // eslint-disable-line no-unused-vars
-    this.unsupported('command-execution', 'classic /troubleshooting/v1 endpoints are unverified on New Central tenants');
-  }
-
-  async getDeviceStats(serial, metric, duration) { // eslint-disable-line no-unused-vars
-    this.unsupported('stats', 'classic /monitoring/v2 endpoints are unverified on New Central tenants');
-  }
-
   /** Wrap axios errors with the Aruba-specific parser (user-friendly message + actions). */
   enhanceError(error, context) {
     if (error.name === 'CapabilityError') return error;

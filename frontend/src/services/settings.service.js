@@ -247,61 +247,6 @@ const settingsService = {
   // General Settings (for future expansion)
   // ============================================
 
-  /**
-   * Get all application settings
-   * @returns {Promise} Application settings
-   */
-  async getSettings() {
-    try {
-      const response = await api.get('/settings')
-      return response.data
-    } catch (error) {
-      throw handleApiError(error, 'fetching settings')
-    }
-  },
-
-  /**
-   * Update application settings
-   * @param {Object} settings - Settings to update
-   * @returns {Promise} Updated settings
-   */
-  async updateSettings(settings) {
-    try {
-      const response = await api.put('/settings', settings)
-      return response.data
-    } catch (error) {
-      throw handleApiError(error, 'updating settings')
-    }
-  },
-
-  /**
-   * Get a specific setting by key
-   * @param {string} key - Setting key
-   * @returns {Promise} Setting value
-   */
-  async getSetting(key) {
-    try {
-      const response = await api.get(`/settings/${key}`)
-      return response.data
-    } catch (error) {
-      throw handleApiError(error, 'fetching setting')
-    }
-  },
-
-  /**
-   * Update a specific setting
-   * @param {string} key - Setting key
-   * @param {*} value - Setting value
-   * @returns {Promise} Updated setting
-   */
-  async updateSetting(key, value) {
-    try {
-      const response = await api.put(`/settings/${key}`, { value })
-      return response.data
-    } catch (error) {
-      throw handleApiError(error, 'updating setting')
-    }
-  },
 }
 
 export default settingsService

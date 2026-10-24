@@ -60,7 +60,7 @@ There's no self-signup. The first admin is created on the server (see `deploy/RE
 |---|---|
 | Viewer | See inventory, status, discovery results, and backup history (not backup contents) |
 | Operator | Everything a viewer can, plus: add and edit devices and their credentials, run discovery, backups, and connection tests, view and diff backup contents |
-| Admin | Everything an operator can, plus: manage users, cloud integrations, and the Git mirror; delete devices, backups, and scans; run device commands |
+| Admin | Everything an operator can, plus: manage users, cloud integrations, and the Git mirror; delete devices, backups, and scans |
 
 Deleting a user keeps everything they set up (integrations, credentials, the Git mirror config, automations). Ownership moves to the admin who deleted them.
 

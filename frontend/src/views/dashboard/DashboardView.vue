@@ -177,7 +177,7 @@ const devicesStore = useDevicesStore()
 const authStore = useAuthStore()
 const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole))
 // Keeps the shared socket open while this page is mounted
-useWebSocket()
+const { on: onSocket, off: offSocket } = useWebSocket()
 
 const snackbar = ref({
   show: false,
@@ -316,39 +316,60 @@ const showSnackbar = (message, color = 'success') => {
   }
 }
 
+// The cards only need counts: the server's fleet-wide summary, refetched
+// shortly after status changes and syncs arrive over the socket. The timed
+// refresh is a safety net, paused while the tab is hidden.
+const SAFETY_REFRESH_MS = 5 * 60 * 1000
+let lastRefresh = 0
+let summaryTimer = null
+
+const refreshSummary = async ({ trend = false } = {}) => {
+  clearTimeout(summaryTimer)
+  if (trend) previousStats.value = { ...devicesStore.stats }
+  lastRefresh = Date.now()
+  await devicesStore.fetchStatusSummary()
+}
+const refreshSummarySoon = () => {
+  clearTimeout(summaryTimer)
+  summaryTimer = setTimeout(() => refreshSummary().catch(() => {}), 3000)
+}
+const refreshIfStale = () => {
+  if (document.visibilityState === 'visible' && Date.now() - lastRefresh >= SAFETY_REFRESH_MS) {
+    refreshSummary({ trend: true }).catch(() => {})
+  }
+}
+
 const startAutoRefresh = () => {
-  refreshInterval.value = setInterval(async () => {
-    if (!devicesStore.loading) {
-      previousStats.value = { ...devicesStore.stats }
-      await devicesStore.fetchDevices()
-    }
-  }, 30000)
+  refreshInterval.value = setInterval(refreshIfStale, SAFETY_REFRESH_MS)
+  document.addEventListener('visibilitychange', refreshIfStale)
 }
 
 // A cloud sync job finished: show its additions now rather than at the next tick.
-watch(() => devicesStore.lastSyncResult, () => {
-  devicesStore.fetchDevices().catch(() => {})
-})
+watch(() => devicesStore.lastSyncResult, refreshSummarySoon)
+onSocket('device:status:update', refreshSummarySoon)
 
 const stopAutoRefresh = () => {
   if (refreshInterval.value) {
     clearInterval(refreshInterval.value)
     refreshInterval.value = null
   }
+  document.removeEventListener('visibilitychange', refreshIfStale)
 }
 
 onMounted(async () => {
   try {
-    await devicesStore.fetchDevices()
+    await refreshSummary()
     previousStats.value = { ...devicesStore.stats }
-    startAutoRefresh()
   } catch (error) {
     showSnackbar('Failed to load dashboard data', 'error')
   }
+  startAutoRefresh()
 })
 
 onUnmounted(() => {
   stopAutoRefresh()
+  clearTimeout(summaryTimer)
+  offSocket('device:status:update', refreshSummarySoon)
 })
 </script>
 

@@ -56,7 +56,7 @@
                 :loading="testingConnection"
                 @click="testDirectConnection"
               >
-                <v-icon left>mdi-connection</v-icon>
+                <v-icon start>mdi-connection</v-icon>
                 Test Connection
               </v-btn>
               <v-btn
@@ -66,7 +66,7 @@
                 :loading="systemLoading"
                 @click="refreshSystemInfo"
               >
-                <v-icon left>mdi-refresh</v-icon>
+                <v-icon start>mdi-refresh</v-icon>
                 Refresh System Info
               </v-btn>
               <v-btn
@@ -76,7 +76,7 @@
                 :loading="backupRunning"
                 @click="backUpNow"
               >
-                <v-icon left>mdi-backup-restore</v-icon>
+                <v-icon start>mdi-backup-restore</v-icon>
                 Back Up Now
               </v-btn>
               <v-btn
@@ -85,7 +85,7 @@
                 variant="tonal"
                 @click="editDialog = true"
               >
-                <v-icon left>mdi-pencil</v-icon>
+                <v-icon start>mdi-pencil</v-icon>
                 Edit
               </v-btn>
             </div>
@@ -249,7 +249,7 @@
             <v-card-text>
               <div class="text-overline text-grey">Location</div>
               <div class="text-h6">{{ device.location || 'N/A' }}</div>
-              <v-icon left size="small" class="text-grey mt-1">mdi-map-marker</v-icon>
+              <v-icon size="small" class="text-grey mt-1">mdi-map-marker</v-icon>
             </v-card-text>
           </v-card>
         </v-col>
@@ -292,7 +292,7 @@
           <v-card>
             <v-card-title class="d-flex align-center justify-space-between">
               <div>
-                <v-icon left>mdi-information</v-icon>
+                <v-icon start>mdi-information</v-icon>
                 System Information
               </div>
               <div v-if="systemData?.timestamp" class="text-caption text-grey">
@@ -494,7 +494,7 @@
                 class="mt-4"
                 @click="refreshSystemInfo"
               >
-                <v-icon left>mdi-refresh</v-icon>
+                <v-icon start>mdi-refresh</v-icon>
                 Refresh System Info
               </v-btn>
             </v-card-text>
@@ -507,7 +507,7 @@
         <v-col cols="12" md="6">
           <v-card>
             <v-card-title>
-              <v-icon left>mdi-information-outline</v-icon>
+              <v-icon start>mdi-information-outline</v-icon>
               Device Details
             </v-card-title>
             <v-divider />

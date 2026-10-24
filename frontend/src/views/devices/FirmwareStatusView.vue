@@ -4,7 +4,7 @@
       <v-col cols="12">
         <v-card>
           <v-card-title class="d-flex align-center">
-            <v-icon left>mdi-chip</v-icon>
+            <v-icon start>mdi-chip</v-icon>
             Firmware Status
             <v-spacer></v-spacer>
             <v-btn
@@ -14,7 +14,7 @@
               :disabled="loading"
               @click="pollFirmware"
             >
-              <v-icon left>mdi-refresh</v-icon>
+              <v-icon start>mdi-refresh</v-icon>
               Poll All Switches
             </v-btn>
           </v-card-title>
@@ -24,7 +24,7 @@
             <v-alert
               v-if="firmwareError"
               type="error"
-              dismissible
+              closable
               class="mb-4"
               @click:close="firmwareError = null"
             >
@@ -94,7 +94,7 @@
                     :disabled="firmwareData.length === 0"
                     @click="exportToCSV"
                   >
-                    <v-icon left>mdi-download</v-icon>
+                    <v-icon start>mdi-download</v-icon>
                     Export CSV
                   </v-btn>
                 </v-toolbar>
