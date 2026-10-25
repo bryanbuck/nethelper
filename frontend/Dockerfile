@@ -12,7 +12,7 @@ ARG VITE_APP_VERSION=0.9.0-beta.4
 ENV VITE_APP_VERSION=${VITE_APP_VERSION}
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+FROM nginxinc/nginx-unprivileged:1.30-alpine
 ENV BACKEND_UPSTREAM=backend:3000
 COPY nginx/security-headers.conf /etc/nginx/snippets/nethelper-security-headers.conf
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
