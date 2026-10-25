@@ -4,6 +4,10 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ## [Unreleased]
 
+### Security
+- Backend: `body-parser` 1.20.9, fixing a denial of service from extra bytes after a compressed request body (GHSA-27r3-jxmh-p828, high). Bull's `uuid` is held at 11.1.1 (GHSA-w5hq-g745-h8pq, moderate; Bull calls only `v4()`, so it was not reachable). `npm audit` is clean in both tiers.
+- Frontend image: nginx 1.30 (stable) instead of 1.27, whose image had not been rebuilt since June 2025 and so carried 16 months of unpatched nginx and Alpine fixes.
+
 ## [0.9.0-beta.4] — 2026-10-24
 
 ### Added

@@ -62,5 +62,10 @@
       "<rootDir>/tests/setup-env.js"
     ],
     "clearMocks": true
+  },
+  "overrides": {
+    "bull": {
+      "uuid": "^11.1.1"
+    }
   }
 }
