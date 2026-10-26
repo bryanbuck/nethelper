@@ -123,6 +123,18 @@
         </v-alert>
       </v-col>
     </v-row>
+    <!-- Not pinged: the address belongs to another device now (ping monitor) -->
+    <v-row v-else-if="device && addressHeldBy">
+      <v-col cols="12">
+        <v-alert type="info" variant="tonal" icon="mdi-lan-pending">
+          NetHelper doesn't ping this device:
+          <router-link :to="`/devices/${addressHeldBy.id}`" class="font-weight-medium">{{ addressHeldBy.name }}</router-link>
+          has the same IP address ({{ device.ipAddress }}) and {{ addressHeldBy.why }}, so it is what answers.
+          {{ cloudPlaneName }} reports this device offline and still lists its last known address.
+          <div v-if="cloudConnectionNote" class="mt-1">{{ cloudConnectionNote }}</div>
+        </v-alert>
+      </v-col>
+    </v-row>
     <v-row v-else-if="device && cloudConnectionNote">
       <v-col cols="12">
         <v-alert type="warning" variant="tonal" icon="mdi-cloud-alert">
@@ -896,24 +908,36 @@ const cloudStatusWarning = computed(() => {
     }
   }
   if (answersPingButCloudOffline(device.value)) {
-    // A device here with the same IP that is up explains the ping reply.
-    const others = sameIpDevices.value
-    const other = others.find((d) => d.cloudStatus === 'online' && d.managementMode === 'cloud')
-      || others.find((d) => d.status === 'online')
     return {
       title: `${plane} reports it offline, but its address answers ping`,
       text: 'Another device may now use this IP address.',
       lookup: true,
-      answeredBy: other && {
-        id: other.id,
-        name: other.name,
-        why: other.managementMode === 'cloud' && other.cloudStatus === 'online'
-          ? `${cloudProviderLabel(other.cloudIntegration?.provider)} reports it online`
-          : 'it is online',
-      },
+      answeredBy: answeringDevice(),
     }
   }
   return null
+})
+
+// A device here with the same IP that is up explains a ping reply.
+function answeringDevice() {
+  const others = sameIpDevices.value
+  const other = others.find((d) => d.cloudStatus === 'online' && d.managementMode === 'cloud')
+    || others.find((d) => d.status === 'online')
+  return other && {
+    id: other.id,
+    name: other.name,
+    why: other.managementMode === 'cloud' && other.cloudStatus === 'online'
+      ? `${cloudProviderLabel(other.cloudIntegration?.provider)} reports it online`
+      : 'it is online',
+  }
+}
+
+// The ping monitor gave its address to another device (no ping result while
+// its cloud reports it offline and a device with its IP can be answering).
+const addressHeldBy = computed(() => {
+  const d = device.value
+  if (!d || d.managementMode !== 'cloud' || d.cloudStatus !== 'offline' || d.pingStatus) return null
+  return answeringDevice() || null
 })
 
 const cloudConnectionNote = computed(() => {

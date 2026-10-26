@@ -5,6 +5,40 @@ const alertService = require('./alert.service');
 const deviceEvents = require('./device-events.service');
 const { effectiveStatus } = require('../utils/device-status');
 
+// Could be what answers its address: directly managed, or its cloud sees it.
+const canAnswer = (d) => d.managementMode !== 'cloud' || d.cloudStatus === 'online';
+
+/**
+ * Split a sweep's devices into those to ping and those that step aside
+ * because another device holds their address. A cloud-managed device its
+ * cloud reports offline, sharing its IP with a device that can be answering
+ * (directly managed, or its cloud reports it online), isn't pinged: the reply
+ * belongs to the other one (a cloud keeps an offline device's last IP after
+ * another device took it). Its ping result is cleared instead, so its status
+ * is the cloud's `offline` rather than `warning`. Any other shared address
+ * (every holder offline, or plain duplicates) is pinged for each device as
+ * before.
+ * @returns {{ toPing: Object[], stepAside: Array<{ device: Object, answeredBy: Object }> }}
+ */
+function splitSharedAddresses(devices) {
+  const byIp = new Map();
+  for (const d of devices) byIp.set(d.ipAddress, [...(byIp.get(d.ipAddress) || []), d]);
+  const toPing = [];
+  const stepAside = [];
+  for (const group of byIp.values()) {
+    const answering = group.find((d) => d.managementMode === 'cloud' && d.cloudStatus === 'online')
+      || group.find(canAnswer);
+    for (const d of group) {
+      if (answering && d.managementMode === 'cloud' && d.cloudStatus === 'offline') {
+        stepAside.push({ device: d, answeredBy: { id: answering.id, name: answering.name } });
+      } else {
+        toPing.push(d);
+      }
+    }
+  }
+  return { toPing, stepAside };
+}
+
 class PingMonitorService {
   constructor() {
     this.config = {
@@ -109,19 +143,27 @@ class PingMonitorService {
         return;
       }
 
-      logger.info(`Starting ping check for ${devices.length} devices`);
+      const { toPing, stepAside } = splitSharedAddresses(devices);
+      for (const { device, answeredBy } of stepAside) {
+        await this.stepAside(device, answeredBy).catch((error) => {
+          logger.error(`Error clearing the ping result of ${device.name}:`, error);
+        });
+      }
+
+      logger.info(`Starting ping check for ${toPing.length} devices${stepAside.length ? ` (${stepAside.length} not pinged: another device holds their address)` : ''}`);
 
       // Reset stats
       this.lastCheckStats = {
-        total: devices.length,
+        total: toPing.length,
         successful: 0,
         failed: 0,
+        notPinged: stepAside.length,
         timestamp: new Date(),
       };
 
       // Process devices in batches
-      for (let i = 0; i < devices.length; i += this.config.batchSize) {
-        const batch = devices.slice(i, i + this.config.batchSize);
+      for (let i = 0; i < toPing.length; i += this.config.batchSize) {
+        const batch = toPing.slice(i, i + this.config.batchSize);
 
         await Promise.all(
           batch.map(async (device) => {
@@ -142,7 +184,7 @@ class PingMonitorService {
         );
 
         // Small delay between batches to avoid overwhelming the network
-        if (i + this.config.batchSize < devices.length) {
+        if (i + this.config.batchSize < toPing.length) {
           await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
@@ -242,6 +284,25 @@ class PingMonitorService {
   }
 
   /**
+   * A device another one holds the address of (splitSharedAddresses): clear
+   * its ping result, once, so its displayed status is its cloud's. Its ping
+   * alert is moot (the cloud-offline rule covers it), and the History tab's
+   * ping lane shows "no data" from here on (`ping.unknown`, naming the device
+   * that answers).
+   */
+  async stepAside(device, answeredBy) {
+    if (device.pingStatus === null && !device.consecutiveFailures) return;
+    await getPrisma().device.update({
+      where: { id: device.id },
+      data: { pingStatus: null, pingResponseTime: null, consecutiveFailures: 0, pingLastChecked: new Date() },
+    });
+    logger.info(`Device ${device.name} not pinged: ${answeredBy.name} holds its address ${device.ipAddress}`);
+    this.emitStatusUpdate(device.id, device.name, null, null, device);
+    alertService.clear('device.offline', { subjectKey: device.id, deviceId: device.id });
+    await deviceEvents.recordStateIfChanged({ id: device.id, name: device.name }, 'ping.', 'unknown', 'ping', { answeredBy });
+  }
+
+  /**
    * Record a settled ping state (online/offline) as a DeviceEvent for the
    * device's history: on every change, and once per device per process.
    * 'warning' (a missed check or two) is not one, so a blip that recovers
@@ -321,3 +382,4 @@ class PingMonitorService {
 }
 
 module.exports = new PingMonitorService();
+module.exports.splitSharedAddresses = splitSharedAddresses;

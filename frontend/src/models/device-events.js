@@ -25,6 +25,8 @@ export const DEVICE_EVENTS = {
   'device.restarted': { label: 'Restarted', icon: 'mdi-restart', color: 'warning' },
   'ping.online': { label: 'Answers ping', icon: 'mdi-lan-check', color: 'success' },
   'ping.offline': { label: 'Stopped answering ping', icon: 'mdi-lan-disconnect', color: 'error' },
+  // Another device holds its address, so NetHelper stopped pinging it
+  'ping.unknown': { label: 'Not pinged: another device has its address', icon: 'mdi-lan-pending', color: 'medium-emphasis' },
 }
 
 export const EVENT_SOURCE_LABELS = {
