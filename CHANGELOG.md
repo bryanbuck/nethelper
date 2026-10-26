@@ -15,6 +15,9 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 - `automation:completed` socket events carry the run's `deviceId`, like `automation:started`.
 - Dependency updates: Vuetify 3.13.7, Chart.js 4.6.1, Sass 1.106, ESLint 9.39 (frontend); nodemailer 10.2.1, dotenv 18.0.9 (backend).
 
+### Fixed
+- Dashboard: the four status tiles had text close to their fill color: dark text on the Classic theme's blue, green and red tiles, white on the Dark theme's green, red and yellow ones, and a View Details link in the tile's own color. Each tile now uses black or white text, whichever reads better on its fill.
+
 ### Security
 - Changing your password, or an admin resetting it (Users page or `npm run user:manage`), now ends every other session at once. Before, access tokens already issued kept working for up to an hour (`JWT_EXPIRES_IN`). Open real-time connections from those sessions are dropped too. Tokens issued before the upgrade stay valid until they expire.
 - Backend: `body-parser` 1.20.9, fixing a denial of service from extra bytes after a compressed request body (GHSA-27r3-jxmh-p828, high). Bull's `uuid` is held at 11.1.1 (GHSA-w5hq-g745-h8pq, moderate; Bull calls only `v4()`, so it was not reachable). `npm audit` is clean in both tiers.

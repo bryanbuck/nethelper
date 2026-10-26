@@ -7,6 +7,7 @@ import {
 } from '@/utils/theme-preference'
 import { defaultsForTheme, classicDefaults } from '@/plugins/theme-defaults'
 import { themes } from '@/plugins/themes'
+import { contrastRatio as contrast, blend, readableOn } from '@/utils/contrast'
 
 describe('theme preference', () => {
   beforeEach(() => localStorage.clear())
@@ -41,22 +42,8 @@ describe('theme defaults', () => {
   })
 })
 
-// WCAG relative luminance contrast between two #rrggbb colors.
-function contrast(a, b) {
-  const lum = (hex) => {
-    const [r, g, bl] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
-      .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
-    return 0.2126 * r + 0.7152 * g + 0.0722 * bl
-  }
-  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x)
-  return (hi + 0.05) / (lo + 0.05)
-}
-
 // A tonal alert or chip: its text color over a 12% tint of itself.
-function tint(fg, bg, alpha = 0.12) {
-  const ch = (hex, i) => parseInt(hex.slice(i, i + 2), 16)
-  return '#' + [1, 3, 5].map((i) => Math.round(ch(bg, i) * (1 - alpha) + ch(fg, i) * alpha).toString(16).padStart(2, '0')).join('')
-}
+const tint = (fg, bg, alpha = 0.12) => blend(fg, bg, alpha)
 
 describe('theme foreground contrast', () => {
   for (const [id, theme] of Object.entries(themes)) {
@@ -76,4 +63,19 @@ describe('theme foreground contrast', () => {
     expect(themes.light.colors.primary).toBe('#FF8300')
     expect(themes.light.colors['on-primary']).toBe('#FFFFFF')
   })
+})
+
+// Dashboard tiles (StatsCard): text on a card filled with a status color, in
+// the color readableOn() picks; the title and trend at 92% opacity (StatsCard .stats-secondary).
+describe('filled tile text', () => {
+  for (const [id, theme] of Object.entries(themes)) {
+    for (const color of ['primary', 'success', 'error', 'warning']) {
+      it(`${id}: text on a ${color} tile is readable`, () => {
+        const fill = theme.colors[color]
+        const text = readableOn(fill)
+        expect(contrast(text, fill)).toBeGreaterThanOrEqual(4.5)
+        expect(contrast(blend(text, fill, 0.92), fill)).toBeGreaterThanOrEqual(4.5)
+      })
+    }
+  }
 })
