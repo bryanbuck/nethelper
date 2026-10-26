@@ -7,11 +7,12 @@ import StatusBar from '@/components/common/StatusBar.vue'
 import ChangePasswordDialog from '@/components/common/ChangePasswordDialog.vue'
 import AlertBell from '@/components/common/AlertBell.vue'
 import { THEMES, writeThemePreference } from '@/utils/theme-preference'
-import { defaultsForTheme } from '@/plugins/theme-defaults'
+import { appDefaults } from '@/plugins/theme-defaults'
 
 const theme = useTheme()
 // Phones: the theme picker moves into the account menu so the title fits.
 const { xs } = useDisplay()
+const themeDefaults = computed(() => appDefaults(theme.global.name.value, xs.value))
 const route = useRoute()
 const authStore = useAuthStore()
 
@@ -24,7 +25,6 @@ const isAuthPage = computed(() => {
 })
 
 const currentTheme = computed(() => THEMES.find((t) => t.id === theme.global.name.value) || THEMES[0])
-const themeDefaults = computed(() => defaultsForTheme(theme.global.name.value))
 // The global VBtn default is color: 'primary', which vanishes on the primary app
 // bar. Vuetify has no text-on-* class, so pass the token as a CSS color.
 const onPrimary = 'rgb(var(--v-theme-on-primary))'

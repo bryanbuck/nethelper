@@ -30,7 +30,7 @@
       No channels yet. Alerts show in the app only.
     </div>
 
-    <v-table v-else density="comfortable" class="table-stack mt-2">
+    <v-table v-else class="table-stack mt-2">
       <thead>
         <tr>
           <th>Name</th>

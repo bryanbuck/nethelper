@@ -59,7 +59,7 @@
           No groups yet.
         </div>
 
-        <v-table v-else density="comfortable">
+        <v-table v-else>
           <thead>
             <tr>
               <th>Name</th>

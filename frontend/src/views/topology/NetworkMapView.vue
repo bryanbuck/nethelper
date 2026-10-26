@@ -103,30 +103,32 @@
           </template>
         </v-tooltip>
         <v-spacer v-show="showOptions" />
-        <v-btn v-show="showOptions" variant="text" prepend-icon="mdi-history" @click="openChanges">
-          Changes
-        </v-btn>
-        <v-btn
+        <ActionButton
+          v-show="showOptions"
+          variant="text"
+          icon="mdi-history"
+          label="Changes"
+          @click="openChanges"
+        />
+        <ActionButton
           v-if="canEdit"
           v-show="showOptions"
           variant="text"
-          prepend-icon="mdi-graph-outline"
           :disabled="!graph.nodes.length"
+          icon="mdi-graph-outline"
+          label="Auto-arrange"
           @click="canvas?.relayout()"
-        >
-          Auto-arrange
-        </v-btn>
-        <v-btn
+        />
+        <ActionButton
           v-if="canEdit"
           v-show="showOptions"
           variant="tonal"
-          prepend-icon="mdi-content-save"
           :disabled="!topologyStore.layoutDirty"
           :loading="topologyStore.savingLayout"
+          icon="mdi-content-save"
+          label="Save layout"
           @click="saveLayout"
-        >
-          Save layout
-        </v-btn>
+        />
         <v-btn
           v-if="canEdit"
           v-show="showOptions"
@@ -494,6 +496,7 @@ import {
 import { useRoute, useRouter } from 'vue-router'
 import TopologyCanvas from '@/components/topology/TopologyCanvas.vue'
 import ImportDiscoveredDialog from '@/components/discovery/ImportDiscoveredDialog.vue'
+import ActionButton from '@/components/common/ActionButton.vue'
 
 const topologyStore = useTopologyStore()
 const route = useRoute()

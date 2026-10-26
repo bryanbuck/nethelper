@@ -7,17 +7,16 @@
         {{ stateLabel }}
       </v-chip>
       <v-spacer />
-      <v-btn variant="text" prepend-icon="mdi-graph-outline" to="/map">Network Map</v-btn>
-      <v-btn
+      <ActionButton variant="text" icon="mdi-graph-outline" label="Network Map" to="/map" />
+      <ActionButton
         v-if="canEdit"
         color="primary"
         variant="tonal"
-        prepend-icon="mdi-refresh"
+        icon="mdi-refresh"
+        label="Read now"
         :loading="reading"
         @click="readNow"
-      >
-        Read now
-      </v-btn>
+      />
     </v-card-title>
 
     <v-card-subtitle class="pb-2">
@@ -75,6 +74,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { usePhoneColumns } from '@/composables/usePhoneColumns'
+import ActionButton from '@/components/common/ActionButton.vue'
 
 const props = defineProps({
   device: { type: Object, required: true }

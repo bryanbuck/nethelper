@@ -15,22 +15,19 @@
           </div>
           
           <div class="d-flex flex-wrap ga-2">
-            <v-btn
+            <ActionButton
               variant="outlined"
-              prepend-icon="mdi-history"
-              size="large"
+              icon="mdi-history"
+              label="Run History"
               to="/automations/executions"
-            >
-              Run History
-            </v-btn>
-            <v-btn
+            />
+            <ActionButton
               color="primary"
-              prepend-icon="mdi-plus"
-              size="large"
+              icon="mdi-plus"
+              label="Create Automation"
+              keep-label
               @click="createNewAutomation"
-            >
-              Create Automation
-            </v-btn>
+            />
           </div>
         </div>
         
@@ -411,6 +408,7 @@ import { storeToRefs } from 'pinia'
 import { useAutomationsStore } from '@/stores/automations'
 import { apiErrorMessage } from '@/utils/apiError'
 import { formatDistanceToNow, format } from 'date-fns'
+import ActionButton from '@/components/common/ActionButton.vue'
 
 const router = useRouter()
 const automationsStore = useAutomationsStore()

@@ -43,14 +43,13 @@
                 style="max-width: 180px"
                 @update:model-value="reloadBackups"
               />
-              <v-btn
+              <ActionButton
                 v-if="canManage"
                 color="primary"
-                prepend-icon="mdi-play"
+                icon="mdi-play"
+                label="Run Backup Now"
                 @click="openRunDialog"
-              >
-                Run Backup Now
-              </v-btn>
+              />
             </v-card-title>
 
             <v-data-table-server
@@ -233,15 +232,14 @@
                 class="scope-provider-filter"
                 @update:model-value="onScopeProviderChange"
               />
-              <v-btn
+              <ActionButton
                 v-if="canManage"
                 color="primary"
-                prepend-icon="mdi-cloud-download-outline"
                 :loading="backupsStore.running"
+                icon="mdi-cloud-download-outline"
+                label="Back Up Cloud Scopes"
                 @click="runScopeBackup"
-              >
-                Back Up Cloud Scopes
-              </v-btn>
+              />
             </v-card-title>
             <v-card-subtitle class="text-wrap pb-2">
               Configuration a cloud holds above the device: a Juniper Mist org and its sites
@@ -374,14 +372,13 @@
             <v-card-title class="d-flex align-center">
               <span>Backup Schedules</span>
               <v-spacer />
-              <v-btn
+              <ActionButton
                 v-if="canManage"
                 color="primary"
-                prepend-icon="mdi-plus"
+                icon="mdi-plus"
+                label="New Schedule"
                 @click="openScheduleDialog()"
-              >
-                New Schedule
-              </v-btn>
+              />
             </v-card-title>
 
             <v-data-table
@@ -772,6 +769,7 @@ import { useBackupsStore } from '@/stores/backups'
 import { useDevicesStore } from '@/stores/devices'
 import { useWebSocket } from '@/composables/useWebSocket'
 import ConfigDiffViewer from '@/components/backups/ConfigDiffViewer.vue'
+import ActionButton from '@/components/common/ActionButton.vue'
 import { CloudProviderInfo, cloudProviderLabel } from '@/models/vendors'
 import { usePhoneColumns } from '@/composables/usePhoneColumns'
 
@@ -798,14 +796,16 @@ const rules = {
 }
 
 // ---- Table headers ----
+// Short values (status, sizes, dates) stay on one line.
+const NO_WRAP = { class: 'text-no-wrap' }
 const backupHeaders = [
   { title: 'Device', key: 'deviceName' },
-  { title: 'Status', key: 'status' },
-  { title: 'Trigger', key: 'trigger' },
+  { title: 'Status', key: 'status', cellProps: NO_WRAP },
+  { title: 'Trigger', key: 'trigger', cellProps: NO_WRAP },
   { title: 'Formats', key: 'formats', sortable: false },
   { title: 'Changes', key: 'hasChanges' },
-  { title: 'Size', key: 'sizeBytes' },
-  { title: 'Date', key: 'createdAt' },
+  { title: 'Size', key: 'sizeBytes', cellProps: NO_WRAP },
+  { title: 'Date', key: 'createdAt', cellProps: NO_WRAP },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' }
 ]
 const shownBackupHeaders = usePhoneColumns(backupHeaders, ['deviceName', 'status', 'hasChanges', 'createdAt', 'actions'])
@@ -814,8 +814,8 @@ const scopeHeaders = [
   { title: 'Scope', key: 'scopeName', sortable: false },
   { title: 'Status', key: 'status', sortable: false },
   { title: 'Changes', key: 'hasChanges', sortable: false },
-  { title: 'Size', key: 'sizeBytes', sortable: false },
-  { title: 'Date', key: 'createdAt', sortable: false },
+  { title: 'Size', key: 'sizeBytes', sortable: false, cellProps: NO_WRAP },
+  { title: 'Date', key: 'createdAt', sortable: false, cellProps: NO_WRAP },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' }
 ]
 const shownScopeHeaders = usePhoneColumns(scopeHeaders, ['scopeName', 'status', 'hasChanges', 'createdAt', 'actions'])

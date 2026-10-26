@@ -12,6 +12,16 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
   - The Network Map folds its toolbar behind an options button, and its details panel takes the full width.
   - The automation builder's palette and properties panel float over the canvas. Editing a workflow on a phone works but is easier on a larger screen.
 - The app bar title no longer gets cut to "Net…" on narrow screens, and on phones the theme picker is in the account menu.
+- Tighter spacing everywhere: table rows are shorter and cells narrower at the sides, and on phones lists, fields, cards, page margins and grid gaps are tighter still. The Classic theme was already compact and is unchanged.
+- Less wrapping:
+  - Table headers stay on one line, and so do short values such as status, IP address, size and date.
+  - Last Seen reads "5 min ago" instead of "less than a minute ago".
+  - On Devices, the Managed chip shows just Central, Mist, Local or Direct. An unverified one has a "?" and says so in its tooltip.
+  - On wide tables, the Actions column stays pinned at the right edge.
+- On phones:
+  - Toolbar and header buttons are icons, with their name as a tooltip. The page's main action keeps its label.
+  - The one-line description under a page title is hidden.
+  - Table footers show the range and pager without the page-size picker.
 
 ### Fixed
 - The sign-in page footer showed a broken character instead of ©.

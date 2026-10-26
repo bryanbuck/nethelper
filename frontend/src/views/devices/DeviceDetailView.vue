@@ -49,58 +49,48 @@
           </div>
           <div class="d-flex flex-column align-start align-sm-end gap-2">
             <div class="d-flex flex-wrap justify-sm-end gap-2">
-              <v-btn
+              <ActionButton
                 v-if="device && canEdit && (device.managementMode === 'direct' || device.apiCredentialId)"
-                :size="xs ? 'small' : undefined"
                 color="info"
                 variant="outlined"
+                icon="mdi-connection"
+                label="Test Connection"
                 :loading="testingConnection"
                 @click="testDirectConnection"
-              >
-                <v-icon start>mdi-connection</v-icon>
-                Test Connection
-              </v-btn>
-              <v-btn
+              />
+              <ActionButton
                 v-if="canEdit && systemPoll?.available"
-                :size="xs ? 'small' : undefined"
                 color="primary"
                 variant="outlined"
+                icon="mdi-refresh"
+                label="Refresh System Info"
                 :loading="systemLoading"
                 @click="refreshSystemInfo"
-              >
-                <v-icon start>mdi-refresh</v-icon>
-                Refresh System Info
-              </v-btn>
-              <v-btn
+              />
+              <ActionButton
                 v-if="device && canEdit"
-                :size="xs ? 'small' : undefined"
                 color="primary"
                 variant="outlined"
+                icon="mdi-backup-restore"
+                label="Back Up Now"
                 :loading="backupRunning"
                 @click="backUpNow"
-              >
-                <v-icon start>mdi-backup-restore</v-icon>
-                Back Up Now
-              </v-btn>
-              <v-btn
+              />
+              <ActionButton
                 v-if="device && canEdit"
-                :size="xs ? 'small' : undefined"
                 color="primary"
                 variant="tonal"
+                icon="mdi-pencil"
+                label="Edit"
                 @click="editDialog = true"
-              >
-                <v-icon start>mdi-pencil</v-icon>
-                Edit
-              </v-btn>
-              <v-btn
+              />
+              <ActionButton
                 v-if="device && xs"
-                size="small"
                 variant="outlined"
-                prepend-icon="mdi-timeline-text-outline"
+                icon="mdi-timeline-text-outline"
+                label="Activity for this device"
                 :to="{ path: '/activity', query: { deviceId: device.id } }"
-              >
-                Activity
-              </v-btn>
+              />
             </div>
             <div v-if="lastTestResult" class="text-caption text-grey">
               {{ lastTestResult }}
@@ -735,6 +725,7 @@ import DeviceRecentRunsCard from '@/components/devices/DeviceRecentRunsCard.vue'
 import { lastSeenSummary } from '@/models/device-seen'
 import DeviceMergeDialog from '@/components/devices/DeviceMergeDialog.vue'
 import DeviceEditDialog from '@/components/devices/DeviceEditDialog.vue'
+import ActionButton from '@/components/common/ActionButton.vue'
 import { useBackupsStore } from '@/stores/backups'
 import { useWebSocket } from '@/composables/useWebSocket'
 import deviceService from '@/services/device.service'
@@ -750,7 +741,7 @@ const authStore = useAuthStore()
 const backupsStore = useBackupsStore()
 const { on: onSocket, off: offSocket } = useWebSocket()
 const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole))
-// Phones: smaller header buttons (Activity joins them), icon-free tabs.
+// Phones: icon-only header buttons (Activity joins them), icon-free tabs.
 const { xs } = useDisplay()
 
 // The row shown is the store's own object whenever the store holds it, so

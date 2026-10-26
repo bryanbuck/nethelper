@@ -7,16 +7,15 @@
             <v-icon start>mdi-chip</v-icon>
             Firmware Status
             <v-spacer></v-spacer>
-            <v-btn
+            <ActionButton
               v-if="canEdit"
               color="primary"
+              icon="mdi-refresh"
+              label="Poll All Switches"
               :loading="loading"
               :disabled="loading"
               @click="pollFirmware"
-            >
-              <v-icon start>mdi-refresh</v-icon>
-              Poll All Switches
-            </v-btn>
+            />
           </v-card-title>
 
           <v-card-text>
@@ -243,6 +242,7 @@ import { format } from 'date-fns'
 import { toCsv, downloadCsv } from '@/utils/csv'
 import { PlatformInfo } from '@/models/vendors'
 import { usePhoneColumns } from '@/composables/usePhoneColumns'
+import ActionButton from '@/components/common/ActionButton.vue'
 
 const devicesStore = useDevicesStore()
 const authStore = useAuthStore()

@@ -11,24 +11,23 @@
         </div>
 
         <div class="d-flex flex-wrap align-center ga-2">
-          <v-btn
+          <ActionButton
             variant="outlined"
-            prepend-icon="mdi-refresh"
+            icon="mdi-refresh"
+            label="Refresh"
             :loading="discoveryStore.scansLoading"
             @click="refreshScans"
-          >
-            Refresh
-          </v-btn>
+          />
 
-          <v-btn
+          <ActionButton
             v-if="canEdit"
             color="secondary"
-            prepend-icon="mdi-radar"
+            icon="mdi-radar"
+            label="New Scan"
+            keep-label
             :disabled="discoveryStore.isScanning"
             @click="openScanDialog"
-          >
-            New Scan
-          </v-btn>
+          />
         </div>
       </div>
 
@@ -434,6 +433,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useDiscoveryStore } from '@/stores/discovery'
 import { useWebSocket } from '@/composables/useWebSocket'
 import ImportDiscoveredDialog from '@/components/discovery/ImportDiscoveredDialog.vue'
+import ActionButton from '@/components/common/ActionButton.vue'
 import { cloudProviderLabel } from '@/models/vendors'
 import { usePhoneColumns } from '@/composables/usePhoneColumns'
 

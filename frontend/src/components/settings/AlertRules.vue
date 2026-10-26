@@ -21,7 +21,7 @@
     <v-alert v-if="loadError" type="error" variant="tonal" class="mb-4">{{ loadError }}</v-alert>
 
     <!-- table-stack: one block per rule on phones (assets/styles/responsive.scss) -->
-    <v-table density="comfortable" class="table-stack">
+    <v-table class="table-stack">
       <thead>
         <tr>
           <th>Rule</th>

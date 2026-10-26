@@ -5,7 +5,7 @@
       <span>History</span>
       <v-spacer />
       <v-btn-toggle v-model="range" mandatory density="compact" variant="outlined" divided>
-        <v-btn v-for="r in RANGES" :key="r.value" :value="r.value" size="small">{{ r.label }}</v-btn>
+        <v-btn v-for="r in RANGES" :key="r.value" :value="r.value" size="small">{{ xs ? r.short : r.label }}</v-btn>
       </v-btn-toggle>
       <v-btn icon="mdi-refresh" variant="text" size="small" :loading="loading" aria-label="Refresh" @click="load()" />
     </v-card-title>
@@ -126,10 +126,11 @@ const props = defineProps({
   device: { type: Object, required: true }
 })
 
+// `short` on a phone, so the toggle fits beside the title.
 const RANGES = [
-  { value: '24h', label: '24 h' },
-  { value: '7d', label: '7 days' },
-  { value: '30d', label: '30 days' },
+  { value: '24h', label: '24 h', short: '24h' },
+  { value: '7d', label: '7 days', short: '7d' },
+  { value: '30d', label: '30 days', short: '30d' },
 ]
 const LANE_ICONS = { ping: 'mdi-lan-connect', cloud: 'mdi-cloud-outline', combined: 'mdi-set-center' }
 const STATE_LABELS = { online: 'Online', offline: 'Offline', warning: 'Warning', maintenance: 'Maintenance', unknown: 'No data' }

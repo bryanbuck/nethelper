@@ -36,48 +36,40 @@
             </v-chip>
             
             <!-- Action Buttons -->
-            <v-btn
+            <ActionButton
               v-if="workflowId"
-              :size="xs ? 'small' : undefined"
               variant="text"
-              prepend-icon="mdi-history"
               :to="{ path: '/automations/executions', query: { automationId: workflowId } }"
-            >
-              Runs
-            </v-btn>
+              icon="mdi-history"
+              label="Runs"
+            />
 
-            <v-btn
-              :size="xs ? 'small' : undefined"
+            <ActionButton
               variant="outlined"
-              prepend-icon="mdi-play"
               :disabled="!canTestWorkflow"
               :loading="running"
               title="Save, then run once now (Manual and Schedule triggers)"
+              icon="mdi-play"
+              label="Run now"
               @click="testWorkflow"
-            >
-              Run now
-            </v-btn>
+            />
             
-            <v-btn
-              :size="xs ? 'small' : undefined"
+            <ActionButton
               variant="outlined"
-              prepend-icon="mdi-content-save"
               :loading="saving"
+              icon="mdi-content-save"
+              label="Save"
               @click="saveWorkflow"
-            >
-              Save
-            </v-btn>
+            />
             
-            <v-btn
-              :size="xs ? 'small' : undefined"
+            <ActionButton
               color="primary"
-              prepend-icon="mdi-rocket-launch"
               :disabled="!canDeployWorkflow"
               :loading="deploying"
+              icon="mdi-rocket-launch"
+              label="Deploy"
               @click="deployWorkflow"
-            >
-              Deploy
-            </v-btn>
+            />
             
             <v-menu>
               <template #activator="{ props }">
@@ -117,45 +109,41 @@
         <!-- Toolbar -->
         <div class="builder-toolbar d-flex flex-wrap align-center justify-space-between ga-2">
           <div class="d-flex flex-wrap align-center ga-2">
-            <v-btn
+            <ActionButton
               variant="outlined"
               size="small"
-              prepend-icon="mdi-undo"
               :disabled="!canUndo"
+              icon="mdi-undo"
+              label="Undo"
               @click="undo"
-            >
-              Undo
-            </v-btn>
+            />
             
-            <v-btn
+            <ActionButton
               variant="outlined"
               size="small"
-              prepend-icon="mdi-redo"
               :disabled="!canRedo"
+              icon="mdi-redo"
+              label="Redo"
               @click="redo"
-            >
-              Redo
-            </v-btn>
+            />
             
             <v-divider vertical class="mx-2"></v-divider>
             
-            <v-btn
+            <ActionButton
               variant="outlined"
               size="small"
-              prepend-icon="mdi-fit-to-screen"
+              icon="mdi-fit-to-screen"
+              label="Fit View"
               @click="resetView"
-            >
-              Fit View
-            </v-btn>
+            />
             
-            <v-btn
+            <ActionButton
               variant="outlined"
               size="small"
-              prepend-icon="mdi-auto-fix"
+              icon="mdi-auto-fix"
+              label="Auto Layout"
               @click="autoLayout"
-            >
-              Auto Layout
-            </v-btn>
+            />
           </div>
           
           <div class="d-flex flex-wrap align-center ga-2">
@@ -182,14 +170,13 @@
               </v-btn>
             </div>
             
-            <v-btn
+            <ActionButton
               variant="outlined"
               size="small"
-              :prepend-icon="toolbarCollapsed ? 'mdi-chevron-left' : 'mdi-chevron-right'"
+              :icon="toolbarCollapsed ? 'mdi-chevron-left' : 'mdi-chevron-right'"
+              :label="`${toolbarCollapsed ? 'Show' : 'Hide'} Palette`"
               @click="toolbarCollapsed = !toolbarCollapsed"
-            >
-              {{ toolbarCollapsed ? 'Show' : 'Hide' }} Palette
-            </v-btn>
+            />
           </div>
         </div>
       </v-container>
@@ -486,6 +473,7 @@ import { apiErrorMessage } from '@/utils/apiError'
 import WorkflowCanvas from '@/components/automations/WorkflowCanvas.vue'
 import NodeToolbar from '@/components/automations/NodeToolbar.vue'
 import NodeConfigDialog from '@/components/automations/NodeConfigDialog.vue'
+import ActionButton from '@/components/common/ActionButton.vue'
 
 // vue-flow edges carry a type too ('smoothstep'); an edge is what has source and target.
 const isEdge = (el) => !!(el.source && el.target)
