@@ -8,6 +8,12 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 - Backend: `body-parser` 1.20.9, fixing a denial of service from extra bytes after a compressed request body (GHSA-27r3-jxmh-p828, high). Bull's `uuid` is held at 11.1.1 (GHSA-w5hq-g745-h8pq, moderate; Bull calls only `v4()`, so it was not reachable). `npm audit` is clean in both tiers.
 - Frontend image: nginx 1.30 (stable) instead of 1.27, whose image had not been rebuilt since June 2025 and so carried 16 months of unpatched nginx and Alpine fixes.
 
+### Changed
+- Dependency updates: Vuetify 3.13.7, Chart.js 4.6.1, Sass 1.106, ESLint 9.39 (frontend); nodemailer 10.2.1, dotenv 18.0.9 (backend).
+
+### Removed
+- Frontend: the unused FullCalendar packages (left over from the removed Schedule page).
+
 ## [0.9.0-beta.4] — 2026-10-24
 
 ### Added
