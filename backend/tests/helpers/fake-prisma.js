@@ -32,14 +32,16 @@ function createFakePrisma() {
       return users.filter((u) => matches(u, where)).length;
     },
     async create({ data, select }) {
-      const row = { id: crypto.randomUUID(), refreshToken: null, lastLogin: null, createdAt: new Date(), ...data };
+      const row = { id: crypto.randomUUID(), refreshToken: null, tokenVersion: 0, lastLogin: null, createdAt: new Date(), ...data };
       users.push(row);
       return pick(row, select);
     },
     async update({ where, data, select }) {
       const row = users.find((u) => matches(u, where));
       if (!row) throw new Error('Record to update not found');
-      Object.assign(row, data);
+      for (const [k, v] of Object.entries(data)) {
+        row[k] = v && typeof v === 'object' && 'increment' in v ? (row[k] ?? 0) + v.increment : v;
+      }
       return pick(row, select);
     },
     async delete({ where }) {

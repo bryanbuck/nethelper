@@ -30,7 +30,10 @@ export function useWebSocket() {
       await webSocketService.connect(wsUrl, {
         // A function, so every reconnect sends the current (possibly
         // refreshed) token rather than the one from the first connect.
-        auth: (cb) => cb({ token: authStore.token })
+        // localStorage first, like api.js: its refresh interceptor writes the
+        // new token there, not to the store (a stale token is refused once
+        // a password change has ended older sessions).
+        auth: (cb) => cb({ token: localStorage.getItem('access_token') || authStore.token })
       })
       
       // Update reactive refs based on service status
