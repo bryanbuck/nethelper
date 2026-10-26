@@ -10,14 +10,12 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ### Changed
 - `automation:completed` socket events carry the run's `deviceId`, like `automation:started`.
+- Dependency updates: Vuetify 3.13.7, Chart.js 4.6.1, Sass 1.106, ESLint 9.39 (frontend); nodemailer 10.2.1, dotenv 18.0.9 (backend).
 
 ### Security
 - Changing your password, or an admin resetting it (Users page or `npm run user:manage`), now ends every other session at once. Before, access tokens already issued kept working for up to an hour (`JWT_EXPIRES_IN`). Open real-time connections from those sessions are dropped too. Tokens issued before the upgrade stay valid until they expire.
 - Backend: `body-parser` 1.20.9, fixing a denial of service from extra bytes after a compressed request body (GHSA-27r3-jxmh-p828, high). Bull's `uuid` is held at 11.1.1 (GHSA-w5hq-g745-h8pq, moderate; Bull calls only `v4()`, so it was not reachable). `npm audit` is clean in both tiers.
 - Frontend image: nginx 1.30 (stable) instead of 1.27, whose image had not been rebuilt since June 2025 and so carried 16 months of unpatched nginx and Alpine fixes.
-
-### Changed
-- Dependency updates: Vuetify 3.13.7, Chart.js 4.6.1, Sass 1.106, ESLint 9.39 (frontend); nodemailer 10.2.1, dotenv 18.0.9 (backend).
 
 ### Removed
 - Frontend: the unused FullCalendar packages (left over from the removed Schedule page).
