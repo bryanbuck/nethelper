@@ -12,9 +12,9 @@ Both were installed from this runbook on clean Debian 13 (trixie) VMs on 2026-10
 **Getting the code.** Clone the repository (`git clone … /opt/nethelper`) or unpack a release tarball there. Every command below runs from that tree. Each release on GitHub has `nethelper-<version>.tar.gz` (the source plus a prebuilt UI, so bare metal skips the frontend build) and its checksum:
 
 ```sh
-gh release download v0.9.0-beta.4 -R bryanbuck/nethelper
-sha256sum -c nethelper-0.9.0-beta.4.tar.gz.sha256
-tar xzf nethelper-0.9.0-beta.4.tar.gz && mv nethelper-0.9.0-beta.4 /opt/nethelper
+gh release download v0.9.0-beta.5 -R bryanbuck/nethelper
+sha256sum -c nethelper-0.9.0-beta.5.tar.gz.sha256
+tar xzf nethelper-0.9.0-beta.5.tar.gz && mv nethelper-0.9.0-beta.5 /opt/nethelper
 ```
 
 Either way, the browser talks to one origin: nginx serves the SPA and proxies `/api` and `/socket.io` to the backend. You don't need `CORS_ORIGINS` unless the UI is served from somewhere else.

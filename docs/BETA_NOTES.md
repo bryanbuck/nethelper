@@ -71,7 +71,7 @@ Deleting a user keeps everything they set up (integrations, credentials, the Git
 Send reports to the NetHelper admin who invited you. Include:
 
 1. **What you did and what happened**, including the exact error text or a screenshot.
-2. **The version.** It's in the page footer (for example `NetHelper 0.9.0-beta.4`), and `GET /health` returns it too.
+2. **The version.** It's in the page footer (for example `NetHelper 0.9.0-beta.5`), and `GET /health` returns it too.
 3. **Which platform and management plane**: for example "AOS-S 2930F, direct over SSH" or "Mist switch EX4100".
 4. **Backend logs from around that time**:
    - Docker: `docker compose logs --since 30m backend`
