@@ -129,6 +129,7 @@ router.delete('/git-backup', authorize('admin'), settingsController.deleteGitBac
 // Alert notification channels (email / webhook), admin only: webhook URLs
 // and recipients are sensitive, and channels apply to everyone's alerts.
 router.get('/notification-channels', authorize('admin'), notificationChannels.list);
+router.get('/notification-channels/cloud-alarm-names', authorize('admin'), notificationChannels.cloudAlarmNames);
 router.post('/notification-channels', authorize('admin'), notificationChannels.create);
 router.put('/notification-channels/:id', authorize('admin'), validateUUID('id'), notificationChannels.update);
 router.delete('/notification-channels/:id', authorize('admin'), validateUUID('id'), notificationChannels.remove);

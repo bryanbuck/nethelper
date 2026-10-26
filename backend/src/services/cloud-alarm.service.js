@@ -20,7 +20,13 @@
  * Emits `cloud:alarms` ({ integrationId, raised, cleared }) when a poll
  * stores something new. Rows are pruned after CLOUD_ALARM_RETENTION_DAYS,
  * except stateful alarms still active.
+ *
+ * In process, `events` emits 'raised' (a new alarm) and 'cleared' (a stateful
+ * one that cleared) with an alarmSnapshot(), for notification channels. Only
+ * recent ones (NOTIFY_MAX_AGE_MS): a backfill after a restart or a first poll
+ * stores days of history and must not send it.
  */
+const EventEmitter = require('events');
 
 const { getPrisma } = require('../config/database');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
@@ -31,6 +37,9 @@ const logger = require('../utils/logger');
 const DAY_MS = 24 * 3600 * 1000;
 const BACKFILL_DAYS = 7;
 const OVERLAP_MS = 15 * 60 * 1000;
+const NOTIFY_MAX_AGE_MS = 60 * 60 * 1000;
+
+const events = new EventEmitter();
 const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
 
 const retentionDays = () => {
@@ -85,6 +94,37 @@ function matchDevice(alarm, devices) {
 
 const time = (value) => (value ? new Date(value).getTime() : null);
 
+/** What a notification says about an alarm (row columns plus names). */
+function alarmSnapshot(row, { integrationName, deviceName } = {}) {
+  return {
+    id: row.id || null,
+    externalId: row.externalId,
+    integrationId: row.integrationId,
+    integrationName: integrationName || null,
+    provider: row.provider,
+    type: row.type,
+    name: row.name,
+    category: row.category || null,
+    severity: row.severity,
+    status: row.status,
+    summary: row.summary || null,
+    siteName: row.siteName || null,
+    device: row.deviceId ? { id: row.deviceId, name: deviceName || null } : null,
+    count: row.count ?? 1,
+    raisedAt: row.raisedAt,
+    clearedAt: row.clearedAt || null,
+    clearedReason: row.clearedReason || null,
+  };
+}
+
+function notify(event, snapshot) {
+  try {
+    events.emit(event, snapshot);
+  } catch (error) {
+    logger.warn(`cloud-alarm: a ${event} listener failed: ${error.message}`);
+  }
+}
+
 /** The columns to write for an alarm we already hold, or null if unchanged. */
 function changes(row, alarm, deviceId) {
   const patch = {};
@@ -128,6 +168,10 @@ async function pollProvider(provider, now = Date.now()) {
     })
     : [];
   const byExternalId = new Map(existing.map((row) => [row.externalId, row]));
+  const deviceNames = new Map(devices.map((d) => [d.id, d.name]));
+  const recent = (value) => now - time(value) <= NOTIFY_MAX_AGE_MS;
+  const notices = [];
+  const notice = (event, row) => notices.push([event, alarmSnapshot(row, { integrationName: provider.label, deviceName: deviceNames.get(row.deviceId) })]);
 
   let raised = 0;
   let cleared = 0;
@@ -136,28 +180,29 @@ async function pollProvider(provider, now = Date.now()) {
     const deviceId = matchDevice(alarm, devices);
     const row = byExternalId.get(alarm.externalId);
     if (!row) {
-      await prisma.cloudAlarm.create({
-        data: {
-          integrationId,
-          provider: provider.providerType,
-          externalId: alarm.externalId,
-          type: alarm.type,
-          name: alarm.name,
-          category: alarm.category,
-          severity: alarm.severity,
-          stateful: alarm.stateful,
-          status: alarm.status,
-          deviceId,
-          siteName: alarm.siteName,
-          summary: alarm.summary,
-          count: alarm.count,
-          raisedAt: alarm.raisedAt,
-          lastSeenAt: alarm.lastSeenAt,
-          clearedAt: alarm.clearedAt,
-          clearedReason: alarm.clearedReason,
-          data: alarm.data || {},
-        },
-      });
+      const data = {
+        integrationId,
+        provider: provider.providerType,
+        externalId: alarm.externalId,
+        type: alarm.type,
+        name: alarm.name,
+        category: alarm.category,
+        severity: alarm.severity,
+        stateful: alarm.stateful,
+        status: alarm.status,
+        deviceId,
+        siteName: alarm.siteName,
+        summary: alarm.summary,
+        count: alarm.count,
+        raisedAt: alarm.raisedAt,
+        lastSeenAt: alarm.lastSeenAt,
+        clearedAt: alarm.clearedAt,
+        clearedReason: alarm.clearedReason,
+        data: alarm.data || {},
+      };
+      const created = await prisma.cloudAlarm.create({ data });
+      // One message even when it already cleared (the snapshot says so).
+      if (recent(alarm.raisedAt)) notice('raised', { ...data, ...created });
       raised += 1;
       if (alarm.status === 'cleared') cleared += 1;
       continue;
@@ -166,7 +211,10 @@ async function pollProvider(provider, now = Date.now()) {
     if (!patch) continue;
     await prisma.cloudAlarm.update({ where: { id: row.id }, data: patch });
     updated += 1;
-    if (patch.status === 'cleared') cleared += 1;
+    if (patch.status === 'cleared') {
+      cleared += 1;
+      if (row.stateful && recent(alarm.clearedAt || now)) notice('cleared', { ...row, ...patch });
+    }
   }
 
   // Stateful alarms the cloud no longer holds active have cleared.
@@ -174,20 +222,19 @@ async function pollProvider(provider, now = Date.now()) {
     const stillOpen = new Set([...activeIds, ...alarms.filter((a) => a.status !== 'active').map((a) => a.externalId)]);
     const gone = await prisma.cloudAlarm.findMany({
       where: { integrationId, stateful: true, status: 'active' },
-      select: { id: true, externalId: true },
     });
-    const ids = gone.filter((row) => !stillOpen.has(row.externalId)).map((row) => row.id);
-    if (ids.length) {
-      await prisma.cloudAlarm.updateMany({
-        where: { id: { in: ids } },
-        data: { status: 'cleared', clearedAt: new Date(now), clearedReason: null },
-      });
-      cleared += ids.length;
+    const goneRows = gone.filter((row) => !stillOpen.has(row.externalId));
+    if (goneRows.length) {
+      const clearData = { status: 'cleared', clearedAt: new Date(now), clearedReason: null };
+      await prisma.cloudAlarm.updateMany({ where: { id: { in: goneRows.map((row) => row.id) } }, data: clearData });
+      cleared += goneRows.length;
+      for (const row of goneRows) notice('cleared', { ...row, ...clearData });
     }
   }
 
   lastPoll.set(integrationId, now);
   if (raised || cleared) emit('cloud:alarms', { integrationId, raised, cleared });
+  for (const [event, snapshot] of notices) notify(event, snapshot);
   return { integrationId, name: provider.label, received: alarms.length, raised, cleared, updated };
 }
 
@@ -220,6 +267,6 @@ async function pollAll() {
 }
 
 module.exports = {
-  pollAll, pollProvider, prune, matchDevice,
+  pollAll, pollProvider, prune, matchDevice, alarmSnapshot, events, NOTIFY_MAX_AGE_MS,
   _reset: () => { lastPoll.clear(); lastPrune = 0; },
 };

@@ -71,6 +71,51 @@ function formatAlert(event, alert, baseUrl = appBaseUrl()) {
   return { subject, text, payload };
 }
 
+const PROVIDER_LABELS = { aruba_central: 'Aruba Central', juniper_mist: 'Juniper Mist', cisco_meraki: 'Cisco Meraki' };
+
+/**
+ * Subject, plain text and webhook payload for a cloud alarm (CloudAlarm
+ * snapshot from cloud-alarm.service alarmSnapshot()).
+ * @param {'raised'|'cleared'} event
+ */
+function formatCloudAlarm(event, alarm, baseUrl = appBaseUrl()) {
+  const cloud = alarm.integrationName || PROVIDER_LABELS[alarm.provider] || 'The cloud';
+  const where = alarm.device?.name ? ` on ${alarm.device.name}` : alarm.siteName ? ` at ${alarm.siteName}` : '';
+  const title = `${alarm.name}${where}`;
+  const alreadyCleared = event === 'raised' && alarm.status === 'cleared';
+  // Central clears some alerts on a timer: that is not the problem going away.
+  const timerClear = /timer/i.test(alarm.clearedReason || '');
+  const query = new URLSearchParams({ categories: 'cloud-alarm', ...(alarm.device?.id && { deviceId: alarm.device.id }) });
+  const url = baseUrl ? `${baseUrl}/activity?${query}` : null;
+  const subject = event === 'cleared'
+    ? `[Cleared] ${cloud}: ${title}`
+    : `[${(alarm.severity || 'info').toUpperCase()}] ${cloud}: ${title}`;
+  const lines = [
+    `${event === 'cleared' ? 'Cleared: ' : ''}${title}`,
+    alarm.summary,
+    '',
+    `Cloud: ${cloud}`,
+    `Alarm: ${alarm.name}${alarm.type && alarm.type !== alarm.name ? ` (${alarm.type})` : ''}`,
+    `Severity: ${alarm.severity}`,
+    ...(alarm.device?.name ? [`Device: ${alarm.device.name}`] : []),
+    ...(alarm.siteName ? [`Site: ${alarm.siteName}`] : []),
+    ...(alarm.count > 1 ? [`Incidents: ${alarm.count}`] : []),
+    `Raised: ${new Date(alarm.raisedAt).toISOString()}`,
+    ...(alarm.clearedAt && (event === 'cleared' || alreadyCleared) ? [`Cleared: ${new Date(alarm.clearedAt).toISOString()}${alarm.clearedReason ? ` (${alarm.clearedReason})` : ''}`] : []),
+    ...(timerClear && (event === 'cleared' || alreadyCleared) ? ['Cleared by the cloud\'s alert timer: the problem may not be fixed.'] : []),
+    '',
+    `Raised by ${cloud}; acknowledge or clear it there.`,
+    ...(url ? [url] : []),
+  ].filter((line) => line !== undefined && line !== null);
+  const payload = {
+    event: `cloud-alarm.${event}`,
+    text: `${subject}${alarm.summary ? `\n${alarm.summary}` : ''}${url ? `\n${url}` : ''}`,
+    cloudAlarm: { ...alarm, integrationName: cloud, url },
+    sentAt: new Date().toISOString(),
+  };
+  return { subject, text: lines.join('\n'), payload };
+}
+
 class NotificationService {
   constructor() {
     this.transport = null;
@@ -124,5 +169,6 @@ class NotificationService {
 
 module.exports = new NotificationService();
 module.exports.formatAlert = formatAlert;
+module.exports.formatCloudAlarm = formatCloudAlarm;
 module.exports.appBaseUrl = appBaseUrl;
 module.exports.WEBHOOK_TIMEOUT_MS = WEBHOOK_TIMEOUT_MS;

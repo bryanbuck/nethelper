@@ -143,3 +143,69 @@ describe('pollAll', () => {
     expect(mockPrisma.cloudAlarm.deleteMany.mock.calls[0][0].where.status).toEqual({ not: 'active' });
   });
 });
+
+describe('notification events', () => {
+  const listen = () => {
+    const seen = [];
+    const onRaised = (a) => seen.push(['raised', a]);
+    const onCleared = (a) => seen.push(['cleared', a]);
+    service.events.on('raised', onRaised);
+    service.events.on('cleared', onCleared);
+    return { seen, stop: () => { service.events.off('raised', onRaised); service.events.off('cleared', onCleared); } };
+  };
+
+  test('a new recent alarm is raised with its device and cloud; a backfilled old one is not', async () => {
+    const { seen, stop } = listen();
+    try {
+      mockPrisma.cloudAlarm.create.mockImplementation(async ({ data }) => ({ id: `row-${data.externalId}`, ...data }));
+      await service.pollProvider(provider({
+        alarms: [
+          alarm('new', { name: 'Port Flap', summary: 'Port 1/1/7 on Sw-CoreA is flapping', raisedAt: new Date(NOW - 10 * 60e3) }),
+          alarm('old', { raisedAt: new Date(NOW - 2 * 24 * 3600e3) }),
+        ],
+        activeIds: ['new', 'old'],
+      }), NOW);
+      expect(seen).toEqual([['raised', expect.objectContaining({
+        id: 'row-new', externalId: 'new', name: 'Port Flap', integrationName: 'Central', provider: 'aruba_central',
+        device: { id: 'd-a', name: 'Sw-CoreA' }, status: 'active', siteName: 'HQ',
+      })]]);
+    } finally {
+      stop();
+    }
+  });
+
+  test('a stateful alarm that clears, or leaves the active list, is cleared; a count bump is nothing', async () => {
+    const c1 = { id: 'r1', integrationId: 'int-c', provider: 'aruba_central', ...alarm('c1'), deviceId: 'd-a' };
+    const c2 = { id: 'r2', integrationId: 'int-c', provider: 'aruba_central', ...alarm('c2'), deviceId: null };
+    const c3 = { id: 'r3', integrationId: 'int-c', provider: 'aruba_central', ...alarm('c3'), deviceId: null };
+    mockPrisma.cloudAlarm.findMany.mockImplementation(async ({ where }) => (where.externalId ? [c1, c3] : [c1, c2, c3]));
+    const { seen, stop } = listen();
+    try {
+      await service.pollProvider(provider({
+        alarms: [
+          alarm('c1', { status: 'cleared', clearedAt: new Date(NOW - 60e3), clearedReason: 'Due to clear alert timer configuration' }),
+          alarm('c3', { count: 4 }),
+        ],
+        activeIds: ['c3'],
+      }), NOW);
+      expect(seen.map(([event, a]) => [event, a.externalId, a.clearedReason])).toEqual([
+        ['cleared', 'c1', 'Due to clear alert timer configuration'],
+        ['cleared', 'c2', null],
+      ]);
+      expect(seen[0][1].device).toEqual({ id: 'd-a', name: 'Sw-CoreA' });
+    } finally {
+      stop();
+    }
+  });
+
+  test('a failing listener does not break the poll', async () => {
+    const boom = () => { throw new Error('listener bug'); };
+    service.events.on('raised', boom);
+    try {
+      await expect(service.pollProvider(provider({ alarms: [alarm('n1', { raisedAt: new Date(NOW) })], activeIds: ['n1'] }), NOW))
+        .resolves.toMatchObject({ raised: 1 });
+    } finally {
+      service.events.off('raised', boom);
+    }
+  });
+});

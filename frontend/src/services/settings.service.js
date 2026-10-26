@@ -211,6 +211,16 @@ const settingsService = {
     }
   },
 
+  /** Cloud alarm names a channel can filter on: [{ provider, name }] (seen here, plus well-known ones). */
+  async getCloudAlarmNames() {
+    try {
+      const response = await api.get('/settings/notification-channels/cloud-alarm-names')
+      return response.data.data || []
+    } catch (error) {
+      throw handleApiError(error, 'loading cloud alarm names')
+    }
+  },
+
   /** Send a sample notification now. @returns {Promise<{ success: boolean, error?: string }>} */
   async testNotificationChannel(id) {
     try {

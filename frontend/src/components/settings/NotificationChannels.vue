@@ -6,7 +6,7 @@
         <p class="text-body-2 text-medium-emphasis mb-0">
           Send alerts outside the app, by email or to a webhook (Slack, Teams, or anything that takes a JSON POST).
           Each channel gets one message when a matching alert opens and one when it resolves; repeats of an open
-          alert don't send again.
+          alert don't send again. A channel can also send the alarms Aruba Central and Juniper Mist raise themselves.
         </p>
       </div>
       <v-btn color="primary" prepend-icon="mdi-plus" class="ml-4" @click="openEditor(null)">Add channel</v-btn>
@@ -57,6 +57,9 @@
           <td class="text-body-2">
             {{ severityLabel(channel.minSeverity) }} and up ·
             {{ channel.rules.length ? channel.rules.map(ruleLabel).join(', ') : 'all rules' }}
+            <div v-if="channel.cloudAlarms" class="text-caption text-medium-emphasis">
+              + cloud alarms{{ channel.cloudAlarmNames?.length ? `: ${channel.cloudAlarmNames.join(', ')}` : '' }}
+            </div>
           </td>
           <td class="text-body-2">
             <template v-if="channel.lastDeliveryAt">
@@ -199,6 +202,32 @@
               variant="outlined"
               density="compact"
             />
+
+            <v-switch
+              v-model="draft.cloudAlarms"
+              label="Also send cloud alarms"
+              color="primary"
+              density="compact"
+              hide-details
+              class="mt-4"
+            />
+            <div class="text-caption text-medium-emphasis mb-2">
+              Alarms Aruba Central or Juniper Mist raise themselves (for example Central's Port Flap), once when
+              raised and once when they clear. The severity above applies. Acknowledge and clear them in the cloud.
+            </div>
+            <v-combobox
+              v-if="draft.cloudAlarms"
+              v-model="draft.cloudAlarmNames"
+              :items="cloudAlarmNameItems"
+              label="Only these cloud alarms"
+              hint="Leave empty for every cloud alarm. Names as the cloud shows them; case, spaces and underscores don't matter."
+              persistent-hint
+              multiple
+              chips
+              closable-chips
+              variant="outlined"
+              density="compact"
+            />
             <v-switch v-model="draft.enabled" label="Enabled" color="primary" density="compact" hide-details class="mt-2" />
           </v-form>
         </v-card-text>
@@ -264,11 +293,29 @@ const openEditor = (channel) => {
         headers: Object.keys(channel.config.headers || {}).map((name) => ({ name, value: '', stored: true })),
         minSeverity: channel.minSeverity,
         rules: [...channel.rules],
+        cloudAlarms: Boolean(channel.cloudAlarms),
+        cloudAlarmNames: [...(channel.cloudAlarmNames || [])],
         enabled: channel.enabled
       }
-    : { id: null, name: '', type: 'webhook', recipients: [], url: '', headers: [], minSeverity: 'warning', rules: [], enabled: true }
+    : {
+        id: null, name: '', type: 'webhook', recipients: [], url: '', headers: [], minSeverity: 'warning', rules: [],
+        cloudAlarms: false, cloudAlarmNames: [], enabled: true
+      }
   editorOpen.value = true
+  store.fetchCloudAlarmNames()
 }
+
+// One entry per name however each cloud spells it ("Port Flap", "Port flap")
+const alarmKey = (name) => String(name).trim().toLowerCase().replace(/[\s_-]+/g, ' ')
+const cloudAlarmNameItems = computed(() => {
+  const seen = new Set()
+  return (store.cloudAlarmNames || []).map((n) => n.name).filter((name) => {
+    const key = alarmKey(name)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+})
 
 // A new webhook needs a URL; an edit may leave it blank to keep the stored one
 const urlRule = (v) => {
@@ -281,6 +328,8 @@ const payloadOf = (d) => ({
   type: d.type,
   minSeverity: d.minSeverity,
   rules: d.rules,
+  cloudAlarms: d.cloudAlarms,
+  cloudAlarmNames: d.cloudAlarmNames.map((n) => String(n).trim()).filter(Boolean),
   enabled: d.enabled,
   config: d.type === 'email'
     ? { recipients: d.recipients.map((r) => String(r).trim()).filter(Boolean) }

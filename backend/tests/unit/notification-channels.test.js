@@ -26,9 +26,10 @@ const nodemailer = require('nodemailer');
 const encryption = require('../../src/utils/encryption');
 const alertService = require('../../src/services/alert.service');
 const channels = require('../../src/services/notification-channel.service');
-const { channelMatches, SECRET_MASK } = require('../../src/services/notification-channel.service');
+const { channelMatches, channelTakesCloudAlarm, SECRET_MASK } = require('../../src/services/notification-channel.service');
+const cloudAlarmService = require('../../src/services/cloud-alarm.service');
 const notifier = require('../../src/services/notification.service');
-const { formatAlert, appBaseUrl } = require('../../src/services/notification.service');
+const { formatAlert, formatCloudAlarm, appBaseUrl } = require('../../src/services/notification.service');
 const notificationJob = require('../../src/jobs/notification.job');
 
 const alert = (over = {}) => ({
@@ -268,5 +269,84 @@ describe('message format', () => {
     expect(appBaseUrl({ APP_BASE_URL: 'https://a.io/', CORS_ORIGINS: 'https://b.io' })).toBe('https://a.io');
     expect(appBaseUrl({ CORS_ORIGINS: 'https://b.io,https://c.io' })).toBe('https://b.io');
     expect(appBaseUrl({})).toBe('');
+  });
+});
+
+describe('cloud alarms', () => {
+  const cloudAlarm = (over = {}) => ({
+    id: 'ca1', externalId: 'x1', integrationId: 'int-c', integrationName: 'Home Network', provider: 'aruba_central',
+    type: 'Port Flap', name: 'Port Flap', severity: 'warning', status: 'active', summary: 'Port 1/1/7 flapped 52 times in 10 minutes',
+    siteName: 'HQ', device: { id: 'd1', name: 'sw1' }, count: 1, raisedAt: '2026-10-25T10:00:00.000Z', clearedAt: null, clearedReason: null, ...over,
+  });
+
+  test.each([
+    ['off by default', channel(), cloudAlarm(), false],
+    ['opted in, any name', channel({ cloudAlarms: true }), cloudAlarm(), true],
+    ['below the minimum severity', channel({ cloudAlarms: true, minSeverity: 'critical' }), cloudAlarm(), false],
+    ['a disabled channel', channel({ cloudAlarms: true, enabled: false }), cloudAlarm(), false],
+    ['named, any spelling', channel({ cloudAlarms: true, cloudAlarmNames: ['port_flap'] }), cloudAlarm(), true],
+    ['Mist type by its display name', channel({ cloudAlarms: true, cloudAlarmNames: ['Port Flap'] }), cloudAlarm({ name: 'Port flap', type: 'port_flap' }), true],
+    ['another name', channel({ cloudAlarms: true, cloudAlarmNames: ['IPsec SA Down'] }), cloudAlarm(), false],
+  ])('which channels take one: %s', (_label, ch, a, expected) => {
+    expect(channelTakesCloudAlarm(ch, a)).toBe(expected);
+  });
+
+  test('queues a delivery per channel that takes it, following the mirror\'s events once started', async () => {
+    mockPrisma.notificationChannel.findMany.mockResolvedValue([channel({ id: 'c1', cloudAlarms: true }), channel({ id: 'c2' })]);
+    channels.start();
+    try {
+      cloudAlarmService.events.emit('raised', cloudAlarm());
+      await new Promise((r) => setImmediate(r));
+    } finally {
+      channels.stop();
+    }
+    expect(mockQueue.add).toHaveBeenCalledTimes(1);
+    expect(mockQueue.add).toHaveBeenCalledWith('deliver', { channelId: 'c1', event: 'raised', cloudAlarm: cloudAlarm() }, expect.objectContaining({ attempts: 3 }));
+  });
+
+  test('a webhook gets the cloud alarm payload', async () => {
+    mockPrisma.notificationChannel.findUnique.mockResolvedValue(channel({ cloudAlarms: true }));
+    axios.post.mockResolvedValue({ status: 200 });
+    await channels.deliver({ channelId: 'c1', event: 'raised', cloudAlarm: cloudAlarm() });
+    const [, payload] = axios.post.mock.calls[0];
+    expect(payload).toMatchObject({ event: 'cloud-alarm.raised', cloudAlarm: { name: 'Port Flap', device: { id: 'd1', name: 'sw1' } } });
+    expect(payload.text).toMatch(/^\[WARNING\] Home Network: Port Flap on sw1/);
+  });
+
+  test('message format: raised, cleared by timer, site-level', () => {
+    const raised = formatCloudAlarm('raised', cloudAlarm(), 'https://nh.example');
+    expect(raised.subject).toBe('[WARNING] Home Network: Port Flap on sw1');
+    expect(raised.text).toContain('Port 1/1/7 flapped 52 times in 10 minutes');
+    expect(raised.text).toContain('acknowledge or clear it there');
+    expect(raised.text).toContain('https://nh.example/activity?categories=cloud-alarm&deviceId=d1');
+
+    const cleared = formatCloudAlarm('cleared', cloudAlarm({
+      status: 'cleared', clearedAt: '2026-10-25T10:20:00.000Z', clearedReason: 'Due to clear alert timer configuration', device: null,
+    }), '');
+    expect(cleared.subject).toBe('[Cleared] Home Network: Port Flap at HQ');
+    expect(cleared.text).toContain('the problem may not be fixed');
+    expect(cleared.text).not.toContain('http');
+  });
+
+  test('cloudAlarmNames are trimmed and deduplicated; a non-list is refused', async () => {
+    const row = await channels.create('u1', {
+      name: 'Ops', type: 'email', config: { recipients: ['a@x.io'] }, cloudAlarms: true, cloudAlarmNames: [' Port Flap ', 'Port Flap', ''],
+    });
+    expect(row).toMatchObject({ cloudAlarms: true, cloudAlarmNames: ['Port Flap'] });
+    await expect(channels.create('u1', { name: 'x', type: 'email', config: { recipients: ['a@x.io'] }, cloudAlarmNames: 'Port Flap' }))
+      .rejects.toThrow('cloudAlarmNames must be a list');
+  });
+
+  test('name suggestions: seen ones plus well-known ones not seen yet', async () => {
+    mockPrisma.cloudAlarm = { findMany: jest.fn(async () => [{ provider: 'aruba_central', name: 'IPsec SA Down' }, { provider: 'aruba_central', name: 'Port Flap' }]) };
+    try {
+      expect(await channels.cloudAlarmNames()).toEqual([
+        { provider: 'aruba_central', name: 'IPsec SA Down' },
+        { provider: 'aruba_central', name: 'Port Flap' },
+        { provider: 'juniper_mist', name: 'Port flap' },
+      ]);
+    } finally {
+      delete mockPrisma.cloudAlarm;
+    }
   });
 });

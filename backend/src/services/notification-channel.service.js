@@ -10,6 +10,13 @@
  * its rules list names the alert's rule (empty = every built-in rule;
  * automation.raised only when named).
  *
+ * Channels with cloudAlarms on also deliver the clouds' own alarms (the
+ * cloud-alarm mirror's 'raised' and 'cleared' events): severity at least
+ * minSeverity, and the alarm's name or type in cloudAlarmNames (empty = any;
+ * compared ignoring case, spaces, dashes and underscores, so "Port flap"
+ * matches Central's "Port Flap" and Mist's port_flap). The alarm is still the
+ * cloud's: NetHelper never acks or clears it there.
+ *
  * A failed delivery is recorded on the channel and logged, never raised as an
  * alert (that could loop). Webhook URLs and header values are secrets:
  * field-encrypted at rest, never returned, and a blank or masked value on
@@ -19,8 +26,9 @@
 
 const { getPrisma } = require('../config/database');
 const alertService = require('./alert.service');
+const cloudAlarmService = require('./cloud-alarm.service');
 const notifier = require('./notification.service');
-const { formatAlert } = require('./notification.service');
+const { formatAlert, formatCloudAlarm } = require('./notification.service');
 const encryption = require('../utils/encryption');
 const { ALERT_RULES, SEVERITIES } = require('../constants/alert-rules');
 const logger = require('../utils/logger');
@@ -29,6 +37,12 @@ const TYPES = ['email', 'webhook'];
 const SECRET_MASK = '***';
 const MAX_RECIPIENTS = 20;
 const MAX_HEADERS = 10;
+const MAX_ALARM_NAMES = 50;
+// Offered in the channel dialog before either cloud has raised them here.
+const KNOWN_ALARM_NAMES = [
+  { provider: 'aruba_central', name: 'Port Flap' },
+  { provider: 'juniper_mist', name: 'Port flap' },
+];
 const CACHE_TTL_MS = 60 * 1000;
 const JOB_OPTIONS = { attempts: 3, backoff: { type: 'exponential', delay: 10000 }, removeOnComplete: 100, removeOnFail: 100 };
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -49,6 +63,18 @@ function channelMatches(channel, alert) {
   const rules = channel.rules || [];
   if (!rules.length) return alert.rule !== 'automation.raised';
   return rules.includes(alert.rule);
+}
+
+// "Port Flap", "port_flap" and "port-flap" are one name.
+const alarmKey = (name) => String(name || '').trim().toLowerCase().replace(/[\s_-]+/g, ' ');
+
+/** A channel takes this cloud alarm: enabled, opted in, severe enough, and named (or no names). */
+function channelTakesCloudAlarm(channel, alarm) {
+  if (!channel.enabled || !channel.cloudAlarms) return false;
+  if (rank(alarm.severity) < rank(channel.minSeverity)) return false;
+  const names = (channel.cloudAlarmNames || []).map(alarmKey);
+  if (!names.length) return true;
+  return names.includes(alarmKey(alarm.name)) || names.includes(alarmKey(alarm.type));
 }
 
 /** What a notification says about the alert, frozen when it is queued. */
@@ -78,16 +104,22 @@ class NotificationChannelService {
     this.cache = null;
     this.onOpened = (alert) => this.dispatch('opened', alert);
     this.onResolved = (alert) => this.dispatch('resolved', alert);
+    this.onAlarmRaised = (alarm) => this.dispatchCloudAlarm('raised', alarm);
+    this.onAlarmCleared = (alarm) => this.dispatchCloudAlarm('cleared', alarm);
   }
 
   start() {
     alertService.on('opened', this.onOpened);
     alertService.on('resolved', this.onResolved);
+    cloudAlarmService.events.on('raised', this.onAlarmRaised);
+    cloudAlarmService.events.on('cleared', this.onAlarmCleared);
   }
 
   stop() {
     alertService.off('opened', this.onOpened);
     alertService.off('resolved', this.onResolved);
+    cloudAlarmService.events.off('raised', this.onAlarmRaised);
+    cloudAlarmService.events.off('cleared', this.onAlarmCleared);
   }
 
   invalidate() {
@@ -119,9 +151,25 @@ class NotificationChannelService {
     }
   }
 
-  /** Send one notification through a channel row. Throws on failure. */
-  async send(channel, event, alert) {
-    const { subject, text, payload } = formatAlert(event, alert);
+  /** Queue one delivery per channel that takes this cloud alarm. Never throws. */
+  async dispatchCloudAlarm(event, alarm) {
+    try {
+      const channels = (await this.enabledChannels()).filter((channel) => channelTakesCloudAlarm(channel, alarm));
+      if (!channels.length) return 0;
+      const { getQueue } = require('../config/bull');
+      const queue = getQueue('notification');
+      await Promise.all(channels.map((channel) =>
+        queue.add('deliver', { channelId: channel.id, event, cloudAlarm: alarm }, JOB_OPTIONS)));
+      return channels.length;
+    } catch (error) {
+      logger.warn(`Could not queue notifications for cloud alarm ${alarm?.externalId}: ${error.message}`);
+      return 0;
+    }
+  }
+
+  /** Send one notification (an alert, or a cloud alarm) through a channel row. Throws on failure. */
+  async send(channel, event, alert, cloudAlarm = null) {
+    const { subject, text, payload } = cloudAlarm ? formatCloudAlarm(event, cloudAlarm) : formatAlert(event, alert);
     if (channel.type === 'email') {
       await notifier.sendEmail(channel.config.recipients || [], subject, text);
     } else if (channel.type === 'webhook') {
@@ -138,12 +186,12 @@ class NotificationChannelService {
    * channel. A failure is recorded only on the last attempt (earlier ones are
    * retried) and rethrown so Bull retries it.
    */
-  async deliver({ channelId, event, alert }, { finalAttempt = true } = {}) {
+  async deliver({ channelId, event, alert, cloudAlarm }, { finalAttempt = true } = {}) {
     const prisma = getPrisma();
     const channel = await prisma.notificationChannel.findUnique({ where: { id: channelId } });
     if (!channel || !channel.enabled) return { skipped: true };
     try {
-      await this.send(channel, event, alert);
+      await this.send(channel, event, alert, cloudAlarm);
     } catch (error) {
       if (finalAttempt) {
         logger.warn(`Notification channel "${channel.name}" failed: ${error.message}`);
@@ -271,9 +319,36 @@ class NotificationChannelService {
       if (unknown) throw badRequest(`Unknown alert rule "${unknown}"`);
       out.rules = [...new Set(data.rules)];
     }
+    if (data.cloudAlarms !== undefined) out.cloudAlarms = Boolean(data.cloudAlarms);
+    if (data.cloudAlarmNames !== undefined) {
+      if (!Array.isArray(data.cloudAlarmNames)) throw badRequest('cloudAlarmNames must be a list');
+      const names = [...new Set(data.cloudAlarmNames.map((n) => String(n).trim()).filter(Boolean))];
+      if (names.length > MAX_ALARM_NAMES) throw badRequest(`At most ${MAX_ALARM_NAMES} cloud alarm names`);
+      const long = names.find((n) => n.length > 100);
+      if (long) throw badRequest(`"${long.slice(0, 40)}…" is too long for an alarm name`);
+      out.cloudAlarmNames = names;
+    }
     if (data.enabled !== undefined) out.enabled = Boolean(data.enabled);
     if (data.config !== undefined || !existing) out.config = this.storedConfig(type, data.config, existing?.config || {});
     return { type, ...out };
+  }
+
+  /**
+   * Alarm names a channel can pick: the ones the clouds have raised here,
+   * plus well-known ones not seen yet. [{ provider, name }], by name.
+   */
+  async cloudAlarmNames() {
+    const seen = await getPrisma().cloudAlarm.findMany({
+      distinct: ['provider', 'name'],
+      select: { provider: true, name: true },
+      orderBy: { name: 'asc' },
+      take: 500,
+    });
+    const all = [...seen];
+    for (const known of KNOWN_ALARM_NAMES) {
+      if (!all.some((s) => s.provider === known.provider && alarmKey(s.name) === alarmKey(known.name))) all.push(known);
+    }
+    return all.sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }) || a.provider.localeCompare(b.provider));
   }
 
   async list() {
@@ -310,6 +385,7 @@ class NotificationChannelService {
 
 module.exports = new NotificationChannelService();
 module.exports.channelMatches = channelMatches;
+module.exports.channelTakesCloudAlarm = channelTakesCloudAlarm;
 module.exports.alertSnapshot = alertSnapshot;
 module.exports.SECRET_MASK = SECRET_MASK;
 module.exports.JOB_OPTIONS = JOB_OPTIONS;
