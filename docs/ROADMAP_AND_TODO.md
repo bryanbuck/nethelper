@@ -541,8 +541,8 @@ Built-in themes only. Users can't define their own. See "Themes" in `CLAUDE.md` 
 - Done (2026-10-19):
   - The last hardcoded colors are gone. The login and 404 backgrounds are primary gradients, the dashboard status chart reads the current theme's colors (Chart.js can't use CSS variables), and the device raw-data block uses theme tokens. The unused `src/style.css` was deleted.
   - Dark's green was too dark to read as a foreground (`#2D6A00` is 2.8:1 on `#121212`). A new `primary-text` theme color fixes this. It is Dark `#5CAB2A` (6.5:1), and the same as primary in Light and Classic. `.text-primary` (text, icons, text/outlined/tonal buttons and chips) and the primary borders and outlines use it, while fills keep primary, which is 6.6:1 against white text.
+- Done (2026-10-25): foreground contrast. `primary-text` is now Light `#9E4F00` and Classic `#2D5C8A`, and a new `warning-text` (Light `#8C5A00`, Classic `#7A4E00`, Dark = warning) backs `.text-warning`, so tonal warning alerts are no longer yellow on pale yellow (1.6:1 in Light). `tests/unit/theme.spec.js` holds both to 4.5:1 on the surface, the page and inside a tonal tint. The user's choice: Light's `#FF8300` stays as the brand fill with white text on it (2.5:1, kept deliberately in the app bar and filled buttons).
 - Open questions:
-  - Light's orange `#FF8300` is 2.5:1 on white, both as text and behind white button labels. That is below WCAG AA; fixing it means changing the brand color.
   - Per-user (server-side) theme preference only if testers ask.
 
 ---

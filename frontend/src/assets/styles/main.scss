@@ -20,3 +20,9 @@ body {
 :root .text-primary {
   color: rgb(var(--v-theme-primary-text)) !important;
 }
+
+// The same for warning (color="warning" on text, icons, tonal alerts and
+// chips): Light's and Classic's warning yellows are unreadable as text.
+:root .text-warning {
+  color: rgb(var(--v-theme-warning-text)) !important;
+}

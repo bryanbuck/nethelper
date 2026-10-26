@@ -432,7 +432,7 @@ const totals = computed(() => {
   border-left: 2px dotted rgb(var(--v-theme-warning));
 }
 .history-marker.restart .history-marker-icon {
-  color: rgb(var(--v-theme-warning));
+  color: rgb(var(--v-theme-warning-text));
 }
 .history-chart {
   padding-top: 16px;
