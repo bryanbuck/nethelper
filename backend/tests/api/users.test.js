@@ -70,6 +70,21 @@ describe('/users (admin)', () => {
     expect(await bcrypt.compare('a brand new password', row.password)).toBe(true);
   });
 
+  test('a reset ends the user\'s access tokens at once, not at expiry', async () => {
+    const opToken = tokenFor(operator);
+    expect((await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${opToken}`)).status).toBe(200);
+
+    await asAdmin(request(app).post(`/api/v1/users/${operator.id}/reset-password`)).send({ password: 'a brand new password' });
+    expect(mockPrisma.user.rows[1].tokenVersion).toBe(1);
+    const res = await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${opToken}`);
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('Session ended');
+
+    const login = await request(app).post('/api/v1/auth/login').send({ email: 'op@example.com', password: 'a brand new password' });
+    const me = await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${login.body.data.accessToken}`);
+    expect(me.status).toBe(200);
+  });
+
   test('reset enforces the 12-character minimum', async () => {
     const res = await asAdmin(request(app).post(`/api/v1/users/${operator.id}/reset-password`)).send({ password: 'short' });
     expect(res.status).toBe(400);
@@ -147,5 +162,22 @@ describe('POST /auth/change-password', () => {
 
     const login = await request(app).post('/api/v1/auth/login').send({ email: 'op@example.com', password: 'a brand new password' });
     expect(login.status).toBe(200);
+  });
+
+  test('ends the other sessions at once; the tokens it returns keep working', async () => {
+    const otherSession = tokenFor(operator);
+    const res = await change(operator, { currentPassword: PASSWORD, newPassword: 'a brand new password' });
+    expect(res.status).toBe(200);
+    expect(jwt.verify(res.body.data.accessToken, process.env.JWT_SECRET).tv).toBe(1);
+
+    const stale = await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${otherSession}`);
+    expect(stale.status).toBe(401);
+    expect(stale.body.error).toBe('Session ended');
+    const fresh = await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${res.body.data.accessToken}`);
+    expect(fresh.status).toBe(200);
+
+    // A refresh keeps the new version
+    const refreshed = await request(app).post('/api/v1/auth/refresh').send({ refreshToken: res.body.data.refreshToken });
+    expect(jwt.verify(refreshed.body.data.accessToken, process.env.JWT_SECRET).tv).toBe(1);
   });
 });

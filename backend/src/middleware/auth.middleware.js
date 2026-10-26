@@ -5,6 +5,12 @@ const { debugLog, Services } = require('../utils/debug-logger');
 // Create service-specific logger
 const logger = debugLog.createLogger(Services.AUTH);
 
+// An access token is valid only for the user's current tokenVersion. Tokens
+// issued before the claim existed carry none and count as version 0.
+function tokenVersionMatches(decoded, user) {
+  return (decoded.tv ?? 0) === (user.tokenVersion ?? 0);
+}
+
 async function authenticate(req, res, next) {
   const requestId = Math.random().toString(36).substring(7);
   logger.debug('Authentication middleware started', {
@@ -58,6 +64,7 @@ async function authenticate(req, res, next) {
         email: true,
         name: true,
         role: true,
+        tokenVersion: true,
       },
     });
 
@@ -69,6 +76,15 @@ async function authenticate(req, res, next) {
       });
     }
 
+    // The password was changed or reset after this token was issued.
+    if (!tokenVersionMatches(decoded, user)) {
+      logger.warn('Token from an ended session', { userId: user.id }, requestId);
+      return res.status(401).json({
+        success: false,
+        error: 'Session ended',
+      });
+    }
+
     logger.success('User found and authenticated', {
       userId: user.id,
       email: user.email,
@@ -76,7 +92,8 @@ async function authenticate(req, res, next) {
     }, requestId);
 
     // Attach user to request
-    req.user = user;
+    const { tokenVersion: _tokenVersion, ...publicUser } = user;
+    req.user = publicUser;
     next();
   } catch (error) {
     logger.error('Authentication error', {
@@ -134,4 +151,5 @@ function authorize(...roles) {
 module.exports = {
   authenticate,
   authorize,
+  tokenVersionMatches,
 };

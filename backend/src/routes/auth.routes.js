@@ -6,8 +6,13 @@ const { normalizeEmail } = require('../utils/email');
 const { getPrisma } = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
 const logger = require('../utils/logger');
+const { endSocketSessions } = require('../websocket/socket.handler');
 
 const router = express.Router();
+
+// After a password change, how long the other sessions' sockets are kept
+// before they are dropped: long enough for this tab to store its new token.
+const SOCKET_END_DELAY_MS = 2000;
 
 // Hash of a random string, used to equalize login timing for unknown users.
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync(require('crypto').randomBytes(16).toString('hex'), 12);
@@ -26,13 +31,15 @@ const loginValidation = [
   body('password').notEmpty().withMessage('Password is required'),
 ];
 
-// Generate JWT tokens
-function generateTokens(userId) {
+// Generate JWT tokens. The access token carries the user's tokenVersion (`tv`),
+// which authenticate() checks, so bumping it ends every session at once.
+function generateTokens(user) {
+  const userId = user.id;
   logger.debug('Generating tokens', { userId });
   
   try {
     const accessToken = jwt.sign(
-      { userId },
+      { userId, tv: user.tokenVersion ?? 0 },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
@@ -192,7 +199,7 @@ router.post('/login', loginValidation, async (req, res) => {
     logger.debug(`[${requestId}] Password verified, generating tokens`, { userId: user.id });
 
     // Generate tokens
-    const { accessToken, refreshToken } = generateTokens(user.id);
+    const { accessToken, refreshToken } = generateTokens(user);
     
     logger.debug(`[${requestId}] Tokens generated, updating database`, { 
       userId: user.id,
@@ -286,7 +293,7 @@ router.post('/refresh', async (req, res) => {
     }
 
     // Generate new tokens
-    const { accessToken, refreshToken: newRefreshToken } = generateTokens(decoded.userId);
+    const { accessToken, refreshToken: newRefreshToken } = generateTokens(user);
 
     // Update user with new refresh token
     await prisma.user.update({
@@ -427,8 +434,10 @@ router.put('/me', authenticate, [
 });
 
 // Change your own password. Requires the current one. Issues a fresh token
-// pair for this session; the stored refresh token is replaced, so any other
-// session is signed out when its access token expires.
+// pair for this session; every other session ends at once: the stored refresh
+// token is replaced and the tokenVersion bump rejects their access tokens.
+// Their sockets are dropped once this reply is out, so this tab has its new
+// token before its own socket reconnects.
 router.post('/change-password', authenticate, [
   body('currentPassword').notEmpty().withMessage('Current password is required'),
   body('newPassword').isLength({ min: 12 }).withMessage('New password must be at least 12 characters'),
@@ -452,11 +461,13 @@ router.post('/change-password', authenticate, [
       return res.status(400).json({ success: false, error: 'New password must differ from the current one' });
     }
 
-    const { accessToken, refreshToken } = generateTokens(user.id);
+    const tokenVersion = (user.tokenVersion ?? 0) + 1;
+    const { accessToken, refreshToken } = generateTokens({ id: user.id, tokenVersion });
     await prisma.user.update({
       where: { id: user.id },
-      data: { password: await bcrypt.hash(newPassword, 12), refreshToken },
+      data: { password: await bcrypt.hash(newPassword, 12), refreshToken, tokenVersion },
     });
+    res.on('finish', () => setTimeout(() => endSocketSessions(user.id, tokenVersion), SOCKET_END_DELAY_MS).unref());
 
     logger.info('User changed their password', { userId: user.id });
     res.json({ success: true, data: { accessToken, refreshToken } });

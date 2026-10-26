@@ -2,8 +2,31 @@ const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const logger = require('../utils/logger');
 const { allowedOrigins } = require('../config/cors');
+const { tokenVersionMatches } = require('../middleware/auth.middleware');
 
 let io;
+
+// Handshake auth: a valid access token for an existing user at its current
+// tokenVersion (a password change or reset ends older sessions).
+async function authenticateSocket(socket, next) {
+  try {
+    const token = socket.handshake.auth.token;
+    if (!token) {
+      return next(new Error('Authentication required'));
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const { getPrisma } = require('../config/database');
+    const user = await getPrisma().user.findUnique({ where: { id: decoded.userId }, select: { tokenVersion: true } });
+    if (!user || !tokenVersionMatches(decoded, user)) return next(new Error('Session ended'));
+    socket.userId = decoded.userId;
+    socket.tokenVersion = user.tokenVersion ?? 0;
+    next();
+  } catch (error) {
+    logger.error('Socket authentication error:', error);
+    next(new Error('Invalid token'));
+  }
+}
 
 function initializeSocket(server) {
   io = new Server(server, {
@@ -15,21 +38,7 @@ function initializeSocket(server) {
   });
 
   // Authentication middleware
-  io.use(async (socket, next) => {
-    try {
-      const token = socket.handshake.auth.token;
-      if (!token) {
-        return next(new Error('Authentication required'));
-      }
-
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      socket.userId = decoded.userId;
-      next();
-    } catch (error) {
-      logger.error('Socket authentication error:', error);
-      next(new Error('Invalid token'));
-    }
-  });
+  io.use(authenticateSocket);
 
   // Connection handler
   io.on('connection', (socket) => {
@@ -95,6 +104,22 @@ function initializeSocket(server) {
   return io;
 }
 
+// Drop a user's sockets opened before tokenVersion `version` (a password
+// change or reset). They can reconnect only with a current token. Returns
+// how many were dropped.
+function endSocketSessions(userId, version) {
+  if (!io) return 0;
+  let ended = 0;
+  for (const socket of io.of('/').sockets.values()) {
+    if (socket.userId === userId && (socket.tokenVersion ?? 0) < version) {
+      socket.disconnect(true);
+      ended += 1;
+    }
+  }
+  if (ended) logger.info(`Ended ${ended} socket session(s) for user ${userId}`);
+  return ended;
+}
+
 function getIO() {
   if (!io) {
     throw new Error('Socket.io not initialized');
@@ -105,4 +130,6 @@ function getIO() {
 module.exports = {
   initializeSocket,
   getIO,
+  authenticateSocket,
+  endSocketSessions,
 };

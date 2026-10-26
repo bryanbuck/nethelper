@@ -341,7 +341,8 @@ async function changePassword(user) {
       where: { id: user.id },
       data: { 
         password: hashedPassword,
-        refreshToken: null // Invalidate existing refresh tokens
+        refreshToken: null, // Invalidate existing refresh tokens
+        tokenVersion: { increment: 1 } // and the access tokens already issued
       }
     });
 

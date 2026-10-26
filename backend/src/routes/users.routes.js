@@ -12,6 +12,7 @@ const { getPrisma } = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
 const { deleteUserPreservingData } = require('../services/user-lifecycle');
 const logger = require('../utils/logger');
+const { endSocketSessions } = require('../websocket/socket.handler');
 
 const router = express.Router();
 router.use(authenticate, authorize('admin'));
@@ -80,7 +81,8 @@ router.put('/:id', [
 });
 
 // Set a new password for someone else (e.g. they forgot theirs). Signs them
-// out: the stored refresh token is revoked.
+// out everywhere at once: the stored refresh token is revoked and the
+// tokenVersion bump rejects their access tokens and drops their sockets.
 router.post('/:id/reset-password', [
   idParam,
   body('password').isLength({ min: 12 }).withMessage('Password must be at least 12 characters'),
@@ -91,10 +93,12 @@ router.post('/:id/reset-password', [
     const user = await findUser(prisma, req.params.id, res);
     if (!user) return;
 
-    await prisma.user.update({
+    const { tokenVersion } = await prisma.user.update({
       where: { id: user.id },
-      data: { password: await bcrypt.hash(req.body.password, 12), refreshToken: null },
+      data: { password: await bcrypt.hash(req.body.password, 12), refreshToken: null, tokenVersion: { increment: 1 } },
+      select: { tokenVersion: true },
     });
+    endSocketSessions(user.id, tokenVersion);
     logger.info('Password reset by admin', { userId: user.id, resetBy: req.user.id });
     res.json({ success: true, message: 'Password reset' });
   } catch (error) {
