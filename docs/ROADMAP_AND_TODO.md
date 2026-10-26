@@ -86,7 +86,7 @@ Preparing the dev-environment build for a private, in-house beta. Deploy targets
 - ⏳ Post-beta hardening (from the audit):
   - Tokens are kept in `localStorage`, so an XSS would expose them; the CSP is the guard. Consider an httpOnly, SameSite refresh-token cookie.
   - After a password change or an admin reset, access tokens already issued keep working until they expire (`JWT_EXPIRES_IN`, 1 h); only the refresh token is revoked. Role changes and deletions already apply on the next request (`authenticate` reloads the user). Add a `tokenVersion` claim that `authenticate` checks.
-  - Upgrade the test toolchain majors (jest 30, vitest 5, the eslint config) to clear the dev-only advisories.
+  - ✅ Dev-only advisories cleared: `npm audit` (dev dependencies included) reports none in either tier (checked 2026-10-25), and the frontend is on vitest 5. Left as plain upgrades, not security fixes: jest 30 and eslint 10.
 - ✅ Simpler install (2026-10-21, branch `feat/easy-install`):
   - `deploy/install.sh`: one-step Compose install and upgrade. It generates the secrets, pulls or builds the images, waits for health, and creates the first admin through `create-admin --if-no-users`.
   - `.github/workflows/release.yml`: on a `v<VERSION>` tag, GHCR images plus a release tarball with a prebuilt `frontend/dist`. A manual run is a dry run.
@@ -182,7 +182,7 @@ Deferred:
 
 ### 2a. Cloud alarms (read-only mirror of Mist / Central active alarms)
 **Priority**: Medium
-**Status**: ✅ Feed-first version merged to `master` 2026-10-23 (`6925242`), not yet released. The active-alarm dashboard card, the History tab row and local silences below are still deferred; the open questions below still apply to them.
+**Status**: ✅ Feed-first version merged to `master` 2026-10-23 (`6925242`), shipped in `v0.9.0-beta.4` (2026-10-24). The active-alarm dashboard card, the History tab row and local silences below are still deferred; the open questions below still apply to them.
 
 **What was built (2026-10-23)**, a smaller first step than the design below, chosen because the Activity feed (item 14) asks only "what happened, when", which fits what both clouds return:
 - `CloudAlarm` table (migration `cloud_alarms`), not `DeviceEvent`: a Central alert names no device in a field, and `DeviceEvent` needs one. `deviceId` is optional (`SetNull` on delete, re-pointed on merge); `integrationId` is a plain column.
@@ -631,7 +631,7 @@ Admin-only page at `/system`, opened from the version indicator at the right of 
 
 ### 14. Activity feed (fleet-wide device activity)
 **Priority**: Medium
-**Status**: ✅ Merged to `master` 2026-10-23 (`eef1049`), not yet released. Cloud alarms joined it as a category on 2026-10-23 (item 2a).
+**Status**: ✅ Merged to `master` 2026-10-23 (`eef1049`), shipped in `v0.9.0-beta.4` (2026-10-24). Cloud alarms joined it as a category on 2026-10-23 (item 2a).
 
 A rolling feed of what happened to the managed devices, at `/activity` (nav item) and in the dashboard's Recent Activity card (which used to be just the loaded table page sorted by `lastSeen`). Separate from the status bar, which is about NetHelper itself. `GET /api/v1/activity` (`services/activity.service.js`, any signed-in role, read-only) merges rows other services already write: `DeviceEvent` status changes (ping/cloud) and restarts, `ConfigBackup` successes that found a change, and device alerts opened/resolved. Noise control: a device's first ping/cloud state (no `data.previous`) is a History starting point, not news; a device's first successful backup is a capture, not a change; the ping/cloud offline alert rules are left out (their status events say it) and so are resolutions by merge; port link/PoE/live-monitor events are a separate `port` category, off by default; repeats of one kind on one device/port within 10 minutes fold into one "flapping" item with a count. Filters: categories, vendor, device (kept in the URL); paging by `before`. The page refetches its newest items a few seconds after a relevant `device:event`, `backup:completed` (with changes) or `alert:*`.
 
@@ -655,5 +655,5 @@ The old per-tier backlogs (`backend_todo.txt` / `frontend_todo.txt`, dated March
 
 ---
 
-**Last Updated**: 2026-10-19 (Mist first contact and parity)
+**Last Updated**: 2026-10-25 (beta.5 cleanup)
 **Maintained By**: Development Team
