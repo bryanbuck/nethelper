@@ -542,7 +542,7 @@ const addNode = (category, nodeData) => {
 .node-item-later {
   font-size: 10px;
   font-weight: 500;
-  color: rgb(var(--v-theme-warning));
+  color: rgb(var(--v-theme-warning-text));
   margin-top: 2px;
 }
 
