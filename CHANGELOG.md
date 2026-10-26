@@ -10,6 +10,7 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ### Changed
 - Themes: text in the Light theme's orange and in the Light and Classic warning colors is now readable (at least 4.5:1). Orange text, links and outlines use a darker orange, and warning banners, chips and icons a dark amber instead of yellow on pale yellow. The brand orange stays as the app bar and button fill.
+- A cloud-managed device its cloud reports offline, whose IP address another device now holds, shows as offline instead of warning. NetHelper stops pinging it (the reply is the other device's), its page names the device that has the address, and its History ping lane shows no data from then on.
 - `automation:completed` socket events carry the run's `deviceId`, like `automation:started`.
 - Dependency updates: Vuetify 3.13.7, Chart.js 4.6.1, Sass 1.106, ESLint 9.39 (frontend); nodemailer 10.2.1, dotenv 18.0.9 (backend).
 
