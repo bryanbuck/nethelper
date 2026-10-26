@@ -717,6 +717,10 @@ model NotificationChannel {
   config             Json
   minSeverity        String    @default("warning") // info | warning | critical
   rules              String[]  @default([])
+  // Also deliver the clouds' own alarms (CloudAlarm, raised and cleared);
+  // cloudAlarmNames narrows them by alarm name or type (empty = any).
+  cloudAlarms        Boolean   @default(false)
+  cloudAlarmNames    String[]  @default([])
   enabled            Boolean   @default(true)
   lastDeliveryAt     DateTime?
   lastDeliveryStatus String? // success | failed

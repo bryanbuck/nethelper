@@ -3416,6 +3416,25 @@
           "response": []
         },
         {
+          "name": "GET /settings/notification-channels/cloud-alarm-names",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/settings/notification-channels/cloud-alarm-names",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "notification-channels",
+                "cloud-alarm-names"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "POST /settings/notification-channels",
           "request": {
             "method": "POST",

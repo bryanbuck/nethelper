@@ -5,6 +5,7 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 ## [Unreleased]
 
 ### Added
+- Notification channels can also send cloud alarms (Settings → Notifications → "Also send cloud alarms"): one message when Aruba Central or Juniper Mist raises an alarm and one when it clears, at the channel's minimum severity, optionally only for named alarms such as Port Flap. Only alarms from the last hour are sent, so upgrading or restarting doesn't send old ones.
 - Device page: a banner with the device's unresolved alerts (worst severity first, linking to the Alerts page filtered to the device), a Recent Automation Runs card on the Overview once an automation has run against it (linking to Run History filtered to the device), and an Activity button that opens the Activity feed filtered to the device.
 - Alerts and Run History take a `?deviceId=` filter, shown as a chip you can clear.
 

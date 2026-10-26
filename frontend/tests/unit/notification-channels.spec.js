@@ -14,7 +14,12 @@ vi.mock('@/services/settings.service', () => ({
     createNotificationChannel: vi.fn(async (p) => ({ id: 'new', rules: [], config: {}, ...p })),
     updateNotificationChannel: vi.fn(async (id, p) => ({ id, rules: [], config: {}, ...p })),
     deleteNotificationChannel: vi.fn(),
-    testNotificationChannel: vi.fn()
+    testNotificationChannel: vi.fn(),
+    getCloudAlarmNames: vi.fn(async () => [
+      { provider: 'aruba_central', name: 'IPsec SA Down' },
+      { provider: 'aruba_central', name: 'Port Flap' },
+      { provider: 'juniper_mist', name: 'Port flap' }
+    ])
   }
 }))
 
@@ -60,6 +65,8 @@ describe('notification channels', () => {
       type: 'webhook',
       minSeverity: 'critical',
       rules: [],
+      cloudAlarms: false,
+      cloudAlarmNames: [],
       enabled: true,
       config: { url: '***', headers: { 'X-Token': '***' } }
     })
@@ -68,6 +75,25 @@ describe('notification channels', () => {
     expect(wrapper.vm.payloadOf(wrapper.vm.draft).config).toEqual({
       url: 'https://hooks.slack.com/services/NEW', headers: { 'X-Token': 'fresh' }
     })
+    wrapper.unmount()
+  })
+
+  test('cloud alarms: names offered once per spelling, loaded once, sent trimmed', async () => {
+    const wrapper = mount(NotificationChannels, {
+      global: { plugins: [createVuetify({ components, directives })] },
+      attachTo: document.body
+    })
+    await flushPromises()
+    wrapper.vm.openEditor({ ...WEBHOOK, cloudAlarms: true, cloudAlarmNames: ['Port Flap'] })
+    await flushPromises()
+    expect(wrapper.vm.cloudAlarmNameItems).toEqual(['IPsec SA Down', 'Port Flap'])
+    wrapper.vm.draft.cloudAlarmNames.push('  IPsec SA Down ')
+    expect(wrapper.vm.payloadOf(wrapper.vm.draft)).toMatchObject({ cloudAlarms: true, cloudAlarmNames: ['Port Flap', 'IPsec SA Down'] })
+
+    wrapper.vm.openEditor(null)
+    await flushPromises()
+    expect(settingsService.getCloudAlarmNames).toHaveBeenCalledTimes(1)
+    expect(wrapper.vm.draft).toMatchObject({ cloudAlarms: false, cloudAlarmNames: [] })
     wrapper.unmount()
   })
 

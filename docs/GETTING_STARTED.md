@@ -66,7 +66,7 @@ The status column comes from ping first, then the cloud:
 | offline | Doesn't answer ping and its cloud (if any) agrees, or hasn't been checked yet |
 | warning | The cloud and ping disagree: the cloud says online but ping fails (no route or ICMP filtered), or the cloud says offline but its address answers (possibly another device now has that IP). Hover the status for the reason |
 
-**Alerts** lists open problems: devices offline, configs out of sync with Central, failed backups or syncs. They close by themselves when the condition clears. Admins can tune or turn off each rule under **Settings → Alerts**. To get them by email or in Slack/Teams too, an admin adds a channel under **Settings → Notifications** and presses **Test** (email also needs `SMTP_HOST` on the server, see `docs/CONFIGURATION.md`).
+**Alerts** lists open problems: devices offline, configs out of sync with Central, failed backups or syncs. They close by themselves when the condition clears. Admins can tune or turn off each rule under **Settings → Alerts**. To get them by email or in Slack/Teams too, an admin adds a channel under **Settings → Notifications** and presses **Test** (email also needs `SMTP_HOST` on the server, see `docs/CONFIGURATION.md`). Turn on **Also send cloud alarms** in a channel to get the clouds' own alarms there too, for example Central's Port Flap.
 
 ## 7. Add your team
 
