@@ -8,17 +8,18 @@
     :link="showActions"
     @click="showActions && $emit('action-click')"
   >
-    <v-card-text class="d-flex align-center justify-space-between">
+    <!-- On a filled card everything inherits one readable color (contentStyle) -->
+    <v-card-text class="d-flex align-center justify-space-between" :style="contentStyle">
       <div>
         <div class="text-h4 font-weight-bold stats-value" :class="valueColor">
           {{ formattedValue }}
         </div>
-        <div class="text-subtitle-1 text-medium-emphasis mt-1">
+        <div class="text-subtitle-1 mt-1" :class="filled ? 'stats-secondary' : 'text-medium-emphasis'">
           {{ title }}
         </div>
-        <div v-if="trend" class="d-flex align-center mt-2">
+        <div v-if="trend" class="d-flex align-center mt-2" :class="{ 'stats-secondary': filled }">
           <v-icon 
-            :color="trendColor" 
+            :color="filled ? undefined : trendColor" 
             size="small" 
             class="mr-1"
           >
@@ -26,7 +27,7 @@
           </v-icon>
           <span 
             class="text-caption font-weight-medium" 
-            :class="trendColor"
+            :class="filled ? undefined : trendColor"
           >
             {{ trendValue }}{{ trendSuffix }} {{ trendLabel }}
           </span>
@@ -34,7 +35,7 @@
       </div>
       <div class="stats-icon">
         <v-icon 
-          :color="iconColor" 
+          :color="filled ? undefined : iconColor" 
           size="48"
         >
           {{ icon }}
@@ -42,11 +43,11 @@
       </div>
     </v-card-text>
     
-    <v-card-actions v-if="showActions">
+    <v-card-actions v-if="showActions" :style="contentStyle">
       <v-btn 
         variant="text" 
         size="small" 
-        :color="color"
+        :color="filled ? 'inherit' : color"
       >
         View Details
         <v-icon end>mdi-arrow-right</v-icon>
@@ -57,6 +58,8 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useTheme } from 'vuetify'
+import { readableOn } from '@/utils/contrast'
 
 const props = defineProps({
   title: {
@@ -108,6 +111,18 @@ const props = defineProps({
 
 defineEmits(['action-click'])
 
+const theme = useTheme()
+
+// Elevated/flat cards are filled with `color`. Their text must follow the
+// fill, not the page: black or white, whichever reads better on this theme's
+// fill (the themes' on-* colors and the page text don't, e.g. dark text on
+// Classic's blue, white on Dark's yellow).
+const filled = computed(() => ['elevated', 'flat'].includes(props.variant))
+const contentStyle = computed(() => {
+  const fill = filled.value && theme.current.value.colors[props.color]
+  return fill ? { color: readableOn(fill) } : undefined
+})
+
 const formattedValue = computed(() => {
   if (props.loading) return '...';
   if (typeof props.value === 'number') {
@@ -135,6 +150,7 @@ const trendColor = computed(() => {
 })
 
 const valueColor = computed(() => {
+  if (filled.value) return props.loading ? 'stats-secondary' : undefined
   return props.loading ? 'text-medium-emphasis' : 'text-high-emphasis'
 })
 
@@ -158,5 +174,11 @@ const iconColor = computed(() => {
 
 .stats-icon {
   opacity: 0.7;
+}
+
+/* Secondary text on a fill: the fill's text color, slightly lighter
+   (theme.spec.js checks it stays at least 4.5:1) */
+.stats-secondary {
+  opacity: 0.92;
 }
 </style>
