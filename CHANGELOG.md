@@ -4,6 +4,8 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ## [Unreleased]
 
+## [0.9.0-beta.5] — 2026-10-25
+
 ### Added
 - Notification channels can also send cloud alarms (Settings → Notifications → "Also send cloud alarms"): one message when Aruba Central or Juniper Mist raises an alarm and one when it clears, at the channel's minimum severity, optionally only for named alarms such as Port Flap. Only alarms from the last hour are sent, so upgrading or restarting doesn't send old ones.
 - Device page: a banner with the device's unresolved alerts (worst severity first, linking to the Alerts page filtered to the device), a Recent Automation Runs card on the Overview once an automation has run against it (linking to Run History filtered to the device), and an Activity button that opens the Activity feed filtered to the device.
@@ -25,6 +27,11 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ### Removed
 - Frontend: the unused FullCalendar packages (left over from the removed Schedule page).
+### Upgrading from 0.9.0-beta.4
+- Take a database backup first: migrations are forward-only. **Docker Compose**: run `deploy/install.sh` from the new tree (it keeps your `.env` values). **Bare metal**: follow "Upgrading" in [`deploy/README.md`](deploy/README.md).
+- Two migrations, both adding columns with defaults: `20261025120000_user_token_version` adds `User.tokenVersion`, and `20261025180000_notification_cloud_alarms` adds `cloudAlarms`/`cloudAlarmNames` to `NotificationChannel` (off for existing channels). No new settings or environment variables.
+- Nobody is signed out by the upgrade: tokens issued by beta.4 stay valid until they expire.
+- To get cloud alarms such as Central's Port Flap by email or webhook, edit a channel under Settings → Notifications and turn on **Also send cloud alarms**.
 
 ## [0.9.0-beta.4] — 2026-10-24
 
