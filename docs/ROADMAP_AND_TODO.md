@@ -175,7 +175,7 @@ Also open from the cloud plan (2026-10-19), to check on hardware:
 Deferred:
 - ⏳ Rule scoping (per device, group, site) and custom thresholds; maintenance windows / snooze.
 - ⏳ Port-flap detection from `port.link.*` events; API/transport failure alerts beyond backups.
-- ⏳ Open-alerts banner on the device page.
+- ✅ Open-alerts banner on the device page (2026-10-25, `components/devices/DeviceAlertsBanner.vue`): the device's unresolved alerts, colored by the worst severity, linking to `/alerts?deviceId=`.
 - ⏳ Multi-instance: settle timers are in memory (same single-instance assumption as the live monitor).
 
 ---
@@ -301,7 +301,8 @@ Shipped (`services/automation/`: `graph.js`, `nodes.js` registry, `engine.js`, `
 - ✅ Builder "Run now" (was a placeholder "Test" button) saves and queues a run. Automation jobs run at most once (`attempts: 1`; the queue default of 3 could repeat steps). Fixed the builder counting vue-flow edges as nodes, which broke its own validation.
 
 Deferred:
-- ⏳ Per-device run history on the device page; a run-history retention setting in the UI.
+- ✅ Per-device run history on the device page (2026-10-25): the Overview's Recent Automation Runs card (`components/devices/DeviceRecentRunsCard.vue`, shown once a run targeted the device), linking to Run History filtered by `?deviceId=`; `automation:completed` now carries `deviceId`.
+- ⏳ A run-history retention setting in the UI.
 - ⏳ The remaining actions (reboot, configure, command, firmware, HTTP request) and notification nodes; config writes are out of scope until the restore direction (`MULTI_VENDOR_ROADMAP.md` §8b).
 - ⏳ Alert-trigger runs are capped only by alert dedup; no per-automation rate limit yet.
 
@@ -636,7 +637,7 @@ Admin-only page at `/system`, opened from the version indicator at the right of 
 A rolling feed of what happened to the managed devices, at `/activity` (nav item) and in the dashboard's Recent Activity card (which used to be just the loaded table page sorted by `lastSeen`). Separate from the status bar, which is about NetHelper itself. `GET /api/v1/activity` (`services/activity.service.js`, any signed-in role, read-only) merges rows other services already write: `DeviceEvent` status changes (ping/cloud) and restarts, `ConfigBackup` successes that found a change, and device alerts opened/resolved. Noise control: a device's first ping/cloud state (no `data.previous`) is a History starting point, not news; a device's first successful backup is a capture, not a change; the ping/cloud offline alert rules are left out (their status events say it) and so are resolutions by merge; port link/PoE/live-monitor events are a separate `port` category, off by default; repeats of one kind on one device/port within 10 minutes fold into one "flapping" item with a count. Filters: categories, vendor, device (kept in the URL); paging by `before`. The page refetches its newest items a few seconds after a relevant `device:event`, `backup:completed` (with changes) or `alert:*`.
 
 **Deferred**:
-- Device-group and free-text filters; a link from the device page to its filtered feed.
+- Device-group and free-text filters. (The device page's Activity button, opening the feed filtered to the device, shipped 2026-10-25.)
 - Sync results (devices adopted, possible duplicates, devices that left a cloud) and discovery imports as feed items: they aren't stored per device today.
 - Folding spans one page only: a flap split across a page boundary shows as two items.
 - Per-port noise rules (e.g. show uplink ports only) once ports carry a role.

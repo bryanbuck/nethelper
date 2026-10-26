@@ -4,6 +4,13 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ## [Unreleased]
 
+### Added
+- Device page: a banner with the device's unresolved alerts (worst severity first, linking to the Alerts page filtered to the device), a Recent Automation Runs card on the Overview once an automation has run against it (linking to Run History filtered to the device), and an Activity button that opens the Activity feed filtered to the device.
+- Alerts and Run History take a `?deviceId=` filter, shown as a chip you can clear.
+
+### Changed
+- `automation:completed` socket events carry the run's `deviceId`, like `automation:started`.
+
 ### Security
 - Backend: `body-parser` 1.20.9, fixing a denial of service from extra bytes after a compressed request body (GHSA-27r3-jxmh-p828, high). Bull's `uuid` is held at 11.1.1 (GHSA-w5hq-g745-h8pq, moderate; Bull calls only `v4()`, so it was not reachable). `npm audit` is clean in both tiers.
 - Frontend image: nginx 1.30 (stable) instead of 1.27, whose image had not been rebuilt since June 2025 and so carried 16 months of unpatched nginx and Alpine fixes.

@@ -63,6 +63,15 @@
               {{ sev.title }}
             </v-chip>
           </v-chip-group>
+          <v-chip
+            v-if="deviceFilter"
+            closable
+            size="small"
+            prepend-icon="mdi-router-network"
+            @click:close="clearDeviceFilter"
+          >
+            {{ deviceFilterName }}
+          </v-chip>
           <v-spacer />
           <v-select
             v-model="ruleFilter"
@@ -211,7 +220,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAlertsStore } from '@/stores/alerts'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -224,6 +233,7 @@ import {
 } from '@/models/alerts'
 
 const route = useRoute()
+const router = useRouter()
 const alertsStore = useAlertsStore()
 const authStore = useAuthStore()
 const notifications = useNotificationsStore()
@@ -233,6 +243,10 @@ const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole
 const statusTab = ref(['active', 'open', 'acknowledged', 'resolved', 'all'].includes(route.query.status) ? route.query.status : 'active')
 const severityFilter = ref([])
 const ruleFilter = ref(route.query.rule || null)
+// From the device page's alerts banner (?deviceId=)
+const deviceFilter = ref(route.query.deviceId || null)
+const deviceFilterName = computed(() =>
+  alertsStore.items.find((a) => a.device?.id === deviceFilter.value)?.device?.name || 'One device')
 const search = ref('')
 const page = ref(1)
 const itemsPerPage = ref(25)
@@ -263,6 +277,7 @@ async function reload(toPage = page.value) {
       status: statusTab.value,
       severity: severityFilter.value,
       rule: ruleFilter.value,
+      deviceId: deviceFilter.value,
       q: search.value?.trim() || null,
       page: page.value,
       limit: itemsPerPage.value
@@ -270,6 +285,12 @@ async function reload(toPage = page.value) {
   } catch (error) {
     notifications.showError(error.userMessage || error.message || 'Failed to load alerts')
   }
+}
+
+function clearDeviceFilter() {
+  deviceFilter.value = null
+  router.replace({ query: { ...route.query, deviceId: undefined } })
+  reload(1)
 }
 
 function onTableOptions(options) {

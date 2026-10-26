@@ -154,6 +154,9 @@
       </v-col>
     </v-row>
 
+    <!-- Unresolved alerts for this device -->
+    <DeviceAlertsBanner v-if="device" :device-id="device.id" />
+
     <!-- Overview / Live -->
     <v-tabs v-if="device" v-model="tab" color="primary" class="mb-4">
       <v-tab value="overview">
@@ -172,6 +175,15 @@
         <v-icon start icon="mdi-timeline-clock-outline" />
         History
       </v-tab>
+      <v-spacer />
+      <v-btn
+        variant="text"
+        class="align-self-center"
+        prepend-icon="mdi-timeline-text-outline"
+        :to="{ path: '/activity', query: { deviceId: device.id } }"
+      >
+        Activity
+      </v-btn>
     </v-tabs>
 
     <!-- Loading State -->
@@ -626,6 +638,9 @@
           </v-card>
         </v-col>
       </v-row>
+
+      <!-- Automation runs that targeted this device -->
+      <DeviceRecentRunsCard :device-id="device.id" />
     </template>
 
     <!-- Connection Test Dialog -->
@@ -683,6 +698,8 @@ import DeviceLivePanel from '@/components/devices/DeviceLivePanel.vue'
 import DeviceNeighborsPanel from '@/components/devices/DeviceNeighborsPanel.vue'
 import DeviceHistoryPanel from '@/components/devices/DeviceHistoryPanel.vue'
 import DeviceAddressLookup from '@/components/devices/DeviceAddressLookup.vue'
+import DeviceAlertsBanner from '@/components/devices/DeviceAlertsBanner.vue'
+import DeviceRecentRunsCard from '@/components/devices/DeviceRecentRunsCard.vue'
 import { lastSeenSummary } from '@/models/device-seen'
 import DeviceMergeDialog from '@/components/devices/DeviceMergeDialog.vue'
 import DeviceEditDialog from '@/components/devices/DeviceEditDialog.vue'
