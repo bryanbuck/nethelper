@@ -33,7 +33,7 @@ beforeAll(async () => {
 beforeEach(() => {
   jest.clearAllMocks();
   mockRows.clear();
-  mockRows.set(ID, { id: ID, automationId: 'a1', status: 'pending', trigger: 'schedule', startedAt: null });
+  mockRows.set(ID, { id: ID, automationId: 'a1', deviceId: 'd1', status: 'pending', trigger: 'schedule', startedAt: null });
 });
 const auth = (r) => r.set('Authorization', `Bearer ${token}`);
 
@@ -55,6 +55,6 @@ test('cancelling a pending run tells clients; a finished run can\'t be cancelled
   const res = await auth(request(app).patch(`/api/v1/executions/${ID}/cancel`));
   expect(res.status).toBe(200);
   expect(mockRows.get(ID).status).toBe('cancelled');
-  expect(mockEmit).toHaveBeenCalledWith('automation:completed', expect.objectContaining({ executionId: ID, status: 'cancelled' }));
+  expect(mockEmit).toHaveBeenCalledWith('automation:completed', expect.objectContaining({ executionId: ID, deviceId: 'd1', status: 'cancelled' }));
   expect((await auth(request(app).patch(`/api/v1/executions/${ID}/cancel`))).status).toBe(400);
 });

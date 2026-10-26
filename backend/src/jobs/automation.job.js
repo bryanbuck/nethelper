@@ -78,7 +78,7 @@ async function runAutomation({ automationId, executionId, deviceId, alertId, con
     data: { status, completedAt, duration, output, error },
   });
   await prisma.automation.update({ where: { id: automationId }, data: { lastRun: completedAt } });
-  emit('automation:completed', { executionId: execution.id, automationId, automation: summary, status, output, error, duration, trigger });
+  emit('automation:completed', { executionId: execution.id, automationId, automation: summary, deviceId: device?.id || null, status, output, error, duration, trigger });
   logger.info('Automation run finished', { automationId, executionId: execution.id, status, trigger });
   return { executionId: execution.id, status };
 }

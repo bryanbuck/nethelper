@@ -224,6 +224,7 @@ router.patch('/:id/cancel', authorize('admin', 'operator'), async (req, res) => 
           executionId: id,
           automationId: execution.automationId,
           automation: updatedExecution.automation,
+          deviceId: execution.deviceId || null,
           status: 'cancelled',
           trigger: execution.trigger,
         });

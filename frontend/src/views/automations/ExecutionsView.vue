@@ -49,6 +49,15 @@
             style="max-width: 180px"
             @update:model-value="reload(1)"
           />
+          <v-chip
+            v-if="deviceFilter"
+            closable
+            size="small"
+            prepend-icon="mdi-router-network"
+            @click:close="clearDeviceFilter"
+          >
+            {{ deviceFilterName }}
+          </v-chip>
           <v-spacer />
           <v-btn variant="text" icon="mdi-refresh" title="Refresh" :loading="store.loading" @click="reload()" />
         </v-card-title>
@@ -186,7 +195,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useExecutionsStore } from '@/stores/executions'
 import { useAutomationsStore } from '@/stores/automations'
 import { useAuthStore } from '@/stores/auth'
@@ -204,6 +213,7 @@ import {
 useWebSocket() // live status as runs start and finish
 
 const route = useRoute()
+const router = useRouter()
 const store = useExecutionsStore()
 const automationsStore = useAutomationsStore()
 const authStore = useAuthStore()
@@ -214,6 +224,10 @@ const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole
 const automationFilter = ref(route.query.automationId || null)
 const statusFilter = ref(route.query.status || null)
 const triggerFilter = ref(route.query.trigger || null)
+// From the device page's Recent Automation Runs card (?deviceId=)
+const deviceFilter = ref(route.query.deviceId || null)
+const deviceFilterName = computed(() =>
+  store.items.find((r) => r.device?.id === deviceFilter.value)?.device?.name || 'One device')
 const page = ref(1)
 const itemsPerPage = ref(25)
 const cancelling = ref(null)
@@ -243,12 +257,19 @@ async function reload(toPage = page.value) {
       automationId: automationFilter.value,
       status: statusFilter.value,
       trigger: triggerFilter.value,
+      deviceId: deviceFilter.value,
       page: page.value,
       limit: itemsPerPage.value
     })
   } catch (error) {
     notifications.showError(error.userMessage || error.message || 'Failed to load run history')
   }
+}
+
+function clearDeviceFilter() {
+  deviceFilter.value = null
+  router.replace({ query: { ...route.query, deviceId: undefined } })
+  reload(1)
 }
 
 function onTableOptions(options) {
