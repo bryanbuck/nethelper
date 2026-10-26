@@ -3,8 +3,8 @@
     <!-- Header with breadcrumbs and actions -->
     <v-row>
       <v-col cols="12">
-        <div class="d-flex align-center justify-space-between mb-4">
-          <div>
+        <div class="d-flex flex-wrap align-center justify-space-between ga-3 mb-4">
+          <div class="header-title">
             <v-breadcrumbs
               :items="breadcrumbs"
               divider=">"
@@ -47,10 +47,11 @@
               </span>
             </div>
           </div>
-          <div class="d-flex flex-column align-end gap-2">
-            <div class="d-flex gap-2">
+          <div class="d-flex flex-column align-start align-sm-end gap-2">
+            <div class="d-flex flex-wrap justify-sm-end gap-2">
               <v-btn
                 v-if="device && canEdit && (device.managementMode === 'direct' || device.apiCredentialId)"
+                :size="xs ? 'small' : undefined"
                 color="info"
                 variant="outlined"
                 :loading="testingConnection"
@@ -61,6 +62,7 @@
               </v-btn>
               <v-btn
                 v-if="canEdit && systemPoll?.available"
+                :size="xs ? 'small' : undefined"
                 color="primary"
                 variant="outlined"
                 :loading="systemLoading"
@@ -71,6 +73,7 @@
               </v-btn>
               <v-btn
                 v-if="device && canEdit"
+                :size="xs ? 'small' : undefined"
                 color="primary"
                 variant="outlined"
                 :loading="backupRunning"
@@ -81,12 +84,22 @@
               </v-btn>
               <v-btn
                 v-if="device && canEdit"
+                :size="xs ? 'small' : undefined"
                 color="primary"
                 variant="tonal"
                 @click="editDialog = true"
               >
                 <v-icon start>mdi-pencil</v-icon>
                 Edit
+              </v-btn>
+              <v-btn
+                v-if="device && xs"
+                size="small"
+                variant="outlined"
+                prepend-icon="mdi-timeline-text-outline"
+                :to="{ path: '/activity', query: { deviceId: device.id } }"
+              >
+                Activity
               </v-btn>
             </div>
             <div v-if="lastTestResult" class="text-caption text-grey">
@@ -170,33 +183,39 @@
     <DeviceAlertsBanner v-if="device" :device-id="device.id" />
 
     <!-- Overview / Live -->
-    <v-tabs v-if="device" v-model="tab" color="primary" class="mb-4">
-      <v-tab value="overview">
-        <v-icon start icon="mdi-information-outline" />
-        Overview
-      </v-tab>
-      <v-tab value="live">
-        <v-icon start icon="mdi-access-point" />
-        Live
-      </v-tab>
-      <v-tab value="neighbors">
-        <v-icon start icon="mdi-lan" />
-        Neighbors
-      </v-tab>
-      <v-tab value="history">
-        <v-icon start icon="mdi-timeline-clock-outline" />
-        History
-      </v-tab>
-      <v-spacer />
+    <div v-if="device" class="d-flex align-center mb-4">
+      <!-- Phones: the four tabs fit once restyled (assets/styles/responsive.scss), and
+           arrows that appear on a resize would then keep them overflowing, so none -->
+      <v-tabs v-model="tab" color="primary" class="tab-row" :show-arrows="!xs">
+        <v-tab value="overview">
+          <v-icon v-if="!xs" start icon="mdi-information-outline" />
+          Overview
+        </v-tab>
+        <v-tab value="live">
+          <v-icon v-if="!xs" start icon="mdi-access-point" />
+          Live
+        </v-tab>
+        <v-tab value="neighbors">
+          <v-icon v-if="!xs" start icon="mdi-lan" />
+          Neighbors
+        </v-tab>
+        <v-tab value="history">
+          <v-icon v-if="!xs" start icon="mdi-timeline-clock-outline" />
+          History
+        </v-tab>
+      </v-tabs>
+      <!-- Outside the tabs' slide group, so it stays in view when the tabs scroll; on phones it joins the header buttons -->
       <v-btn
+        v-if="!xs"
         variant="text"
-        class="align-self-center"
+        class="flex-shrink-0"
         prepend-icon="mdi-timeline-text-outline"
+        title="Activity for this device"
         :to="{ path: '/activity', query: { deviceId: device.id } }"
       >
         Activity
       </v-btn>
-    </v-tabs>
+    </div>
 
     <!-- Loading State -->
     <v-row v-if="loading && !device">
@@ -248,39 +267,39 @@
     <template v-else-if="device">
       <!-- Quick Stats Cards -->
       <v-row>
-        <v-col cols="12" md="3">
+        <v-col cols="6" md="3">
           <v-card>
             <v-card-text>
               <div class="text-overline text-grey">Device Type</div>
-              <div class="text-h5">{{ device.type ? deviceTypeInfo(device.type).label : 'N/A' }}</div>
+              <div class="text-h5 stat-value">{{ device.type ? deviceTypeInfo(device.type).label : 'N/A' }}</div>
               <v-icon class="mt-2" size="large">{{ getDeviceIcon(device.type) }}</v-icon>
             </v-card-text>
           </v-card>
         </v-col>
-        <v-col cols="12" md="3">
+        <v-col cols="6" md="3">
           <v-card>
             <v-card-text>
               <div class="text-overline text-grey">IP Address</div>
-              <div class="text-h6">{{ device.ipAddress || 'N/A' }}</div>
+              <div class="text-h6 stat-value">{{ device.ipAddress || 'N/A' }}</div>
               <div class="text-caption text-grey mt-1">
                 {{ device.macAddress || 'MAC: N/A' }}
               </div>
             </v-card-text>
           </v-card>
         </v-col>
-        <v-col cols="12" md="3">
+        <v-col cols="6" md="3">
           <v-card>
             <v-card-text>
               <div class="text-overline text-grey">Location</div>
-              <div class="text-h6">{{ device.location || 'N/A' }}</div>
+              <div class="text-h6 stat-value">{{ device.location || 'N/A' }}</div>
               <v-icon size="small" class="text-grey mt-1">mdi-map-marker</v-icon>
             </v-card-text>
           </v-card>
         </v-col>
-        <v-col cols="12" md="3">
+        <v-col cols="6" md="3">
           <v-card>
             <v-card-text>
-              <div class="d-flex align-center">
+              <div class="d-flex flex-wrap align-center column-gap-2">
                 <div class="text-overline text-grey">Last Seen</div>
                 <v-spacer />
                 <a
@@ -293,7 +312,7 @@
                   {{ lastSeen.ping.at ? `Ping ${formatRelativeTime(lastSeen.ping.at)}` : 'Never answered ping' }}
                 </a>
               </div>
-              <div class="text-h6" :title="lastSeen.at ? formatTimestamp(lastSeen.at) : undefined">
+              <div class="text-h6 stat-value" :title="lastSeen.at ? formatTimestamp(lastSeen.at) : undefined">
                 {{ lastSeen.at ? formatRelativeTime(lastSeen.at) : 'Never' }}
               </div>
               <div v-if="lastSeen.by" class="text-caption mt-1 d-flex align-center">
@@ -314,7 +333,7 @@
       <v-row class="mt-4">
         <v-col cols="12">
           <v-card>
-            <v-card-title class="d-flex align-center justify-space-between">
+            <v-card-title class="d-flex flex-wrap align-center justify-space-between column-gap-4">
               <div>
                 <v-icon start>mdi-information</v-icon>
                 System Information
@@ -352,7 +371,7 @@
             <v-card-text v-else-if="systemData">
               <v-row>
                 <v-col cols="12" md="6">
-                  <v-list density="compact">
+                  <v-list density="compact" class="wrap-lines">
                     <v-list-item>
                       <template #prepend>
                         <v-icon>mdi-server</v-icon>
@@ -406,7 +425,7 @@
                 </v-col>
 
                 <v-col cols="12" md="6">
-                  <v-list density="compact">
+                  <v-list density="compact" class="wrap-lines">
                     <v-list-item>
                       <template #prepend>
                         <v-icon>mdi-earth</v-icon>
@@ -465,12 +484,12 @@
                 <v-col cols="12">
                   <v-divider class="mb-4" />
                   <h3 class="text-h6 mb-3">Management Interface Status</h3>
-                  <v-chip-group>
+                  <v-chip-group column>
                     <v-chip
                       v-for="(value, key) in systemData.mgmt_intf_status"
                       :key="key"
                       variant="tonal"
-                      class="mr-2 mb-2"
+                      class="chip-wrap mr-2 mb-2"
                     >
                       <strong>{{ formatFieldName(key) }}:</strong>&nbsp;{{ value }}
                     </v-chip>
@@ -483,12 +502,12 @@
                 <v-col cols="12">
                   <v-divider class="mb-4" />
                   <h3 class="text-h6 mb-3">Software Information</h3>
-                  <v-chip-group>
+                  <v-chip-group column>
                     <v-chip
                       v-for="(value, key) in systemData.software_info"
                       :key="key"
                       variant="tonal"
-                      class="mr-2 mb-2"
+                      class="chip-wrap mr-2 mb-2"
                     >
                       <strong>{{ formatFieldName(key) }}:</strong>&nbsp;{{ formatValue(value) }}
                     </v-chip>
@@ -536,7 +555,7 @@
             </v-card-title>
             <v-divider />
             <v-card-text>
-              <v-list density="compact">
+              <v-list density="compact" class="wrap-lines">
                 <v-list-item v-if="device.serial">
                   <v-list-item-title>Serial Number</v-list-item-title>
                   <v-list-item-subtitle class="text-body-2 font-weight-medium">
@@ -606,7 +625,7 @@
             </v-card-title>
             <v-divider />
             <v-card-text>
-              <v-list density="compact">
+              <v-list density="compact" class="wrap-lines">
                 <v-list-item>
                   <v-list-item-title>Vendor</v-list-item-title>
                   <v-list-item-subtitle class="text-body-2 font-weight-medium">
@@ -656,7 +675,7 @@
     </template>
 
     <!-- Connection Test Dialog -->
-    <v-dialog v-model="showConnectionTestDialog" max-width="800px">
+    <v-dialog v-model="showConnectionTestDialog" max-width="800px" :fullscreen="$vuetify.display.xs">
       <v-card>
         <v-card-title>
           <v-icon icon="mdi-connection" class="mr-2" />
@@ -701,6 +720,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useDisplay } from 'vuetify'
 import { useDevicesStore } from '@/stores/devices'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
@@ -730,6 +750,8 @@ const authStore = useAuthStore()
 const backupsStore = useBackupsStore()
 const { on: onSocket, off: offSocket } = useWebSocket()
 const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole))
+// Phones: smaller header buttons (Activity joins them), icon-free tabs.
+const { xs } = useDisplay()
 
 // The row shown is the store's own object whenever the store holds it, so
 // changes made elsewhere (live monitoring toggle, socket status updates) show
@@ -1239,5 +1261,24 @@ onUnmounted(() => {
 
 .gap-2 {
   gap: 0.5rem;
+}
+
+.header-title {
+  min-width: 0;
+}
+
+/* Tabs take the row's remaining width and scroll (with arrows) inside it. */
+.tab-row {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (max-width: 599.98px) {
+  /* Two cards per row: the headline values drop to body size. */
+  .stat-value {
+    font-size: 1rem !important;
+    line-height: 1.5rem !important;
+    overflow-wrap: anywhere;
+  }
 }
 </style>

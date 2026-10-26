@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="d-flex align-center mb-2">
+    <div class="d-flex flex-wrap align-center ga-2 mb-2">
       <div class="flex-grow-1">
         <div class="text-h6">Notification channels</div>
         <p class="text-body-2 text-medium-emphasis mb-0">
@@ -9,7 +9,7 @@
           alert don't send again. A channel can also send the alarms Aruba Central and Juniper Mist raise themselves.
         </p>
       </div>
-      <v-btn color="primary" prepend-icon="mdi-plus" class="ml-4" @click="openEditor(null)">Add channel</v-btn>
+      <v-btn color="primary" prepend-icon="mdi-plus" class="ml-sm-2" @click="openEditor(null)">Add channel</v-btn>
     </div>
 
     <v-alert v-if="!store.emailConfigured && hasEmailChannel" type="warning" variant="tonal" density="compact" class="my-4">
@@ -30,7 +30,7 @@
       No channels yet. Alerts show in the app only.
     </div>
 
-    <v-table v-else density="comfortable" class="mt-2">
+    <v-table v-else density="comfortable" class="table-stack mt-2">
       <thead>
         <tr>
           <th>Name</th>
@@ -47,21 +47,21 @@
             <v-icon size="small" class="mr-1">{{ channel.type === 'email' ? 'mdi-email-outline' : 'mdi-webhook' }}</v-icon>
             <span class="font-weight-medium">{{ channel.name }}</span>
           </td>
-          <td class="text-body-2">
+          <td class="text-body-2" data-label="Sends to">
             <template v-if="channel.type === 'email'">{{ channel.config.recipients.join(', ') }}</template>
             <template v-else>
               {{ channel.config.urlHint }}
               <v-chip v-if="channel.config.insecure" size="x-small" color="warning" variant="tonal" class="ml-1">http</v-chip>
             </template>
           </td>
-          <td class="text-body-2">
+          <td class="text-body-2" data-label="Alerts">
             {{ severityLabel(channel.minSeverity) }} and up ·
             {{ channel.rules.length ? channel.rules.map(ruleLabel).join(', ') : 'all rules' }}
             <div v-if="channel.cloudAlarms" class="text-caption text-medium-emphasis">
               + cloud alarms{{ channel.cloudAlarmNames?.length ? `: ${channel.cloudAlarmNames.join(', ')}` : '' }}
             </div>
           </td>
-          <td class="text-body-2">
+          <td class="text-body-2" data-label="Last delivery">
             <template v-if="channel.lastDeliveryAt">
               <v-icon
                 size="small"
@@ -74,7 +74,7 @@
             </template>
             <span v-else class="text-medium-emphasis">Never</span>
           </td>
-          <td>
+          <td data-label="Enabled">
             <v-switch
               :model-value="channel.enabled"
               color="primary"
@@ -102,7 +102,7 @@
     </v-table>
 
     <!-- Add / edit -->
-    <v-dialog v-model="editorOpen" max-width="620" scrollable>
+    <v-dialog v-model="editorOpen" max-width="620" :fullscreen="$vuetify.display.xs" scrollable>
       <v-card v-if="draft">
         <v-card-title>{{ draft.id ? `Edit "${draft.originalName}"` : 'Add notification channel' }}</v-card-title>
         <v-card-text>

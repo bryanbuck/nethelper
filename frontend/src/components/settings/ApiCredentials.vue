@@ -1,7 +1,7 @@
 <template>
   <div class="api-credentials">
     <!-- Header with Add Button -->
-    <div class="d-flex align-center justify-space-between mb-4">
+    <div class="d-flex flex-wrap align-center justify-space-between ga-2 mb-4">
       <div>
         <div class="text-h6 mb-1">API Credentials</div>
         <p class="text-body-2 text-medium-emphasis mb-0">
@@ -143,7 +143,7 @@
     </v-card>
 
     <!-- Create/Edit Dialog -->
-    <v-dialog v-model="showDialog" max-width="600px" persistent>
+    <v-dialog v-model="showDialog" max-width="600px" :fullscreen="$vuetify.display.xs" persistent>
       <v-card>
         <v-card-title>
           <span class="text-h5">{{ dialogMode === 'create' ? 'Add' : 'Edit' }} API Credential</span>
@@ -269,7 +269,7 @@
     </v-dialog>
 
     <!-- Test Credential Dialog -->
-    <v-dialog v-model="showTestDialog" max-width="600px">
+    <v-dialog v-model="showTestDialog" max-width="600px" :fullscreen="$vuetify.display.xs">
       <v-card>
         <v-card-title>
           <v-icon class="mr-2">mdi-test-tube</v-icon>

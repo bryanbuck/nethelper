@@ -1,12 +1,13 @@
 <template>
   <v-dialog 
     v-model="show" 
-    max-width="800px" 
+    max-width="800px"
+    :fullscreen="$vuetify.display.xs" 
     persistent
     scrollable
   >
     <v-card>
-      <v-card-title class="d-flex align-center justify-space-between">
+      <v-card-title class="d-flex flex-wrap align-center justify-space-between ga-2">
         <div class="d-flex align-center">
           <v-icon 
             :color="nodeTypeColor" 

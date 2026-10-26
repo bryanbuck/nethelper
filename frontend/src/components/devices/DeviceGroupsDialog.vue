@@ -1,5 +1,5 @@
 <template>
-  <v-dialog :model-value="modelValue" max-width="760" scrollable @update:model-value="close">
+  <v-dialog :model-value="modelValue" max-width="760" :fullscreen="$vuetify.display.xs" scrollable @update:model-value="close">
     <v-card>
       <v-card-title class="d-flex align-center">
         <v-icon start icon="mdi-folder-multiple-outline" />

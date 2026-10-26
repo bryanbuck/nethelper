@@ -33,7 +33,7 @@
 
             <!-- Summary -->
             <v-row v-if="firmwareData.length > 0" class="mb-4">
-              <v-col cols="12" sm="4" md="3">
+              <v-col cols="4" md="3">
                 <v-card color="primary" variant="tonal">
                   <v-card-text>
                     <div class="text-h4">{{ summary.total }}</div>
@@ -41,7 +41,7 @@
                   </v-card-text>
                 </v-card>
               </v-col>
-              <v-col cols="12" sm="4" md="3">
+              <v-col cols="4" md="3">
                 <v-card color="success" variant="tonal">
                   <v-card-text>
                     <div class="text-h4">{{ summary.successful }}</div>
@@ -49,7 +49,7 @@
                   </v-card-text>
                 </v-card>
               </v-col>
-              <v-col cols="12" sm="4" md="3">
+              <v-col cols="4" md="3">
                 <v-card color="error" variant="tonal">
                   <v-card-text>
                     <div class="text-h4">{{ summary.failed }}</div>
@@ -69,7 +69,7 @@
 
             <!-- Data Table -->
             <v-data-table
-              :headers="headers"
+              :headers="shownHeaders"
               :items="firmwareData"
               :loading="loading"
               :search="search"
@@ -242,6 +242,7 @@ import { useAuthStore } from '@/stores/auth'
 import { format } from 'date-fns'
 import { toCsv, downloadCsv } from '@/utils/csv'
 import { PlatformInfo } from '@/models/vendors'
+import { usePhoneColumns } from '@/composables/usePhoneColumns'
 
 const devicesStore = useDevicesStore()
 const authStore = useAuthStore()
@@ -271,6 +272,7 @@ const headers = [
   { title: 'Secondary Version', key: 'secondary', sortable: true },
   { title: 'Error', key: 'error', sortable: false, align: 'center' }
 ]
+const shownHeaders = usePhoneColumns(headers, ['deviceName', 'success', 'current', 'primary', 'secondary', 'error'])
 
 const summary = computed(() => {
   const total = firmwareData.value.length

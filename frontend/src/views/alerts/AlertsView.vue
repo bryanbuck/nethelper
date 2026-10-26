@@ -95,7 +95,7 @@
           />
         </v-card-title>
 
-        <div v-if="canEdit && selected.length" class="d-flex align-center ga-2 px-4 pb-2">
+        <div v-if="canEdit && selected.length" class="d-flex flex-wrap align-center ga-2 px-4 pb-2">
           <span class="text-body-2">{{ selected.length }} selected</span>
           <v-btn
             size="small"
@@ -369,6 +369,13 @@ function timeAgo(value) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Phones have no hover for the title tooltip: show the whole text. */
+@media (max-width: 599.98px) {
+  .alert-message {
+    max-width: none;
+    white-space: normal;
+  }
 }
 
 .subject-link {

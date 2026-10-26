@@ -3,7 +3,7 @@
     <!-- Header Section -->
     <div class="builder-header">
       <v-container fluid class="pa-4">
-        <div class="d-flex align-center justify-space-between mb-4">
+        <div class="d-flex flex-wrap align-center justify-space-between ga-2 mb-4">
           <div class="d-flex align-center">
             <v-btn 
               variant="text" 
@@ -22,7 +22,7 @@
             </div>
           </div>
           
-          <div class="d-flex align-center ga-2">
+          <div class="d-flex flex-wrap align-center ga-2">
             <!-- Workflow Status -->
             <v-chip 
               :color="workflowStatusColor" 
@@ -38,6 +38,7 @@
             <!-- Action Buttons -->
             <v-btn
               v-if="workflowId"
+              :size="xs ? 'small' : undefined"
               variant="text"
               prepend-icon="mdi-history"
               :to="{ path: '/automations/executions', query: { automationId: workflowId } }"
@@ -46,6 +47,7 @@
             </v-btn>
 
             <v-btn
+              :size="xs ? 'small' : undefined"
               variant="outlined"
               prepend-icon="mdi-play"
               :disabled="!canTestWorkflow"
@@ -57,6 +59,7 @@
             </v-btn>
             
             <v-btn
+              :size="xs ? 'small' : undefined"
               variant="outlined"
               prepend-icon="mdi-content-save"
               :loading="saving"
@@ -66,6 +69,7 @@
             </v-btn>
             
             <v-btn
+              :size="xs ? 'small' : undefined"
               color="primary"
               prepend-icon="mdi-rocket-launch"
               :disabled="!canDeployWorkflow"
@@ -111,8 +115,8 @@
         </div>
         
         <!-- Toolbar -->
-        <div class="builder-toolbar d-flex align-center justify-space-between">
-          <div class="d-flex align-center ga-2">
+        <div class="builder-toolbar d-flex flex-wrap align-center justify-space-between ga-2">
+          <div class="d-flex flex-wrap align-center ga-2">
             <v-btn
               variant="outlined"
               size="small"
@@ -154,7 +158,7 @@
             </v-btn>
           </div>
           
-          <div class="d-flex align-center ga-2">
+          <div class="d-flex flex-wrap align-center ga-2">
             <!-- Validation Status -->
             <div v-if="validationResult" class="d-flex align-center ga-2">
               <v-icon 
@@ -218,9 +222,20 @@
       <!-- Properties Panel -->
       <div v-if="selectedElement" class="properties-panel">
         <v-card class="properties-card" elevation="4">
-          <v-card-title class="text-h6 py-3">
+          <v-card-title class="d-flex align-center text-h6 py-3">
             <v-icon class="mr-2" color="primary">mdi-information</v-icon>
             Properties
+            <template v-if="xs">
+              <v-spacer />
+              <v-btn
+                icon="mdi-close"
+                variant="text"
+                size="small"
+                title="Hide properties"
+                aria-label="Hide properties"
+                @click="selectedElement = null"
+              />
+            </template>
           </v-card-title>
           
           <v-divider></v-divider>
@@ -287,7 +302,7 @@
     />
     
     <!-- Workflow Settings Dialog -->
-    <v-dialog v-model="settingsDialog" max-width="600px">
+    <v-dialog v-model="settingsDialog" max-width="600px" :fullscreen="$vuetify.display.xs">
       <v-card>
         <v-card-title>Workflow Settings</v-card-title>
         
@@ -407,7 +422,7 @@
     </v-dialog>
     
     <!-- Help Dialog -->
-    <v-dialog v-model="helpDialog" max-width="600px">
+    <v-dialog v-model="helpDialog" max-width="600px" :fullscreen="$vuetify.display.xs">
       <v-card>
         <v-card-title>Workflow Builder Help</v-card-title>
         
@@ -463,6 +478,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useDisplay } from 'vuetify'
 import { useRouter, useRoute } from 'vue-router'
 import { validateWorkflow, exportWorkflowToJSON, importWorkflowFromJSON } from '@/utils/layoutUtils'
 import { useAutomationsStore } from '@/stores/automations'
@@ -489,7 +505,10 @@ const settingsDraft = ref({})
 const importDialog = ref(false)
 const helpDialog = ref(false)
 const showValidationDialog = ref(false)
-const toolbarCollapsed = ref(false)
+// Phones: the palette and properties panel float over the canvas (styles
+// below), so the palette starts closed and the canvas keeps the full width.
+const { xs } = useDisplay()
+const toolbarCollapsed = ref(xs.value)
 const saving = ref(false)
 const deploying = ref(false)
 const importFile = ref(null)
@@ -1061,7 +1080,8 @@ onUnmounted(() => {
 
 <style scoped>
 .automation-builder {
-  height: 100vh;
+  /* The viewport under the app bar and status bar (v-main's layout offsets). */
+  height: calc(100dvh - var(--v-layout-top, 0px) - var(--v-layout-bottom, 0px));
   display: flex;
   flex-direction: column;
   background-color: rgb(var(--v-theme-background));
@@ -1080,6 +1100,7 @@ onUnmounted(() => {
 }
 
 .builder-content {
+  position: relative;
   flex: 1;
   display: flex;
   overflow: hidden;
@@ -1108,6 +1129,36 @@ onUnmounted(() => {
 .properties-card {
   height: 100%;
   overflow-y: auto;
+}
+
+@media (max-width: 599.98px) {
+  .builder-header .v-container {
+    padding: 8px 12px !important;
+  }
+
+  .node-palette {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 5;
+    width: min(280px, 85vw);
+    overflow-y: auto;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  }
+
+  .node-palette :deep(.node-toolbar) {
+    width: 100%;
+  }
+
+  .properties-panel {
+    position: absolute;
+    inset: auto 0 0 0;
+    z-index: 6;
+    width: auto;
+    max-height: 55%;
+    padding: 8px;
+    border-left: 0;
+    border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  }
 }
 
 .configuration-info {

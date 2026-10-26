@@ -10,7 +10,7 @@
           </p>
         </div>
         
-        <div class="d-flex align-center ga-2">
+        <div class="d-flex flex-wrap align-center ga-2">
           <v-btn
             variant="outlined"
             prepend-icon="mdi-chip"
@@ -38,7 +38,7 @@
       
       <!-- Quick Stats Cards: fleet-wide counts; a click filters the table by that status -->
       <v-row class="mb-6">
-        <v-col v-for="card in statCards" :key="card.key" cols="12" sm="6" md="3">
+        <v-col v-for="card in statCards" :key="card.key" cols="6" md="3">
           <v-card
             :variant="isActiveCard(card) ? 'flat' : 'tonal'"
             :color="card.color"
@@ -104,6 +104,7 @@
     <v-dialog 
       v-model="showAddDialog" 
       max-width="600px"
+      :fullscreen="$vuetify.display.xs"
       persistent
     >
       <v-card>

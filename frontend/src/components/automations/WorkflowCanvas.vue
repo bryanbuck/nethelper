@@ -61,8 +61,9 @@
         </ControlButton>
       </Controls>
       
-      <!-- MiniMap -->
+      <!-- MiniMap (not on phones: it would cover a third of the canvas) -->
       <MiniMap 
+        v-if="!$vuetify.display.xs"
         position="bottom-right"
         :pannable="true"
         :zoomable="true"

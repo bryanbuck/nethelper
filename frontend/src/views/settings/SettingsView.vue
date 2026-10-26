@@ -3,7 +3,7 @@
     <div class="settings-view">
       <v-container fluid class="pa-4">
         <!-- Header Section -->
-        <div class="d-flex align-center justify-space-between mb-6">
+        <div class="d-flex flex-wrap align-center justify-space-between ga-2 mb-6">
           <div>
             <h1 class="text-h4 font-weight-bold mb-1">Settings</h1>
             <p class="text-subtitle-1 text-medium-emphasis mb-0">

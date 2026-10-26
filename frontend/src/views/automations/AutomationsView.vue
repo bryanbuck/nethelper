@@ -3,7 +3,7 @@
     <!-- Header Section -->
     <div class="automations-header">
       <v-container fluid>
-        <div class="d-flex align-center justify-space-between mb-4">
+        <div class="d-flex flex-wrap align-center justify-space-between ga-2 mb-4">
           <div>
             <h1 class="text-h4 font-weight-bold mb-1">
               Automations
@@ -14,7 +14,7 @@
             </p>
           </div>
           
-          <div class="d-flex ga-2">
+          <div class="d-flex flex-wrap ga-2">
             <v-btn
               variant="outlined"
               prepend-icon="mdi-history"
@@ -36,11 +36,11 @@
         
         <!-- Stats Cards -->
         <v-row class="mb-4">
-          <v-col cols="12" sm="6" md="3">
+          <v-col cols="6" md="3">
             <v-card class="stats-card">
               <v-card-text>
                 <div class="d-flex align-center">
-                  <v-icon color="primary" size="40" class="mr-3">mdi-robot</v-icon>
+                  <v-icon color="primary" size="40" class="mr-3 d-none d-sm-flex">mdi-robot</v-icon>
                   <div>
                     <p class="text-h4 font-weight-bold mb-0">{{ stats.total }}</p>
                     <p class="text-body-2 text-medium-emphasis mb-0">Total Automations</p>
@@ -50,11 +50,11 @@
             </v-card>
           </v-col>
           
-          <v-col cols="12" sm="6" md="3">
+          <v-col cols="6" md="3">
             <v-card class="stats-card">
               <v-card-text>
                 <div class="d-flex align-center">
-                  <v-icon color="success" size="40" class="mr-3">mdi-play-circle</v-icon>
+                  <v-icon color="success" size="40" class="mr-3 d-none d-sm-flex">mdi-play-circle</v-icon>
                   <div>
                     <p class="text-h4 font-weight-bold mb-0">{{ stats.active }}</p>
                     <p class="text-body-2 text-medium-emphasis mb-0">Active</p>
@@ -64,11 +64,11 @@
             </v-card>
           </v-col>
           
-          <v-col cols="12" sm="6" md="3">
+          <v-col cols="6" md="3">
             <v-card class="stats-card">
               <v-card-text>
                 <div class="d-flex align-center">
-                  <v-icon color="warning" size="40" class="mr-3">mdi-pause-circle</v-icon>
+                  <v-icon color="warning" size="40" class="mr-3 d-none d-sm-flex">mdi-pause-circle</v-icon>
                   <div>
                     <p class="text-h4 font-weight-bold mb-0">{{ stats.inactive }}</p>
                     <p class="text-body-2 text-medium-emphasis mb-0">Inactive</p>
@@ -78,11 +78,11 @@
             </v-card>
           </v-col>
           
-          <v-col cols="12" sm="6" md="3">
+          <v-col cols="6" md="3">
             <v-card class="stats-card">
               <v-card-text>
                 <div class="d-flex align-center">
-                  <v-icon color="info" size="40" class="mr-3">mdi-calendar-clock</v-icon>
+                  <v-icon color="info" size="40" class="mr-3 d-none d-sm-flex">mdi-calendar-clock</v-icon>
                   <div>
                     <p class="text-h4 font-weight-bold mb-0">{{ stats.scheduled }}</p>
                     <p class="text-body-2 text-medium-emphasis mb-0">Scheduled</p>

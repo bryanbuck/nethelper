@@ -14,7 +14,7 @@
 
       <v-card>
         <v-data-table
-          :headers="headers"
+          :headers="shownHeaders"
           :items="usersStore.users"
           :loading="usersStore.loading"
           item-value="id"
@@ -156,6 +156,7 @@ import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import { apiErrorMessage } from '@/utils/apiError'
+import { usePhoneColumns } from '@/composables/usePhoneColumns'
 
 const usersStore = useUsersStore()
 const authStore = useAuthStore()
@@ -169,6 +170,7 @@ const headers = [
   { title: 'Created', key: 'createdAt' },
   { title: '', key: 'actions', sortable: false, align: 'end' }
 ]
+const shownHeaders = usePhoneColumns(headers, ['name', 'email', 'role', 'actions'])
 
 const ROLES = {
   admin: { label: 'Admin', color: 'error' },

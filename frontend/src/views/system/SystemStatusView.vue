@@ -73,7 +73,7 @@
             <v-card variant="outlined" class="h-100">
               <v-card-title class="text-subtitle-1">Job queues</v-card-title>
               <SectionError :value="current.queues" />
-              <v-table v-if="Array.isArray(current.queues)" density="compact">
+              <v-table v-if="Array.isArray(current.queues)" density="compact" class="table-stack">
                 <thead>
                   <tr>
                     <th>Queue</th>
@@ -92,19 +92,19 @@
                       <v-chip v-if="q.paused" size="x-small" color="warning" variant="tonal" class="ml-1">paused</v-chip>
                     </td>
                     <template v-if="q.error">
-                      <td colspan="5" class="text-error">{{ q.error }}</td>
+                      <td colspan="5" class="text-error" data-label="Error">{{ q.error }}</td>
                     </template>
                     <template v-else>
-                      <td class="text-end">{{ formatNumber(q.waiting) }}</td>
-                      <td class="text-end">{{ formatNumber(q.active) }}</td>
-                      <td class="text-end">{{ formatNumber(q.delayed) }}</td>
-                      <td class="text-end" :class="{ 'text-error': q.failed }">{{ formatNumber(q.failed) }}</td>
-                      <td class="text-end">
+                      <td class="text-end" data-label="Waiting">{{ formatNumber(q.waiting) }}</td>
+                      <td class="text-end" data-label="Active">{{ formatNumber(q.active) }}</td>
+                      <td class="text-end" data-label="Delayed">{{ formatNumber(q.delayed) }}</td>
+                      <td class="text-end" :class="{ 'text-error': q.failed }" data-label="Failed">{{ formatNumber(q.failed) }}</td>
+                      <td class="text-end" data-label="Done/min">
                         {{ rate(q.completedInInterval) }}
                         <span v-if="q.failedInInterval" class="text-error">· {{ rate(q.failedInInterval) }} failed</span>
                       </td>
                     </template>
-                    <td class="text-no-wrap">{{ nextRun(q.name) }}</td>
+                    <td class="text-no-wrap" data-label="Next scheduled">{{ nextRun(q.name) }}</td>
                   </tr>
                 </tbody>
               </v-table>
@@ -163,13 +163,13 @@
                     <dt>Connections</dt><dd>{{ database.connections }} ({{ database.activeConnections }} active) of {{ database.maxConnections }}</dd>
                     <dt>Version</dt><dd>{{ database.version }}</dd>
                   </dl>
-                  <v-table density="compact" class="mt-2">
+                  <v-table density="compact" class="table-stack mt-2">
                     <thead><tr><th>Largest tables</th><th class="text-end">Size</th><th class="text-end">~Rows</th></tr></thead>
                     <tbody>
                       <tr v-for="t in database.tables" :key="t.name">
                         <td>{{ t.name }}</td>
-                        <td class="text-end">{{ formatBytes(t.bytes) }}</td>
-                        <td class="text-end">{{ t.rows == null ? '—' : formatNumber(t.rows) }}</td>
+                        <td class="text-end" data-label="Size">{{ formatBytes(t.bytes) }}</td>
+                        <td class="text-end" data-label="~Rows">{{ t.rows == null ? '—' : formatNumber(t.rows) }}</td>
                       </tr>
                     </tbody>
                   </v-table>
@@ -224,7 +224,7 @@
                   <div class="text-overline mt-2">Cloud event streams</div>
                   <div v-if="!subsystems.cloudStreams.enabled" class="text-medium-emphasis">Disabled (CLOUD_STREAM_ENABLED)</div>
                   <div v-else-if="!subsystems.cloudStreams.streams.length" class="text-medium-emphasis">None open</div>
-                  <div v-for="s in subsystems.cloudStreams.streams" :key="s.integrationId" class="d-flex align-center ga-2 py-1">
+                  <div v-for="s in subsystems.cloudStreams.streams" :key="s.integrationId" class="d-flex flex-wrap align-center ga-2 py-1">
                     <v-chip :color="STREAM_STATE_COLORS[s.state] || 'grey'" size="x-small" variant="tonal">{{ s.state }}</v-chip>
                     <span class="text-body-2">{{ s.label }}</span>
                     <v-spacer />

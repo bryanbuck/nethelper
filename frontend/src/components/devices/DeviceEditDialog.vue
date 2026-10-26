@@ -2,6 +2,7 @@
   <v-dialog
     v-model="open"
     max-width="600px"
+    :fullscreen="$vuetify.display.xs"
     persistent
   >
     <v-card>

@@ -83,7 +83,7 @@
 
       <!-- Ports -->
       <v-card class="mb-4">
-        <v-card-title class="d-flex align-center">
+        <v-card-title class="d-flex flex-wrap align-center column-gap-2">
           <v-icon start icon="mdi-ethernet" />
           Ports
           <v-spacer />
@@ -94,7 +94,15 @@
         </v-card-title>
         <v-divider />
         <v-table density="compact" class="live-ports">
-          <thead>
+          <!-- Phones: three columns (port, state, rates) instead of seven -->
+          <thead v-if="xs">
+            <tr>
+              <th>Port</th>
+              <th>Link · PoE</th>
+              <th class="text-end">In / Out</th>
+            </tr>
+          </thead>
+          <thead v-else>
             <tr>
               <th>Port</th>
               <th>Description</th>
@@ -115,36 +123,66 @@
             <tr v-else-if="!live.ports.length">
               <td colspan="7" class="text-center text-medium-emphasis py-6">No ports reported yet.</td>
             </tr>
-            <tr
-              v-for="p in live.ports"
-              :key="p.port"
-              :class="{ 'recently-changed': recentlyChanged(p.port) }"
-            >
-              <td class="font-weight-medium">{{ p.port }}</td>
-              <td class="text-medium-emphasis">{{ p.description || '' }}</td>
-              <td>
-                <v-chip :color="linkChip(p).color" size="x-small" variant="tonal">
-                  <v-icon start :icon="linkChip(p).icon" size="x-small" />
-                  {{ linkChip(p).label }}
-                </v-chip>
-              </td>
-              <td>
-                <v-chip v-if="p.poe" :color="poeChip(p).color" size="x-small" variant="tonal">
-                  <v-icon start :icon="poeChip(p).icon" size="x-small" />
-                  {{ poeChip(p).label }}
-                </v-chip>
-              </td>
-              <td class="text-end tabular">{{ rate(p.port, 'rxBps') }}</td>
-              <td class="text-end tabular">{{ rate(p.port, 'txBps') }}</td>
-              <td>
-                <LiveSparkline
-                  v-if="p.linkUp"
-                  :points="live.history[p.port] || []"
-                  :format="formatBps"
-                  :label="`Port ${p.port} throughput`"
-                />
-              </td>
-            </tr>
+            <template v-else-if="xs">
+              <tr
+                v-for="p in live.ports"
+                :key="p.port"
+                :class="{ 'recently-changed': recentlyChanged(p.port) }"
+              >
+                <td>
+                  <div class="font-weight-medium">{{ p.port }}</div>
+                  <div v-if="p.description" class="text-caption text-medium-emphasis">{{ p.description }}</div>
+                </td>
+                <td>
+                  <div class="d-flex flex-wrap ga-1 py-1">
+                    <v-chip :color="linkChip(p).color" size="x-small" variant="tonal">
+                      <v-icon start :icon="linkChip(p).icon" size="x-small" />
+                      {{ linkChip(p).label }}
+                    </v-chip>
+                    <v-chip v-if="p.poe" :color="poeChip(p).color" size="x-small" variant="tonal">
+                      <v-icon start :icon="poeChip(p).icon" size="x-small" />
+                      {{ poeChip(p).label }}
+                    </v-chip>
+                  </div>
+                </td>
+                <td class="text-end tabular">
+                  <div>{{ rate(p.port, 'rxBps') }}</div>
+                  <div>{{ rate(p.port, 'txBps') }}</div>
+                </td>
+              </tr>
+            </template>
+            <template v-else>
+              <tr
+                v-for="p in live.ports"
+                :key="p.port"
+                :class="{ 'recently-changed': recentlyChanged(p.port) }"
+              >
+                <td class="font-weight-medium">{{ p.port }}</td>
+                <td class="text-medium-emphasis">{{ p.description || '' }}</td>
+                <td>
+                  <v-chip :color="linkChip(p).color" size="x-small" variant="tonal">
+                    <v-icon start :icon="linkChip(p).icon" size="x-small" />
+                    {{ linkChip(p).label }}
+                  </v-chip>
+                </td>
+                <td>
+                  <v-chip v-if="p.poe" :color="poeChip(p).color" size="x-small" variant="tonal">
+                    <v-icon start :icon="poeChip(p).icon" size="x-small" />
+                    {{ poeChip(p).label }}
+                  </v-chip>
+                </td>
+                <td class="text-end tabular">{{ rate(p.port, 'rxBps') }}</td>
+                <td class="text-end tabular">{{ rate(p.port, 'txBps') }}</td>
+                <td>
+                  <LiveSparkline
+                    v-if="p.linkUp"
+                    :points="live.history[p.port] || []"
+                    :format="formatBps"
+                    :label="`Port ${p.port} throughput`"
+                  />
+                </td>
+              </tr>
+            </template>
           </tbody>
         </v-table>
       </v-card>
@@ -159,6 +197,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useDisplay } from 'vuetify'
 import { useLiveStore } from '@/stores/live'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -179,6 +218,8 @@ const authStore = useAuthStore()
 const notifications = useNotificationsStore()
 // Holds the shared socket open while the Live tab is visible.
 useWebSocket()
+// Phones get the compact three-column ports table.
+const { xs } = useDisplay()
 
 const toggling = ref(false)
 const now = ref(Date.now())

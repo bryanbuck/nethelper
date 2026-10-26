@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="d-flex align-center mb-4">
+    <div class="d-flex flex-wrap align-center ga-2 mb-4">
       <div>
         <h3 class="text-h6">Cloud Integrations</h3>
         <div class="text-caption text-medium-emphasis">
@@ -125,7 +125,7 @@
     </v-row>
 
     <!-- Create / Edit dialog -->
-    <v-dialog v-model="dialog" max-width="600" persistent>
+    <v-dialog v-model="dialog" max-width="600" :fullscreen="$vuetify.display.xs" persistent>
       <v-card>
         <v-card-title>{{ editing ? 'Edit Cloud Integration' : 'Add Cloud Integration' }}</v-card-title>
         <v-card-text>

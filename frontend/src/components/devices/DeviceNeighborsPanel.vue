@@ -36,7 +36,7 @@
     </v-card-subtitle>
 
     <v-data-table
-      :headers="headers"
+      :headers="shownHeaders"
       :items="links"
       :loading="loading"
       density="compact"
@@ -74,6 +74,7 @@ import { useTopologyStore } from '@/stores/topology'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { usePhoneColumns } from '@/composables/usePhoneColumns'
 
 const props = defineProps({
   device: { type: Object, required: true }
@@ -101,6 +102,7 @@ const headers = [
   { title: 'Protocol', key: 'source' },
   { title: 'Last seen', key: 'lastSeen' }
 ]
+const shownHeaders = usePhoneColumns(headers, ['localPort', 'remote', 'remotePortId', 'remoteMgmtIp'])
 
 // `cloud`: a link the cloud computed (Central's site topology), not one LLDP table.
 const PROTOCOL_LABELS = { lldp: 'LLDP', cdp: 'CDP', cloud: 'Cloud topology' }

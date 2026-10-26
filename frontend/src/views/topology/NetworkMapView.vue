@@ -30,16 +30,19 @@
     <!-- Toolbar -->
     <v-card variant="outlined" class="mb-3">
       <v-card-text class="d-flex flex-wrap align-center ga-3 py-2">
+        <!-- Phones: search and an options toggle; the rest opens below them -->
         <v-select
+          v-show="showOptions"
           v-model="siteModel"
           :items="siteItems"
           label="Site"
           density="compact"
           variant="outlined"
           hide-details
-          style="max-width: 220px; min-width: 160px"
+          class="map-field map-field-site"
         />
         <v-switch
+          v-show="showOptions"
           v-model="topologyStore.includeDiscovered"
           label="Discovered hosts"
           density="compact"
@@ -58,9 +61,20 @@
           prepend-inner-icon="mdi-magnify"
           hide-details
           clearable
-          style="max-width: 280px; min-width: 200px"
+          class="map-field map-field-search"
+        />
+        <v-btn
+          v-if="xs"
+          class="map-options-toggle"
+          :icon="optionsOpen ? 'mdi-chevron-up' : 'mdi-tune-variant'"
+          variant="text"
+          :title="optionsOpen ? 'Hide map options' : 'Map options'"
+          :aria-label="optionsOpen ? 'Hide map options' : 'Map options'"
+          :aria-expanded="optionsOpen"
+          @click="optionsOpen = !optionsOpen"
         />
         <v-autocomplete
+          v-show="showOptions"
           v-model="vlanModel"
           :items="vlanItems"
           item-title="title"
@@ -72,11 +86,12 @@
           hide-details
           clearable
           :no-data-text="vlans.length ? 'No matching VLAN' : 'No VLAN data yet (AOS-CX and Mist switches report it on a topology refresh)'"
-          style="max-width: 240px; min-width: 160px"
+          class="map-field map-field-vlan"
         />
         <v-tooltip location="bottom" text="Mark links where a VLAN both switches have is not allowed on one side, or the untagged VLANs differ">
           <template #activator="{ props: tip }">
             <v-switch
+              v-show="showOptions"
               v-bind="tip"
               v-model="showMismatches"
               :label="mismatchCount ? `VLAN mismatches (${mismatchCount})` : 'VLAN mismatches'"
@@ -87,12 +102,13 @@
             />
           </template>
         </v-tooltip>
-        <v-spacer />
-        <v-btn variant="text" prepend-icon="mdi-history" @click="openChanges">
+        <v-spacer v-show="showOptions" />
+        <v-btn v-show="showOptions" variant="text" prepend-icon="mdi-history" @click="openChanges">
           Changes
         </v-btn>
         <v-btn
           v-if="canEdit"
+          v-show="showOptions"
           variant="text"
           prepend-icon="mdi-graph-outline"
           :disabled="!graph.nodes.length"
@@ -102,6 +118,7 @@
         </v-btn>
         <v-btn
           v-if="canEdit"
+          v-show="showOptions"
           variant="tonal"
           prepend-icon="mdi-content-save"
           :disabled="!topologyStore.layoutDirty"
@@ -112,6 +129,7 @@
         </v-btn>
         <v-btn
           v-if="canEdit"
+          v-show="showOptions"
           color="primary"
           variant="flat"
           prepend-icon="mdi-refresh"
@@ -154,16 +172,24 @@
           <v-icon size="14">mdi-lan-pending</v-icon> marker.
         </v-alert>
         <div v-if="selectedVlan !== null && !showNoLinksHint" class="map-legend">
-          <div class="text-subtitle-2">
+          <!-- Phones: the legend is one line until tapped, so it doesn't cover the map -->
+          <div
+            class="text-subtitle-2"
+            :class="{ 'legend-toggle': xs }"
+            :role="xs ? 'button' : undefined"
+            :aria-expanded="xs ? legendOpen : undefined"
+            @click="legendOpen = !legendOpen"
+          >
+            <v-icon v-if="xs" size="16" class="mr-1">{{ legendOpen ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
             {{ selectedVlanEntry ? vlanTitle(selectedVlanEntry) : `VLAN ${selectedVlan}` }}
             <v-chip v-if="selectedVlanEntry?.names.length > 1" size="x-small" color="warning" variant="tonal" class="ml-1">
               names differ
             </v-chip>
           </div>
-          <div class="text-caption text-medium-emphasis">
+          <div v-show="!xs || legendOpen" class="text-caption text-medium-emphasis">
             {{ selectedVlanEntry ? vlanSummaryText(selectedVlanEntry) : 'No device on this map carries it.' }}
           </div>
-          <div class="d-flex flex-wrap ga-3 mt-1 text-caption">
+          <div v-show="!xs || legendOpen" class="d-flex flex-wrap ga-3 mt-1 text-caption">
             <span><span class="swatch swatch-carried" /> carried</span>
             <span><span class="swatch swatch-pruned" /> not allowed on one side</span>
             <span><span class="swatch swatch-unknown" /> no VLAN data</span>
@@ -197,7 +223,7 @@
     <v-navigation-drawer
       :model-value="panelOpen"
       location="right"
-      width="380"
+      :width="xs ? viewportWidth : 380"
       temporary
       @update:model-value="(open) => { if (!open) closePanel() }"
     >
@@ -262,7 +288,7 @@
             </v-list-item>
           </v-list>
         </template>
-        <div class="d-flex ga-2 pa-4">
+        <div class="d-flex flex-wrap ga-2 pa-4">
           <v-btn variant="tonal" prepend-icon="mdi-open-in-app" :to="`/devices/${selected.data.deviceId}`">
             Open device
           </v-btn>
@@ -454,6 +480,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import { useDisplay } from 'vuetify'
 import { useTopologyStore } from '@/stores/topology'
 import topologyService from '@/services/topology.service'
 import { useAuthStore } from '@/stores/auth'
@@ -495,6 +522,13 @@ const importTarget = ref(null)
 const importDefaults = ref({})
 
 const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole))
+
+// Phones: a full-width details panel, the toolbar folded behind an options
+// toggle, and a one-line legend until tapped.
+const { xs, width: viewportWidth } = useDisplay()
+const optionsOpen = ref(false)
+const showOptions = computed(() => !xs.value || optionsOpen.value)
+const legendOpen = ref(false)
 const graph = computed(() => topologyStore.graph)
 const stats = computed(() => topologyStore.stats)
 
@@ -783,6 +817,57 @@ onMounted(load)
   flex: 1 1 auto;
   min-height: 400px;
   overflow: hidden;
+}
+
+.map-field-site {
+  max-width: 220px;
+  min-width: 160px;
+}
+
+.map-field-search {
+  max-width: 280px;
+  min-width: 200px;
+}
+
+.map-field-vlan {
+  max-width: 240px;
+  min-width: 160px;
+}
+
+.legend-toggle {
+  cursor: pointer;
+}
+
+@media (max-width: 599.98px) {
+  .network-map {
+    height: calc(100dvh - 112px);
+    min-height: 420px;
+  }
+
+  .map-card {
+    min-height: 300px;
+  }
+
+  .map-field {
+    flex: 1 1 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  /* Search and the options toggle share the first line. */
+  .map-field-search {
+    flex: 1 1 0;
+    order: -2;
+  }
+
+  .map-options-toggle {
+    order: -1;
+  }
+
+  .map-legend {
+    right: 12px;
+    max-width: none;
+  }
 }
 
 .map-hint {

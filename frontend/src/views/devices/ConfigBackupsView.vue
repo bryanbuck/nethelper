@@ -56,7 +56,7 @@
             <v-data-table-server
               v-model:page="page"
               v-model:items-per-page="itemsPerPage"
-              :headers="backupHeaders"
+              :headers="shownBackupHeaders"
               :items="backupsStore.backups"
               :items-length="backupsStore.total"
               :loading="backupsStore.backupsLoading"
@@ -253,7 +253,7 @@
             <v-data-table-server
               v-model:page="scopePage"
               v-model:items-per-page="scopeItemsPerPage"
-              :headers="scopeHeaders"
+              :headers="shownScopeHeaders"
               :items="backupsStore.scopeBackups"
               :items-length="backupsStore.scopeTotal"
               :loading="backupsStore.scopeLoading"
@@ -385,7 +385,7 @@
             </v-card-title>
 
             <v-data-table
-              :headers="scheduleHeaders"
+              :headers="shownScheduleHeaders"
               :items="backupsStore.schedules"
               :loading="backupsStore.schedulesLoading"
             >
@@ -469,7 +469,7 @@
     </v-container>
 
     <!-- Run Backup Now dialog (device picker) -->
-    <v-dialog v-model="showRunDialog" max-width="640" persistent scrollable>
+    <v-dialog v-model="showRunDialog" max-width="640" :fullscreen="$vuetify.display.xs" persistent scrollable>
       <v-card>
         <v-card-title class="text-h5">Run Backup Now</v-card-title>
         <v-card-text>
@@ -517,7 +517,7 @@
     </v-dialog>
 
     <!-- View backup content dialog (one tab per artifact: CLI / JSON) -->
-    <v-dialog v-model="showViewDialog" max-width="900" scrollable>
+    <v-dialog v-model="showViewDialog" max-width="900" :fullscreen="$vuetify.display.xs" scrollable>
       <v-card>
         <v-card-title class="d-flex align-center">
           <span class="text-truncate">{{ viewTarget?.title }} — {{ formatDate(viewTarget?.createdAt) }}</span>
@@ -569,7 +569,7 @@
     </v-dialog>
 
     <!-- Compare dialog -->
-    <v-dialog v-model="showCompareDialog" max-width="1100" scrollable>
+    <v-dialog v-model="showCompareDialog" max-width="1100" :fullscreen="$vuetify.display.xs" scrollable>
       <v-card>
         <v-card-title class="text-h5">Compare Backups</v-card-title>
         <v-card-text>
@@ -631,7 +631,7 @@
     </v-dialog>
 
     <!-- Schedule create/edit dialog -->
-    <v-dialog v-model="showScheduleDialog" max-width="720" persistent scrollable>
+    <v-dialog v-model="showScheduleDialog" max-width="720" :fullscreen="$vuetify.display.xs" persistent scrollable>
       <v-card>
         <v-card-title class="text-h5">
           {{ editingSchedule ? 'Edit Schedule' : 'New Backup Schedule' }}
@@ -773,6 +773,7 @@ import { useDevicesStore } from '@/stores/devices'
 import { useWebSocket } from '@/composables/useWebSocket'
 import ConfigDiffViewer from '@/components/backups/ConfigDiffViewer.vue'
 import { CloudProviderInfo, cloudProviderLabel } from '@/models/vendors'
+import { usePhoneColumns } from '@/composables/usePhoneColumns'
 
 const authStore = useAuthStore()
 const backupsStore = useBackupsStore()
@@ -807,6 +808,7 @@ const backupHeaders = [
   { title: 'Date', key: 'createdAt' },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' }
 ]
+const shownBackupHeaders = usePhoneColumns(backupHeaders, ['deviceName', 'status', 'hasChanges', 'createdAt', 'actions'])
 
 const scopeHeaders = [
   { title: 'Scope', key: 'scopeName', sortable: false },
@@ -816,6 +818,7 @@ const scopeHeaders = [
   { title: 'Date', key: 'createdAt', sortable: false },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' }
 ]
+const shownScopeHeaders = usePhoneColumns(scopeHeaders, ['scopeName', 'status', 'hasChanges', 'createdAt', 'actions'])
 
 const scheduleHeaders = [
   { title: 'Name', key: 'name' },
@@ -825,6 +828,7 @@ const scheduleHeaders = [
   { title: 'Retention', key: 'retention', sortable: false },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' }
 ]
+const shownScheduleHeaders = usePhoneColumns(scheduleHeaders, ['name', 'cronExpression', 'active', 'actions'])
 
 const devicePickerHeaders = [
   { title: 'Name', key: 'name' },
@@ -1392,5 +1396,12 @@ onMounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* Phones have no hover for the title tooltip: show the whole text. */
+@media (max-width: 599.98px) {
+  .backup-error {
+    max-width: none;
+    white-space: normal;
+  }
 }
 </style>

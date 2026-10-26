@@ -19,7 +19,7 @@
     </v-alert>
 
     <v-card elevation="2" class="device-table-card">
-      <v-card-title class="d-flex align-center justify-space-between">
+      <v-card-title class="d-flex flex-wrap align-center justify-space-between ga-2">
         <div class="d-flex align-center">
           <v-icon class="mr-2" color="primary">mdi-devices</v-icon>
           Network Devices
@@ -33,7 +33,7 @@
           </v-chip>
         </div>
         
-        <div class="d-flex align-center ga-2">
+        <div class="table-toolbar d-flex flex-wrap flex-sm-nowrap align-center ga-2">
           <v-text-field
             v-model="searchInput"
             density="compact"
@@ -41,7 +41,7 @@
             hide-details
             placeholder="Search devices..."
             prepend-inner-icon="mdi-magnify"
-            style="width: 250px; min-width: 250px;"
+            class="table-search"
             clearable
             @update:model-value="onSearchInput"
           />
@@ -259,13 +259,13 @@
       <!-- Bulk Actions Bar: above the table, pinned under the app bar while the page scrolls -->
       <v-slide-y-transition>
         <v-card-actions v-if="selectedItems.length > 0" class="bulk-actions-bar">
-          <div class="d-flex align-center justify-space-between w-100">
+          <div class="d-flex flex-wrap align-center justify-space-between ga-2 w-100">
             <div class="d-flex align-center">
               <v-icon class="mr-2" color="primary">mdi-checkbox-marked</v-icon>
               <span class="font-weight-medium">{{ selectedItems.length }} devices selected</span>
             </div>
             
-            <div class="d-flex align-center ga-2">
+            <div class="d-flex flex-wrap align-center ga-2">
               <v-menu v-if="canEdit">
                 <template #activator="{ props }">
                   <v-btn
@@ -336,7 +336,7 @@
       <v-data-table-server
         v-model="selectedItems"
         v-model:options="tableOptions"
-        :headers="headers"
+        :headers="shownHeaders"
         :items="devicesStore.devices"
         :items-length="devicesStore.pagination.total"
         :loading="devicesStore.tableLoading"
@@ -606,6 +606,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import deviceService from '@/services/device.service'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { usePhoneColumns } from '@/composables/usePhoneColumns'
 import { formatDistanceToNow } from 'date-fns'
 import { debounce } from 'lodash-es'
 import ConnectionStatusBadge from './ConnectionStatusBadge.vue'
@@ -722,6 +723,9 @@ const headers = [
     width: '120px'
   }
 ]
+
+// Phones: name (with model), type, status, address and actions per row.
+const shownHeaders = usePhoneColumns(headers, ['name', 'type', 'status', 'ipAddress', 'actions'])
 
 // Filter options
 const statusOptions = [
@@ -1137,6 +1141,30 @@ defineExpose({ refreshTable })
 .device-data-table :deep(.v-table__wrapper) {
   height: calc(100vh - 400px);
   min-height: 400px;
+}
+
+.table-search {
+  width: 250px;
+  min-width: 250px;
+}
+
+/* Phones: rows stack, so the table grows with the page instead of scrolling
+   inside a box; the toolbar takes its own line with a full-width search. */
+@media (max-width: 599.98px) {
+  .device-data-table :deep(.v-table__wrapper) {
+    height: auto;
+    min-height: 0;
+  }
+
+  .table-toolbar {
+    width: 100%;
+  }
+
+  .table-search {
+    flex: 1 1 100%;
+    width: auto;
+    min-width: 0;
+  }
 }
 
 /* v-card's overflow: hidden would make the card the sticky container; clip keeps the rounded corners without that. */
