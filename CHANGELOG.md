@@ -4,6 +4,8 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ## [Unreleased]
 
+## [0.9.0-beta.6] — 2026-10-29
+
 ### Changed
 - The repository is public. The docs no longer describe a private, invitation-only beta: `docs/BETA_NOTES.md` is now [`docs/SUPPORT.md`](docs/SUPPORT.md) (what's supported, what was tested on real equipment, what isn't supported yet), problems are reported as GitHub issues, and security problems through GitHub's private vulnerability reporting.
 - The release images pull without a `docker login`. `deploy/README.md` downloads the release tarball with `curl` instead of `gh`.
