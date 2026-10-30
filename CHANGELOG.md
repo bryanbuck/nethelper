@@ -5,9 +5,9 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 ## [Unreleased]
 
 ### Changed
-- First public release. The docs no longer describe a private beta: `docs/BETA_NOTES.md` is now [`docs/SUPPORT.md`](docs/SUPPORT.md) (what's supported, what was tested on real equipment, what isn't supported yet), problems are reported as GitHub issues, and security problems through GitHub's private vulnerability reporting.
+- The repository is public. The docs no longer describe a private, invitation-only beta: `docs/BETA_NOTES.md` is now [`docs/SUPPORT.md`](docs/SUPPORT.md) (what's supported, what was tested on real equipment, what isn't supported yet), problems are reported as GitHub issues, and security problems through GitHub's private vulnerability reporting.
 - The release images pull without a `docker login`. `deploy/README.md` downloads the release tarball with `curl` instead of `gh`.
-- The app bar and status bar show "Beta" only on a beta build (and "Pre-release" on another pre-release version), not on a release.
+- The app bar and status bar label follows the version: "Beta" on a beta build, "Pre-release" on another pre-release version, and nothing on a release.
 - Phone layout (screens under 600px wide): no page scrolls sideways any more, and no button or filter is cut off at the screen edge.
   - Tables show each row as a card of label/value lines, keeping the columns that matter (for example name, type, status, IP and actions on Devices).
   - Page headers, toolbars and filter rows wrap. Tabs fit or get arrows. Stat tiles sit two to a row. Wide dialogs open full screen. Long values and error messages wrap instead of ending in "…".

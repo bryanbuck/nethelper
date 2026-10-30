@@ -26,7 +26,7 @@
       "deviceFunction": "-",
       "type": "Switch",
       "internet": false,
-      "name": "Sw-Studio",
+      "name": "Sw-Access1",
       "health": "Good",
       "healthReason": null,
       "deployment": "Standalone",

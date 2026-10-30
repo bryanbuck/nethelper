@@ -1,0 +1,48 @@
+# CodeQL code scanning for the JavaScript/Vue code and the workflows
+# themselves. Free on public repositories; on a private one without GitHub
+# Advanced Security the upload fails, so the job is skipped there. Results
+# appear under Security → Code scanning. Not a required check.
+name: CodeQL
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+    paths-ignore:
+      - '**.md'
+  schedule:
+    - cron: '23 4 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, actions]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          # Tests and fixtures hold deliberate fake secrets and captures.
+          config: |
+            paths-ignore:
+              - backend/tests
+              - frontend/tests
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}

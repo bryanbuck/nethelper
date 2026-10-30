@@ -18,9 +18,9 @@ const identity = require('../../src/services/device-identity.service');
 const { matchInventory } = identity;
 const CXSwitchAPI = require('../../src/services/device-api/cx-switch-api');
 
-const handAdded = { id: 'a', name: 'Sw-Studio', serial: 'STUDIO', macAddress: 'cc:Cc:cc:Cc:Cc:Cc', ipAddress: '192.168.0.14', apiCredentialId: 'c1', cloudIntegrationId: 'int-1' };
-const synced = { id: 'b', name: 'Sw-Studio', serial: 'VN00000001', macAddress: 'ec:67:94:00:20:00', ipAddress: '192.168.0.14', cloudIntegrationId: 'int-1' };
-const inventoryEntry = { serial: 'VN00000001', macAddress: 'EC-67-94-00-20-00', name: 'Sw-Studio' };
+const handAdded = { id: 'a', name: 'Sw-Access1', serial: 'STUDIO', macAddress: 'cc:Cc:cc:Cc:Cc:Cc', ipAddress: '192.168.0.14', apiCredentialId: 'c1', cloudIntegrationId: 'int-1' };
+const synced = { id: 'b', name: 'Sw-Access1', serial: 'VN00000001', macAddress: 'ec:67:94:00:20:00', ipAddress: '192.168.0.14', cloudIntegrationId: 'int-1' };
+const inventoryEntry = { serial: 'VN00000001', macAddress: 'EC-67-94-00-20-00', name: 'Sw-Access1' };
 
 beforeEach(() => jest.clearAllMocks());
 

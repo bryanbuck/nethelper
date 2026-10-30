@@ -17,7 +17,7 @@ describe('utils/device-key', () => {
   });
 
   test('macVariants lists the spellings providers store a MAC in', () => {
-    expect(macVariants('4C4AB43B7980')).toEqual(['4c:4a:b4:3b:79:80', '4c4ab43b7980', '4c-4a-b4-3b-79-80', '4c4a.b43b.7980']);
+    expect(macVariants('4C4AB4007980')).toEqual(['4c:4a:b4:00:79:80', '4c4ab4007980', '4c-4a-b4-00-79-80', '4c4a.b400.7980']);
     expect(macVariants('not a mac')).toEqual([]);
   });
 });

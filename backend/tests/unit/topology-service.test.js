@@ -62,7 +62,7 @@ const topology = require('../../src/services/topology/topology.service');
 const { makeVlanSnapshot } = require('../../src/services/topology/vlan-membership');
 
 const cx = {
-  id: 'd-cx', name: 'Sw-Studio', type: 'switch', vendor: 'aruba', platform: 'aos-cx', ipAddress: '10.0.0.14', managementMode: 'cloud',
+  id: 'd-cx', name: 'Sw-Access1', type: 'switch', vendor: 'aruba', platform: 'aos-cx', ipAddress: '10.0.0.14', managementMode: 'cloud',
 };
 const neighbor = (localPort, chassisId, portId, sysName) => ({
   localPort, chassisId, portId, sysName, mac: chassisId, capabilities: ['bridge'], protocol: 'lldp',
@@ -71,7 +71,7 @@ const neighbor = (localPort, chassisId, portId, sysName) => ({
 function stubCx(neighbors, extra = {}) {
   devicePoller.withCxSession.mockImplementation(async (_device, _creds, fn) => fn({
     getLldpNeighbors: async () => neighbors,
-    getLldpIdentity: async () => ({ chassisId: 'ec:67:94:00:20:00', sysName: 'Sw-Studio' }),
+    getLldpIdentity: async () => ({ chassisId: 'ec:67:94:00:20:00', sysName: 'Sw-Access1' }),
     getVlanMembership: async () => null,
     ...extra,
   }));

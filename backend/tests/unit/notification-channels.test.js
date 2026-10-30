@@ -274,7 +274,7 @@ describe('message format', () => {
 
 describe('cloud alarms', () => {
   const cloudAlarm = (over = {}) => ({
-    id: 'ca1', externalId: 'x1', integrationId: 'int-c', integrationName: 'Home Network', provider: 'aruba_central',
+    id: 'ca1', externalId: 'x1', integrationId: 'int-c', integrationName: 'Lab Central', provider: 'aruba_central',
     type: 'Port Flap', name: 'Port Flap', severity: 'warning', status: 'active', summary: 'Port 1/1/7 flapped 52 times in 10 minutes',
     siteName: 'HQ', device: { id: 'd1', name: 'sw1' }, count: 1, raisedAt: '2026-10-25T10:00:00.000Z', clearedAt: null, clearedReason: null, ...over,
   });
@@ -310,12 +310,12 @@ describe('cloud alarms', () => {
     await channels.deliver({ channelId: 'c1', event: 'raised', cloudAlarm: cloudAlarm() });
     const [, payload] = axios.post.mock.calls[0];
     expect(payload).toMatchObject({ event: 'cloud-alarm.raised', cloudAlarm: { name: 'Port Flap', device: { id: 'd1', name: 'sw1' } } });
-    expect(payload.text).toMatch(/^\[WARNING\] Home Network: Port Flap on sw1/);
+    expect(payload.text).toMatch(/^\[WARNING\] Lab Central: Port Flap on sw1/);
   });
 
   test('message format: raised, cleared by timer, site-level', () => {
     const raised = formatCloudAlarm('raised', cloudAlarm(), 'https://nh.example');
-    expect(raised.subject).toBe('[WARNING] Home Network: Port Flap on sw1');
+    expect(raised.subject).toBe('[WARNING] Lab Central: Port Flap on sw1');
     expect(raised.text).toContain('Port 1/1/7 flapped 52 times in 10 minutes');
     expect(raised.text).toContain('acknowledge or clear it there');
     expect(raised.text).toContain('https://nh.example/activity?categories=cloud-alarm&deviceId=d1');
@@ -323,7 +323,7 @@ describe('cloud alarms', () => {
     const cleared = formatCloudAlarm('cleared', cloudAlarm({
       status: 'cleared', clearedAt: '2026-10-25T10:20:00.000Z', clearedReason: 'Due to clear alert timer configuration', device: null,
     }), '');
-    expect(cleared.subject).toBe('[Cleared] Home Network: Port Flap at HQ');
+    expect(cleared.subject).toBe('[Cleared] Lab Central: Port Flap at HQ');
     expect(cleared.text).toContain('the problem may not be fixed');
     expect(cleared.text).not.toContain('http');
   });
