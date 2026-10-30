@@ -1,8 +1,8 @@
 {
   "_comment": "Shapes of live New Central network-config/v1alpha1 responses (captured 2026-10-16), values anonymised. scopeMapsText is the raw body: scope-id is an unquoted number above 2^53.",
   "sites": { "items": [
-    { "id": "66470128290", "scopeId": "66470128290", "scopeName": "HQ", "collectionId": "68797217769316352", "collectionName": "Prod Sites", "deviceCount": 11, "type": "network-config/sites" },
-    { "id": "66470128371", "scopeId": "66470128371", "scopeName": "Branch", "collectionId": null, "collectionName": null, "deviceCount": 2, "type": "network-config/sites" }
+    { "id": "60000000001", "scopeId": "60000000001", "scopeName": "HQ", "collectionId": "68797217769316352", "collectionName": "Prod Sites", "deviceCount": 11, "type": "network-config/sites" },
+    { "id": "60000000002", "scopeId": "60000000002", "scopeName": "Branch", "collectionId": null, "collectionName": null, "deviceCount": 2, "type": "network-config/sites" }
   ], "total": 2, "count": 2, "offset": null },
   "siteCollections": { "items": [
     { "id": "68797217769316352", "scopeId": "68797217769316352", "scopeName": "Prod Sites", "siteCount": 1, "type": "network-config/site-collections" }
@@ -11,12 +11,12 @@
     { "id": "96971477242781696", "scopeId": "96971477242781696", "scopeName": "Wired", "isIap8x": false, "deviceCount": 1, "type": "network-config/device-collections" }
   ], "total": 1, "count": 1, "offset": null },
   "configAssignments": { "config-assignment": [
-    { "scope-id": "67816348241", "device-function": "CAMPUS_AP", "profile-type": "wlan-ssids", "profile-instance": "Corp", "scope-name": "0f1e2d3c4b5a69788796a5b4c3d2e1f0", "scope-type": "GLOBAL" },
-    { "scope-id": "67816348241", "device-function": "ACCESS_SWITCH", "profile-type": "ntp", "profile-instance": "internal_ntp", "scope-name": "0f1e2d3c4b5a69788796a5b4c3d2e1f0", "scope-type": "GLOBAL" },
+    { "scope-id": "60000000004", "device-function": "CAMPUS_AP", "profile-type": "wlan-ssids", "profile-instance": "Corp", "scope-name": "0f1e2d3c4b5a69788796a5b4c3d2e1f0", "scope-type": "GLOBAL" },
+    { "scope-id": "60000000004", "device-function": "ACCESS_SWITCH", "profile-type": "ntp", "profile-instance": "internal_ntp", "scope-name": "0f1e2d3c4b5a69788796a5b4c3d2e1f0", "scope-type": "GLOBAL" },
     { "scope-id": "68797217769316352", "device-function": "ACCESS_SWITCH", "profile-type": "layer2-vlan", "profile-instance": "20", "scope-name": "Prod Sites", "scope-type": "SITE_COLLECTION" },
-    { "scope-id": "66470128290", "device-function": "CAMPUS_AP", "profile-type": "auth-servers", "profile-instance": "radius1", "scope-name": "HQ", "scope-type": "SITE" }
+    { "scope-id": "60000000001", "device-function": "CAMPUS_AP", "profile-type": "auth-servers", "profile-instance": "radius1", "scope-name": "HQ", "scope-type": "SITE" }
   ] },
-  "scopeMapsText": "{\"scope-map\":[{\"scope-name\":\"67816348241\",\"scope-id\":67816348241,\"persona\":\"CAMPUS_AP\",\"resource\":\"wlan-ssids/Corp\"},{\"scope-name\":\"67816348241\",\"scope-id\":67816348241,\"persona\":\"SERVICE_PERSONA\",\"resource\":\"alert-configs/switch.interfaceRuntsError\"},{\"scope-name\":\"68797217769316352\",\"scope-id\":68797217769316352,\"persona\":\"ACCESS_SWITCH\",\"resource\":\"layer2-vlan/20\"},{\"scope-name\":\"68797217769316350\",\"scope-id\":68797217769316350,\"persona\":\"ACCESS_SWITCH\",\"resource\":\"ntp/decoy\"},{\"scope-name\":\"66470128290\",\"scope-id\":66470128290,\"persona\":\"CAMPUS_AP\",\"resource\":\"auth-servers/radius1\"}]}",
+  "scopeMapsText": "{\"scope-map\":[{\"scope-name\":\"60000000004\",\"scope-id\":60000000004,\"persona\":\"CAMPUS_AP\",\"resource\":\"wlan-ssids/Corp\"},{\"scope-name\":\"60000000004\",\"scope-id\":60000000004,\"persona\":\"SERVICE_PERSONA\",\"resource\":\"alert-configs/switch.interfaceRuntsError\"},{\"scope-name\":\"68797217769316352\",\"scope-id\":68797217769316352,\"persona\":\"ACCESS_SWITCH\",\"resource\":\"layer2-vlan/20\"},{\"scope-name\":\"68797217769316350\",\"scope-id\":68797217769316350,\"persona\":\"ACCESS_SWITCH\",\"resource\":\"ntp/decoy\"},{\"scope-name\":\"60000000001\",\"scope-id\":60000000001,\"persona\":\"CAMPUS_AP\",\"resource\":\"auth-servers/radius1\"}]}",
   "profiles": {
     "wlan-ssids": { "wlan-ssid": [
       { "ssid": "Guest", "enable": true, "ap-mode": "CAMPUS_AP", "forward-mode": "FORWARD_MODE_BRIDGE" },

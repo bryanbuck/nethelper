@@ -13,7 +13,7 @@
           "chassis_name": "Sw-CoreB",
           "chassis_protocol": "LLDP",
           "mgmt_ip_list": "192.168.255.2",
-          "port_description": "Sw-Studio1",
+          "port_description": "Sw-Access11",
           "port_id_subtype": "if_name",
           "port_pvid": "10",
           "vlan_id_list": "10,17,18,19,20,21,42,50,51,99"
@@ -40,7 +40,7 @@
     }
   },
   "system": {
-    "hostname": "Sw-Studio",
+    "hostname": "Sw-Access1",
     "platform_name": "6200",
     "system_mac": "ec:67:94:00:20:00"
   }

@@ -551,8 +551,8 @@ describe('ArubaCentralProvider scope backups', () => {
     expect(await provider.listConfigScopes()).toEqual([
       GLOBAL,
       { scopeType: 'site-collection', scopeId: '68797217769316352', name: 'Prod Sites' },
-      { scopeType: 'site', scopeId: '66470128371', name: 'Branch' },
-      { scopeType: 'site', scopeId: '66470128290', name: 'HQ' },
+      { scopeType: 'site', scopeId: '60000000002', name: 'Branch' },
+      { scopeType: 'site', scopeId: '60000000001', name: 'HQ' },
       { scopeType: 'device-group', scopeId: '96971477242781696', name: 'Wired' },
     ]);
   });
@@ -561,7 +561,7 @@ describe('ArubaCentralProvider scope backups', () => {
     const config = await provider.getScopeConfiguration(GLOBAL);
     expect(config.format).toBe('central-scope-json');
     const bundle = JSON.parse(config.text);
-    expect(bundle.scope).toEqual({ type: 'org', id: 'global', name: 'Global', centralScopeId: '67816348241' });
+    expect(bundle.scope).toEqual({ type: 'org', id: 'global', name: 'Global', centralScopeId: '60000000004' });
     expect(bundle.assignments).toEqual([
       { deviceFunction: 'ACCESS_SWITCH', profileInstance: 'internal_ntp', profileType: 'ntp' },
       { deviceFunction: 'CAMPUS_AP', profileInstance: 'Corp', profileType: 'wlan-ssids' },
@@ -569,7 +569,7 @@ describe('ArubaCentralProvider scope backups', () => {
     // Objects in effect at the scope come from the LOCAL view of each mapped type.
     expect(Object.keys(bundle.objects)).toEqual(['alert-configs', 'wlan-ssids']);
     expect(bundle.objects['alert-configs']).toBeNull(); // 404 → recorded as unavailable
-    expect(requests).toContainEqual({ route: 'wlan-ssids', params: { 'scope-id': '67816348241', 'view-type': 'LOCAL' } });
+    expect(requests).toContainEqual({ route: 'wlan-ssids', params: { 'scope-id': '60000000004', 'view-type': 'LOCAL' } });
     // Lists sorted by identity, Central's counters dropped.
     expect(bundle.objects['wlan-ssids']).toEqual({ 'wlan-ssid': [
       expect.objectContaining({ ssid: 'Corp' }), expect.objectContaining({ ssid: 'Guest' }),
@@ -589,7 +589,7 @@ describe('ArubaCentralProvider scope backups', () => {
   });
 
   test('secrets are replaced by a keyed fingerprint', async () => {
-    const text = (await provider.getScopeConfiguration({ scopeType: 'site', scopeId: '66470128290', name: 'HQ' })).text;
+    const text = (await provider.getScopeConfiguration({ scopeType: 'site', scopeId: '60000000001', name: 'HQ' })).text;
     expect(text).not.toContain('not-a-real-secret');
     const server = JSON.parse(text).objects['auth-servers']['auth-server'][0];
     expect(server['shared-secret-config']['secret-type']).toBe('PLAIN_TEXT');
@@ -667,7 +667,7 @@ describe('findByAddress', () => {
         ] };
       }
       return params.next
-        ? { items: [{ mac: '00:50:56:86:eb:83', name: '00:50:56:86:eb:83', ipv4: '192.168.252.4', status: 'Disconnected', lastSeenAt: '2026-10-22T19:42:10.646Z', type: 'Wired', connectedTo: 'Sw-Studio', connectedDeviceSerial: 'SN3', port: '1/1/3', vlanId: '10', manufacturer: 'VMware, Inc.' }] }
+        ? { items: [{ mac: '00:50:56:00:eb:83', name: '00:50:56:00:eb:83', ipv4: '192.168.252.4', status: 'Disconnected', lastSeenAt: '2026-10-22T19:42:10.646Z', type: 'Wired', connectedTo: 'Sw-Access1', connectedDeviceSerial: 'SN3', port: '1/1/3', vlanId: '10', manufacturer: 'VMware, Inc.' }] }
         : { items: [{ mac: '00:00:5e:00:01:01', ipv4: '192.168.99.11', status: 'Connected' }], next: 2 };
     });
 
@@ -678,8 +678,8 @@ describe('findByAddress', () => {
     expect(holders).toEqual([
       expect.objectContaining({ kind: 'device', name: 'Sw-CoreA', serial: 'SN1', mac: 'aa:bb:cc:00:00:01', status: 'online' }),
       expect.objectContaining({
-        kind: 'client', name: null, mac: '00:50:56:86:eb:83', status: 'disconnected', lastSeen: new Date('2026-10-22T19:42:10.646Z'),
-        connectedTo: expect.objectContaining({ name: 'Sw-Studio', serial: 'SN3', port: '1/1/3', vlan: '10', ssid: null }),
+        kind: 'client', name: null, mac: '00:50:56:00:eb:83', status: 'disconnected', lastSeen: new Date('2026-10-22T19:42:10.646Z'),
+        connectedTo: expect.objectContaining({ name: 'Sw-Access1', serial: 'SN3', port: '1/1/3', vlan: '10', ssid: null }),
       }),
     ]);
   });
@@ -692,7 +692,7 @@ describe('findByAddress', () => {
     const makeRequest = jest.spyOn(central, 'makeRequest').mockImplementation(async (method, endpoint) => (
       endpoint.endsWith('/devices')
         ? { items: [] }
-        : { items: [{ mac: '00:50:56:86:eb:83', ipv4: '192.168.252.4', status: 'Connected' }], next: 'more' }
+        : { items: [{ mac: '00:50:56:00:eb:83', ipv4: '192.168.252.4', status: 'Connected' }], next: 'more' }
     ));
 
     const holders = await central.findByAddress('192.168.252.4');

@@ -14,7 +14,7 @@ const TIMING = { settleMs: 20, nudgeMs: 1000 };
  * Input typed before `ready()` is echoed immediately but executed only after
  * the banner and first prompt, like the real switch.
  */
-function fakeShell({ prompt = 'Sw-Studio# ', banner = '', respond }) {
+function fakeShell({ prompt = 'Sw-Access1# ', banner = '', respond }) {
   const stream = new EventEmitter();
   const pending = [];
   let ready = false;
@@ -39,7 +39,7 @@ function fakeShell({ prompt = 'Sw-Studio# ', banner = '', respond }) {
   return stream;
 }
 
-const CONFIG = 'Current configuration:\r\n!\r\nhostname Sw-Studio\r\n!\r\n';
+const CONFIG = 'Current configuration:\r\n!\r\nhostname Sw-Access1\r\n!\r\n';
 const cxRespond = (command) => {
   if (command === 'no page') return '';
   if (command === 'show running-config') return CONFIG;
@@ -64,7 +64,7 @@ describe('driveShell', () => {
     stream.ready();
 
     const out = await result;
-    expect(out.config).toBe('Current configuration:\n!\nhostname Sw-Studio\n!');
+    expect(out.config).toBe('Current configuration:\n!\nhostname Sw-Access1\n!');
     expect(out._paging).toBe('');
     expect(stream.written).toEqual(['no page\n', 'show running-config\n']);
   });
@@ -83,7 +83,7 @@ describe('driveShell', () => {
     const result = drive(stream, QUEUE);
     stream.ready();
     const out = await result;
-    expect(out.config).toContain('hostname Sw-Studio');
+    expect(out.config).toContain('hostname Sw-Access1');
     expect(stream.written).toEqual(['no page\n', 'show running-config\n']);
   });
 
@@ -109,12 +109,12 @@ describe('driveShell', () => {
   test('nudges with a newline when no prompt appears', async () => {
     const stream = fakeShell({ respond: cxRespond });
     stream.write = jest.fn((text) => {
-      if (text === '\n') setImmediate(() => stream.emit('data', Buffer.from('\r\nSw-Studio# ')));
-      else setImmediate(() => stream.emit('data', Buffer.from(`${text.trim()}\r\n${cxRespond(text.trim())}Sw-Studio# `)));
+      if (text === '\n') setImmediate(() => stream.emit('data', Buffer.from('\r\nSw-Access1# ')));
+      else setImmediate(() => stream.emit('data', Buffer.from(`${text.trim()}\r\n${cxRespond(text.trim())}Sw-Access1# `)));
     });
     const out = await drive(stream, QUEUE, { settleMs: 10, nudgeMs: 30 });
     expect(stream.write.mock.calls[0][0]).toBe('\n');
-    expect(out.config).toContain('hostname Sw-Studio');
+    expect(out.config).toContain('hostname Sw-Access1');
   });
 
   test('returns what it has when the stream closes early', async () => {
@@ -128,12 +128,12 @@ describe('driveShell', () => {
 
 describe('stripEcho', () => {
   test('drops the echoed command and the exact prompt line', () => {
-    expect(stripEcho('show version\r\nAOS-CX ML.10.16\r\nSw-Studio# ', 'show version', 'Sw-Studio#'))
+    expect(stripEcho('show version\r\nAOS-CX ML.10.16\r\nSw-Access1# ', 'show version', 'Sw-Access1#'))
       .toBe('AOS-CX ML.10.16');
   });
 
   test('keeps a last output line that only looks like a prompt', () => {
-    expect(stripEcho('cmd\nline ending in #\nSw-Studio#', 'cmd', 'Sw-Studio#')).toBe('line ending in #');
+    expect(stripEcho('cmd\nline ending in #\nSw-Access1#', 'cmd', 'Sw-Access1#')).toBe('line ending in #');
   });
 });
 
@@ -143,9 +143,9 @@ describe('getRunningConfig', () => {
   afterEach(() => jest.restoreAllMocks());
 
   test('drops the AOS-CX "Current configuration:" header', async () => {
-    jest.spyOn(service, 'runCommands').mockResolvedValue({ config: 'Current configuration:\n!\nhostname Sw-Studio' });
+    jest.spyOn(service, 'runCommands').mockResolvedValue({ config: 'Current configuration:\n!\nhostname Sw-Access1' });
     await expect(service.getRunningConfig({ ipAddress: '10.0.0.1', vendor: 'aruba', platform: 'aos-cx' }, creds))
-      .resolves.toBe('!\nhostname Sw-Studio');
+      .resolves.toBe('!\nhostname Sw-Access1');
   });
 
   test('leaves other platforms untouched', async () => {

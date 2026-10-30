@@ -119,7 +119,7 @@ describe('Mist stream URL and capability', () => {
 
   test('Central has no stream', () => {
     const central = new ArubaCentralProvider({
-      id: 'int-c', provider: 'aruba_central', name: 'Home Network', baseUrl: 'https://us4.api.central.arubanetworks.com', credentials: { clientId: 'c', clientSecret: 's' },
+      id: 'int-c', provider: 'aruba_central', name: 'Lab Central', baseUrl: 'https://us4.api.central.arubanetworks.com', credentials: { clientId: 'c', clientSecret: 's' },
     });
     expect(central.supports('events')).toBe(false);
     expect(() => central.openEventStream([])).toThrow(CapabilityError);

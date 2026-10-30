@@ -31,7 +31,7 @@ Hands-on checks that need real equipment, a real host, or a browser login, which
 
 ## 🚀 Releases
 
-**Status**: `0.9.0` is the first public release (prepared 2026-10-29 on `release/0.9.0`). It follows five private betas, `v0.9.0-beta.1` (2026-10-20) to `v0.9.0-beta.5` (2026-10-25); what each one changed is in [`CHANGELOG.md`](../CHANGELOG.md), and what was tested on real equipment is in [`SUPPORT.md`](SUPPORT.md). Bugs and requests are GitHub Issues; a fix closes its issue from the commit (`Fixes #N`) and adds a line under `[Unreleased]` in `CHANGELOG.md`. Release steps: `CONTRIBUTING.md` → "Releasing".
+**Status**: the 0.9 beta. `v0.9.0-beta.1` (2026-10-20) to `v0.9.0-beta.5` (2026-10-25) were private; the repository goes public with `v0.9.0-beta.6` (prepared 2026-10-29), and `0.9.0` follows once the open items below and in "Waiting on the maintainer" are done; what each one changed is in [`CHANGELOG.md`](../CHANGELOG.md), and what was tested on real equipment is in [`SUPPORT.md`](SUPPORT.md). Bugs and requests are GitHub Issues; a fix closes its issue from the commit (`Fixes #N`) and adds a line under `[Unreleased]` in `CHANGELOG.md`. Release steps: `CONTRIBUTING.md` → "Releasing".
 
 Still open from the beta's security and packaging work:
 - ⏳ Tokens are kept in `localStorage`, so an XSS would expose them; the CSP is the guard. Consider an httpOnly, SameSite refresh-token cookie. Logout still revokes only the refresh token (a password change or reset ends every session at once).
@@ -96,7 +96,7 @@ Also open from the cloud plan (2026-10-19), to check on hardware:
 - ✅ Mist stream: JNAP-01 unplug/replug confirmed on 2026-10-20 (phase 7). JNEX-01 port events confirmed too (above).
 - ✅ "Config out of sync" alerts opened for Sw-CoreA/Sw-CoreB (confirmed 2026-10-20).
 - ✅ `/map` viewed in a browser with the cloud links (Mist and Central), 2026-10-20.
-- ✅ CX credentials for Sw-CoreA, Sw-CoreB and Sw-Studio fixed; connection tests, polls, LLDP and backups pass (2026-10-20).
+- ✅ CX credentials for Sw-CoreA, Sw-CoreB and Sw-Access1 fixed; connection tests, polls, LLDP and backups pass (2026-10-20).
 
 Deferred:
 - ⏳ Rule scoping (per device, group, site) and custom thresholds; maintenance windows / snooze.
@@ -117,7 +117,7 @@ Deferred:
 - `services/cloud-alarm.service.js`, polled by `pollCloudAlarms` on the cloud queue (`CLOUD_ALARMS_ENABLED`, `CLOUD_ALARM_INTERVAL` 5 min, `CLOUD_ALARM_RETENTION_DAYS` 30; a restart backfills from the newest stored alarm, at most 7 days). Device link only on a unique match: serial (also as a word in Central's summary, e.g. "Switch Reboot"), MAC, hostname, then device name as a whole word in the summary (not names that are IPs or under 3 characters). Otherwise the alarm is about its site. Socket `cloud:alarms`.
 - Activity feed category `cloud-alarm` (on by default): raised items, cleared items for stateful alarms with the reason (a Central timer clear says the problem may not be fixed), repeats of one alarm on one device/site within 10 minutes folded.
 - 2026-10-25: notification channels can deliver cloud alarms (item 2, 'Cloud alarms through the same channels').
-- First live poll (2026-10-23): Central "Home Network" stored its active "IPsec SA Down" site-level (its summary names two gateways). Mist "Buck Home" still returns nothing until alarm rules are enabled in its template.
+- First live poll (2026-10-23): Central "Lab Central" stored its active "IPsec SA Down" site-level (its summary names two gateways). Mist "Lab Mist" still returns nothing until alarm rules are enabled in its template.
 
 **Goal.** Show the alarms the clouds already raise, without creating NetHelper `Alert` rows (that would duplicate actionable items owned in the vendor cloud):
 - When each alarm appeared and cleared, on the device History tab.
@@ -142,13 +142,13 @@ Never write acks or clears back to the cloud.
   - Mist `GET /api/v1/orgs/{org}/alarms/search`: time window (`duration`, default `1d`) plus `acked`/`group`/`severity`/`type`; no status filter; `next` paging. Alarm fields: `id` (UUID), `type`, `group`, `severity`, `timestamp`, `last_seen`, `count` (incidents in one alarm window), `status` open\|resolved + `resolved_time`, `switches`/`aps`/`gateways` (MACs), `hostnames`, `acked`. Rate limit 5000 calls/h per token.
   - New Central `GET /network-notifications/v1/alerts`: OData `filter` on `status` (Active\|Deferred\|Cleared), `siteId`, `category`, `deviceType`; cursor `next`, `limit` ≤ 100.
   - Central webhook and stream payloads carry `alertId` (same id through Add → Update/Cleared, so a recurrence is a new id), `impactedEntities.deviceSerial` and `additionalDetails[].deviceSerial`. The stream is `wss://<host>/network-notifications/v1/alert-events`: protobuf inside CloudEvents, same OAuth token, **Advance tier only**.
-- 2026-10-22, live, Central ("Home Network"):
+- 2026-10-22, live, Central ("Lab Central"):
   - The list works, and `filter=status eq 'Active'` / `status in ('Active','Deferred')` work (one transient 502). 2 active, 15 cleared.
   - Item fields: `id` (UUID; the docs' `"22071893000:…"` example is wrong), `key` (UUIDv3, distinct per subject, e.g. per OSPF peer; whether it survives a recurrence is unconfirmed, as no subject repeated), `name`, `category`, `deviceType`, `severity`, `priority`, `status`, `summary`, `createdAt`, `updatedAt` (`""` while active), `clearedReason`, `siteName`, `deferredUntil`, `notes`, `rootCause`, `action`.
   - **No serial, siteId or MAC.** The device appears only in `summary` text ("…stopped receiving data from gateway AVGW.").
   - `alerts/classification?type=impacted_devices` returns counts per alert type only, no serials.
   - **7 of 15 cleared alerts were cleared by timer** (`clearedReason: "Due to clear alert timer configuration"`) and one by "Device went offline", so a Central clear does not always mean the problem is gone.
-- 2026-10-22, live, Mist ("Buck Home"):
+- 2026-10-22, live, Mist ("Lab Mist"):
   - `alarms/search?duration=30d`: 0 results.
   - The org's alarm template "Default" has `rules: {}`, and its sites set no template of their own, so Mist generates nothing until rules are enabled in Mist.
   - `GET /api/v1/const/alarm_defs` (248 types): only the marvis group's examples carry `status`, and marvis needs a VNA license. The 157 infrastructure types are point events that come in pairs (`switch_down`/`switch_reconnected`, `sw_alarm_chassis_*`/`*_clear`, `*_down`/`*_up`), and most of the clear/up/reconnected types are `default_enabled: false`.
@@ -165,9 +165,9 @@ Never write acks or clears back to the cloud.
 
 **Re-probe commands** (from `backend/`, `--out` outside the repo):
 ```
-node scripts/probe-cloud.js --integration "Buck Home" --out <dir> --no-builtin \
+node scripts/probe-cloud.js --integration "Lab Mist" --out <dir> --no-builtin \
   --get '/api/v1/orgs/<org>/alarms/search?duration=7d&limit=100' --get /api/v1/orgs/<org>/alarmtemplates
-node scripts/probe-cloud.js --integration "Home Network" --out <dir> \
+node scripts/probe-cloud.js --integration "Lab Central" --out <dir> \
   --get "/network-notifications/v1/alerts?limit=100&filter=status in ('Active','Deferred')"
 ```
 Two `--get`s with the same path but different queries write to the same file, so use a separate `--out` for each.

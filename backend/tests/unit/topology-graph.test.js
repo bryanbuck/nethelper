@@ -80,7 +80,7 @@ describe('guessType', () => {
 
 describe('buildGraph', () => {
   const studio = {
-    id: 'd-studio', name: 'Sw-Studio', type: 'switch', vendor: 'aruba', platform: 'aos-cx',
+    id: 'd-studio', name: 'Sw-Access1', type: 'switch', vendor: 'aruba', platform: 'aos-cx',
     ipAddress: '192.168.0.14', macAddress: null, location: 'HQ', pingStatus: 'online',
   };
   const core = {
@@ -91,7 +91,7 @@ describe('buildGraph', () => {
     id: 'd-gw', name: 'gw1', type: 'gateway', vendor: 'aruba', ipAddress: '192.168.255.1', location: 'DC',
   };
   const states = [
-    { deviceId: 'd-studio', status: 'ok', chassisId: 'ec:67:94:00:20:00', sysName: 'Sw-Studio' },
+    { deviceId: 'd-studio', status: 'ok', chassisId: 'ec:67:94:00:20:00', sysName: 'Sw-Access1' },
     { deviceId: 'd-core', status: 'ok', chassisId: '14:ab:ec:00:10:00', sysName: 'Sw-CoreB' },
   ];
   const link = (deviceId, localPort, chassis, port, extra = {}) => ({
@@ -107,7 +107,7 @@ describe('buildGraph', () => {
   const links = [
     // Studio 1/1/13 ↔ CoreB 1/1/6, reported from both ends
     link('d-studio', '1/1/13', '14:ab:ec:00:10:00', '1/1/6', { remoteSysName: 'Sw-CoreB' }),
-    link('d-core', '1/1/6', 'ec:67:94:00:20:00', '1/1/13', { remoteSysName: 'Sw-Studio' }),
+    link('d-core', '1/1/6', 'ec:67:94:00:20:00', '1/1/13', { remoteSysName: 'Sw-Access1' }),
     // The phone on Studio 1/1/4: no Device; matches a discovery host by MAC
     link('d-studio', '1/1/4', '192.168.18.140', '042AE200304E:P1', {
       remoteMac: '04:2a:e2:00:30:4e', remoteSysName: 'SEP042AE200304E', remoteCapabilities: ['bridge', 'telephone'],

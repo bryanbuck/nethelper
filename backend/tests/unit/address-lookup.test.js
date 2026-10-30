@@ -83,7 +83,7 @@ describe('address lookup', () => {
     label: name, integration: { name }, supports: (c) => c === 'address-lookup' && Boolean(findByAddress), findByAddress,
   });
   const client = (over) => ({
-    kind: 'client', name: null, mac: '00:50:56:86:eb:83', serial: null, model: null, status: 'connected', lastSeen: new Date(),
+    kind: 'client', name: null, mac: '00:50:56:00:eb:83', serial: null, model: null, status: 'connected', lastSeen: new Date(),
     manufacturer: 'VMware, Inc.', connectedTo: { name: 'Sw-CoreB', serial: null, mac: null, port: '1/1/27', vlan: '99', ssid: null }, ...over,
   });
 
@@ -106,13 +106,13 @@ describe('address lookup', () => {
 
     expect(cloud.items.map((i) => [i.title, i.detail])).toEqual([
       ['Sw-New', 'Home Central device (6200F), reports it online, not in NetHelper'],
-      ['vm-1', 'Home Central client on Sw-CoreB port 1/1/27, VLAN 99; MAC 00:50:56:86:eb:83, VMware, Inc.; connected now'],
+      ['vm-1', 'Home Central client on Sw-CoreB port 1/1/27, VLAN 99; MAC 00:50:56:00:eb:83, VMware, Inc.; connected now'],
       ['00:00:5e:00:01:01', 'Home Central client on Sw-CoreB port 1/1/27, VLAN 99; MAC 00:00:5e:00:01:01; disconnected'],
     ]);
     expect(cloud.reason).toBe("Couldn't read: Lab Mist. Can't search by address: Meraki.");
     expect(cloud).not.toHaveProperty('macHolder');
     // No neighbor entry: the connected client's MAC is the one compared.
-    expect(result).toMatchObject({ mac: '00:50:56:86:eb:83', macFrom: 'Home Central', sameMac: false });
+    expect(result).toMatchObject({ mac: '00:50:56:00:eb:83', macFrom: 'Home Central', sameMac: false });
   });
 
   test("a cloud client with the device's own MAC says the device holds the address", async () => {

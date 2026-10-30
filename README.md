@@ -2,7 +2,7 @@
 
 Multi-vendor network inventory, monitoring, and configuration backup. NetHelper keeps one view of your switches, access points, and gateways, whether they're managed through a cloud controller (Aruba Central, Juniper Mist) or reached directly (AOS-CX REST, AOS-S SSH, Junos NETCONF). It tracks their status and keeps versioned, diffable backups of their configurations.
 
-**Status: 0.9** (`VERSION`). Pre-1.0: behavior may still change between minor versions. What works, what has been tested on real equipment, what doesn't work yet, and how to report problems: [`docs/SUPPORT.md`](docs/SUPPORT.md).
+**Status: 0.9 beta** (`VERSION`), open to anyone who wants to try it. Pre-1.0: behavior may still change between versions. What works, what has been tested on real equipment, what doesn't work yet, and how to report problems: [`docs/SUPPORT.md`](docs/SUPPORT.md).
 
 ## Running it
 

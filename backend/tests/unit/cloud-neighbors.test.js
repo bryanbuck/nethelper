@@ -77,7 +77,7 @@ describe('Central parser (live capture)', () => {
   });
 
   test('an unmanaged neighbor named by its MAC keeps the MAC as chassis id, not as a name', () => {
-    const unmanaged = bySerial('Sw-Studio').neighbors.find((n) => n.localPort === '1/1/14');
+    const unmanaged = bySerial('Sw-Access1').neighbors.find((n) => n.localPort === '1/1/14');
     expect(unmanaged).toMatchObject({ sysName: null, capabilities: [] });
     expect(unmanaged.mac).toBe(unmanaged.chassisId.toLowerCase());
   });
@@ -149,9 +149,9 @@ describe('provider bulk reads', () => {
 
   test('Central: the inventory names the sites, then one v1 topology read per site', async () => {
     const provider = new ArubaCentralProvider({
-      id: 'int-c', provider: 'aruba_central', name: 'Home Network', baseUrl: 'https://us4.api.central.arubanetworks.com', credentials: { clientId: 'c', clientSecret: 's' },
+      id: 'int-c', provider: 'aruba_central', name: 'Lab Central', baseUrl: 'https://us4.api.central.arubanetworks.com', credentials: { clientId: 'c', clientSecret: 's' },
     });
-    const bySite = { 66470128290: central.hq, 66470128371: central.branch, 74710080672: central.teleworker };
+    const bySite = { 60000000001: central.hq, 60000000002: central.branch, 60000000003: central.teleworker };
     provider.makeRequest = jest.fn(async (_method, endpoint) => {
       if (endpoint === '/network-monitoring/v1alpha1/devices') return central.devices;
       const site = endpoint.match(/^\/network-monitoring\/v1\/topology\/(\d+)$/)?.[1];

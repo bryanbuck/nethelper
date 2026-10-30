@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/bryanbuck/nethelper/security/advisories/new
+    about: Privately, not as a public issue. See SECURITY.md.
+  - name: What's supported
+    url: https://github.com/bryanbuck/nethelper/blob/master/docs/SUPPORT.md
+    about: Platforms, what was tested on real equipment, and known limits.

@@ -129,7 +129,7 @@ describe('provider status reads (live captures)', () => {
 
   test("Central: the inventory read; \"Out of sync\" is out of sync", async () => {
     const provider = new ArubaCentralProvider({
-      id: 'int-c', provider: 'aruba_central', name: 'Home Network', baseUrl: 'https://us4.api.central.arubanetworks.com', credentials: { clientId: 'c', clientSecret: 's' },
+      id: 'int-c', provider: 'aruba_central', name: 'Lab Central', baseUrl: 'https://us4.api.central.arubanetworks.com', credentials: { clientId: 'c', clientSecret: 's' },
     });
     provider.makeRequest = jest.fn(async () => centralDevices);
 

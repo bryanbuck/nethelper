@@ -7,7 +7,7 @@ jest.mock('axios', () => ({ post: jest.fn() }));
 const axios = require('axios');
 const CXSwitchAPI = require('../../src/services/device-api/cx-switch-api');
 
-const device = { id: 'd1', name: 'Sw-Studio', ipAddress: '192.0.2.14', type: 'switch', vendor: 'aruba', platform: 'aos-cx' };
+const device = { id: 'd1', name: 'Sw-Access1', ipAddress: '192.0.2.14', type: 'switch', vendor: 'aruba', platform: 'aos-cx' };
 
 test('a 401 says the switch rejected the credentials and keeps its reply', async () => {
   axios.post.mockResolvedValue({ status: 401, statusText: 'Unauthorized', data: 'Login failed.\n', headers: {} });

@@ -85,7 +85,7 @@ describe('AOS-CX REST (live capture, 6200F ML.10.16)', () => {
   });
 
   test('identity from /system', () => {
-    expect(cx.parseIdentity(fixture.system)).toEqual({ chassisId: 'ec:67:94:00:20:00', sysName: 'Sw-Studio' });
+    expect(cx.parseIdentity(fixture.system)).toEqual({ chassisId: 'ec:67:94:00:20:00', sysName: 'Sw-Access1' });
   });
 
   test('URI strings (depth too shallow) and empty responses are ignored', () => {
