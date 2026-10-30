@@ -38,6 +38,8 @@ Still open from the beta's security and packaging work:
 - ⏳ A browser E2E smoke test (login → add device → backup → diff), run against a stack stood up by `deploy/install.sh -y`.
 - ⏳ arm64 images (the release publishes amd64 only).
 - ⏳ `deploy/install.sh` and the published images haven't been run on a real Docker host yet (tested in CI against a fake `docker`, `deploy-scripts.test.js`); see "Waiting on the maintainer" above.
+- ⏳ Deferred major upgrades (Dependabot PRs closed 2026-10-30): Prisma 7 (`prisma` + `@prisma/client` together; fails CI as a bump), Vuetify 4 and ESLint 10 (fail CI), Pinia 4 (passes CI, but no breaking-change notes and a new npm releaser; check against the running UI first).
+- ⏳ CodeQL (first scan 2026-10-30): two real findings fixed in `v0.9.0-beta.7` (sort key lookup, base URL trim). Left open as accepted or tracked: request forgery in `cx-switch-api.js` (connecting to operator-entered device IPs is the product), disabled certificate validation for AOS-CX REST (switches use self-signed certificates; an opt-in verify/pin setting would close it), tokens in `localStorage` (the httpOnly cookie item above), and the first-admin password printed once by `user-manager.js` (by design).
 - Accepted: a moderate `uuid` advisory inside `bull` (the fix is a breaking bull major, and bull doesn't pass the affected argument).
 - Considered and not done: a browser first-run setup (a one-time token from the log), which would add new auth surface. Revisit if the installer isn't enough.
 

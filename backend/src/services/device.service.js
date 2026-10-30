@@ -50,7 +50,8 @@ function skippedReason(error) {
 
 function deviceOrderBy(sortBy, sortOrder) {
   const dir = sortOrder === 'desc' ? 'desc' : 'asc';
-  const order = SORT_FIELDS[sortBy] ? SORT_FIELDS[sortBy](dir) : DEFAULT_ORDER;
+  // Own keys only: sortBy comes from the query string, and SORT_FIELDS['constructor'] is a function too.
+  const order = Object.hasOwn(SORT_FIELDS, sortBy) ? SORT_FIELDS[sortBy](dir) : DEFAULT_ORDER;
   // Ties broken by id so pages don't shuffle rows between requests
   return [...order, { id: 'asc' }];
 }
