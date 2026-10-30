@@ -71,6 +71,13 @@ describe('deviceService.getDevices', () => {
       .toEqual([{ pingStatus: 'asc' }, { name: 'asc' }, { id: 'asc' }]);
   });
 
+  test.each(['constructor', 'toString', '__proto__', 'hasOwnProperty'])('a built-in name as sort key (%s) falls back too', async (sortBy) => {
+    await deviceService.getDevices({}, { limit: 10, sortBy, sortOrder: 'desc' });
+
+    expect(mockPrisma.device.findMany.mock.calls[0][0].orderBy)
+      .toEqual([{ pingStatus: 'asc' }, { name: 'asc' }, { id: 'asc' }]);
+  });
+
   test('a page returns the filtered total and a fleet-wide summary', async () => {
     mockPrisma.device.count.mockImplementation(async (args = {}) => {
       if (args.where === undefined) return 40;

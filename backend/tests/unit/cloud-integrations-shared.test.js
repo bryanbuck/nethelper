@@ -56,3 +56,20 @@ describe('an integration that stops syncing resolves its sync.failed alert', () 
     expect(alertService.clear).toHaveBeenCalledWith('sync.failed', { subjectKey: 'mist-1' });
   });
 });
+
+describe('normalizeBaseUrl', () => {
+  test('trims whitespace and trailing slashes, keeps the path', () => {
+    expect(settingsService.normalizeBaseUrl(' https://central.example.com/api/// ')).toBe('https://central.example.com/api');
+    expect(settingsService.normalizeBaseUrl('https://api.mist.com')).toBe('https://api.mist.com');
+  });
+
+  test('refuses a non-http(s) URL', () => {
+    expect(() => settingsService.normalizeBaseUrl('ftp://host/')).toThrow('not an http(s) URL');
+  });
+
+  test('a long run of slashes is handled in linear time', () => {
+    const started = Date.now();
+    expect(() => settingsService.normalizeBaseUrl(`${'/'.repeat(1_000_000)}x`)).toThrow('not an http(s) URL');
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+});

@@ -12,6 +12,9 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 ### Changed
 - Dependency updates (backend): bcryptjs 3 (new password hashes start with `$2b$`; existing ones keep working), redis 6, joi 18, qs 6.16.2. The release workflow uses docker/build-push-action 7 and docker/setup-buildx-action 4.
 
+### Fixed
+- Found by CodeQL: a Devices list request sorted by a built-in name such as `constructor` failed with a server error instead of using the default order, and saving a cloud integration whose base URL ended in a very long run of slashes could stall the server (admin only).
+
 ## [0.9.0-beta.6] — 2026-10-29
 
 ### Changed

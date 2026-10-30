@@ -459,7 +459,11 @@ class SettingsService {
    */
   normalizeBaseUrl(baseUrl) {
     if (!baseUrl) return null;
-    const trimmed = String(baseUrl).trim().replace(/\/+$/, '');
+    // Trailing slashes trimmed by index: /\/+$/ is quadratic on a long run of them.
+    const raw = String(baseUrl).trim();
+    let end = raw.length;
+    while (end > 0 && raw[end - 1] === '/') end--;
+    const trimmed = raw.slice(0, end);
     let url;
     try {
       url = new URL(trimmed);
