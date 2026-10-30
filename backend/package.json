@@ -1,6 +1,6 @@
 {
   "name": "nethelper-backend",
-  "version": "0.9.0-beta.6",
+  "version": "0.9.0-beta.7",
   "description": "NetHelper API: multi-vendor network inventory, monitoring, and config backup",
   "main": "server.js",
   "scripts": {
