@@ -36,7 +36,7 @@
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^10.2.1",
     "ping": "^1.0.0",
-    "prisma": "^5.7.0",
+    "prisma": "^7.10.1",
     "redis": "^4.6.11",
     "socket.io": "^4.8.4",
     "ssh2": "^1.17.0",
