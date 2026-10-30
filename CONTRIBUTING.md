@@ -37,7 +37,7 @@ The docs have drifted before: new work replaced old behavior, and the docs went 
 | A roadmap item's status (started, shipped, deferred) | its status line in `docs/ROADMAP_AND_TODO.md`, with an absolute date |
 | Deployment: Dockerfiles, Compose, systemd, nginx | `deploy/README.md`. Keep the proxy blocks of the two nginx configs in sync |
 | The rights NetHelper needs on a device, or the first-run steps | `docs/GETTING_STARTED.md` |
-| What the beta supports, or a known limitation | `docs/BETA_NOTES.md` |
+| What NetHelper supports, what was tested on real equipment, or a known limitation | `docs/SUPPORT.md` |
 | Something you learned on real hardware | `docs/hardware/` |
 
 And three rules:
@@ -48,7 +48,7 @@ And three rules:
 
 ## Releasing
 
-1. Set the new version everywhere it appears: `VERSION`, `version` in both `package.json` files (and their lockfiles, with `npm version <v> --no-git-tag-version` in each tier), the `NETHELPER_VERSION` defaults in `deploy/docker-compose.yml`, `ARG VITE_APP_VERSION` in `frontend/Dockerfile`, and the `gh release download` example in `deploy/README.md`. `backend/tests/unit/release-version.test.js` fails if one is missed.
+1. Set the new version everywhere it appears: `VERSION`, `version` in both `package.json` files (and their lockfiles, with `npm version <v> --no-git-tag-version` in each tier), the `NETHELPER_VERSION` defaults in `deploy/docker-compose.yml`, `ARG VITE_APP_VERSION` in `frontend/Dockerfile`, and the release download example in `deploy/README.md`. `backend/tests/unit/release-version.test.js` fails if one is missed.
 2. Move the `[Unreleased]` entries in `CHANGELOG.md` under a dated heading for the version: `## [<version>] — <YYYY-MM-DD>`.
 3. Merge to `master`, then tag and push the tag: `git tag v<version> && git push origin v<version>`.
 

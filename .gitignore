@@ -163,3 +163,5 @@ backend/pnpm-lock.yaml
 # style/additions without them being pushed to or overwritten by others.
 CLAUDE.md
 **/CLAUDE.md
+# Local-only notes (e.g. GOING_PUBLIC.local.md)
+*.local.md

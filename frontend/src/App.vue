@@ -8,6 +8,7 @@ import ChangePasswordDialog from '@/components/common/ChangePasswordDialog.vue'
 import AlertBell from '@/components/common/AlertBell.vue'
 import { THEMES, writeThemePreference } from '@/utils/theme-preference'
 import { defaultsForTheme } from '@/plugins/theme-defaults'
+import { prereleaseLabel } from '@/utils/version'
 
 const theme = useTheme()
 const route = useRoute()
@@ -16,6 +17,7 @@ const authStore = useAuthStore()
 const drawer = ref(false)
 const changePasswordOpen = ref(false)
 const appVersion = import.meta.env.VITE_APP_VERSION
+const versionLabel = prereleaseLabel(appVersion)
 
 const isAuthPage = computed(() => {
   return route.meta?.requiresAuth === false
@@ -131,7 +133,7 @@ onMounted(() => {
           <v-toolbar-title>
             <v-icon class="mr-2">mdi-network</v-icon>
             NetHelper
-            <v-chip size="x-small" variant="outlined" label class="ml-2" :title="`Version ${appVersion}`">Beta</v-chip>
+            <v-chip v-if="versionLabel" size="x-small" variant="outlined" label class="ml-2" :title="`Version ${appVersion}`">{{ versionLabel }}</v-chip>
           </v-toolbar-title>
 
           <v-spacer />

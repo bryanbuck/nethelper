@@ -32,7 +32,8 @@ describe('StatusBar', () => {
 
   test('shows the version and idle text, then the newest message with its action', async () => {
     const wrapper = mountBar()
-    expect(wrapper.text()).toContain('NetHelper 1.2.3 · Beta')
+    expect(wrapper.text()).toContain('NetHelper 1.2.3')
+    expect(wrapper.text()).not.toContain('Beta')
     expect(wrapper.text()).toContain('No new activity')
 
     const store = useNotificationsStore()

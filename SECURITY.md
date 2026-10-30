@@ -4,14 +4,13 @@
 
 Please don't open a public issue for a security problem.
 
-- **Beta testers**: tell the NetHelper admin who invited you, privately.
-- **Everyone else**: use GitHub's private vulnerability reporting on this repository (**Security → Report a vulnerability**).
+Use GitHub's private vulnerability reporting on this repository (**Security → Report a vulnerability**).
 
 Include the version (page footer, or `GET /health`), what an attacker can do, and the steps to reproduce. Leave out real device configs and credentials: describe them, or send a redacted copy.
 
 ## Supported versions
 
-Only the latest release gets fixes during the 0.x beta.
+Only the latest release gets fixes while NetHelper is at 0.x.
 
 ## Security model
 

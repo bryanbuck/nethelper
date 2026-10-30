@@ -136,7 +136,7 @@
         class="status-meta__dot"
         :class="`status-meta__dot--${store.connection}`"
       />
-      <span>NetHelper {{ version }} · Beta</span>
+      <span>NetHelper {{ version }}<template v-if="versionLabel"> · {{ versionLabel }}</template></span>
       <v-icon v-if="authStore.isAdmin" size="14" class="status-meta__icon">mdi-monitor-dashboard</v-icon>
     </component>
   </v-footer>
@@ -177,10 +177,13 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
+import { prereleaseLabel } from '@/utils/version'
 
-defineProps({
+const props = defineProps({
   version: { type: String, default: '' }
 })
+
+const versionLabel = computed(() => prereleaseLabel(props.version))
 
 const store = useNotificationsStore()
 const authStore = useAuthStore()

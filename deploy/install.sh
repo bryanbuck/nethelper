@@ -233,9 +233,9 @@ fi
 if [ -z "$BUILD" ]; then
   if ! run docker compose pull backend frontend; then
     say ""
-    say "Couldn't pull the release images. While the repository is private, pulling"
-    say "needs a GitHub token with read:packages:"
-    say "  echo <token> | docker login ghcr.io -u <github user> --password-stdin"
+    say "Couldn't pull the release images: no registry access from this host, or a"
+    say "private registry (for ghcr.io, a GitHub token with read:packages:"
+    say "  echo <token> | docker login ghcr.io -u <github user> --password-stdin)."
     say "Building locally instead (a few minutes)."
     BUILD=1
   fi

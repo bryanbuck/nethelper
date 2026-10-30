@@ -4,6 +4,14 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ## [Unreleased]
 
+### Changed
+- First public release. The docs no longer describe a private beta: `docs/BETA_NOTES.md` is now [`docs/SUPPORT.md`](docs/SUPPORT.md) (what's supported, what was tested on real equipment, what isn't supported yet), problems are reported as GitHub issues, and security problems through GitHub's private vulnerability reporting.
+- The release images pull without a `docker login`. `deploy/README.md` downloads the release tarball with `curl` instead of `gh`.
+- The app bar and status bar show "Beta" only on a beta build (and "Pre-release" on another pre-release version), not on a release.
+
+### Fixed
+- `docs/SUPPORT.md` (formerly the beta notes) listed alert notifications, device groups and status history as unsupported; they all work.
+
 ## [0.9.0-beta.5] — 2026-10-25
 
 ### Added

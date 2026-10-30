@@ -1,6 +1,6 @@
 # Getting started
 
-Your first hour with NetHelper, after it's installed ([`deploy/README.md`](../deploy/README.md); with Docker Compose, `deploy/install.sh` does it in one step) and the first admin exists. What each platform supports, and known limits: [`BETA_NOTES.md`](BETA_NOTES.md).
+Your first hour with NetHelper, after it's installed ([`deploy/README.md`](../deploy/README.md); with Docker Compose, `deploy/install.sh` does it in one step) and the first admin exists. What each platform supports, and known limits: [`SUPPORT.md`](SUPPORT.md).
 
 ## Before you start
 
@@ -80,4 +80,4 @@ There's no self-signup and no "forgot password": an admin resets passwords on th
 
 ## When something doesn't work
 
-[`BETA_NOTES.md` → Reporting a problem](BETA_NOTES.md#reporting-a-problem) lists what to send. Every setting is in [`CONFIGURATION.md`](CONFIGURATION.md).
+[`SUPPORT.md` → Reporting a problem](SUPPORT.md#reporting-a-problem) lists what to send. Every setting is in [`CONFIGURATION.md`](CONFIGURATION.md).
