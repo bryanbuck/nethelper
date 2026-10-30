@@ -176,6 +176,17 @@ const iconColor = computed(() => {
   opacity: 0.7;
 }
 
+/* Phones show two cards per row: drop the icon, shrink the number. */
+@media (max-width: 599.98px) {
+  .stats-icon {
+    display: none;
+  }
+
+  .stats-value {
+    font-size: 1.75rem !important;
+  }
+}
+
 /* Secondary text on a fill: the fill's text color, slightly lighter
    (theme.spec.js checks it stays at least 4.5:1) */
 .stats-secondary {

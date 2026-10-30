@@ -1,5 +1,5 @@
 <template>
-  <v-dialog :model-value="modelValue" max-width="960" @update:model-value="emit('update:modelValue', $event)">
+  <v-dialog :model-value="modelValue" max-width="960" :fullscreen="$vuetify.display.xs" @update:model-value="emit('update:modelValue', $event)">
     <v-card>
       <v-card-title class="d-flex align-center">
         <v-icon start icon="mdi-call-merge" />

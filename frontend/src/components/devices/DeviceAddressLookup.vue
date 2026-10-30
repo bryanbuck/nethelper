@@ -14,7 +14,7 @@
     <v-alert v-if="error" type="error" variant="text" density="compact" class="px-0">{{ error }}</v-alert>
 
     <div v-if="result" class="address-lookup">
-      <div class="d-flex align-center ga-2 mb-1">
+      <div class="d-flex flex-wrap align-center ga-2 mb-1">
         <span class="font-weight-medium">{{ headline }}</span>
         <v-spacer />
         <v-btn variant="text" size="x-small" prepend-icon="mdi-refresh" :loading="loading" @click="run">Check again</v-btn>

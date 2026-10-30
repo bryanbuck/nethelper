@@ -19,7 +19,7 @@
     </v-alert>
 
     <v-card elevation="2" class="device-table-card">
-      <v-card-title class="d-flex align-center justify-space-between">
+      <v-card-title class="d-flex flex-wrap align-center justify-space-between ga-2">
         <div class="d-flex align-center">
           <v-icon class="mr-2" color="primary">mdi-devices</v-icon>
           Network Devices
@@ -33,7 +33,7 @@
           </v-chip>
         </div>
         
-        <div class="d-flex align-center ga-2">
+        <div class="table-toolbar d-flex flex-wrap flex-sm-nowrap align-center ga-2">
           <v-text-field
             v-model="searchInput"
             density="compact"
@@ -41,45 +41,36 @@
             hide-details
             placeholder="Search devices..."
             prepend-inner-icon="mdi-magnify"
-            style="width: 250px; min-width: 250px;"
+            class="table-search"
             clearable
             @update:model-value="onSearchInput"
           />
           
-          <v-btn
+          <ActionButton
             v-if="canEdit"
             color="primary"
-            prepend-icon="mdi-sync"
+            icon="mdi-sync"
+            label="Sync"
             :loading="devicesStore.loading"
             @click="syncDevices"
-          >
-            Sync
-          </v-btn>
+          />
           
-          <v-btn
+          <ActionButton
             variant="outlined"
-            prepend-icon="mdi-filter"
+            icon="mdi-filter"
+            label="Filters"
+            :badge="activeFiltersCount"
             @click="showFilters = !showFilters"
-          >
-            Filters
-            <v-badge 
-              v-if="activeFiltersCount > 0" 
-              :content="activeFiltersCount" 
-              color="primary" 
-              offset-x="-8" 
-              offset-y="8"
-            />
-          </v-btn>
+          />
           
           <v-menu>
             <template #activator="{ props }">
-              <v-btn
+              <ActionButton
                 variant="outlined"
-                prepend-icon="mdi-dots-vertical"
+                icon="mdi-dots-vertical"
+                label="Actions"
                 v-bind="props"
-              >
-                Actions
-              </v-btn>
+              />
             </template>
             <v-list>
               <v-list-item
@@ -259,13 +250,13 @@
       <!-- Bulk Actions Bar: above the table, pinned under the app bar while the page scrolls -->
       <v-slide-y-transition>
         <v-card-actions v-if="selectedItems.length > 0" class="bulk-actions-bar">
-          <div class="d-flex align-center justify-space-between w-100">
+          <div class="d-flex flex-wrap align-center justify-space-between ga-2 w-100">
             <div class="d-flex align-center">
               <v-icon class="mr-2" color="primary">mdi-checkbox-marked</v-icon>
               <span class="font-weight-medium">{{ selectedItems.length }} devices selected</span>
             </div>
             
-            <div class="d-flex align-center ga-2">
+            <div class="d-flex flex-wrap align-center ga-2">
               <v-menu v-if="canEdit">
                 <template #activator="{ props }">
                   <v-btn
@@ -336,7 +327,7 @@
       <v-data-table-server
         v-model="selectedItems"
         v-model:options="tableOptions"
-        :headers="headers"
+        :headers="shownHeaders"
         :items="devicesStore.devices"
         :items-length="devicesStore.pagination.total"
         :loading="devicesStore.tableLoading"
@@ -430,6 +421,7 @@
               :color="getManagementChip(item).color"
               size="small"
               :variant="getManagementChip(item).variant"
+              :title="getManagementChip(item).title"
             >
               <v-icon
                 start
@@ -437,6 +429,7 @@
                 size="x-small"
               ></v-icon>
               {{ getManagementChip(item).label }}
+              <v-icon v-if="getManagementChip(item).unverified" end icon="mdi-help-circle-outline" size="x-small" />
             </v-chip>
             <v-tooltip v-if="getManagementMismatch(item)" location="top">
               <template #activator="{ props }">
@@ -601,12 +594,14 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useDisplay } from 'vuetify'
 import { useDevicesStore } from '@/stores/devices'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import deviceService from '@/services/device.service'
 import { useWebSocket } from '@/composables/useWebSocket'
-import { formatDistanceToNow } from 'date-fns'
+import { usePhoneColumns } from '@/composables/usePhoneColumns'
+import { timeAgo } from '@/models/activity'
 import { debounce } from 'lodash-es'
 import ConnectionStatusBadge from './ConnectionStatusBadge.vue'
 import DeviceMergeDialog from './DeviceMergeDialog.vue'
@@ -618,6 +613,7 @@ import { unreachableFromHere, answersPingButCloudOffline, DeviceTypeInfo, device
 import { VendorInfo, PlatformInfo } from '@/models/vendors'
 import { toCsv, downloadCsv } from '@/utils/csv'
 import { useSettingsStore } from '@/stores/settings'
+import ActionButton from '@/components/common/ActionButton.vue'
 
 const router = useRouter()
 const devicesStore = useDevicesStore()
@@ -656,72 +652,84 @@ const tableOptions = ref({
 })
 
 // Table headers
+// No fixed widths: they added up past a laptop screen and squeezed cells into
+// wrapping. Short values stay on one line; the name and location may wrap.
 const headers = [
   {
     title: 'Device Name',
     key: 'name',
-    sortable: true,
-    width: '250px'
+    sortable: true
   },
   {
     title: 'Type',
     key: 'type',
-    sortable: true,
-    width: '150px'
+    cellProps: { class: 'text-no-wrap' },
+    sortable: true
   },
   {
     title: 'Managed',
     key: 'managementMode',
+    cellProps: { class: 'text-no-wrap' },
     sortable: true,
-    width: '120px',
     tooltip: 'How NetHelper reaches this device (a cloud platform, or direct via REST/SSH)'
   },
   {
     title: 'Status',
     key: 'status',
+    cellProps: { class: 'text-no-wrap' },
     sortable: true,
-    width: '120px',
     tooltip: 'Network reachability status (ICMP ping)'
   },
   {
     title: 'IP Address',
     key: 'ipAddress',
-    sortable: true,
-    width: '140px'
+    cellProps: { class: 'text-no-wrap' },
+    sortable: true
   },
   {
     title: 'Location',
     key: 'location',
-    sortable: true,
-    width: '180px'
+    sortable: true
   },
   {
     title: 'Cloud Status',
     key: 'cloudStatus',
+    cellProps: { class: 'text-no-wrap' },
     sortable: true,
-    width: '140px',
     tooltip: 'Status as reported by the device\'s cloud platform'
   },
   {
     title: 'API Status',
     key: 'apiStatus',
+    cellProps: { class: 'text-no-wrap' },
     sortable: false,
-    width: '160px',
     tooltip: 'Device API communication status'
   },
   {
     title: 'Last Seen',
     key: 'lastSeen',
-    sortable: true,
-    width: '160px'
+    cellProps: { class: 'text-no-wrap' },
+    sortable: true
   },
   {
     title: 'Actions',
     key: 'actions',
+    cellProps: { class: 'text-no-wrap' },
     sortable: false,
-    width: '120px'
+    // Pinned to the right edge, so the row actions stay in reach when the
+    // columns are wider than the screen.
+    fixed: 'end',
+    width: 120
   }
 ]
+
+const { xs } = useDisplay()
+// Phones: name (with model), type, status, address and actions per row; rows
+// stack there, so nothing is pinned.
+const shownHeaders = usePhoneColumns(
+  computed(() => xs.value ? headers.map((h) => ({ ...h, fixed: undefined })) : headers),
+  ['name', 'type', 'status', 'ipAddress', 'actions']
+)
 
 // Filter options
 const statusOptions = [
@@ -1023,20 +1031,21 @@ const cloudPlaneName = (item) =>
 
 // Three-state "Managed" chip: prefers the device-reported cloudManaged truth
 // over the record-keeping managementMode field, falling back to the latter
-// (marked "unverified") when the device has never been probed.
+// (outlined, with a "?") when the device has never been probed. Short labels
+// so the column stays narrow; the tooltip says it in full.
 const getManagementChip = (item) => {
   const plane = cloudPlaneName(item)
   if (item.cloudManaged === true) {
-    return { label: `${plane}-managed`, color: 'info', variant: 'tonal', icon: 'mdi-cloud' }
+    return { label: plane, title: `${plane}-managed`, color: 'info', variant: 'tonal', icon: 'mdi-cloud' }
   }
   if (item.cloudManaged === false) {
-    return { label: 'Locally managed', color: 'success', variant: 'tonal', icon: 'mdi-lan-connect' }
+    return { label: 'Local', title: 'Locally managed', color: 'success', variant: 'tonal', icon: 'mdi-lan-connect' }
   }
   // cloudManaged is null/undefined - fall back to managementMode, unverified
   if (item.managementMode === 'cloud') {
-    return { label: `${plane} (unverified)`, color: 'grey', variant: 'outlined', icon: 'mdi-cloud-outline' }
+    return { label: plane, title: `${plane} (unverified: not yet probed)`, unverified: true, color: 'grey', variant: 'outlined', icon: 'mdi-cloud-outline' }
   }
-  return { label: 'Direct (unverified)', color: 'grey', variant: 'outlined', icon: 'mdi-lan-connect' }
+  return { label: 'Direct', title: 'Direct (unverified: not yet probed)', unverified: true, color: 'grey', variant: 'outlined', icon: 'mdi-lan-connect' }
 }
 
 // Returns a warning string when the device's own view of cloud ownership
@@ -1056,7 +1065,7 @@ const formatLastSeen = (lastSeen) => {
   if (!lastSeen) return 'Unknown'
   
   try {
-    return formatDistanceToNow(new Date(lastSeen), { addSuffix: true })
+    return timeAgo(lastSeen)
   } catch (error) {
     return 'Unknown'
   }
@@ -1137,6 +1146,30 @@ defineExpose({ refreshTable })
 .device-data-table :deep(.v-table__wrapper) {
   height: calc(100vh - 400px);
   min-height: 400px;
+}
+
+.table-search {
+  width: 250px;
+  min-width: 250px;
+}
+
+/* Phones: rows stack, so the table grows with the page instead of scrolling
+   inside a box; the toolbar takes its own line with a full-width search. */
+@media (max-width: 599.98px) {
+  .device-data-table :deep(.v-table__wrapper) {
+    height: auto;
+    min-height: 0;
+  }
+
+  .table-toolbar {
+    width: 100%;
+  }
+
+  .table-search {
+    flex: 1 1 100%;
+    width: auto;
+    min-width: 0;
+  }
 }
 
 /* v-card's overflow: hidden would make the card the sticky container; clip keeps the rounded corners without that. */

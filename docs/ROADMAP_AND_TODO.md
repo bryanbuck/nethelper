@@ -489,6 +489,8 @@ Support for multiple organizations/customers:
 **Priority**: Low
 **Status**: Not Started
 
+The web app has a phone layout (2026-10-26): pages fit a 360–414px screen without horizontal scrolling, tables stack into label/value cards, wide dialogs go full screen. The canvas pages (Network Map, automation builder) are usable on a phone but not designed for it. The shared phone rules and opt-in classes are in `frontend/src/assets/styles/responsive.scss`; wide tables keep their key columns with `frontend/src/composables/usePhoneColumns.js`.
+
 Native mobile apps for iOS/Android:
 - Real-time device monitoring
 - Push notifications for alerts

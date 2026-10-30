@@ -1,15 +1,18 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useTheme } from 'vuetify'
+import { useTheme, useDisplay } from 'vuetify'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import StatusBar from '@/components/common/StatusBar.vue'
 import ChangePasswordDialog from '@/components/common/ChangePasswordDialog.vue'
 import AlertBell from '@/components/common/AlertBell.vue'
 import { THEMES, writeThemePreference } from '@/utils/theme-preference'
-import { defaultsForTheme } from '@/plugins/theme-defaults'
+import { appDefaults } from '@/plugins/theme-defaults'
 
 const theme = useTheme()
+// Phones: the theme picker moves into the account menu so the title fits.
+const { xs } = useDisplay()
+const themeDefaults = computed(() => appDefaults(theme.global.name.value, xs.value))
 const route = useRoute()
 const authStore = useAuthStore()
 
@@ -22,7 +25,6 @@ const isAuthPage = computed(() => {
 })
 
 const currentTheme = computed(() => THEMES.find((t) => t.id === theme.global.name.value) || THEMES[0])
-const themeDefaults = computed(() => defaultsForTheme(theme.global.name.value))
 // The global VBtn default is color: 'primary', which vanishes on the primary app
 // bar. Vuetify has no text-on-* class, so pass the token as a CSS color.
 const onPrimary = 'rgb(var(--v-theme-on-primary))'
@@ -129,16 +131,16 @@ onMounted(() => {
           ></v-app-bar-nav-icon>
         
           <v-toolbar-title>
-            <v-icon class="mr-2">mdi-network</v-icon>
+            <v-icon class="mr-2 d-none d-sm-inline-flex">mdi-network</v-icon>
             NetHelper
             <v-chip size="x-small" variant="outlined" label class="ml-2" :title="`Version ${appVersion}`">Beta</v-chip>
           </v-toolbar-title>
 
-          <v-spacer />
+          <!-- No v-spacer: the title already grows, and a spacer would halve its room on phones. -->
 
           <AlertBell :color="onPrimary" />
 
-          <v-menu>
+          <v-menu v-if="!xs">
             <template #activator="{ props }">
               <v-btn
                 icon
@@ -176,12 +178,26 @@ onMounted(() => {
             </template>
           
             <v-list>
-              <v-list-item>
+              <v-list-item class="wrap-lines">
                 <v-list-item-title>{{ authStore.userName }}</v-list-item-title>
                 <v-list-item-subtitle>{{ authStore.user?.email }} · {{ authStore.userRole }}</v-list-item-subtitle>
               </v-list-item>
 
               <v-divider />
+
+              <template v-if="xs">
+                <v-list-subheader>Theme</v-list-subheader>
+                <v-list-item
+                  v-for="t in THEMES"
+                  :key="t.id"
+                  :prepend-icon="t.icon"
+                  :title="t.label"
+                  :active="t.id === currentTheme.id"
+                  color="primary"
+                  @click="selectTheme(t.id)"
+                />
+                <v-divider />
+              </template>
 
               <v-list-item @click="changePasswordOpen = true">
                 <template #prepend>

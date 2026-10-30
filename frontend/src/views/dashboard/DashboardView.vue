@@ -1,7 +1,7 @@
 <template>
   <div class="dashboard-view">
     <v-container fluid class="pa-4">
-      <div class="d-flex align-center justify-space-between mb-6">
+      <div class="d-flex flex-wrap align-center justify-space-between ga-2 mb-6">
         <div>
           <h1 class="text-h4 font-weight-bold mb-1">Dashboard</h1>
           <p class="text-subtitle-1 text-medium-emphasis mb-0">
@@ -9,7 +9,7 @@
           </p>
         </div>
         
-        <div class="d-flex align-center ga-2">
+        <div class="d-flex flex-wrap align-center ga-2">
           <v-btn 
             v-if="canEdit"
             color="primary" 
@@ -23,7 +23,7 @@
       </div>
 
       <v-row>
-        <v-col cols="12" sm="6" md="3">
+        <v-col cols="6" md="3">
           <StatsCard
             title="Total Devices"
             :value="devicesStore.stats.total"
@@ -38,7 +38,7 @@
           />
         </v-col>
         
-        <v-col cols="12" sm="6" md="3">
+        <v-col cols="6" md="3">
           <StatsCard
             title="Online Devices"
             :value="devicesStore.stats.online"
@@ -53,7 +53,7 @@
           />
         </v-col>
         
-        <v-col cols="12" sm="6" md="3">
+        <v-col cols="6" md="3">
           <StatsCard
             title="Offline Devices"
             :value="devicesStore.stats.offline"
@@ -68,7 +68,7 @@
           />
         </v-col>
         
-        <v-col cols="12" sm="6" md="3">
+        <v-col cols="6" md="3">
           <StatsCard
             title="Warning Devices"
             :value="devicesStore.stats.warning"

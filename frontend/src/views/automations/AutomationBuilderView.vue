@@ -3,7 +3,7 @@
     <!-- Header Section -->
     <div class="builder-header">
       <v-container fluid class="pa-4">
-        <div class="d-flex align-center justify-space-between mb-4">
+        <div class="d-flex flex-wrap align-center justify-space-between ga-2 mb-4">
           <div class="d-flex align-center">
             <v-btn 
               variant="text" 
@@ -22,7 +22,7 @@
             </div>
           </div>
           
-          <div class="d-flex align-center ga-2">
+          <div class="d-flex flex-wrap align-center ga-2">
             <!-- Workflow Status -->
             <v-chip 
               :color="workflowStatusColor" 
@@ -36,44 +36,40 @@
             </v-chip>
             
             <!-- Action Buttons -->
-            <v-btn
+            <ActionButton
               v-if="workflowId"
               variant="text"
-              prepend-icon="mdi-history"
               :to="{ path: '/automations/executions', query: { automationId: workflowId } }"
-            >
-              Runs
-            </v-btn>
+              icon="mdi-history"
+              label="Runs"
+            />
 
-            <v-btn
+            <ActionButton
               variant="outlined"
-              prepend-icon="mdi-play"
               :disabled="!canTestWorkflow"
               :loading="running"
               title="Save, then run once now (Manual and Schedule triggers)"
+              icon="mdi-play"
+              label="Run now"
               @click="testWorkflow"
-            >
-              Run now
-            </v-btn>
+            />
             
-            <v-btn
+            <ActionButton
               variant="outlined"
-              prepend-icon="mdi-content-save"
               :loading="saving"
+              icon="mdi-content-save"
+              label="Save"
               @click="saveWorkflow"
-            >
-              Save
-            </v-btn>
+            />
             
-            <v-btn
+            <ActionButton
               color="primary"
-              prepend-icon="mdi-rocket-launch"
               :disabled="!canDeployWorkflow"
               :loading="deploying"
+              icon="mdi-rocket-launch"
+              label="Deploy"
               @click="deployWorkflow"
-            >
-              Deploy
-            </v-btn>
+            />
             
             <v-menu>
               <template #activator="{ props }">
@@ -111,50 +107,46 @@
         </div>
         
         <!-- Toolbar -->
-        <div class="builder-toolbar d-flex align-center justify-space-between">
-          <div class="d-flex align-center ga-2">
-            <v-btn
+        <div class="builder-toolbar d-flex flex-wrap align-center justify-space-between ga-2">
+          <div class="d-flex flex-wrap align-center ga-2">
+            <ActionButton
               variant="outlined"
               size="small"
-              prepend-icon="mdi-undo"
               :disabled="!canUndo"
+              icon="mdi-undo"
+              label="Undo"
               @click="undo"
-            >
-              Undo
-            </v-btn>
+            />
             
-            <v-btn
+            <ActionButton
               variant="outlined"
               size="small"
-              prepend-icon="mdi-redo"
               :disabled="!canRedo"
+              icon="mdi-redo"
+              label="Redo"
               @click="redo"
-            >
-              Redo
-            </v-btn>
+            />
             
             <v-divider vertical class="mx-2"></v-divider>
             
-            <v-btn
+            <ActionButton
               variant="outlined"
               size="small"
-              prepend-icon="mdi-fit-to-screen"
+              icon="mdi-fit-to-screen"
+              label="Fit View"
               @click="resetView"
-            >
-              Fit View
-            </v-btn>
+            />
             
-            <v-btn
+            <ActionButton
               variant="outlined"
               size="small"
-              prepend-icon="mdi-auto-fix"
+              icon="mdi-auto-fix"
+              label="Auto Layout"
               @click="autoLayout"
-            >
-              Auto Layout
-            </v-btn>
+            />
           </div>
           
-          <div class="d-flex align-center ga-2">
+          <div class="d-flex flex-wrap align-center ga-2">
             <!-- Validation Status -->
             <div v-if="validationResult" class="d-flex align-center ga-2">
               <v-icon 
@@ -178,14 +170,13 @@
               </v-btn>
             </div>
             
-            <v-btn
+            <ActionButton
               variant="outlined"
               size="small"
-              :prepend-icon="toolbarCollapsed ? 'mdi-chevron-left' : 'mdi-chevron-right'"
+              :icon="toolbarCollapsed ? 'mdi-chevron-left' : 'mdi-chevron-right'"
+              :label="`${toolbarCollapsed ? 'Show' : 'Hide'} Palette`"
               @click="toolbarCollapsed = !toolbarCollapsed"
-            >
-              {{ toolbarCollapsed ? 'Show' : 'Hide' }} Palette
-            </v-btn>
+            />
           </div>
         </div>
       </v-container>
@@ -218,9 +209,20 @@
       <!-- Properties Panel -->
       <div v-if="selectedElement" class="properties-panel">
         <v-card class="properties-card" elevation="4">
-          <v-card-title class="text-h6 py-3">
+          <v-card-title class="d-flex align-center text-h6 py-3">
             <v-icon class="mr-2" color="primary">mdi-information</v-icon>
             Properties
+            <template v-if="xs">
+              <v-spacer />
+              <v-btn
+                icon="mdi-close"
+                variant="text"
+                size="small"
+                title="Hide properties"
+                aria-label="Hide properties"
+                @click="selectedElement = null"
+              />
+            </template>
           </v-card-title>
           
           <v-divider></v-divider>
@@ -287,7 +289,7 @@
     />
     
     <!-- Workflow Settings Dialog -->
-    <v-dialog v-model="settingsDialog" max-width="600px">
+    <v-dialog v-model="settingsDialog" max-width="600px" :fullscreen="$vuetify.display.xs">
       <v-card>
         <v-card-title>Workflow Settings</v-card-title>
         
@@ -407,7 +409,7 @@
     </v-dialog>
     
     <!-- Help Dialog -->
-    <v-dialog v-model="helpDialog" max-width="600px">
+    <v-dialog v-model="helpDialog" max-width="600px" :fullscreen="$vuetify.display.xs">
       <v-card>
         <v-card-title>Workflow Builder Help</v-card-title>
         
@@ -463,6 +465,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useDisplay } from 'vuetify'
 import { useRouter, useRoute } from 'vue-router'
 import { validateWorkflow, exportWorkflowToJSON, importWorkflowFromJSON } from '@/utils/layoutUtils'
 import { useAutomationsStore } from '@/stores/automations'
@@ -470,6 +473,7 @@ import { apiErrorMessage } from '@/utils/apiError'
 import WorkflowCanvas from '@/components/automations/WorkflowCanvas.vue'
 import NodeToolbar from '@/components/automations/NodeToolbar.vue'
 import NodeConfigDialog from '@/components/automations/NodeConfigDialog.vue'
+import ActionButton from '@/components/common/ActionButton.vue'
 
 // vue-flow edges carry a type too ('smoothstep'); an edge is what has source and target.
 const isEdge = (el) => !!(el.source && el.target)
@@ -489,7 +493,10 @@ const settingsDraft = ref({})
 const importDialog = ref(false)
 const helpDialog = ref(false)
 const showValidationDialog = ref(false)
-const toolbarCollapsed = ref(false)
+// Phones: the palette and properties panel float over the canvas (styles
+// below), so the palette starts closed and the canvas keeps the full width.
+const { xs } = useDisplay()
+const toolbarCollapsed = ref(xs.value)
 const saving = ref(false)
 const deploying = ref(false)
 const importFile = ref(null)
@@ -1061,7 +1068,8 @@ onUnmounted(() => {
 
 <style scoped>
 .automation-builder {
-  height: 100vh;
+  /* The viewport under the app bar and status bar (v-main's layout offsets). */
+  height: calc(100dvh - var(--v-layout-top, 0px) - var(--v-layout-bottom, 0px));
   display: flex;
   flex-direction: column;
   background-color: rgb(var(--v-theme-background));
@@ -1080,6 +1088,7 @@ onUnmounted(() => {
 }
 
 .builder-content {
+  position: relative;
   flex: 1;
   display: flex;
   overflow: hidden;
@@ -1108,6 +1117,36 @@ onUnmounted(() => {
 .properties-card {
   height: 100%;
   overflow-y: auto;
+}
+
+@media (max-width: 599.98px) {
+  .builder-header .v-container {
+    padding: 8px 12px !important;
+  }
+
+  .node-palette {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 5;
+    width: min(280px, 85vw);
+    overflow-y: auto;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  }
+
+  .node-palette :deep(.node-toolbar) {
+    width: 100%;
+  }
+
+  .properties-panel {
+    position: absolute;
+    inset: auto 0 0 0;
+    z-index: 6;
+    width: auto;
+    max-height: 55%;
+    padding: 8px;
+    border-left: 0;
+    border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  }
 }
 
 .configuration-info {

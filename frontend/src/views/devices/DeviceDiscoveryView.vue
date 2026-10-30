@@ -2,7 +2,7 @@
   <div class="device-discovery-view">
     <v-container fluid class="pa-4">
       <!-- Header Section -->
-      <div class="d-flex align-center justify-space-between mb-6">
+      <div class="d-flex flex-wrap align-center justify-space-between ga-2 mb-6">
         <div>
           <h1 class="text-h4 font-weight-bold mb-1">Device Discovery</h1>
           <p class="text-subtitle-1 text-medium-emphasis mb-0">
@@ -10,32 +10,31 @@
           </p>
         </div>
 
-        <div class="d-flex align-center ga-2">
-          <v-btn
+        <div class="d-flex flex-wrap align-center ga-2">
+          <ActionButton
             variant="outlined"
-            prepend-icon="mdi-refresh"
+            icon="mdi-refresh"
+            label="Refresh"
             :loading="discoveryStore.scansLoading"
             @click="refreshScans"
-          >
-            Refresh
-          </v-btn>
+          />
 
-          <v-btn
+          <ActionButton
             v-if="canEdit"
             color="secondary"
-            prepend-icon="mdi-radar"
+            icon="mdi-radar"
+            label="New Scan"
+            keep-label
             :disabled="discoveryStore.isScanning"
             @click="openScanDialog"
-          >
-            New Scan
-          </v-btn>
+          />
         </div>
       </div>
 
       <!-- Active Scan Progress -->
       <v-card v-if="discoveryStore.isScanning" class="mb-6" variant="tonal" color="info">
         <v-card-text>
-          <div class="d-flex align-center justify-space-between mb-2">
+          <div class="d-flex flex-wrap align-center justify-space-between ga-2 mb-2">
             <div class="d-flex align-center">
               <v-progress-circular
                 indeterminate
@@ -73,7 +72,7 @@
         </v-card-title>
 
         <v-data-table
-          :headers="scanHeaders"
+          :headers="shownScanHeaders"
           :items="discoveryStore.scans"
           :loading="discoveryStore.scansLoading"
           item-value="id"
@@ -161,6 +160,7 @@
           <div class="d-flex align-center flex-wrap ga-4">
             <v-btn-toggle
               v-model="resultsFilter"
+              class="results-filter"
               color="primary"
               variant="outlined"
               density="compact"
@@ -179,13 +179,13 @@
               density="compact"
               hide-details
               clearable
-              style="max-width: 300px"
+              class="results-search"
             />
           </div>
         </v-card-text>
 
         <v-data-table
-          :headers="resultHeaders"
+          :headers="shownResultHeaders"
           :items="filteredResults"
           :loading="discoveryStore.activeScanLoading"
           :search="resultsSearch"
@@ -297,6 +297,7 @@
     <v-dialog
       v-model="showScanDialog"
       max-width="600px"
+      :fullscreen="$vuetify.display.xs"
       persistent
     >
       <v-card>
@@ -432,7 +433,9 @@ import { useAuthStore } from '@/stores/auth'
 import { useDiscoveryStore } from '@/stores/discovery'
 import { useWebSocket } from '@/composables/useWebSocket'
 import ImportDiscoveredDialog from '@/components/discovery/ImportDiscoveredDialog.vue'
+import ActionButton from '@/components/common/ActionButton.vue'
 import { cloudProviderLabel } from '@/models/vendors'
+import { usePhoneColumns } from '@/composables/usePhoneColumns'
 
 const authStore = useAuthStore()
 const discoveryStore = useDiscoveryStore()
@@ -479,6 +482,7 @@ const scanHeaders = [
   { title: 'Discovered', key: 'discovered', sortable: false },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' }
 ]
+const shownScanHeaders = usePhoneColumns(scanHeaders, ['createdAt', 'status', 'totalHosts', 'actions'])
 
 const resultHeaders = [
   { title: 'IP Address', key: 'ipAddress' },
@@ -492,6 +496,7 @@ const resultHeaders = [
   { title: 'Status', key: 'status' },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' }
 ]
+const shownResultHeaders = usePhoneColumns(resultHeaders, ['ipAddress', 'vendor', 'hostname', 'centralMatch', 'status', 'actions'])
 
 const isAdmin = computed(() => authStore.user?.role === 'admin')
 // Scan, import and ignore are operator+
@@ -699,5 +704,30 @@ onMounted(async () => {
 .device-discovery-view {
   background-color: rgb(var(--v-theme-background));
   min-height: 100vh;
+}
+
+.results-search {
+  max-width: 300px;
+}
+
+/* Phones: the filter toggle spans the width in three equal parts, the search
+   takes its own line. */
+@media (max-width: 599.98px) {
+  .results-filter {
+    width: 100%;
+  }
+
+  .results-filter .v-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 4px;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+
+  .results-search {
+    max-width: none;
+    flex: 1 1 100%;
+  }
 }
 </style>

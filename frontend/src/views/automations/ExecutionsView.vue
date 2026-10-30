@@ -65,7 +65,7 @@
         <v-data-table-server
           v-model:page="page"
           v-model:items-per-page="itemsPerPage"
-          :headers="headers"
+          :headers="shownHeaders"
           :items="store.items"
           :items-length="store.total"
           :loading="store.loading"
@@ -143,9 +143,9 @@
     </v-container>
 
     <!-- Run detail -->
-    <v-dialog v-model="detailOpen" max-width="760" scrollable>
+    <v-dialog v-model="detailOpen" max-width="760" :fullscreen="$vuetify.display.xs" scrollable>
       <v-card v-if="detail">
-        <v-card-title class="d-flex align-center ga-2">
+        <v-card-title class="d-flex flex-wrap align-center ga-2">
           <v-icon :color="executionStatusMeta(detail.status).color">{{ executionStatusMeta(detail.status).icon }}</v-icon>
           {{ detail.automation?.name || 'Automation run' }}
           <v-spacer />
@@ -201,6 +201,7 @@ import { useAutomationsStore } from '@/stores/automations'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { usePhoneColumns } from '@/composables/usePhoneColumns'
 import {
   EXECUTION_STATUSES,
   EXECUTION_TRIGGERS,
@@ -243,6 +244,7 @@ const headers = [
   { title: 'Duration', key: 'duration', sortable: false },
   { title: '', key: 'actions', sortable: false, align: 'end', width: 96 }
 ]
+const shownHeaders = usePhoneColumns(headers, ['status', 'automation', 'device', 'createdAt', 'actions'])
 
 const automationItems = computed(() =>
   automationsStore.automations.map((a) => ({ title: a.name, value: a.id }))
@@ -362,6 +364,13 @@ function timeAgo(value) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Phones have no hover for the title tooltip: show the whole text. */
+@media (max-width: 599.98px) {
+  .run-error {
+    max-width: none;
+    white-space: normal;
+  }
 }
 
 .step-detail {

@@ -21,7 +21,9 @@
     >
       <Background :pattern-color="canvasColors.pattern" :gap="16" />
       <Controls position="bottom-left" :show-interactive="false" />
+      <!-- Not on phones: it would cover a third of the map -->
       <MiniMap
+        v-if="!$vuetify.display.xs"
         position="bottom-right"
         pannable
         zoomable

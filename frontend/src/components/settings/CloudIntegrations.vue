@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="d-flex align-center mb-4">
+    <div class="d-flex flex-wrap align-center ga-2 mb-4">
       <div>
         <h3 class="text-h6">Cloud Integrations</h3>
         <div class="text-caption text-medium-emphasis">
@@ -105,15 +105,33 @@
           </v-card-text>
 
           <v-card-actions>
-            <v-btn v-if="authStore.isAdmin" size="small" variant="text" :loading="testingId === integration.id" @click="testIntegration(integration)">
-              Test
-            </v-btn>
-            <v-btn v-if="canEdit" size="small" variant="text" :loading="syncingId === integration.id" @click="syncIntegration(integration)">
-              Sync devices
-            </v-btn>
-            <v-btn v-if="canEdit" size="small" variant="text" :loading="scopeBackupId === integration.id" @click="backUpScopes(integration)">
-              Back up scopes
-            </v-btn>
+            <ActionButton
+              v-if="authStore.isAdmin"
+              size="small"
+              variant="text"
+              icon="mdi-connection"
+              label="Test"
+              :loading="testingId === integration.id"
+              @click="testIntegration(integration)"
+            />
+            <ActionButton
+              v-if="canEdit"
+              size="small"
+              variant="text"
+              icon="mdi-sync"
+              label="Sync devices"
+              :loading="syncingId === integration.id"
+              @click="syncIntegration(integration)"
+            />
+            <ActionButton
+              v-if="canEdit"
+              size="small"
+              variant="text"
+              icon="mdi-cloud-download-outline"
+              label="Back up scopes"
+              :loading="scopeBackupId === integration.id"
+              @click="backUpScopes(integration)"
+            />
             <v-spacer />
             <template v-if="authStore.isAdmin">
               <v-btn size="small" variant="text" icon="mdi-pencil" @click="openEdit(integration)" />
@@ -125,7 +143,7 @@
     </v-row>
 
     <!-- Create / Edit dialog -->
-    <v-dialog v-model="dialog" max-width="600" persistent>
+    <v-dialog v-model="dialog" max-width="600" :fullscreen="$vuetify.display.xs" persistent>
       <v-card>
         <v-card-title>{{ editing ? 'Edit Cloud Integration' : 'Add Cloud Integration' }}</v-card-title>
         <v-card-text>
@@ -233,6 +251,7 @@ import { useDevicesStore } from '@/stores/devices'
 import { useBackupsStore } from '@/stores/backups'
 import { useAuthStore } from '@/stores/auth'
 import { CloudProviderInfo } from '@/models/vendors'
+import ActionButton from '@/components/common/ActionButton.vue'
 
 const settingsStore = useSettingsStore()
 const devicesStore = useDevicesStore()

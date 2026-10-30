@@ -4,6 +4,28 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ## [Unreleased]
 
+### Changed
+- Phone layout (screens under 600px wide): no page scrolls sideways any more, and no button or filter is cut off at the screen edge.
+  - Tables show each row as a card of label/value lines, keeping the columns that matter (for example name, type, status, IP and actions on Devices).
+  - Page headers, toolbars and filter rows wrap. Tabs fit or get arrows. Stat tiles sit two to a row. Wide dialogs open full screen. Long values and error messages wrap instead of ending in "…".
+  - On the device page, the Live tab's ports table shows port, link/PoE and rates.
+  - The Network Map folds its toolbar behind an options button, and its details panel takes the full width.
+  - The automation builder's palette and properties panel float over the canvas. Editing a workflow on a phone works but is easier on a larger screen.
+- The app bar title no longer gets cut to "Net…" on narrow screens, and on phones the theme picker is in the account menu.
+- Tighter spacing everywhere: table rows are shorter and cells narrower at the sides, and on phones lists, fields, cards, page margins and grid gaps are tighter still. The Classic theme was already compact and is unchanged.
+- Less wrapping:
+  - Table headers stay on one line, and so do short values such as status, IP address, size and date.
+  - Last Seen reads "5 min ago" instead of "less than a minute ago".
+  - On Devices, the Managed chip shows just Central, Mist, Local or Direct. An unverified one has a "?" and says so in its tooltip.
+  - On wide tables, the Actions column stays pinned at the right edge.
+- On phones:
+  - Toolbar and header buttons are icons, with their name as a tooltip. The page's main action keeps its label.
+  - The one-line description under a page title is hidden.
+  - Table footers show the range and pager without the page-size picker.
+
+### Fixed
+- The sign-in page footer showed a broken character instead of ©.
+
 ## [0.9.0-beta.5] — 2026-10-25
 
 ### Added

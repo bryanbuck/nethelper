@@ -20,7 +20,8 @@
 
     <v-alert v-if="loadError" type="error" variant="tonal" class="mb-4">{{ loadError }}</v-alert>
 
-    <v-table density="comfortable">
+    <!-- table-stack: one block per rule on phones (assets/styles/responsive.scss) -->
+    <v-table class="table-stack">
       <thead>
         <tr>
           <th>Rule</th>
@@ -38,7 +39,7 @@
             <div class="font-weight-medium">{{ rule.label }}</div>
             <div class="text-caption text-medium-emphasis">{{ rule.description }}</div>
           </td>
-          <td>
+          <td data-label="Enabled">
             <v-switch
               :model-value="rule.enabled"
               color="primary"
@@ -49,7 +50,7 @@
               @update:model-value="(v) => save(rule, { enabled: v })"
             />
           </td>
-          <td>
+          <td data-label="Severity">
             <v-select
               :model-value="rule.severity"
               :items="ALERT_SEVERITIES"
@@ -66,7 +67,7 @@
               </template>
             </v-select>
           </td>
-          <td>
+          <td data-label="Settle time">
             <v-text-field
               :model-value="rule.settleSeconds"
               type="number"

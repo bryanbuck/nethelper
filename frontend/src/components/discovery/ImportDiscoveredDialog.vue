@@ -2,6 +2,7 @@
   <v-dialog
     :model-value="modelValue"
     max-width="600px"
+    :fullscreen="$vuetify.display.xs"
     persistent
     @update:model-value="emit('update:modelValue', $event)"
   >

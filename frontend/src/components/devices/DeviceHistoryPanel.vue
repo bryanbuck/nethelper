@@ -5,7 +5,7 @@
       <span>History</span>
       <v-spacer />
       <v-btn-toggle v-model="range" mandatory density="compact" variant="outlined" divided>
-        <v-btn v-for="r in RANGES" :key="r.value" :value="r.value" size="small">{{ r.label }}</v-btn>
+        <v-btn v-for="r in RANGES" :key="r.value" :value="r.value" size="small">{{ xs ? r.short : r.label }}</v-btn>
       </v-btn-toggle>
       <v-btn icon="mdi-refresh" variant="text" size="small" :loading="loading" aria-label="Refresh" @click="load()" />
     </v-card-title>
@@ -108,7 +108,7 @@
     <div
       v-if="hover"
       class="history-tooltip"
-      :style="{ left: `${hover.x + 12}px`, top: `${hover.y + 12}px` }"
+      :style="tooltipStyle"
     >
       <div v-for="(line, i) in hover.lines" :key="i" :class="i === 0 && 'font-weight-medium'">{{ line }}</div>
     </div>
@@ -117,6 +117,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useDisplay } from 'vuetify'
 import { format, formatDistanceStrict } from 'date-fns'
 import deviceService from '@/services/device.service'
 import { useWebSocket } from '@/composables/useWebSocket'
@@ -125,10 +126,11 @@ const props = defineProps({
   device: { type: Object, required: true }
 })
 
+// `short` on a phone, so the toggle fits beside the title.
 const RANGES = [
-  { value: '24h', label: '24 h' },
-  { value: '7d', label: '7 days' },
-  { value: '30d', label: '30 days' },
+  { value: '24h', label: '24 h', short: '24h' },
+  { value: '7d', label: '7 days', short: '7d' },
+  { value: '30d', label: '30 days', short: '30d' },
 ]
 const LANE_ICONS = { ping: 'mdi-lan-connect', cloud: 'mdi-cloud-outline', combined: 'mdi-set-center' }
 const STATE_LABELS = { online: 'Online', offline: 'Offline', warning: 'Warning', maintenance: 'Maintenance', unknown: 'No data' }
@@ -138,6 +140,12 @@ const history = ref(null)
 const loading = ref(false)
 const error = ref(null)
 const hover = ref(null)
+const { xs, width: viewportWidth } = useDisplay()
+// Beside the pointer, but never past the right edge (a tap near it on a phone).
+const tooltipStyle = computed(() => hover.value && {
+  left: `${Math.max(8, Math.min(hover.value.x + 12, viewportWidth.value - 328))}px`,
+  top: `${hover.value.y + 12}px`
+})
 
 // The range the shown history was loaded for: labels follow the data, not
 // the toggle, while a new range loads.
@@ -267,7 +275,8 @@ const markerLines = (m) => {
 
 const ticks = computed(() => {
   if (!history.value) return []
-  const count = 6
+  // Fewer labels on a phone's narrow track, or they overlap.
+  const count = xs.value ? 3 : 6
   return Array.from({ length: count + 1 }, (_, i) => {
     const t = start.value + ((end.value - start.value) * i) / count
     return { t, pct: (i / count) * 100, label: fmt(t) }
@@ -463,7 +472,7 @@ const totals = computed(() => {
 .history-tooltip {
   position: fixed;
   z-index: 2000;
-  max-width: 320px;
+  max-width: min(320px, calc(100vw - 16px));
   padding: 6px 10px;
   border-radius: 4px;
   font-size: 0.8125rem;
@@ -473,9 +482,13 @@ const totals = computed(() => {
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
-@media (max-width: 600px) {
+@media (max-width: 599.98px) {
   .history-label {
     flex-basis: 90px;
+    font-size: 0.75rem;
+    line-height: 1.15;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 }
 </style>

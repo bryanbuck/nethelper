@@ -7,7 +7,7 @@
       <span class="text-caption text-medium-emphasis">Raw transitions, newest first</span>
     </v-card-title>
     <v-divider />
-    <v-list v-if="events.length" density="compact">
+    <v-list v-if="events.length" density="compact" class="wrap-lines">
       <v-list-item v-for="e in events" :key="e.id || `${e.type}-${e.occurredAt}`">
         <template #prepend>
           <v-icon :icon="eventInfo(e).icon" :color="eventInfo(e).color" size="small" />

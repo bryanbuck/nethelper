@@ -1,0 +1,233 @@
+// Layout density for every size, then the phone layout (below Vuetify's sm,
+// 600px). Component densities come from layoutDefaults() in
+// plugins/theme-defaults.js; this file holds what density props don't reach.
+
+// Table cells: 12px at the sides instead of 16 (density only changes row
+// height), and headers on one line.
+.v-table > .v-table__wrapper > table > thead > tr > th,
+.v-table > .v-table__wrapper > table > tbody > tr > td {
+  padding-inline: 12px;
+}
+
+.v-table > .v-table__wrapper > table > thead > tr > th {
+  white-space: nowrap;
+}
+
+@media (max-width: $phone-max) {
+  // Tighter page, card and grid spacing. Utility classes (pa-4…) are
+  // !important, so the containers match them.
+  .v-container,
+  .v-container[class*="pa-"] {
+    padding: 8px !important;
+  }
+
+  .v-row:not(.v-row--dense):not(.v-row--no-gutters) {
+    margin: -6px;
+
+    > [class*="v-col"] {
+      padding: 6px;
+    }
+  }
+
+  .v-row + .v-row:not(.v-row--dense):not(.v-row--no-gutters) {
+    margin-top: 6px;
+  }
+
+  .v-card-title {
+    padding: 8px 12px;
+  }
+
+  .v-card-text {
+    padding: 12px;
+  }
+
+  .v-table > .v-table__wrapper > table > thead > tr > th,
+  .v-table > .v-table__wrapper > table > tbody > tr > td {
+    padding-inline: 8px;
+  }
+
+  // A page title's one-line description (h1 + p) is desktop context; on a
+  // phone it costs two or three lines above every page.
+  h1.text-h4 + p {
+    display: none;
+  }
+
+  // Table footers: the page range and pager on one line; the page size stays
+  // at its default.
+  .v-data-table-footer__items-per-page {
+    display: none;
+  }
+
+  // Page titles: text-h4 (34px) wraps every word on a phone.
+  h1.text-h4 {
+    font-size: 1.5rem !important;
+    line-height: 2rem !important;
+  }
+
+  // Vuetify card titles and subtitles are one clipped line. Pages put filters
+  // and buttons in them, which then fall off the card edge: let them wrap.
+  .v-card-title,
+  .v-card-subtitle {
+    white-space: normal;
+  }
+
+  .v-card-title.d-flex {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  // Filter fields in a card title: two to a line at most, never squeezed until
+  // the label is cut (their inline max-widths are for desktop rows).
+  .v-card-title.d-flex .v-input {
+    flex: 1 1 140px;
+    max-width: none !important;
+  }
+
+  // Tabs: no icons, normal case, tighter padding, so a row of three or four
+  // fits without scrolling.
+  // Vuetify's own rule is .v-tab.v-tab.v-btn (min-width: 90px): match it.
+  .v-tab.v-tab.v-btn {
+    min-width: 0;
+    padding-inline: 12px;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+
+  .v-tab .v-btn__prepend,
+  .v-tab .v-icon--start {
+    display: none;
+  }
+
+  .v-card-actions {
+    flex-wrap: wrap;
+  }
+
+  // Alert actions (#append) sit beside the text and squeeze it into a narrow
+  // column: move them under the text.
+  .v-alert {
+    grid-template-areas: "prepend content close" ". append .";
+    grid-template-columns: max-content minmax(0, 1fr) max-content;
+  }
+
+  .v-alert__append {
+    margin-inline-start: 0;
+    margin-top: 8px;
+  }
+
+  // Opt-in for chips that carry a value (key: value): wrap instead of running
+  // off the screen.
+  .chip-wrap.v-chip {
+    height: auto;
+    min-height: var(--v-chip-height);
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  // Stacked data-table rows (mobileBreakpoint in plugins/vuetify.js): a
+  // narrower label column, values that wrap, and a clear line between rows.
+  // The header's fixed column widths don't apply once rows stack.
+  .v-data-table__tr--mobile > td {
+    grid-template-columns: minmax(88px, 38%) minmax(0, 1fr);
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+
+  .v-data-table__tr--mobile > td > .v-data-table__td-value {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .v-data-table__td-value > .d-flex {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .v-data-table__tr--mobile > td:last-child {
+    border-bottom: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+    padding-bottom: 8px;
+  }
+
+  // Plain v-table opt-in: <v-table class="table-stack"> with data-label on
+  // each td stacks the same way as a data table.
+  .table-stack {
+    thead {
+      display: none;
+    }
+
+    tbody > tr {
+      display: block;
+      border-bottom: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+      padding: 4px 0;
+    }
+
+    // The label sits in the left 38%, the cell's own content (any mix of
+    // text and components) flows in the rest, aligned to the end.
+    tbody > tr > td {
+      display: block;
+      position: relative;
+      height: auto !important;
+      min-height: 32px;
+      width: auto !important;
+      padding: 6px 8px 6px calc(38% + 8px) !important;
+      border-bottom: 0 !important;
+      text-align: end;
+      overflow-wrap: anywhere;
+      white-space: normal !important;
+    }
+
+    tbody > tr > td::before {
+      content: attr(data-label);
+      position: absolute;
+      top: 50%;
+      left: 8px;
+      width: calc(38% - 16px);
+      transform: translateY(-50%);
+      font-weight: 500;
+      text-align: start;
+    }
+
+    // A cell without a label (the first, main one; actions) spans the row.
+    tbody > tr > td:not([data-label]) {
+      padding-left: 8px !important;
+      text-align: start;
+    }
+
+    tbody > tr > td:not([data-label])::before {
+      content: none;
+    }
+
+    // Actions cells (class text-right/text-end) stay at the end.
+    tbody > tr > td.text-right:not([data-label]),
+    tbody > tr > td.text-end:not([data-label]) {
+      text-align: end;
+    }
+
+    // Inputs and switches in a labeled cell sit at its end.
+    tbody > tr > td[data-label] > .v-input {
+      margin-inline-start: auto;
+    }
+
+    tbody > tr > td[data-label] > .v-switch .v-selection-control {
+      justify-content: flex-end;
+    }
+
+    tbody > tr > td > .d-flex {
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+  }
+}
+
+// List items whose titles and subtitles carry values worth reading in full
+// (key/value lists, tips): wrap instead of cutting to one line.
+.wrap-lines {
+  .v-list-item-title,
+  .v-list-item-subtitle {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+  }
+}

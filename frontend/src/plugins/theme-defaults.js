@@ -37,3 +37,42 @@ const THEME_DEFAULTS = {
 export function defaultsForTheme (themeName) {
   return THEME_DEFAULTS[themeName] || {}
 }
+
+// Spacing for every theme: tables and lists a step tighter than Vuetify's
+// default, and on a phone (below sm) a step tighter again, with compact fields.
+// Classic is already compact throughout.
+const compactDensity = { density: 'compact' }
+
+export function layoutDefaults (phone) {
+  const tables = phone ? compactDensity : { density: 'comfortable' }
+  const base = {
+    VDataTable: tables,
+    VDataTableServer: tables,
+    VTable: tables,
+  }
+  if (!phone) return base
+  return {
+    ...base,
+    VList: compactDensity,
+    VTabs: compactDensity,
+    VAlert: compactDensity,
+    VTextField: compactDensity,
+    VSelect: compactDensity,
+    VAutocomplete: compactDensity,
+    VCombobox: compactDensity,
+    VTextarea: compactDensity,
+    VBtnToggle: compactDensity,
+  }
+}
+
+// What App.vue's <v-defaults-provider> applies: the layout defaults, with the
+// theme's own (Classic) winning per component.
+export function appDefaults (themeName, phone) {
+  const layout = layoutDefaults(phone)
+  const themed = defaultsForTheme(themeName)
+  const merged = { ...layout }
+  for (const [key, value] of Object.entries(themed)) {
+    merged[key] = { ...layout[key], ...value }
+  }
+  return merged
+}

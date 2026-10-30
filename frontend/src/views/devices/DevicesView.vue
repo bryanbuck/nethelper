@@ -10,35 +10,33 @@
           </p>
         </div>
         
-        <div class="d-flex align-center ga-2">
-          <v-btn
+        <div class="d-flex flex-wrap align-center ga-2">
+          <ActionButton
             variant="outlined"
-            prepend-icon="mdi-chip"
+            icon="mdi-chip"
+            label="Firmware Status"
             to="/devices/firmware"
-          >
-            Firmware Status
-          </v-btn>
-          <v-btn
+          />
+          <ActionButton
             variant="outlined"
-            prepend-icon="mdi-folder-multiple-outline"
+            icon="mdi-folder-multiple-outline"
+            label="Groups"
             @click="groupsDialog = true"
-          >
-            Groups
-          </v-btn>
-          <v-btn
+          />
+          <ActionButton
             v-if="canEdit"
             color="secondary"
-            prepend-icon="mdi-plus"
+            icon="mdi-plus"
+            label="Add Device"
+            keep-label
             @click="addDevice"
-          >
-            Add Device
-          </v-btn>
+          />
         </div>
       </div>
       
       <!-- Quick Stats Cards: fleet-wide counts; a click filters the table by that status -->
       <v-row class="mb-6">
-        <v-col v-for="card in statCards" :key="card.key" cols="12" sm="6" md="3">
+        <v-col v-for="card in statCards" :key="card.key" cols="6" md="3">
           <v-card
             :variant="isActiveCard(card) ? 'flat' : 'tonal'"
             :color="card.color"
@@ -104,6 +102,7 @@
     <v-dialog 
       v-model="showAddDialog" 
       max-width="600px"
+      :fullscreen="$vuetify.display.xs"
       persistent
     >
       <v-card>
@@ -306,6 +305,7 @@ import { useWebSocket } from '@/composables/useWebSocket'
 import DeviceTable from '@/components/devices/DeviceTable.vue'
 import DeviceEditDialog from '@/components/devices/DeviceEditDialog.vue'
 import DeviceGroupsDialog from '@/components/devices/DeviceGroupsDialog.vue'
+import ActionButton from '@/components/common/ActionButton.vue'
 import { vendorOptions, platformOptions } from '@/models/vendors'
 import { useDeviceForm, deviceTypes, managementModeOptions, deviceFormRules as rules } from '@/composables/useDeviceForm'
 

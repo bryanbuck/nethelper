@@ -43,20 +43,19 @@
                 style="max-width: 180px"
                 @update:model-value="reloadBackups"
               />
-              <v-btn
+              <ActionButton
                 v-if="canManage"
                 color="primary"
-                prepend-icon="mdi-play"
+                icon="mdi-play"
+                label="Run Backup Now"
                 @click="openRunDialog"
-              >
-                Run Backup Now
-              </v-btn>
+              />
             </v-card-title>
 
             <v-data-table-server
               v-model:page="page"
               v-model:items-per-page="itemsPerPage"
-              :headers="backupHeaders"
+              :headers="shownBackupHeaders"
               :items="backupsStore.backups"
               :items-length="backupsStore.total"
               :loading="backupsStore.backupsLoading"
@@ -233,15 +232,14 @@
                 class="scope-provider-filter"
                 @update:model-value="onScopeProviderChange"
               />
-              <v-btn
+              <ActionButton
                 v-if="canManage"
                 color="primary"
-                prepend-icon="mdi-cloud-download-outline"
                 :loading="backupsStore.running"
+                icon="mdi-cloud-download-outline"
+                label="Back Up Cloud Scopes"
                 @click="runScopeBackup"
-              >
-                Back Up Cloud Scopes
-              </v-btn>
+              />
             </v-card-title>
             <v-card-subtitle class="text-wrap pb-2">
               Configuration a cloud holds above the device: a Juniper Mist org and its sites
@@ -253,7 +251,7 @@
             <v-data-table-server
               v-model:page="scopePage"
               v-model:items-per-page="scopeItemsPerPage"
-              :headers="scopeHeaders"
+              :headers="shownScopeHeaders"
               :items="backupsStore.scopeBackups"
               :items-length="backupsStore.scopeTotal"
               :loading="backupsStore.scopeLoading"
@@ -374,18 +372,17 @@
             <v-card-title class="d-flex align-center">
               <span>Backup Schedules</span>
               <v-spacer />
-              <v-btn
+              <ActionButton
                 v-if="canManage"
                 color="primary"
-                prepend-icon="mdi-plus"
+                icon="mdi-plus"
+                label="New Schedule"
                 @click="openScheduleDialog()"
-              >
-                New Schedule
-              </v-btn>
+              />
             </v-card-title>
 
             <v-data-table
-              :headers="scheduleHeaders"
+              :headers="shownScheduleHeaders"
               :items="backupsStore.schedules"
               :loading="backupsStore.schedulesLoading"
             >
@@ -469,7 +466,7 @@
     </v-container>
 
     <!-- Run Backup Now dialog (device picker) -->
-    <v-dialog v-model="showRunDialog" max-width="640" persistent scrollable>
+    <v-dialog v-model="showRunDialog" max-width="640" :fullscreen="$vuetify.display.xs" persistent scrollable>
       <v-card>
         <v-card-title class="text-h5">Run Backup Now</v-card-title>
         <v-card-text>
@@ -517,7 +514,7 @@
     </v-dialog>
 
     <!-- View backup content dialog (one tab per artifact: CLI / JSON) -->
-    <v-dialog v-model="showViewDialog" max-width="900" scrollable>
+    <v-dialog v-model="showViewDialog" max-width="900" :fullscreen="$vuetify.display.xs" scrollable>
       <v-card>
         <v-card-title class="d-flex align-center">
           <span class="text-truncate">{{ viewTarget?.title }} — {{ formatDate(viewTarget?.createdAt) }}</span>
@@ -569,7 +566,7 @@
     </v-dialog>
 
     <!-- Compare dialog -->
-    <v-dialog v-model="showCompareDialog" max-width="1100" scrollable>
+    <v-dialog v-model="showCompareDialog" max-width="1100" :fullscreen="$vuetify.display.xs" scrollable>
       <v-card>
         <v-card-title class="text-h5">Compare Backups</v-card-title>
         <v-card-text>
@@ -631,7 +628,7 @@
     </v-dialog>
 
     <!-- Schedule create/edit dialog -->
-    <v-dialog v-model="showScheduleDialog" max-width="720" persistent scrollable>
+    <v-dialog v-model="showScheduleDialog" max-width="720" :fullscreen="$vuetify.display.xs" persistent scrollable>
       <v-card>
         <v-card-title class="text-h5">
           {{ editingSchedule ? 'Edit Schedule' : 'New Backup Schedule' }}
@@ -772,7 +769,9 @@ import { useBackupsStore } from '@/stores/backups'
 import { useDevicesStore } from '@/stores/devices'
 import { useWebSocket } from '@/composables/useWebSocket'
 import ConfigDiffViewer from '@/components/backups/ConfigDiffViewer.vue'
+import ActionButton from '@/components/common/ActionButton.vue'
 import { CloudProviderInfo, cloudProviderLabel } from '@/models/vendors'
+import { usePhoneColumns } from '@/composables/usePhoneColumns'
 
 const authStore = useAuthStore()
 const backupsStore = useBackupsStore()
@@ -797,25 +796,29 @@ const rules = {
 }
 
 // ---- Table headers ----
+// Short values (status, sizes, dates) stay on one line.
+const NO_WRAP = { class: 'text-no-wrap' }
 const backupHeaders = [
   { title: 'Device', key: 'deviceName' },
-  { title: 'Status', key: 'status' },
-  { title: 'Trigger', key: 'trigger' },
+  { title: 'Status', key: 'status', cellProps: NO_WRAP },
+  { title: 'Trigger', key: 'trigger', cellProps: NO_WRAP },
   { title: 'Formats', key: 'formats', sortable: false },
   { title: 'Changes', key: 'hasChanges' },
-  { title: 'Size', key: 'sizeBytes' },
-  { title: 'Date', key: 'createdAt' },
+  { title: 'Size', key: 'sizeBytes', cellProps: NO_WRAP },
+  { title: 'Date', key: 'createdAt', cellProps: NO_WRAP },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' }
 ]
+const shownBackupHeaders = usePhoneColumns(backupHeaders, ['deviceName', 'status', 'hasChanges', 'createdAt', 'actions'])
 
 const scopeHeaders = [
   { title: 'Scope', key: 'scopeName', sortable: false },
   { title: 'Status', key: 'status', sortable: false },
   { title: 'Changes', key: 'hasChanges', sortable: false },
-  { title: 'Size', key: 'sizeBytes', sortable: false },
-  { title: 'Date', key: 'createdAt', sortable: false },
+  { title: 'Size', key: 'sizeBytes', sortable: false, cellProps: NO_WRAP },
+  { title: 'Date', key: 'createdAt', sortable: false, cellProps: NO_WRAP },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' }
 ]
+const shownScopeHeaders = usePhoneColumns(scopeHeaders, ['scopeName', 'status', 'hasChanges', 'createdAt', 'actions'])
 
 const scheduleHeaders = [
   { title: 'Name', key: 'name' },
@@ -825,6 +828,7 @@ const scheduleHeaders = [
   { title: 'Retention', key: 'retention', sortable: false },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' }
 ]
+const shownScheduleHeaders = usePhoneColumns(scheduleHeaders, ['name', 'cronExpression', 'active', 'actions'])
 
 const devicePickerHeaders = [
   { title: 'Name', key: 'name' },
@@ -1392,5 +1396,12 @@ onMounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* Phones have no hover for the title tooltip: show the whole text. */
+@media (max-width: 599.98px) {
+  .backup-error {
+    max-width: none;
+    white-space: normal;
+  }
 }
 </style>

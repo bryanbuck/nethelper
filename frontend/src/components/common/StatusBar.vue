@@ -103,11 +103,12 @@
 
     <template v-if="current">
       <v-btn
-        v-for="item in current.actions"
+        v-for="(item, i) in current.actions"
         :key="item.label"
         size="x-small"
         variant="text"
         class="ml-1"
+        :class="{ 'd-none d-sm-inline-flex': i > 0 }"
         @click="runAction(item)"
       >
         {{ item.label }}
@@ -315,6 +316,12 @@ function runAction(item) {
   flex-shrink: 0;
   font-size: 0.75rem;
 }
+/* Phones: the message gets the width; the time is in the history list. */
+@media (max-width: 599.98px) {
+  .status-message__time {
+    display: none;
+  }
+}
 
 .status-meta {
   align-items: center;
@@ -359,6 +366,7 @@ function runAction(item) {
 }
 .status-history__header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 8px 12px;

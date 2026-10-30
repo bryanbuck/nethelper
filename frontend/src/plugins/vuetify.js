@@ -55,9 +55,19 @@ const vuetify = createVuetify({
     VSwitch: {
       color: 'primary',
     },
+    // Below sm (phones) tables stack each row into label/value pairs instead
+    // of scrolling sideways. Vuetify's own default is never-mobile.
     VDataTable: {
       fixedHeader: true,
       hover: true,
+      mobileBreakpoint: 'sm',
+    },
+    VDataTableServer: {
+      mobileBreakpoint: 'sm',
+    },
+    // Tabs that don't fit get arrows on every device, not only on desktop.
+    VTabs: {
+      showArrows: true,
     },
     VChip: {
       size: 'small',

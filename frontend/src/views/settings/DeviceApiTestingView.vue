@@ -56,7 +56,7 @@
             </v-alert>
 
             <!-- Tests Table -->
-            <v-table v-else density="compact">
+            <v-table v-else density="compact" class="table-stack">
               <thead>
                 <tr>
                   <th>Time</th>
@@ -69,10 +69,10 @@
               </thead>
               <tbody>
                 <tr v-for="(test, index) in recentTests" :key="index">
-                  <td class="text-caption">{{ formatTestTime(test.timestamp) }}</td>
-                  <td>{{ test.deviceIp }}</td>
-                  <td>{{ test.username }}</td>
-                  <td>
+                  <td class="text-caption" data-label="Time">{{ formatTestTime(test.timestamp) }}</td>
+                  <td data-label="Device IP">{{ test.deviceIp }}</td>
+                  <td data-label="Username">{{ test.username }}</td>
+                  <td data-label="Status">
                     <v-chip
                       :color="test.success ? 'success' : 'error'"
                       size="x-small"
@@ -86,8 +86,8 @@
                       {{ test.success ? 'Success' : 'Failed' }}
                     </v-chip>
                   </td>
-                  <td>{{ test.responseTime ? test.responseTime + 'ms' : '-' }}</td>
-                  <td>
+                  <td data-label="Response time">{{ test.responseTime ? test.responseTime + 'ms' : '-' }}</td>
+                  <td class="text-end">
                     <v-btn
                       size="x-small"
                       variant="text"
@@ -112,7 +112,7 @@
           </v-card-title>
 
           <v-card-text>
-            <v-list v-if="!loadingSupportedTypes" density="compact">
+            <v-list v-if="!loadingSupportedTypes" density="compact" class="wrap-lines">
               <v-list-item
                 v-for="type in supportedTypes"
                 :key="type.platform"
@@ -189,7 +189,7 @@
           </v-card-title>
 
           <v-card-text>
-            <v-list density="compact">
+            <v-list density="compact" class="wrap-lines">
               <v-list-item prepend-icon="mdi-check">
                 <v-list-item-subtitle>
                   AOS-CX needs its REST API enabled (HTTPS); Junos is tried over NETCONF, then SSH
@@ -220,7 +220,7 @@
     </v-row>
 
     <!-- Test Details Dialog -->
-    <v-dialog v-model="showDetailsDialog" max-width="700px">
+    <v-dialog v-model="showDetailsDialog" max-width="700px" :fullscreen="$vuetify.display.xs">
       <v-card v-if="selectedTest">
         <v-card-title>
           <v-icon
@@ -232,7 +232,7 @@
         </v-card-title>
 
         <v-card-text>
-          <v-list density="compact">
+          <v-list density="compact" class="wrap-lines">
             <v-list-item>
               <v-list-item-title>Device IP</v-list-item-title>
               <v-list-item-subtitle>{{ selectedTest.deviceIp }}</v-list-item-subtitle>

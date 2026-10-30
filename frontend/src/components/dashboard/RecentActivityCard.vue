@@ -1,6 +1,6 @@
 <template>
   <v-card elevation="2" class="recent-activity-card">
-    <v-card-title class="d-flex align-center justify-space-between">
+    <v-card-title class="d-flex flex-wrap align-center justify-space-between ga-2">
       <div class="d-flex align-center">
         <v-icon class="mr-2" color="primary">mdi-timeline-clock-outline</v-icon>
         Recent Activity
