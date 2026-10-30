@@ -16,7 +16,7 @@ This page lists what works, what has been tested on real equipment, what isn't s
 
 Notes:
 
-- **New Central only.** Create the API client in HPE GreenLake and pick your cluster (e.g. US-West-4 → `us4.api.central.arubanetworks.com`). Classic Central API gateway apps (`apigw-*` hosts) don't work.
+- **New Central only.** Create the API client in HPE GreenLake and pick your cluster (e.g. US-West-4 → `us4.api.central.arubanetworks.com`), or **Custom…** to type the API base URL of an unlisted (private) instance. Classic Central API gateway apps (`apigw-*` hosts) don't work.
 - **Central config backup is not supported.** Central's classic configuration endpoints don't work on New Central tenants, so NetHelper reports "not supported" instead of faking it. An AOS-CX switch managed by Central is still backed up directly over its REST API, when it has an IP address and linked credentials.
 - **Mist is intent-based.** Its "backup" is the device's configuration object, stored as sorted JSON so diffs are meaningful. It isn't a CLI running-config. Mist configures APs through templates, so there's no per-AP config to back up, and NetHelper says so. Link a device credential to a Mist-managed EX switch and its backup also holds the Junos `set` config, read over NETCONF (never SSH: Mist owns the switch). If NETCONF fails, the backup still succeeds from Mist and says why.
 - **A Mist org token with read access is enough.** NetHelper never writes to Mist.

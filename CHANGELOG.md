@@ -4,6 +4,9 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ## [Unreleased]
 
+### Added
+- Settings → Cloud Integrations: the Aruba Central and Juniper Mist region pickers end with **Custom…**, for the API base URL of a private or dedicated instance that isn't listed. Use an `https://` URL: NetHelper sends the integration's API token to it.
+
 ## [0.9.0-beta.6] — 2026-10-29
 
 ### Changed
