@@ -1,8 +1,8 @@
-# NetHelper 0.9 beta: tester notes
+# NetHelper 0.9: what's supported
 
 NetHelper inventories network devices, tracks whether they're up, and backs up their configurations with change history. It works across vendors and across management planes: cloud-managed (Aruba Central, Juniper Mist) and direct (SSH, REST, NETCONF).
 
-This is a **private, in-house beta**. Install it from [`deploy/README.md`](../deploy/README.md), then follow [`GETTING_STARTED.md`](GETTING_STARTED.md) for the first steps. Every setting is listed in [`CONFIGURATION.md`](CONFIGURATION.md).
+This page lists what works, what has been tested on real equipment, what isn't supported yet, and how to report a problem. Install NetHelper from [`deploy/README.md`](../deploy/README.md), then follow [`GETTING_STARTED.md`](GETTING_STARTED.md) for the first steps. Every setting is listed in [`CONFIGURATION.md`](CONFIGURATION.md).
 
 ## What's supported
 
@@ -16,14 +16,14 @@ This is a **private, in-house beta**. Install it from [`deploy/README.md`](../de
 
 Notes:
 
-- **New Central only.** Create the API client in HPE GreenLake and pick your cluster (e.g. US-West-4 → `us4.api.central.arubanetworks.com`). Classic Central API gateway apps (`apigw-*` hosts) don't work. Integrations saved before 2026-10-16 need their base URL re-picked and a GreenLake client ID/secret; the old Customer ID field is gone.
+- **New Central only.** Create the API client in HPE GreenLake and pick your cluster (e.g. US-West-4 → `us4.api.central.arubanetworks.com`). Classic Central API gateway apps (`apigw-*` hosts) don't work.
 - **Central config backup is not supported.** Central's classic configuration endpoints don't work on New Central tenants, so NetHelper reports "not supported" instead of faking it. An AOS-CX switch managed by Central is still backed up directly over its REST API, when it has an IP address and linked credentials.
 - **Mist is intent-based.** Its "backup" is the device's configuration object, stored as sorted JSON so diffs are meaningful. It isn't a CLI running-config. Mist configures APs through templates, so there's no per-AP config to back up, and NetHelper says so. Link a device credential to a Mist-managed EX switch and its backup also holds the Junos `set` config, read over NETCONF (never SSH: Mist owns the switch). If NETCONF fails, the backup still succeeds from Mist and says why.
 - **A Mist org token with read access is enough.** NetHelper never writes to Mist.
 - **AOS-CX needs its REST API on.** On the switch: `https-server rest access-mode read-write` and `https-server vrf mgmt` (or `default`, whichever VRF NetHelper reaches it on), plus a dedicated account. Details and other switch-side facts: `docs/hardware/AOS_CX_NOTES.md`.
 - **Junos NETCONF is off by default.** To use it, enable it with `set system services netconf ssh`. If you don't, NetHelper uses the SSH CLI automatically. (Mist enables it on switches it manages.)
 - **The Junos account must be able to read the configuration.** A login class without `view-configuration` passes the connection test, but a config read returns `/* ACCESS-DENIED */` for every section. NetHelper treats that as a failed read: a direct switch's backup fails and names the denied sections, and a Mist-managed switch is backed up from Mist alone, with a warning on the backup. A good read-only class is `set system login class nethelper-ro permissions [ view view-configuration ]` (on a Mist-managed switch, add it through Mist's Additional CLI Commands). Even then Junos withholds a few hierarchies (on an EX4000: scripts, event-options, secret, extension-service); the backup keeps the rest and its warning names what's missing.
-- **Status** comes from ICMP ping first, then from the device's cloud. A cloud-managed device that its cloud reports online but that doesn't answer NetHelper's ping shows **warning** (hover the status for why): it's up, but NetHelper has no route to it or ICMP is filtered. Its ping alert says the same ("is not answering ping"). The reverse also shows **warning**: a device its cloud reports offline whose address still answers ping. A cloud can keep an offline device's old IP after another device took it, so the ping may be answering for someone else.
+- **Status** comes from ICMP ping first, then from the device's cloud. A cloud-managed device that its cloud reports online but that doesn't answer NetHelper's ping shows **warning** (hover the status for why): it's up, but NetHelper has no route to it or ICMP is filtered. Its ping alert says the same ("is not answering ping"). The reverse also shows **warning**: a device its cloud reports offline whose address still answers ping. A cloud can keep an offline device's old IP after another device took it, so the ping may be answering for someone else. When NetHelper knows that other device (it holds the same address and can be answering), it stops pinging the offline one, which then shows **offline**, and its page names the device that has the address.
 - **Cloud devices stay current on their own.** Devices sync from every cloud integration hourly, and their cloud status, IP, firmware and config state refresh every 5 minutes in between, so cloud-offline alerts open and clear without a manual **Sync**. A device Central reports **Out of sync** (not running the config Central intends) for more than 10 minutes gets a "Config out of sync" alert; turn the rule off under Settings → Alerts if you manage those switches outside Central on purpose. Intervals: `CLOUD_SYNC_INTERVAL`, `CLOUD_STATUS_INTERVAL` (see `docs/CONFIGURATION.md`).
 - **Mist changes arrive within a minute or two.** NetHelper keeps a WebSocket open to each Mist org (outbound only, no public URL). A device coming back is seen at its next report, about a minute, and one that goes quiet is checked within a few minutes. Port link changes and restarts of Mist devices, and every cloud status change, are listed under the device's **Live** tab. Settings → Cloud Integrations shows whether the stream is connected. Central has no equivalent NetHelper can use without a public webhook endpoint, so Central devices stay on the 5-minute refresh.
 - **Live port/PoE state (AOS-CX only).** The device page's **Live** tab shows each port's link, speed, PoE status and draw, throughput, and CPU/memory while it's open. Turn on **Always monitor** to record link and PoE changes as events even when nobody is watching. The switch pushes changes, so nothing needs configuring on it, and it works on Central-managed switches too (read-only, using the device's linked credentials and IP). Other platforms show "not available yet". Use a dedicated switch account for NetHelper: AOS-CX allows 6 REST sessions per user, and each monitored switch keeps one open.
@@ -43,16 +43,19 @@ Notes:
 
 A mock follows the spec, but real equipment is where response-shape surprises show up. **Reports from real Mist orgs, Junos boxes, and AOS-S switches are the most useful thing you can send.**
 
-## Not supported in this beta
+- **Alerts can reach you outside the app.** An admin adds email recipients or a webhook (Slack, Teams, or any JSON receiver) under Settings → Notifications, with a minimum severity and optionally only some rules. Each channel gets one message when an alert opens and one when it resolves; **Test** sends a sample. A channel can also send the alarms Central and Mist raise themselves (**Also send cloud alarms**, optionally only named ones such as Port Flap); acknowledge and clear those in the cloud. Email needs `SMTP_HOST` on the server (`docs/CONFIGURATION.md`).
+- **Device groups** are managed on the Devices page (**Groups**, and **Group** on a table selection). Automation triggers use them to pick devices.
+- **Status history** is on each device page's **History** tab (ping and cloud status over the last day, week or month, with config backups and restarts marked). The dashboard shows current status.
+
+## Not supported yet
 
 - **Cisco Meraki and Catalyst.** They appear as "coming soon" and can't be configured. A Meraki device marked "direct" reports "no transport".
 - **Pushing configuration, restore, or rollback.** Backups are read-only.
 - **SSH key authentication to devices.** Only passwords, and no enable/privileged-mode escalation. (The Git mirror *can* use an SSH key.)
-- **Alerts can reach you outside the app.** An admin adds email recipients or a webhook (Slack, Teams, or any JSON receiver) under Settings → Notifications, with a minimum severity and optionally only some rules. Each channel gets one message when an alert opens and one when it resolves; **Test** sends a sample. A channel can also send the alarms Central and Mist raise themselves (**Also send cloud alarms**, optionally only named ones such as Port Flap); acknowledge and clear those in the cloud. Email needs `SMTP_HOST` on the server (`docs/CONFIGURATION.md`).
-- **Device groups** are managed on the Devices page (**Groups**, and **Group** on a table selection). Automation triggers use them to pick devices.
 - **Automations are experimental.** Only some builder nodes run: Manual, Schedule and Alert triggers, Device Property and Alert Severity conditions, and Create Backup and Raise/Clear/Acknowledge Alert actions. Other nodes are marked "not runnable yet", and a workflow that uses them can be saved but not run or activated. Every run is listed under Automations → Run History.
-- **Status history.** The dashboard shows current status only.
 - **Self-service account recovery.** There's no "forgot password". An admin resets it from the Users page, or on the server with `npm run user:manage`.
+- **More than one backend instance per database.** The live monitor, alert settle timers and cloud event streams run in memory.
+- **arm64 images.** The published images are amd64; on arm64, `install.sh --build` builds them on the host.
 
 ## Accounts and roles
 
@@ -68,10 +71,10 @@ Deleting a user keeps everything they set up (integrations, credentials, the Git
 
 ## Reporting a problem
 
-Send reports to the NetHelper admin who invited you. Include:
+Open an issue at [github.com/bryanbuck/nethelper/issues](https://github.com/bryanbuck/nethelper/issues). For a security problem, don't open an issue: see [`SECURITY.md`](../SECURITY.md). Include:
 
 1. **What you did and what happened**, including the exact error text or a screenshot.
-2. **The version.** It's in the page footer (for example `NetHelper 0.9.0-beta.5`), and `GET /health` returns it too.
+2. **The version.** It's in the page footer (for example `NetHelper 0.9.0`), and `GET /health` returns it too.
 3. **Which platform and management plane**: for example "AOS-S 2930F, direct over SSH" or "Mist switch EX4100".
 4. **Backend logs from around that time**:
    - Docker: `docker compose logs --since 30m backend`
@@ -80,4 +83,4 @@ Send reports to the NetHelper admin who invited you. Include:
    Logs mask values under password, token, secret, and similar keys. Still skim them before sending, and **never send backup contents**: device configs contain secrets.
 5. For device problems, the result of **Test connection** on the device's page.
 
-For a problem with a real device's response format, a copy of the raw response with secrets removed is the fastest way to a fix.
+For a problem with a real device's response format, a copy of the raw response with secrets removed is the fastest way to a fix. Issues are public: remove hostnames, addresses and serials you don't want to share.

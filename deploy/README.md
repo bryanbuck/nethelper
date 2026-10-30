@@ -1,8 +1,8 @@
 # Deploying NetHelper
 
-What's supported, known limitations, and how to report problems: [`docs/BETA_NOTES.md`](../docs/BETA_NOTES.md). Every setting: [`docs/CONFIGURATION.md`](../docs/CONFIGURATION.md).
+What's supported, known limitations, and how to report problems: [`docs/SUPPORT.md`](../docs/SUPPORT.md). Every setting: [`docs/CONFIGURATION.md`](../docs/CONFIGURATION.md).
 
-Two supported ways to run the 0.9 beta:
+Two supported ways to run NetHelper:
 
 - **Docker Compose**: everything, including Postgres and Redis, in containers. Quickest to stand up.
 - **Bare metal**: systemd runs the backend and nginx serves the UI, on a Debian or Ubuntu host with Postgres and Redis from the distro.
@@ -12,9 +12,10 @@ Both were installed from this runbook on clean Debian 13 (trixie) VMs on 2026-10
 **Getting the code.** Clone the repository (`git clone … /opt/nethelper`) or unpack a release tarball there. Every command below runs from that tree. Each release on GitHub has `nethelper-<version>.tar.gz` (the source plus a prebuilt UI, so bare metal skips the frontend build) and its checksum:
 
 ```sh
-gh release download v0.9.0-beta.5 -R bryanbuck/nethelper
-sha256sum -c nethelper-0.9.0-beta.5.tar.gz.sha256
-tar xzf nethelper-0.9.0-beta.5.tar.gz && mv nethelper-0.9.0-beta.5 /opt/nethelper
+base=https://github.com/bryanbuck/nethelper/releases/download/v0.9.0
+curl -fLO "$base/nethelper-0.9.0.tar.gz" -fLO "$base/nethelper-0.9.0.tar.gz.sha256"
+sha256sum -c nethelper-0.9.0.tar.gz.sha256
+tar xzf nethelper-0.9.0.tar.gz && mv nethelper-0.9.0 /opt/nethelper
 ```
 
 Either way, the browser talks to one origin: nginx serves the SPA and proxies `/api` and `/socket.io` to the backend. You don't need `CORS_ORIGINS` unless the UI is served from somewhere else.
@@ -56,13 +57,7 @@ It asks whether to use host networking (MAC addresses in discovery; see **Networ
 
 It doesn't install Docker, set up TLS, or take backups. `./install.sh --help` lists the options. Unattended: `./install.sh -y --admin-email you@example.com --admin-name "Your Name"`; set `NETHELPER_ADMIN_PASSWORD` in your environment to choose the password. `./install.sh --env-only` only writes `deploy/.env`, if you'd rather run Compose yourself (next section).
 
-**Prebuilt images.** Releases publish `ghcr.io/bryanbuck/nethelper-backend` and `nethelper-frontend`. While the repository is private, pulling them needs a GitHub token with the `read:packages` scope:
-
-```sh
-echo <token> | docker login ghcr.io -u <github user> --password-stdin
-```
-
-Without it, or in a git checkout that isn't a release tag (the release images wouldn't match it), the script builds the images on this host instead: a few minutes, with access to the npm registry.
+**Prebuilt images.** Releases publish `ghcr.io/bryanbuck/nethelper-backend` and `nethelper-frontend` (amd64), which pull without a login. In a git checkout that isn't a release tag (the release images wouldn't match it), or when the pull fails, the script builds the images on this host instead: a few minutes, with access to the npm registry.
 
 Back up `deploy/.env` afterwards: its `ENCRYPTION_KEY` decrypts every stored credential (see **Backup and restore**). Then sign in, change the admin's password, and follow [`docs/GETTING_STARTED.md`](../docs/GETTING_STARTED.md).
 

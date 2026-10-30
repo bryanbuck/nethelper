@@ -2,7 +2,7 @@
 
 Multi-vendor network inventory, monitoring, and configuration backup. NetHelper keeps one view of your switches, access points, and gateways, whether they're managed through a cloud controller (Aruba Central, Juniper Mist) or reached directly (AOS-CX REST, AOS-S SSH, Junos NETCONF). It tracks their status and keeps versioned, diffable backups of their configurations.
 
-**Status: 0.9 beta** (`VERSION`). A private, in-house release. What works, what doesn't, and how to report problems: [`docs/BETA_NOTES.md`](docs/BETA_NOTES.md).
+**Status: 0.9** (`VERSION`). Pre-1.0: behavior may still change between minor versions. What works, what has been tested on real equipment, what doesn't work yet, and how to report problems: [`docs/SUPPORT.md`](docs/SUPPORT.md).
 
 ## Running it
 
@@ -34,7 +34,7 @@ Then:
 backend/    Node.js API: Express, Prisma (PostgreSQL), Bull (Redis), Socket.io
 frontend/   Vue 3 SPA: Vuetify, Pinia, Vite
 deploy/     Docker Compose, systemd, nginx
-docs/       Architecture, roadmap, configuration, beta notes
+docs/       Architecture, roadmap, configuration, support matrix
 ```
 
 Needs Node 22+, PostgreSQL 15+, Redis 7+, and `nmap` on the backend host.

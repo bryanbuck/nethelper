@@ -8,6 +8,7 @@ import ChangePasswordDialog from '@/components/common/ChangePasswordDialog.vue'
 import AlertBell from '@/components/common/AlertBell.vue'
 import { THEMES, writeThemePreference } from '@/utils/theme-preference'
 import { appDefaults } from '@/plugins/theme-defaults'
+import { prereleaseLabel } from '@/utils/version'
 
 const theme = useTheme()
 // Phones: the theme picker moves into the account menu so the title fits.
@@ -19,6 +20,7 @@ const authStore = useAuthStore()
 const drawer = ref(false)
 const changePasswordOpen = ref(false)
 const appVersion = import.meta.env.VITE_APP_VERSION
+const versionLabel = prereleaseLabel(appVersion)
 
 const isAuthPage = computed(() => {
   return route.meta?.requiresAuth === false
@@ -133,7 +135,7 @@ onMounted(() => {
           <v-toolbar-title>
             <v-icon class="mr-2 d-none d-sm-inline-flex">mdi-network</v-icon>
             NetHelper
-            <v-chip size="x-small" variant="outlined" label class="ml-2" :title="`Version ${appVersion}`">Beta</v-chip>
+            <v-chip v-if="versionLabel" size="x-small" variant="outlined" label class="ml-2" :title="`Version ${appVersion}`">{{ versionLabel }}</v-chip>
           </v-toolbar-title>
 
           <!-- No v-spacer: the title already grows, and a spacer would halve its room on phones. -->
