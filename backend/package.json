@@ -19,7 +19,7 @@
     "postman:generate": "node scripts/generate-postman.js"
   },
   "dependencies": {
-    "@prisma/client": "^5.7.0",
+    "@prisma/client": "^7.10.1",
     "axios": "^1.6.2",
     "bcryptjs": "^2.4.3",
     "bull": "^4.11.5",
