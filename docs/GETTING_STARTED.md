@@ -7,7 +7,7 @@ Your first hour with NetHelper, after it's installed ([`deploy/README.md`](../de
 Have these ready:
 
 - **Cloud API access**, if your devices are cloud-managed:
-  - **Aruba Central** (New Central only): an API client from HPE GreenLake (client ID and secret; a Workspace ID for a GreenLake-platform client), and your cluster (e.g. US-West-4).
+  - **Aruba Central** (New Central only): an API client from HPE GreenLake (client ID and secret; a Workspace ID for a GreenLake-platform client), and your cluster (e.g. US-West-4; pick **Custom…** and type the API base URL for an unlisted private instance).
   - **Juniper Mist**: an org API token with read access, and the org's region.
 - **A device account for NetHelper** on each directly reached device, with the rights in the table below. Give NetHelper its own account rather than reusing a person's.
 - **Network reach** from the NetHelper host to the devices' management addresses: ICMP for status; HTTPS (AOS-CX REST) or SSH port 22 (AOS-S, Junos NETCONF/CLI) for backups and tests.

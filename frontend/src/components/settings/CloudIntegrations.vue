@@ -171,24 +171,28 @@
             />
 
             <!-- Providers whose tenants live in a specific regional cloud
-                 (Mist, Central) get a picker; everyone else types a base URL. -->
+                 (Mist, Central) get a picker, with Custom for unlisted
+                 (private) instances; everyone else types a base URL. -->
             <v-select
               v-if="regions.length"
-              v-model="form.baseUrl"
-              :items="regions"
+              :model-value="regionChoice"
+              :items="regionItems"
               item-title="label"
               item-value="baseUrl"
               label="Region / Cluster"
               :hint="selectedProvider?.regionHint"
               persistent-hint
               class="mb-3"
+              @update:model-value="onRegionChange"
             />
             <v-text-field
-              v-else
+              v-if="!regions.length || regionChoice === CUSTOM_REGION"
               v-model="form.baseUrl"
               label="API Base URL"
-              :hint="`Default: ${selectedProvider?.defaultBaseUrl || ''}`"
+              :placeholder="regions.length ? 'https://central.example.com' : undefined"
+              :hint="regions.length ? 'The API gateway of an instance not listed above' : `Default: ${selectedProvider?.defaultBaseUrl || ''}`"
               persistent-hint
+              :rules="regions.length ? [baseUrlRule] : []"
               class="mb-3"
             />
 
@@ -268,6 +272,7 @@ const authStore = useAuthStore()
 const canEdit = computed(() => ['admin', 'operator'].includes(authStore.userRole))
 
 const dialog = ref(false)
+const formRef = ref(null)
 const deleteDialog = ref(false)
 const editing = ref(null)
 const pendingDelete = ref(null)
@@ -306,6 +311,33 @@ const selectedProvider = computed(() =>
 const credentialFields = computed(() => selectedProvider.value?.credentialFields || [])
 
 const regions = computed(() => selectedProvider.value?.regions || [])
+
+// Sentinel picker value for a base URL that is not one of the listed regions
+// (a private or dedicated instance); the URL itself is typed in a text field.
+const CUSTOM_REGION = '__custom__'
+const customRegion = ref(false)
+
+const regionItems = computed(() => [...regions.value, { label: 'Custom…', baseUrl: CUSTOM_REGION }])
+
+const isListedRegion = (baseUrl) => regions.value.some(r => r.baseUrl === baseUrl)
+
+const regionChoice = computed(() =>
+  customRegion.value || !isListedRegion(form.baseUrl) ? CUSTOM_REGION : form.baseUrl
+)
+
+const onRegionChange = (value) => {
+  customRegion.value = value === CUSTOM_REGION
+  form.baseUrl = customRegion.value ? '' : value
+}
+
+const baseUrlRule = (value) => {
+  try {
+    const url = new URL(String(value || '').trim())
+    return ['http:', 'https:'].includes(url.protocol) || 'Enter an http(s) URL'
+  } catch {
+    return 'Enter a URL, e.g. https://central.example.com'
+  }
+}
 
 const providerLabel = (id) =>
   cloudProviders.value.find(p => p.id === id)?.label || CloudProviderInfo[id]?.label || id
@@ -351,12 +383,14 @@ const resetForm = (provider = null) => {
   form.baseUrl = cloudProviders.value.find(p => p.id === provider)?.defaultBaseUrl || ''
   form.credentials = {}
   form.isActive = true
+  customRegion.value = false
   Object.keys(revealed).forEach(k => delete revealed[k])
 }
 
 const onProviderChange = (provider) => {
   form.baseUrl = cloudProviders.value.find(p => p.id === provider)?.defaultBaseUrl || ''
   form.credentials = {}
+  customRegion.value = false
 }
 
 const openCreate = () => {
@@ -371,6 +405,7 @@ const openEdit = (integration) => {
   form.provider = integration.provider
   form.name = integration.name
   form.baseUrl = integration.baseUrl
+  customRegion.value = false
   // Non-secret credential values come back from the API; secrets are masked
   // and left blank so a blank submit means "unchanged".
   form.credentials = {}
@@ -388,6 +423,8 @@ const notify = (message, color = 'success') => {
 }
 
 const save = async () => {
+  const { valid } = await formRef.value.validate()
+  if (!valid) return
   saving.value = true
   try {
     if (editing.value) {

@@ -4,6 +4,14 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ## [Unreleased]
 
+## [0.9.0-beta.7] — 2026-10-30
+
+### Added
+- Settings → Cloud Integrations: the Aruba Central and Juniper Mist region pickers end with **Custom…**, for the API base URL of a private or dedicated instance that isn't listed. Use an `https://` URL: NetHelper sends the integration's API token to it.
+
+### Changed
+- Dependency updates (backend): bcryptjs 3 (new password hashes start with `$2b$`; existing ones keep working), redis 6, joi 18, qs 6.16.2. The release workflow uses docker/build-push-action 7 and docker/setup-buildx-action 4.
+
 ## [0.9.0-beta.6] — 2026-10-29
 
 ### Changed
