@@ -44,6 +44,11 @@ serials; `topology-branch.json`: a gateway whose WAN uplinks are port-less
 links to `Internet`/`LTE` pseudo-devices, and an offline switch still listing
 its last link; `topology-teleworker.json`: empty, the site's only AP offline).
 Topology is served only on `v1`; `v1alpha1` returns 404.
+`central-live/switch-2930f.json` and `switch-6300f.json` (2026-11-04, a
+different tenant, anonymised by `probe-cloud.js`) are `{ interfaces, vlans }`
+from `network-monitoring/v1/switches/{serial}/interfaces` and `/vlans`, the
+two reads of `getSwitchVlans()` (also `v1` only). The 6300F is the switch in
+`aos-cx-live/interfaces-vlans.json`, so the two sources can be compared.
 
 `junos-live/` holds **real** NETCONF replies from the same EX4000-12MP (Junos
 24.4R2.25, Mist-managed, 2026-10-19), with MACs, serials and CLEI codes
@@ -91,4 +96,12 @@ capture: the two reads behind the Network Map's VLAN overlay
 (`system/vlans` and the interfaces' `vlan_mode`/`vlan_tag`/`vlan_trunks`/LAG
 `interfaces`/`ip4_address`). Reference attributes appear in three shapes on
 purpose (URI, id map, expanded object) because the live shape at `depth=2` is
-unconfirmed. Replace it with `aos-cx-live/interfaces-vlans.json` from the 6200F.
+unconfirmed at the time. `aos-cx-live/interfaces-vlans.json` is the **live**
+counterpart (6300F, FL.10.16.1060, 2026-11-04, `{ interfaces, vlans }`): references
+are id maps, and a port set with only `vlan access <n>` has `vlan_mode: null`, so
+the parser reads `applied_vlan_*` first.
+
+`aos-cx-live/vxlan-edge0.json` / `vxlan-edge1.json` are **live** captures of two
+6300Fs (FL.10.16.1060, 2026-11-04) joined by a static VXLAN (VNI 110 ↔ VLAN 110,
+loopback0 sources 10.15.20.20 / 10.15.20.25): `{ interfaces, vnis,
+tunnelEndpoints: { vxlan1 } }`, the three reads of `getVxlanState()`.

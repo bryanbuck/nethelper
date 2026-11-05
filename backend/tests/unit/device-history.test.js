@@ -97,7 +97,7 @@ describe('getHistory', () => {
     mockPrisma.device.findUnique.mockResolvedValue({
       id: 'd1', managementMode: 'cloud', cloudIntegrationId: 'i1', cloudIntegration: { name: 'Lab Mist', provider: 'juniper_mist' },
     });
-    mockPrisma.configBackup.findFirst.mockResolvedValue({ createdAt: t('00:00') });
+    mockPrisma.configBackup.findFirst.mockResolvedValue({ id: 'b0', createdAt: t('00:00') });
     mockPrisma.configBackup.findMany.mockResolvedValue([
       { id: 'b1', createdAt: t('01:00'), status: 'success', trigger: 'scheduled', hasChanges: false },
       { id: 'b2', createdAt: t('05:00'), status: 'failed', trigger: 'scheduled', hasChanges: null, error: 'timeout' },
@@ -111,7 +111,7 @@ describe('getHistory', () => {
     expect(history.markers).toEqual([
       expect.objectContaining({ id: 'b1', changed: false }),
       expect.objectContaining({ id: 'b2', status: 'failed', error: 'timeout', changed: false }),
-      expect.objectContaining({ id: 'b3', changed: true, changedSince: t('01:00') }),
+      expect.objectContaining({ id: 'b3', changed: true, changedSince: t('01:00'), changedSinceId: 'b1' }),
     ]);
   });
 });

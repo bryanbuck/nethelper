@@ -1,13 +1,19 @@
 /**
- * AOS-CX VLAN membership from two REST reads (shapes from the AOS-CX 10.10
- * REST schema; not yet checked against a live switch):
+ * AOS-CX VLAN membership from two REST reads (AOS-CX 10.10 REST schema;
+ * checked live on a 6300F, FL.10.16, 2026-11-04:
+ * tests/fixtures/aos-cx-live/interfaces-vlans.json):
  *
  * - /system/vlans: { "<id>": { id, name } } (or a list of the same)
  * - /system/interfaces?attributes=name,type,vlan_mode,vlan_tag,vlan_trunks,
- *   interfaces,routing,ip4_address: per interface,
+ *   applied_vlan_mode,applied_vlan_tag,applied_vlan_trunks,interfaces,
+ *   routing,ip4_address: per interface,
  *     vlan_mode   access | native-untagged | native-tagged (absent when routed)
  *     vlan_tag    the access / native VLAN (a reference: URI, object or id map)
  *     vlan_trunks the allowed VLANs; empty on a trunk = "allowed all"
+ *     applied_*   the same, as in effect. A port configured with only
+ *                 `vlan access <n>` has vlan_mode null (and a default-VLAN
+ *                 port has vlan_tag null too); only applied_* says what it
+ *                 is, so it wins and the configured values are the fallback.
  *     interfaces  a LAG's member ports (LLDP reports the members, so they
  *                 inherit the LAG's membership)
  *     type vlan   an SVI ("vlan10"), routed when it has ip4_address
@@ -30,13 +36,21 @@ function memberNames(value) {
     .map((name) => decodeURIComponent(String(name).split('/interfaces/').pop()));
 }
 
+/** The applied (in effect) value where the switch reports one, else the configured. */
+function effective(iface, attribute) {
+  const applied = iface[`applied_${attribute}`];
+  const empty = applied === null || applied === undefined
+    || (typeof applied === 'object' && !Object.keys(applied).length);
+  return empty ? iface[attribute] : applied;
+}
+
 function portMembership(iface) {
-  const mode = iface.vlan_mode;
+  const mode = effective(iface, 'vlan_mode');
   if (!mode) return iface.routing === true ? { mode: 'routed' } : null;
-  const tag = vlanIds(iface.vlan_tag)[0] ?? null;
+  const tag = vlanIds(effective(iface, 'vlan_tag'))[0] ?? null;
   if (mode === 'access') return { mode: 'access', untagged: tag };
   if (mode !== 'native-untagged' && mode !== 'native-tagged') return null;
-  const trunks = vlanIds(iface.vlan_trunks);
+  const trunks = vlanIds(effective(iface, 'vlan_trunks'));
   const tagged = mode === 'native-tagged' && tag ? [...trunks, tag] : trunks;
   return {
     mode: 'trunk',

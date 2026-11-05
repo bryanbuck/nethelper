@@ -122,3 +122,28 @@ its Central relationship, the data behind `show aruba-central`:
   disconnected). `normalizeCentralStatus` sets `cloudManaged` (source
   `switch-rest`): true when connected and not in monitor mode, false when
   disabled or monitor-only, null (unknown) when enabled but not connected.
+
+## VLAN membership and VXLAN (6300F, FL.10.16.1060, 2026-11-04)
+
+Two 6300Fs (Lab-Edge0/Edge1, Central-managed, read-only REST reads) joined by a
+static VXLAN. Captures: `aos-cx-live/interfaces-vlans.json`,
+`aos-cx-live/vxlan-edge0.json`, `vxlan-edge1.json`.
+
+- **`vlan_mode` is null on a port configured with only `vlan access <n>`.** The
+  configured `vlan_tag` still names the VLAN, but a port left in the default
+  VLAN has `vlan_tag: null` too. `applied_vlan_mode` / `applied_vlan_tag` /
+  `applied_vlan_trunks` always say what is in effect, so the VLAN parser reads
+  those first. A routed port has `applied_vlan_mode: null` and `routing: true`.
+- References at `depth=2` are id maps: `vlan_tag: { "110": "/rest/v10.10/system/vlans/110" }`.
+- VXLAN lives in three places:
+  - `system/interfaces/vxlan1` (`type: vxlan`): `options.local_ip` is the VTEP
+    source (here loopback0's /32, not the management IP), `admin`.
+  - `system/virtual_network_ids`, keyed `vxlan_vni,<vni>`: `id`, `vlan` (id
+    map), `vrf` (null for an L2 VNI), `state: operational`.
+  - `system/interfaces/vxlan1/tunnel_endpoints`, keyed `<vrf>,<origin>,<ip>`
+    (`default,static,10.15.20.25`): `destination`, `origin: static`,
+    `state: operational`, `network_id` (the VNIs flooded to that peer).
+- `system?depth=1` also lists `evpn`, `evpn_instances` and `evpn_mac_ips`; with
+  no EVPN configured, `evpn` is 404 and `evpn_instances` is `{}`.
+- `filter=type:<t>` works on `system/interfaces` here. The reader filters
+  client-side anyway, in case older firmware rejects it.

@@ -566,66 +566,7 @@
     </v-dialog>
 
     <!-- Compare dialog -->
-    <v-dialog v-model="showCompareDialog" max-width="1100" :fullscreen="$vuetify.display.xs" scrollable>
-      <v-card>
-        <v-card-title class="text-h5">Compare Backups</v-card-title>
-        <v-card-text>
-          <v-row>
-            <v-col cols="12" md="6">
-              <v-select
-                v-model="compareFromId"
-                :items="compareCandidates"
-                :loading="loadingCompareRows"
-                label="From (older)"
-                density="compact"
-                @update:model-value="loadDiff"
-              />
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-select
-                v-model="compareToId"
-                :items="compareCandidates"
-                :loading="loadingCompareRows"
-                label="To (newer)"
-                density="compact"
-                @update:model-value="loadDiff"
-              />
-            </v-col>
-          </v-row>
-
-          <div v-if="diffResult?.kinds?.length > 1" class="d-flex align-center mb-3">
-            <span class="text-body-2 text-medium-emphasis mr-3">Compare</span>
-            <v-btn-toggle
-              v-model="compareKind"
-              density="compact"
-              variant="outlined"
-              mandatory
-              @update:model-value="loadDiff"
-            >
-              <v-btn v-for="kind in diffResult.kinds" :key="kind" :value="kind" size="small">
-                {{ kindLabel(kind) }}
-              </v-btn>
-            </v-btn-toggle>
-          </div>
-
-          <v-progress-linear v-if="loadingDiff" indeterminate color="primary" class="mb-3" />
-          <ConfigDiffViewer
-            v-else-if="diffResult"
-            :patch="diffResult.patch"
-            :additions="diffResult.additions"
-            :deletions="diffResult.deletions"
-            :identical="diffResult.identical"
-          />
-          <div v-else class="text-medium-emphasis text-center pa-4">
-            Select two backups to compare.
-          </div>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn variant="text" @click="showCompareDialog = false">Close</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <BackupCompareDialog ref="compareDialog" @error="notify($event, 'error')" />
 
     <!-- Schedule create/edit dialog -->
     <v-dialog v-model="showScheduleDialog" max-width="720" :fullscreen="$vuetify.display.xs" persistent scrollable>
@@ -768,7 +709,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useBackupsStore } from '@/stores/backups'
 import { useDevicesStore } from '@/stores/devices'
 import { useWebSocket } from '@/composables/useWebSocket'
-import ConfigDiffViewer from '@/components/backups/ConfigDiffViewer.vue'
+import BackupCompareDialog from '@/components/backups/BackupCompareDialog.vue'
 import ActionButton from '@/components/common/ActionButton.vue'
 import { CloudProviderInfo, cloudProviderLabel } from '@/models/vendors'
 import { usePhoneColumns } from '@/composables/usePhoneColumns'
@@ -1091,71 +1032,14 @@ async function downloadScope(item) {
 }
 
 // Compare / diff (device backups, or cloud-scope backups)
-const showCompareDialog = ref(false)
-const compareMode = ref('device')
-const compareRows = ref([])
-const loadingCompareRows = ref(false)
-const compareFromId = ref(null)
-const compareToId = ref(null)
-const compareKind = ref(null)
-const diffResult = ref(null)
-const loadingDiff = ref(false)
-
-// Candidates are the device's (or scope's) whole history, loaded when the
-// dialog opens: the table holds only one page of every device's backups.
-const compareCandidates = computed(() =>
-  compareRows.value.map(b => ({ title: formatDate(b.createdAt), value: b.id }))
-)
+const compareDialog = ref(null)
 
 function openCompareDialog(item) {
-  compareMode.value = 'device'
-  startCompare(item, () => backupsStore.fetchDeviceBackupHistory(item.deviceId))
+  compareDialog.value.open({ to: item, loadHistory: () => backupsStore.fetchDeviceBackupHistory(item.deviceId) })
 }
 
 function openScopeCompareDialog(item) {
-  compareMode.value = 'scope'
-  startCompare(item, () => backupsStore.fetchScopeBackupHistory(item))
-}
-
-let compareLoad = 0
-
-async function startCompare(item, loadHistory) {
-  compareRows.value = [item]
-  compareToId.value = item.id
-  compareFromId.value = null
-  compareKind.value = null
-  diffResult.value = null
-  showCompareDialog.value = true
-
-  const load = ++compareLoad
-  loadingCompareRows.value = true
-  try {
-    const rows = await loadHistory()
-    if (load !== compareLoad) return // another Compare was opened meanwhile
-    compareRows.value = rows.some(b => b.id === item.id) ? rows : [item, ...rows]
-  } catch (error) {
-    if (load === compareLoad) notify(error.userMessage || error.message || 'Failed to load backup history', 'error')
-  } finally {
-    if (load === compareLoad) loadingCompareRows.value = false
-  }
-}
-
-async function loadDiff() {
-  if (!compareFromId.value || !compareToId.value || compareFromId.value === compareToId.value) {
-    diffResult.value = null
-    return
-  }
-  loadingDiff.value = true
-  try {
-    diffResult.value = compareMode.value === 'scope'
-      ? await backupsStore.diffScopeBackups(compareFromId.value, compareToId.value)
-      : await backupsStore.diffBackups(compareFromId.value, compareToId.value, compareKind.value || undefined)
-    if (diffResult.value.kind) compareKind.value = diffResult.value.kind
-  } catch (error) {
-    notify(error.userMessage || error.message || 'Failed to compute diff', 'error')
-  } finally {
-    loadingDiff.value = false
-  }
+  compareDialog.value.open({ to: item, mode: 'scope', loadHistory: () => backupsStore.fetchScopeBackupHistory(item) })
 }
 
 // Cloud scopes

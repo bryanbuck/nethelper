@@ -60,6 +60,7 @@ const BaseCloudProvider = require('../../src/services/cloud-providers/base-cloud
 const JunosAPI = require('../../src/services/device-api/junos-api');
 const topology = require('../../src/services/topology/topology.service');
 const { makeVlanSnapshot } = require('../../src/services/topology/vlan-membership');
+const { makeVxlanSnapshot } = require('../../src/services/topology/vxlan-membership');
 
 const cx = {
   id: 'd-cx', name: 'Sw-Access1', type: 'switch', vendor: 'aruba', platform: 'aos-cx', ipAddress: '10.0.0.14', managementMode: 'cloud',
@@ -73,6 +74,7 @@ function stubCx(neighbors, extra = {}) {
     getLldpNeighbors: async () => neighbors,
     getLldpIdentity: async () => ({ chassisId: 'ec:67:94:00:20:00', sysName: 'Sw-Access1' }),
     getVlanMembership: async () => null,
+    getVxlanState: async () => null,
     ...extra,
   }));
 }
@@ -170,6 +172,65 @@ test('AOS-CX VLANs are stored with the links; a failed VLAN read keeps the last 
   const result = await topology.collectDevice(cx);
   expect(result.status).toBe('ok');
   expect(mockStore.states.get('d-cx')).toMatchObject({ vlans, vlanSource: 'AOS-CX REST', vlanError: 'HTTP 403' });
+});
+
+test('AOS-CX VXLAN state is stored with the links; a failed read keeps the last; no VXLAN clears it', async () => {
+  const vxlan = makeVxlanSnapshot({
+    vteps: [{ iface: 'vxlan1', sourceIp: '10.15.20.20' }],
+    vnis: [{ vni: 110, vlan: 110, state: 'operational' }],
+    peers: [{ iface: 'vxlan1', remoteIp: '10.15.20.25', vnis: [110], state: 'operational' }],
+  });
+  const links = [neighbor('1/1/13', '14:ab:ec:00:10:00', '1/1/6', 'Sw-CoreB')];
+  stubCx(links, { getVxlanState: async () => vxlan });
+  await topology.collectDevice(cx);
+  expect(mockStore.states.get('d-cx')).toMatchObject({ vxlan, vxlanSource: 'AOS-CX REST', vxlanError: null });
+
+  stubCx(links, { getVxlanState: async () => { throw new Error('HTTP 404'); } });
+  expect((await topology.collectDevice(cx)).status).toBe('ok');
+  expect(mockStore.states.get('d-cx')).toMatchObject({ vxlan, vxlanError: 'HTTP 404' });
+
+  stubCx(links);
+  await topology.collectDevice(cx);
+  expect(mockStore.states.get('d-cx')).toMatchObject({ vxlanSource: null, vxlanCollectedAt: null, vxlanError: null });
+});
+
+test('a switch read through Central gets its VLANs from the per-switch read; a failure keeps the links', async () => {
+  const vlans = makeVlanSnapshot({ ports: [{ port: '2', mode: 'access', untagged: 110 }] });
+  const getSwitchVlans = jest.fn(async () => vlans);
+  // Central's topology entries carry no `vlans` key.
+  const listNeighbors = jest.fn(async () => new Map([['SN-S', {
+    neighbors: [neighbor('2', '5c:5b:35:00:00:0c', '1/1/1', 'Lab-Edge0')], identity: {}, online: true,
+  }]]));
+  CloudProviderFactory.forDevice.mockResolvedValue({
+    integration: { id: 'central-1' }, label: 'Buck Lab', supports: () => true, listNeighbors, getSwitchVlans,
+  });
+  const core = {
+    id: 'd-core', name: 'Lab-Core', serial: 'SN-S', type: 'switch', vendor: 'aruba', platform: 'aos-s', managementMode: 'cloud',
+  };
+  const result = await topology.collectDevice(core);
+  expect(result).toMatchObject({ status: 'ok', source: 'Buck Lab', neighbors: 1 });
+  expect(getSwitchVlans).toHaveBeenCalledWith('SN-S');
+  expect(mockStore.states.get('d-core')).toMatchObject({ vlans, vlanSource: 'Buck Lab', vlanError: null });
+
+  getSwitchVlans.mockRejectedValueOnce(new Error('Rate limit exceeded'));
+  expect((await topology.collectDevice(core)).status).toBe('ok');
+  expect(mockStore.states.get('d-core')).toMatchObject({ vlans, vlanError: 'Rate limit exceeded' });
+});
+
+test('a cloud AP is never asked for switch VLANs', async () => {
+  const getSwitchVlans = jest.fn();
+  CloudProviderFactory.forDevice.mockResolvedValue({
+    integration: { id: 'central-1' },
+    label: 'Buck Lab',
+    supports: () => true,
+    getSwitchVlans,
+    listNeighbors: async () => new Map([['SN-AP', { neighbors: [], identity: {}, online: true }]]),
+  });
+  await topology.collectDevice({
+    id: 'd-ap2', name: 'ap', serial: 'SN-AP', type: 'access_point', vendor: 'aruba', managementMode: 'cloud',
+  });
+  expect(getSwitchVlans).not.toHaveBeenCalled();
+  expect(mockStore.states.get('d-ap2')).toMatchObject({ status: 'ok', vlanSource: null });
 });
 
 test('AOS-S reads over SSH', async () => {

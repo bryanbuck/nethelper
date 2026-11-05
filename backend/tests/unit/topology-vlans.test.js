@@ -3,9 +3,13 @@
  * Mist port stats), the edge/VLAN analysis, and the graph enrichment.
  */
 const cxFixture = require('../fixtures/aos-cx-vlans.json');
+const cxLive = require('../fixtures/aos-cx-live/interfaces-vlans.json');
 const mistPorts = require('../fixtures/mist-live/neighbors-stats-ports-search.json');
 const mistStats = require('../fixtures/mist-live/stats-devices-allfields-online.json');
+const central2930f = require('../fixtures/central-live/switch-2930f.json');
+const central6300f = require('../fixtures/central-live/switch-6300f.json');
 const { parseCxVlans } = require('../../src/services/topology/parsers/aos-cx-vlans');
+const { parseCentralVlans } = require('../../src/services/topology/parsers/central-vlans');
 const { parseMistNeighbors } = require('../../src/services/topology/parsers/mist');
 const {
   vlanIds, makeVlanSnapshot, portCarries, findPort,
@@ -56,6 +60,71 @@ describe('parseCxVlans', () => {
 
   it('returns null for an empty reply', () => {
     expect(parseCxVlans({ interfaces: {}, vlans: {} })).toBeNull();
+  });
+});
+
+describe('parseCxVlans (live 6300F, FL.10.16)', () => {
+  const snap = parseCxVlans(cxLive);
+
+  it('reads access ports whose configured vlan_mode is null from applied_*', () => {
+    // `vlan access 110` alone leaves vlan_mode null; applied_vlan_mode says access.
+    expect(cxLive.interfaces['1/1/1'].vlan_mode).toBeNull();
+    expect(snap.ports['1/1/1']).toMatchObject({ mode: 'access', untagged: 110 });
+    // A default-VLAN port has vlan_tag null too.
+    expect(snap.ports['1/1/3']).toMatchObject({ mode: 'access', untagged: 1 });
+  });
+
+  it('keeps a routed port routed and skips loopbacks, SVIs and the VXLAN interface', () => {
+    expect(snap.ports['1/1/24']).toMatchObject({ mode: 'routed' });
+    expect(snap.ports.loopback0).toBeUndefined();
+    expect(snap.ports.vlan1).toBeUndefined();
+    expect(snap.ports.vxlan1).toBeUndefined();
+  });
+
+  it('reads the VLAN table', () => {
+    expect(snap.vlans.map((v) => v.id)).toEqual([1, 110, 3000]);
+  });
+
+  it('falls back to the configured values where applied_* is absent', () => {
+    const configuredOnly = parseCxVlans({
+      interfaces: { '1/1/9': { name: '1/1/9', vlan_mode: 'access', vlan_tag: { 20: '/rest/v10.10/system/vlans/20' } } },
+      vlans: {},
+    });
+    expect(configuredOnly.ports['1/1/9']).toMatchObject({ mode: 'access', untagged: 20 });
+  });
+});
+
+describe('Central VLANs (live fixtures)', () => {
+  const read = (f) => parseCentralVlans({ interfaces: f.interfaces.items, vlans: f.vlans.items });
+  const aosS = read(central2930f);
+  const cx = read(central6300f);
+
+  it('maps access, trunk (native + allowed) and routed ports', () => {
+    expect(aosS.ports['2']).toMatchObject({ mode: 'access', untagged: 110 });
+    expect(aosS.ports['3']).toMatchObject({ mode: 'trunk', untagged: 101, tagged: [110], allTagged: false });
+    expect(cx.ports['1/1/24']).toMatchObject({ mode: 'routed' });
+  });
+
+  it('reads a trunk without a native VLAN as nothing untagged', () => {
+    expect(aosS.ports['8']).toMatchObject({ mode: 'trunk', untagged: null, untaggedKnown: true, tagged: [101] });
+  });
+
+  it('takes names from the VLAN list and routed VLANs from addresses that are not down', () => {
+    expect(aosS.vlans.find((v) => v.id === 110)).toEqual({ id: 110, name: 'Access Devices' });
+    expect(aosS.routed.map((r) => r.vlan)).toEqual([101, 110, 254]);
+    expect(cx.routed).toEqual([]);
+  });
+
+  it('agrees with the switch own REST read for the same 6300F', () => {
+    const local = parseCxVlans(cxLive);
+    for (const port of ['1/1/1', '1/1/2', '1/1/3', '1/1/24']) {
+      expect(cx.ports[port]).toMatchObject({ mode: local.ports[port].mode, untagged: local.ports[port].untagged });
+    }
+  });
+
+  it('reads a trunk with no allowed list as allowed-all', () => {
+    const snap = parseCentralVlans({ interfaces: [{ name: '1/1/49', vlanMode: 'Trunk', nativeVlan: 1, allowedVlanIds: [] }] });
+    expect(snap.ports['1/1/49']).toMatchObject({ mode: 'trunk', allTagged: true });
   });
 });
 
