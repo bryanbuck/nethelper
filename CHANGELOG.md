@@ -4,8 +4,24 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ## [Unreleased]
 
+## [0.9.0-beta.8] — 2026-11-04
+
 ### Added
 - Application backups: Settings → **App Backup** (admins) archives NetHelper itself on a schedule or on demand: the database, the config-backup files, and optionally the Git mirror repository, with optional passphrase encryption and retention by count and age. A failed run raises the new **Application backup failed** alert. Restore with `nethelper-admin restore` or `scripts/app-restore.js` (see `deploy/README.md` "Backup and restore"). The backend image now includes `pg_dump` 17; on bare metal, install `postgresql-client`.
+- Network Map: a **VXLAN** overlay (Overlay → VXLAN) for AOS-CX switches read over REST: one tunnel per VTEP pair, with each VNI shown as carried, configured on one side only, or down, a VNI picker, and a tunnel details panel. A tunnel carrying the same VLAN at both ends joins that VLAN's islands, and a VTEP at another site appears on the site's map.
+- Network Map VLAN overlay: switches whose neighbors come from Aruba Central now get their VLANs from Central too.
+- Device page History tab: a config change opens its diff. Click a change window, its backup marker, or an entry in the new Config changes list under the chart (operators and admins, like backup contents).
+- Devices page: **saved filters** (named filters, search and sort, kept per user on the server, from the table's Saved filters menu; every role manages its own), and a remembered view: the filters, search, sort, page and page size are in the URL, and opening Devices again returns to the last one.
+
+### Fixed
+- Network Map VLAN overlay: AOS-CX access ports configured with a plain `vlan access` command were missing (AOS-CX 10.16 leaves `vlan_mode` empty on them), which on most switches was most access ports.
+
+### Security
+- Dependency updates: `joi` 18.3.1 (GHSA-4528-x5fx-h6hg, high: slow email-list validation) and `follow-redirects` past GHSA-mrwp-f3q8-3g9p (high: credentials could follow a redirect) in both tiers; also axios 1.21, nodemailer 10.3.1, redis 6.3.1, ws 8.22.1, express-rate-limit 8.7.2, cron-parser 5.10.3, Sass 1.107. `npm audit` is clean in both tiers.
+
+### Upgrading from 0.9.0-beta.7
+- Take a backup first: migrations are forward-only (from this release on, Settings → App Backup → Run now). **Docker Compose**: run `deploy/install.sh` from the new tree (it keeps your `.env` values). **Bare metal**: follow "Upgrading" in [`deploy/README.md`](deploy/README.md), and install `postgresql-client` (the server's major version or newer) for application backups.
+- Three migrations, all additive: `20261104120000_topology_vxlan` (VXLAN columns on `DeviceTopologyState`), `20261104150000_saved_device_filters` (new table `SavedDeviceFilter`), `20261104180000_app_backup` (new tables `AppBackupConfig`, `AppBackupRun`). New optional setting `APP_BACKUP_PATH` (defaults: `/data/app-backups` in Docker, `/var/lib/nethelper/app-backups` with the systemd unit); scheduled application backups are off until an admin turns them on.
 
 ## [0.9.0-beta.7] — 2026-10-30
 
