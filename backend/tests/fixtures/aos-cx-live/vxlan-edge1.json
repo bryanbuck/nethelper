@@ -1,0 +1,43 @@
+{
+  "interfaces": {
+    "vxlan1": {
+      "admin": "up",
+      "name": "vxlan1",
+      "options": {
+        "local_ip": "10.15.20.25",
+        "vxlan_dest_udp_port": "4789"
+      },
+      "type": "vxlan"
+    }
+  },
+  "vnis": {
+    "vxlan_vni,110": {
+      "id": 110,
+      "interface": {
+        "vxlan1": "/rest/v10.10/system/interfaces/vxlan1"
+      },
+      "routing": false,
+      "state": "operational",
+      "type": "vxlan_vni",
+      "vlan": {
+        "110": "/rest/v10.10/system/vlans/110"
+      },
+      "vrf": null
+    }
+  },
+  "tunnelEndpoints": {
+    "vxlan1": {
+      "default,static,10.15.20.20": {
+        "destination": "10.15.20.20",
+        "network_id": {
+          "vxlan_vni,110": "/rest/v10.10/system/virtual_network_ids/vxlan_vni,110"
+        },
+        "origin": "static",
+        "state": "operational",
+        "vrf": {
+          "default": "/rest/v10.10/system/vrfs/default"
+        }
+      }
+    }
+  }
+}

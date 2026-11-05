@@ -109,6 +109,17 @@ class BaseCloudProvider {
   }
 
   /**
+   * One switch's VLAN membership, for a switch whose links come from this
+   * cloud when its bulk neighbor read carries no VLANs (Central). Mist puts
+   * `vlans` on its listNeighbors() entries instead.
+   * @param {string} serial
+   * @returns {Promise<Object|null>} a VLAN snapshot (topology/vlan-membership.js)
+   */
+  async getSwitchVlans(serial) { // eslint-disable-line no-unused-vars
+    this.unsupported('switch-vlans');
+  }
+
+  /**
    * Current status of every device, for the cloud status refresh
    * (services/cloud-status.service.js), which only updates rows sync made.
    * Defaults to a full inventory read; a provider with a cheaper read
@@ -190,7 +201,7 @@ class BaseCloudProvider {
 
   /**
    * Capability probe used by transport routing and the UI.
-   * @param {string} capability - 'inventory' | 'status' | 'config-backup' | 'scope-backup' | 'topology' | 'events' | 'address-lookup' | 'alarms' | 'test'
+   * @param {string} capability - 'inventory' | 'status' | 'config-backup' | 'scope-backup' | 'topology' | 'switch-vlans' | 'events' | 'address-lookup' | 'alarms' | 'test'
    * @returns {boolean}
    */
   supports(capability) { // eslint-disable-line no-unused-vars

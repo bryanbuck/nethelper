@@ -461,7 +461,8 @@ opens one session per device.
 - `DeviceLink`: one row per local port and remote chassis/port.
 - `DeviceTopologyState`: status `ok | skipped | unsupported | failed`, with a
   reason and the device's own chassis id/sysName, plus the device's VLAN
-  snapshot (`vlans`, `vlanSource`, `vlanCollectedAt`, `vlanError`; below).
+  snapshot (`vlans`, `vlanSource`, `vlanCollectedAt`, `vlanError`) and VXLAN
+  snapshot (`vxlan`, `vxlanSource`, `vxlanCollectedAt`, `vxlanError`; below).
 - `TopologyChange`: `link.added | removed | changed`.
 - `MapLayout`: shared node positions per `all` / `site:<location>`.
 
@@ -483,15 +484,26 @@ gateway → switch → AP → endpoint for layered layout.
 membership, so links and VLANs always come from the same moment (config
 backups can be days older):
 - AOS-CX REST: `GET system/vlans?depth=2&attributes=id,name` and
-  `system/interfaces?…&attributes=name,type,vlan_mode,vlan_tag,vlan_trunks,interfaces,routing,ip4_address`
+  `system/interfaces?…&attributes=name,type,vlan_mode,vlan_tag,vlan_trunks,applied_vlan_mode,applied_vlan_tag,applied_vlan_trunks,interfaces,routing,ip4_address`
   (`parsers/aos-cx-vlans.js`; a LAG's members inherit its membership; SVIs
-  with an address are "routed"). Spec-derived until checked on the 6200F.
+  with an address are "routed"). Checked live on a 6300F (FL.10.16,
+  2026-11-04): a port set with only `vlan access <n>` reports `vlan_mode: null`,
+  so the `applied_*` (in effect) values win and the configured ones are the
+  fallback. Before that fix such ports were silently missing from the overlay.
+- Central (2026-11-04): a switch whose links come from Central (no local read:
+  AOS-S under Central, a CX without a credential) gets its VLANs from
+  `GET /network-monitoring/v1/switches/{serial}/interfaces` (`vlanMode`,
+  `nativeVlan`, `allowedVlanIds`) and `/vlans` (names, `ipv4` = routed), two
+  calls per such switch per run (`getSwitchVlans()`, `parsers/central-vlans.js`;
+  `v1` only, `v1alpha1` is 404). On the lab 6300F it agrees with the switch's
+  own REST read.
 - Mist: `port_mode`/`vlan_ids` from the same `/stats/ports/search` rows (the
   effective membership, already resolved from templates) and irb from device
   stats `if_stat`. A trunk's native VLAN is unknown. A Mist-managed EX read over
   NETCONF still takes Mist's VLANs from the run's shared read.
-- Other transports: none yet (`vlans` cleared). A failed VLAN read keeps the
-  last snapshot and records `vlanError`; it never fails the link collection.
+- Other transports (Junos without Mist, AOS-S/IOS over SSH): none yet
+  (`vlans` cleared). A failed VLAN read keeps the last snapshot and records
+  `vlanError`; it never fails the link collection.
 
 The snapshot (`vlan-membership.js`) holds the VLAN table, ports keyed by
 normalized name, and routed VLANs. `vlan-analysis.js` adds `edge.vlans` to the
@@ -500,6 +512,40 @@ graph (`carried`, `pruned` = both switches have the VLAN but one port drops it,
 devices, islands). Unknown is never guessed: an end without data never makes a
 VLAN pruned, and a group touching such a link is never an island. The
 frontend mirrors `edgeStatus` in `models/topology-vlans.js` (parity-tested).
+
+**VXLAN overlay (2026-11-04).** The same AOS-CX REST session reads the switch's
+VXLAN state (`getVxlanState()`, `parsers/aos-cx-vxlan.js`; checked live on two
+6300Fs joined by a static VXLAN): the `type: vxlan` interfaces
+(`options.local_ip` = VTEP source, usually a loopback), `system/virtual_network_ids`
+(VNI → VLAN, or VRF for an L3 VNI, with `state`) and each VXLAN interface's
+`tunnel_endpoints` (one per remote VTEP: `destination`, `origin` static|evpn,
+`state`, the VNIs in `network_id`). A switch without a VXLAN interface costs
+one GET and stores nothing. EVPN-learned VTEPs are expected in the same table
+(`origin: evpn`) per the schema; only static peers have been seen live.
+Other platforms: none yet.
+
+`vxlan-membership.js` holds the snapshot (VTEPs, VNIs, peers). `vxlan-analysis.js`
+matches a peer's remote IP to a device by the other snapshots' VTEP source
+addresses, then by management IP (an IP two devices claim matches neither),
+and builds `graph.vxlan`:
+- `tunnels`: one per VTEP pair (tunnels are their own edges, not LLDP links),
+  each with `vniStatus` per VNI: `carried` (both ends flood it to each other),
+  `one-sided`, `down` (an end reports the peer not operational) or `unknown`
+  (the far VTEP was not read; never guessed).
+- `vnis`: per VNI, its VTEPs with their local VLAN/VRF, the tunnels carrying
+  it, `isolated` VTEPs (no peer for it), `unresolved` peers (no device has the
+  address) and `vlanDiffers`.
+- On a site map, a tunnel's far end on another site joins as an out-of-scope
+  node marked `tunnelOnly`, shown only with the overlay.
+
+A tunnel carrying a VNI mapped to the same VLAN at both ends is an L2 path for
+the VLAN overlay's island search, and a tunnel to an unread VTEP keeps the
+path open, so a VLAN extended over VXLAN is not called an island; `graph.vlans`
+lists each VLAN's `vnis`. The UI reads the server's statuses
+(`models/topology-vxlan.js`, the status set parity-tested). The map's Overlay
+select switches between VLAN and VXLAN; with VXLAN, tunnels are drawn between
+the nodes' side handles, cabled links fade, and a VNI picker (`?overlay=vxlan&vni=`)
+narrows to one VNI.
 
 **Cloud planes (2026-10-19):** a cloud-managed device that no direct transport
 reaches (no IP or credential, or not a platform NetHelper reads locally: APs,

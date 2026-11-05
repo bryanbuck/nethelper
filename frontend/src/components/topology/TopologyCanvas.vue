@@ -12,7 +12,7 @@
       :max-zoom="2"
       :default-edge-options="{ type: 'default' }"
       class="vue-flow-container"
-      :class="{ 'vlan-overlay': vlan !== null }"
+      :class="{ 'vlan-overlay': vlan !== null, 'vxlan-overlay': vxlan }"
       @node-click="({ node }) => emit('node-click', node)"
       @edge-click="({ edge }) => emit('edge-click', edge.data)"
       @pane-click="emit('pane-click')"
@@ -44,6 +44,11 @@
  * VLAN overlay: with `vlan` set, edges are styled by whether they pass it
  * (models/topology-vlans.js) and nodes by `vlanRoles`; `showMismatches`
  * marks every link with a pruned VLAN or a native mismatch.
+ *
+ * VXLAN overlay: with `vxlan` on, the graph's tunnels (all, or those carrying
+ * `vni`) are drawn as extra edges between the nodes' side handles, styled by
+ * status (models/topology-vxlan.js); cabled links fade, and nodes are styled
+ * by `vxlanRoles`. Tunnel-only nodes (another site's VTEP) appear only then.
  */
 import { ref, computed, watch, markRaw, nextTick } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
@@ -60,6 +65,7 @@ import GhostNode from './nodes/GhostNode.vue'
 import SubnetGroupNode from './nodes/SubnetGroupNode.vue'
 import { layoutTopology } from '@/utils/topologyLayout'
 import { edgeVlanStatus, edgeMismatch } from '@/models/topology-vlans'
+import { visibleTunnels, tunnelStatusFor, tunnelLabel } from '@/models/topology-vxlan'
 
 const props = defineProps({
   graph: { type: Object, required: true },
@@ -68,7 +74,10 @@ const props = defineProps({
   selectedId: { type: String, default: null },
   vlan: { type: Number, default: null },
   vlanRoles: { type: Map, default: () => new Map() },
-  showMismatches: { type: Boolean, default: false }
+  showMismatches: { type: Boolean, default: false },
+  vxlan: { type: Boolean, default: false },
+  vni: { type: Number, default: null },
+  vxlanRoles: { type: Map, default: () => new Map() }
 })
 
 const emit = defineEmits(['node-click', 'edge-click', 'pane-click', 'moved'])
@@ -102,18 +111,31 @@ function computePositions(force = false) {
 
 watch([nodeIdsKey, () => props.savedPositions], () => computePositions(), { immediate: true })
 
-const flowNodes = computed(() => props.graph.nodes.map((n) => ({
-  id: n.id,
-  type: n.kind,
-  position: positions.value[n.id] || { x: 0, y: 0 },
-  data: props.vlan === null ? n.data : { ...n.data, vlanRole: props.vlanRoles.get(n.id) || 'unknown' },
-  class: props.vlan === null ? '' : `vlan-role-${props.vlanRoles.get(n.id) || 'unknown'}`,
-  selected: n.id === props.selectedId
-})))
+function nodeOverlay(n) {
+  if (props.vxlan) {
+    const role = props.vxlanRoles.get(n.id) || 'absent'
+    return { data: { ...n.data, vxlanRole: role }, class: `vxlan-role-${role}` }
+  }
+  if (props.vlan !== null) {
+    const role = props.vlanRoles.get(n.id) || 'unknown'
+    return { data: { ...n.data, vlanRole: role }, class: `vlan-role-${role}` }
+  }
+  return { data: n.data, class: '' }
+}
+
+const flowNodes = computed(() => props.graph.nodes
+  .filter((n) => props.vxlan || !n.data.tunnelOnly)
+  .map((n) => ({
+    id: n.id,
+    type: n.kind,
+    position: positions.value[n.id] || { x: 0, y: 0 },
+    ...nodeOverlay(n),
+    selected: n.id === props.selectedId
+  })))
 
 const nodesById = computed(() => new Map(props.graph.nodes.map((n) => [n.id, n])))
 
-const flowEdges = computed(() => props.graph.edges.map((e) => {
+const cabledEdges = computed(() => props.graph.edges.map((e) => {
   const toGhost = e.source.startsWith('ghost:') || e.target.startsWith('ghost:')
   const status = props.vlan === null ? null : edgeVlanStatus(e, props.vlan, nodesById.value)
   const mismatch = props.vlan === null && props.showMismatches && edgeMismatch(e)
@@ -130,11 +152,33 @@ const flowEdges = computed(() => props.graph.edges.map((e) => {
       'topo-edge-oneway': !e.bidirectional && !toGhost && !status,
       [`topo-edge-vlan-${status}`]: !!status,
       'topo-edge-mismatch': !!mismatch,
-      'topo-edge-faded': props.vlan === null && props.showMismatches && !mismatch
+      'topo-edge-faded': props.vxlan || (props.vlan === null && props.showMismatches && !mismatch)
     },
     data: e
   }
 }))
+
+const tunnelEdges = computed(() => {
+  if (!props.vxlan) return []
+  return visibleTunnels(props.graph.vxlan?.tunnels, props.vni).map((t) => {
+    const status = tunnelStatusFor(t, props.vni)
+    return {
+      id: t.id,
+      source: t.source,
+      target: t.target,
+      sourceHandle: 'tunnel-out',
+      targetHandle: 'tunnel-in',
+      type: 'default',
+      label: status === 'carried' ? tunnelLabel(t, props.vni) : `⚠ ${tunnelLabel(t, props.vni)}`,
+      labelBgPadding: [4, 2],
+      labelBgBorderRadius: 4,
+      class: `topo-tunnel topo-tunnel-${status}`,
+      data: { ...t, tunnel: true }
+    }
+  })
+})
+
+const flowEdges = computed(() => [...cabledEdges.value, ...tunnelEdges.value])
 
 function onDragStop({ nodes }) {
   for (const n of nodes) positions.value[n.id] = { x: Math.round(n.position.x), y: Math.round(n.position.y) }
@@ -240,6 +284,19 @@ defineExpose({ relayout, focusNode, fit: () => fitView({ padding: 0.15 }) })
   border: 2px dashed rgb(var(--v-theme-warning));
 }
 
+:deep(.vxlan-role-absent),
+:deep(.vxlan-role-unknown) {
+  opacity: 0.35;
+}
+
+:deep(.vxlan-role-vtep .topo-node) {
+  border-color: rgb(var(--v-theme-primary-text));
+}
+
+:deep(.vxlan-role-isolated .topo-node) {
+  border: 2px dashed rgb(var(--v-theme-warning));
+}
+
 :deep(.topo-title) {
   font-size: 0.875rem;
   font-weight: 600;
@@ -295,6 +352,35 @@ defineExpose({ relayout, focusNode, fit: () => fitView({ padding: 0.15 }) })
 :deep(.topo-edge-vlan-pruned .vue-flow__edge-text),
 :deep(.topo-edge-mismatch .vue-flow__edge-text) {
   fill: rgb(var(--v-theme-warning));
+  font-weight: 600;
+}
+
+:deep(.topo-tunnel .vue-flow__edge-path) {
+  stroke: rgb(var(--v-theme-primary));
+  stroke-width: 2.5;
+  stroke-dasharray: 10 4 2 4;
+}
+
+:deep(.topo-tunnel-one-sided .vue-flow__edge-path) {
+  stroke: rgb(var(--v-theme-warning));
+}
+
+:deep(.topo-tunnel-down .vue-flow__edge-path) {
+  stroke: rgb(var(--v-theme-error));
+}
+
+:deep(.topo-tunnel-unknown .vue-flow__edge-path) {
+  stroke: rgba(var(--v-theme-on-surface), 0.45);
+  stroke-dasharray: 2 4;
+}
+
+:deep(.topo-tunnel-one-sided .vue-flow__edge-text) {
+  fill: rgb(var(--v-theme-warning-text));
+  font-weight: 600;
+}
+
+:deep(.topo-tunnel-down .vue-flow__edge-text) {
+  fill: rgb(var(--v-theme-error));
   font-weight: 600;
 }
 

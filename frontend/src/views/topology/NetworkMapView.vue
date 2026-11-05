@@ -73,8 +73,18 @@
           :aria-expanded="optionsOpen"
           @click="optionsOpen = !optionsOpen"
         />
-        <v-autocomplete
+        <v-select
           v-show="showOptions"
+          v-model="overlayModel"
+          :items="overlayItems"
+          label="Overlay"
+          density="compact"
+          variant="outlined"
+          hide-details
+          class="map-field map-field-overlay"
+        />
+        <v-autocomplete
+          v-show="showOptions && overlay === 'vlan'"
           v-model="vlanModel"
           :items="vlanItems"
           item-title="title"
@@ -85,10 +95,27 @@
           prepend-inner-icon="mdi-lan"
           hide-details
           clearable
-          :no-data-text="vlans.length ? 'No matching VLAN' : 'No VLAN data yet (AOS-CX and Mist switches report it on a topology refresh)'"
+          :no-data-text="vlans.length ? 'No matching VLAN' : 'No VLAN data yet (switches report it on a topology refresh)'"
           class="map-field map-field-vlan"
         />
-        <v-tooltip location="bottom" text="Mark links where a VLAN both switches have is not allowed on one side, or the untagged VLANs differ">
+        <v-autocomplete
+          v-show="showOptions && overlay === 'vxlan'"
+          v-model="vniModel"
+          :items="vniItems"
+          item-title="title"
+          item-value="value"
+          label="VNI"
+          placeholder="All tunnels"
+          persistent-placeholder
+          density="compact"
+          variant="outlined"
+          prepend-inner-icon="mdi-tunnel-outline"
+          hide-details
+          clearable
+          :no-data-text="vxlan.vnis.length ? 'No matching VNI' : 'No VXLAN data yet (AOS-CX switches report it on a topology refresh)'"
+          class="map-field map-field-vlan"
+        />
+        <v-tooltip v-if="overlay === 'vlan'" location="bottom" text="Mark links where a VLAN both switches have is not allowed on one side, or the untagged VLANs differ">
           <template #activator="{ props: tip }">
             <v-switch
               v-show="showOptions"
@@ -173,7 +200,7 @@
           Devices with no neighbor source show a
           <v-icon size="14">mdi-lan-pending</v-icon> marker.
         </v-alert>
-        <div v-if="selectedVlan !== null && !showNoLinksHint" class="map-legend">
+        <div v-if="overlay === 'vlan' && selectedVlan !== null && !showNoLinksHint" class="map-legend">
           <!-- Phones: the legend is one line until tapped, so it doesn't cover the map -->
           <div
             class="text-subtitle-2"
@@ -197,8 +224,40 @@
             <span><span class="swatch swatch-unknown" /> no VLAN data</span>
             <span><v-icon size="14" color="primary">mdi-router</v-icon> routed here</span>
           </div>
+          <div v-if="selectedVlanEntry?.vnis?.length" v-show="!xs || legendOpen" class="text-caption mt-1">
+            <v-icon size="14">mdi-tunnel-outline</v-icon>
+            Extended over VXLAN (VNI {{ selectedVlanEntry.vnis.join(', ') }}):
+            <a href="#" @click.prevent="showVni(selectedVlanEntry.vnis[0])">show tunnels</a>
+          </div>
         </div>
-        <div v-else-if="showMismatches && !showNoLinksHint" class="map-legend">
+        <div v-else-if="overlay === 'vxlan' && !showNoLinksHint" class="map-legend">
+          <div
+            class="text-subtitle-2"
+            :class="{ 'legend-toggle': xs }"
+            :role="xs ? 'button' : undefined"
+            :aria-expanded="xs ? legendOpen : undefined"
+            @click="legendOpen = !legendOpen"
+          >
+            <v-icon v-if="xs" size="16" class="mr-1">{{ legendOpen ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
+            {{ selectedVni !== null ? (selectedVniEntry ? vniTitle(selectedVniEntry) : `VNI ${selectedVni}`) : 'VXLAN tunnels' }}
+            <v-chip v-if="selectedVniEntry?.vlanDiffers" size="x-small" color="warning" variant="tonal" class="ml-1">
+              VLANs differ
+            </v-chip>
+          </div>
+          <div v-show="!xs || legendOpen" class="text-caption text-medium-emphasis">
+            {{ selectedVni !== null ? (selectedVniEntry ? vniSummaryText(selectedVniEntry) : 'No VTEP on this map has it.') : fabricSummaryText(vxlan) }}
+          </div>
+          <div v-show="!xs || legendOpen" class="d-flex flex-wrap ga-3 mt-1 text-caption">
+            <span><span class="swatch swatch-tunnel" /> carried</span>
+            <span><span class="swatch swatch-tunnel swatch-tunnel-one-sided" /> one side only</span>
+            <span><span class="swatch swatch-tunnel swatch-tunnel-down" /> down</span>
+            <span><span class="swatch swatch-unknown" /> far end not read</span>
+          </div>
+          <div v-for="u in legendUnresolved" v-show="!xs || legendOpen" :key="`${u.node}-${u.remoteIp}`" class="text-caption text-warning">
+            {{ nodeName(u.node) }} has a peer at {{ u.remoteIp }} that matches no device
+          </div>
+        </div>
+        <div v-else-if="overlay === 'vlan' && showMismatches && !showNoLinksHint" class="map-legend">
           <div class="text-subtitle-2">VLAN mismatches</div>
           <div class="text-caption text-medium-emphasis">
             {{ mismatchCount ? `${mismatchCount} link${mismatchCount === 1 ? '' : 's'} marked. Click one for details.` : 'No mismatches on links with VLAN data at both ends.' }}
@@ -210,9 +269,12 @@
           :saved-positions="topologyStore.layout.positions"
           :draggable="canEdit"
           :selected-id="selected?.id || null"
-          :vlan="selectedVlan"
+          :vlan="overlay === 'vlan' ? selectedVlan : null"
           :vlan-roles="vlanRoles"
           :show-mismatches="showMismatches"
+          :vxlan="overlay === 'vxlan'"
+          :vni="selectedVni"
+          :vxlan-roles="vxlanRoles"
           @node-click="selectNode"
           @edge-click="selectEdge"
           @pane-click="selected = null"
@@ -257,7 +319,33 @@
               Last VLAN read failed: {{ selected.data.vlans.error }}
             </div>
           </v-list-item>
+          <v-list-item v-if="selected.data.vxlan" prepend-icon="mdi-tunnel-outline" subtitle="VXLAN" class="wrap-title">
+            <template #title>{{ nodeVxlanText(selected.data.vxlan) }}</template>
+            <div v-if="selected.data.vxlan.vnis.length" class="text-caption text-medium-emphasis">
+              VNIs: {{ selected.data.vxlan.vnis.map(vniMapText).join(', ') }}
+            </div>
+            <div v-if="selected.data.vxlan.error" class="text-caption text-warning">
+              Last VXLAN read failed: {{ selected.data.vxlan.error }}
+            </div>
+          </v-list-item>
         </v-list>
+        <template v-if="selectedTunnels.length">
+          <v-divider />
+          <div class="px-4 pt-3 text-subtitle-2">VXLAN tunnels</div>
+          <v-list density="compact">
+            <v-list-item
+              v-for="t in selectedTunnels"
+              :key="t.id"
+              :title="t.otherName"
+              :subtitle="`${tunnelLabel(t.tunnel, null)} · ${TunnelStatusInfo[t.tunnel.status].label}`"
+              @click="openTunnel(t.tunnel)"
+            >
+              <template #prepend>
+                <v-icon size="18" :color="TunnelStatusInfo[t.tunnel.status].color">mdi-tunnel-outline</v-icon>
+              </template>
+            </v-list-item>
+          </v-list>
+        </template>
         <v-divider />
         <div class="px-4 pt-3 text-subtitle-2">Links</div>
         <v-list density="compact">
@@ -331,7 +419,7 @@
         </v-list>
         <v-divider />
         <div class="pa-4 text-body-2 d-flex flex-column ga-2">
-          <div v-if="selectedVlan !== null">
+          <div v-if="overlay === 'vlan' && selectedVlan !== null">
             <strong>VLAN {{ selectedVlan }}:</strong> {{ edgeStatusText(edgeVlanStatus(selectedEdge, selectedVlan, nodesById)) }}
           </div>
           <template v-if="selectedEdge.vlans && edgeEnds(selectedEdge).some((e) => e.known)">
@@ -357,7 +445,47 @@
             </div>
           </template>
           <div v-else class="text-medium-emphasis">
-            No VLAN data for either end. AOS-CX switches (over REST) and Mist switches report it on a topology refresh.
+            No VLAN data for either end. AOS-CX switches over REST, Mist switches, and switches
+            read through Central report it on a topology refresh.
+          </div>
+        </div>
+      </template>
+
+      <!-- VXLAN tunnel -->
+      <template v-else-if="panel === 'tunnel' && selectedTunnel">
+        <v-list-item class="py-3" :title="tunnelTitle(selectedTunnel)" subtitle="VXLAN tunnel">
+          <template #prepend>
+            <v-icon :color="TunnelStatusInfo[selectedTunnel.status].color">mdi-tunnel-outline</v-icon>
+          </template>
+          <template #append>
+            <v-btn icon="mdi-close" variant="text" size="small" @click="closePanel" />
+          </template>
+        </v-list-item>
+        <v-divider />
+        <v-list density="compact">
+          <v-list-item
+            v-for="end in tunnelEnds(selectedTunnel)"
+            :key="end.id"
+            :title="end.name"
+            :subtitle="end.text"
+            class="wrap-title"
+            @click="focus(end.id)"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-lan</v-icon>
+            </template>
+          </v-list-item>
+        </v-list>
+        <v-divider />
+        <div class="pa-4 text-body-2 d-flex flex-column ga-2">
+          <div class="text-subtitle-2">VNIs</div>
+          <div v-for="vni in selectedTunnel.vnis" :key="vni">
+            <strong>{{ vni }}</strong>
+            <span class="text-medium-emphasis"> ({{ tunnelVniVlans(selectedTunnel, vni) }})</span>:
+            <span :class="statusTextClass(selectedTunnel.vniStatus[vni])">{{ TunnelStatusInfo[selectedTunnel.vniStatus[vni]].text }}</span>
+          </div>
+          <div v-if="!selectedTunnel.vnis.length" class="text-medium-emphasis">
+            No VNI is flooded over it{{ selectedTunnel.status === 'one-sided' ? ', and only one VTEP lists the other' : '' }}.
           </div>
         </div>
       </template>
@@ -493,6 +621,9 @@ import { VendorInfo, liveStateMode } from '@/models/vendors'
 import {
   edgeVlanStatus, edgeMismatch, vlanNodeRoles, vlanTitle, vlanSummaryText, vlanRangeText, nativeText
 } from '@/models/topology-vlans'
+import {
+  TunnelStatusInfo, vxlanNodeRoles, vniTitle, vniSummaryText, fabricSummaryText, tunnelLabel, nodeVxlanText, vniMapText
+} from '@/models/topology-vxlan'
 import { useRoute, useRouter } from 'vue-router'
 import TopologyCanvas from '@/components/topology/TopologyCanvas.vue'
 import ImportDiscoveredDialog from '@/components/discovery/ImportDiscoveredDialog.vue'
@@ -508,7 +639,7 @@ useWebSocket()
 
 const canvas = ref(null)
 const selected = ref(null)
-const panel = ref(null) // 'node' | 'changes' | null
+const panel = ref(null) // 'node' | 'edge' | 'tunnel' | 'changes' | null
 const panelOpen = computed(() => !!panel.value)
 const starting = ref(false)
 const pendingPositions = ref(null)
@@ -517,8 +648,14 @@ const selectedChanges = ref([])
 const searchModel = ref(null)
 const selectedEdge = ref(null)
 const showMismatches = ref(false)
+const selectedTunnel = ref(null)
 const initialVlan = parseInt(route.query.vlan, 10)
 const selectedVlan = ref(initialVlan >= 1 && initialVlan <= 4094 ? initialVlan : null)
+const initialVni = parseInt(route.query.vni, 10)
+const selectedVni = ref(initialVni >= 1 && initialVni <= 16777215 ? initialVni : null)
+// The overlay (vlan | vxlan) is in the URL with its value; ?vlan= alone, as
+// older links have it, means the VLAN overlay.
+const overlay = ref(route.query.overlay === 'vxlan' ? 'vxlan' : 'vlan')
 
 const showImport = ref(false)
 const importTarget = ref(null)
@@ -545,8 +682,9 @@ const siteModel = computed({
   set: (value) => { topologyStore.site = value }
 })
 
+// Tunnel-only nodes (another site's VTEP) are drawn only with the VXLAN overlay.
 const searchItems = computed(() => graph.value.nodes
-  .filter((n) => n.kind !== 'subnet')
+  .filter((n) => n.kind !== 'subnet' && (!n.data.tunnelOnly || overlay.value === 'vxlan'))
   .map((n) => ({
     title: [n.data.name, n.data.ipAddress || n.data.mgmtIp].filter(Boolean).join(' · '),
     value: n.id
@@ -563,6 +701,33 @@ const vlanModel = computed({
 const selectedVlanEntry = computed(() => vlans.value.find((v) => v.id === selectedVlan.value) || null)
 const vlanRoles = computed(() => vlanNodeRoles(selectedVlanEntry.value, graph.value.nodes))
 const mismatchCount = computed(() => graph.value.edges.filter((e) => edgeMismatch(e)).length)
+
+// --- VXLAN overlay ---
+
+const overlayItems = [
+  { title: 'VLAN', value: 'vlan' },
+  { title: 'VXLAN', value: 'vxlan' }
+]
+const overlayModel = computed({
+  get: () => overlay.value,
+  set: (value) => { overlay.value = value || 'vlan' }
+})
+const vxlan = computed(() => graph.value.vxlan || { tunnels: [], vnis: [], unresolved: [] })
+const vniItems = computed(() => vxlan.value.vnis.map((v) => ({ title: vniTitle(v), value: v.vni })))
+const vniModel = computed({
+  get: () => selectedVni.value,
+  set: (value) => { selectedVni.value = value ?? null }
+})
+const selectedVniEntry = computed(() => vxlan.value.vnis.find((v) => v.vni === selectedVni.value) || null)
+const vxlanRoles = computed(() => vxlanNodeRoles(selectedVni.value === null ? null : selectedVniEntry.value, graph.value.nodes))
+const legendUnresolved = computed(() => (selectedVni.value === null
+  ? vxlan.value.unresolved
+  : vxlan.value.unresolved.filter((u) => u.vnis.includes(selectedVni.value))))
+
+function showVni(vni) {
+  overlay.value = 'vxlan'
+  selectedVni.value = vni
+}
 
 const progressText = computed(() => {
   const p = topologyStore.progress
@@ -603,10 +768,21 @@ const selectedLinks = computed(() => {
     .sort((a, b) => String(a.localPort).localeCompare(String(b.localPort), undefined, { numeric: true }))
 })
 
+// Tunnels touching the selected node.
+const selectedTunnels = computed(() => {
+  if (!selected.value) return []
+  const id = selected.value.id
+  return vxlan.value.tunnels
+    .filter((t) => t.source === id || t.target === id)
+    .map((t) => ({ id: t.id, tunnel: t, otherName: nodeName(t.source === id ? t.target : t.source) }))
+})
+
 // --- helpers ---
 
+const nodeName = (id) => nodesById.value.get(id)?.data.name || id
+
 function nodeVlanText(v) {
-  if (!v) return 'Not read (AOS-CX REST and Mist switches only, for now)'
+  if (!v) return 'Not read (AOS-CX REST, Mist, and switches read through Central)'
   if (!v.source) return 'No VLAN data'
   return `${vlanRangeText(v.ids) || 'None'} · via ${v.source}${v.collectedAt ? `, ${formatTime(v.collectedAt)}` : ''}`
 }
@@ -631,6 +807,33 @@ const edgeStatusText = (status) => ({
   absent: 'not carried on this link',
   unknown: 'unknown: an end has no VLAN data'
 }[status])
+
+const tunnelTitle = (t) => `${nodeName(t.source)} ↔ ${nodeName(t.target)}`
+
+/** Each end of a tunnel: its addresses and what it reports, or that it lists no peer. */
+function tunnelEnds(t) {
+  return [t.source, t.target].map((id) => {
+    const end = t.ends[id]
+    let text
+    if (end) {
+      const state = end.up === false ? 'not operational' : end.up ? 'operational' : 'state unknown'
+      text = `${end.localIp || '?'} → ${end.remoteIp} · ${end.origins.join(', ') || 'origin unknown'} · ${state}`
+    } else {
+      text = t.known[id] ? 'Lists no peer for the other VTEP' : 'Not read (no VXLAN data)'
+    }
+    return { id, name: nodeName(id), text }
+  })
+}
+
+/** The local VLAN/VRF each end maps a VNI to, e.g. "VLAN 110 ↔ VLAN 110". */
+function tunnelVniVlans(t, vni) {
+  return [t.source, t.target].map((id) => {
+    const v = nodesById.value.get(id)?.data.vxlan?.vnis.find((x) => x.vni === vni)
+    return v ? vniMapText(v).replace(/^\d+ → /, '') : '?'
+  }).join(' ↔ ')
+}
+
+const statusTextClass = (status) => ({ 'one-sided': 'text-warning', down: 'text-error' }[status] || '')
 
 const typeInfo = (type) => DeviceTypeInfo[type] || { icon: 'mdi-help-network', color: 'grey' }
 
@@ -684,6 +887,7 @@ async function load() {
 
 async function selectNode(node) {
   selectedEdge.value = null
+  selectedTunnel.value = null
   selected.value = nodesById.value.get(node.id) || null
   panel.value = selected.value ? 'node' : null
   selectedChanges.value = []
@@ -703,15 +907,28 @@ async function selectNode(node) {
 }
 
 function selectEdge(edge) {
+  if (edge?.tunnel) {
+    openTunnel(edge)
+    return
+  }
   selected.value = null
+  selectedTunnel.value = null
   selectedEdge.value = graph.value.edges.find((e) => e.id === edge?.id) || null
   panel.value = selectedEdge.value ? 'edge' : null
+}
+
+function openTunnel(tunnel) {
+  selected.value = null
+  selectedEdge.value = null
+  selectedTunnel.value = vxlan.value.tunnels.find((t) => t.id === tunnel?.id) || null
+  panel.value = selectedTunnel.value ? 'tunnel' : null
 }
 
 function closePanel() {
   panel.value = null
   selected.value = null
   selectedEdge.value = null
+  selectedTunnel.value = null
 }
 
 function focus(nodeId) {
@@ -781,10 +998,17 @@ watch(() => [topologyStore.site, topologyStore.includeDiscovered], () => {
 
 watch(changesWindow, (hours) => topologyStore.fetchChanges({ sinceHours: hours }).catch(() => {}))
 
-// The selected VLAN lives in the URL, so a VLAN view can be linked.
-watch(selectedVlan, (vlan) => {
-  if (vlan !== null) showMismatches.value = false
-  router.replace({ query: { ...route.query, vlan: vlan ?? undefined } })
+// The overlay and its value live in the URL, so a view can be linked.
+watch([overlay, selectedVlan, selectedVni], ([mode, vlan, vni]) => {
+  if (vlan !== null || mode === 'vxlan') showMismatches.value = false
+  router.replace({
+    query: {
+      ...route.query,
+      overlay: mode === 'vxlan' ? 'vxlan' : undefined,
+      vlan: mode === 'vlan' ? vlan ?? undefined : undefined,
+      vni: mode === 'vxlan' ? vni ?? undefined : undefined
+    }
+  })
 })
 
 watch(searchModel, (id) => {
@@ -835,6 +1059,11 @@ onMounted(load)
 .map-field-vlan {
   max-width: 240px;
   min-width: 160px;
+}
+
+.map-field-overlay {
+  max-width: 140px;
+  min-width: 120px;
 }
 
 .legend-toggle {
@@ -906,6 +1135,18 @@ onMounted(load)
 .swatch-pruned {
   border-top-style: dashed;
   border-top-color: rgb(var(--v-theme-warning));
+}
+
+.swatch-tunnel {
+  border-top-style: dashed;
+}
+
+.swatch-tunnel-one-sided {
+  border-top-color: rgb(var(--v-theme-warning));
+}
+
+.swatch-tunnel-down {
+  border-top-color: rgb(var(--v-theme-error));
 }
 
 .swatch-unknown {

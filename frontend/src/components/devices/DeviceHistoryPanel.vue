@@ -48,8 +48,12 @@
               v-for="m in changeWindows"
               :key="`w-${m.id}`"
               class="history-change-window"
+              :class="canCompare(m) && 'clickable'"
               :style="span(m.changedSince, m.at)"
+              v-bind="canCompare(m) ? { role: 'button', tabindex: 0, 'aria-label': `Show what changed by ${fmt(m.at)}` } : {}"
               @mousemove="hover = { x: $event.clientX, y: $event.clientY, lines: changeWindowLines(m) }"
+              @click="compare(m)"
+              @keydown.enter="compare(m)"
             />
           </div>
         </div>
@@ -71,9 +75,10 @@
               v-for="(m, i) in history.markers"
               :key="i"
               class="history-marker"
-              :class="markerClass(m)"
+              :class="[markerClass(m), canCompare(m) && 'clickable']"
               :style="{ left: `${pct(m.at)}%` }"
               @mousemove="hover = { x: $event.clientX, y: $event.clientY, lines: markerLines(m) }"
+              @click="compare(m)"
             >
               <v-icon size="x-small" class="history-marker-icon" :icon="markerIcon(m)" />
             </div>
@@ -103,7 +108,27 @@
           {{ t.label }}: {{ t.value }}
         </v-chip>
       </div>
+
+      <!-- Config changes in the window, newest first; Compare opens the diff -->
+      <div v-if="changeWindows.length" class="mt-4">
+        <div class="text-subtitle-2 mb-1">Config changes</div>
+        <v-list density="compact" class="py-0 wrap-lines">
+          <v-list-item
+            v-for="m in [...changeWindows].reverse()"
+            :key="`c-${m.id}`"
+            prepend-icon="mdi-file-document-edit"
+            :title="`Changed between ${fmtFull(m.changedSince)} and ${fmtFull(m.at)}`"
+            :subtitle="`Found by a ${m.trigger === 'manual' ? 'manual' : 'scheduled'} backup`"
+          >
+            <template v-if="canManage" #append>
+              <v-btn size="small" variant="text" prepend-icon="mdi-file-compare" @click="compare(m)">Compare</v-btn>
+            </template>
+          </v-list-item>
+        </v-list>
+      </div>
     </v-card-text>
+
+    <BackupCompareDialog ref="compareDialog" @error="notifications.showError($event)" />
 
     <div
       v-if="hover"
@@ -121,6 +146,10 @@ import { useDisplay } from 'vuetify'
 import { format, formatDistanceStrict } from 'date-fns'
 import deviceService from '@/services/device.service'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { useAuthStore } from '@/stores/auth'
+import { useBackupsStore } from '@/stores/backups'
+import { useNotificationsStore } from '@/stores/notifications'
+import BackupCompareDialog from '@/components/backups/BackupCompareDialog.vue'
 
 const props = defineProps({
   device: { type: Object, required: true }
@@ -249,7 +278,28 @@ const changeWindowLines = (m) => [
   'Config changed on the device',
   `Some time between ${fmt(m.changedSince)} and ${fmt(m.at)}`,
   'Found by comparing two backups; who changed it is not known.',
+  ...(canCompare(m) ? ['Click to see what changed.'] : []),
 ]
+const fmtFull = (t) => format(new Date(t), 'MMM d, HH:mm')
+
+// A change opens the Compare dialog with the backup that found it and the
+// success before it preselected. Backup contents are operator+ (they carry
+// secrets), so viewers get the timeline only.
+const authStore = useAuthStore()
+const backupsStore = useBackupsStore()
+const notifications = useNotificationsStore()
+const canManage = computed(() => ['admin', 'operator'].includes(authStore.user?.role))
+const compareDialog = ref(null)
+const canCompare = (m) => canManage.value && m.kind === 'backup' && m.changed && Boolean(m.changedSinceId)
+const compare = (m) => {
+  if (!canCompare(m)) return
+  hover.value = null
+  compareDialog.value.open({
+    to: { id: m.id, createdAt: m.at },
+    from: { id: m.changedSinceId, createdAt: m.changedSince },
+    loadHistory: () => backupsStore.fetchDeviceBackupHistory(props.device.id),
+  })
+}
 
 const markerClass = (m) => {
   if (m.kind === 'restart') return 'restart'
@@ -267,7 +317,7 @@ const markerLines = (m) => {
   }
   const lines = [`${m.trigger === 'manual' ? 'Manual' : 'Scheduled'} backup`, fmt(m.at)]
   if (m.status === 'failed') lines.push(`Failed: ${m.error || 'unknown error'}`)
-  else if (m.changed) lines.push('Config changed since the previous backup')
+  else if (m.changed) lines.push('Config changed since the previous backup', ...(canCompare(m) ? ['Click to see what changed.'] : []))
   else lines.push('No change')
   if (m.warning) lines.push(m.warning)
   return lines
@@ -413,6 +463,15 @@ const totals = computed(() => {
   border-left: 2px dashed rgba(var(--v-theme-on-surface), 0.45);
   pointer-events: auto;
   cursor: default;
+}
+.history-change-window.clickable,
+.history-marker.clickable {
+  cursor: pointer;
+}
+.history-change-window.clickable:hover,
+.history-change-window.clickable:focus-visible {
+  background: rgba(var(--v-theme-primary), 0.4);
+  outline: none;
 }
 .history-marker::after {
   /* a wider invisible hit area */

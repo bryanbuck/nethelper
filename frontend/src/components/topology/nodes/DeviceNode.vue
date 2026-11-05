@@ -30,9 +30,19 @@
           <v-icon v-bind="tip" size="16" :color="vlanBadge.color">{{ vlanBadge.icon }}</v-icon>
         </template>
       </v-tooltip>
+      <v-tooltip v-if="vxlanBadge" location="bottom" :text="vxlanBadge.text">
+        <template #activator="{ props: tip }">
+          <v-icon v-bind="tip" size="16" :color="vxlanBadge.color">{{ vxlanBadge.icon }}</v-icon>
+        </template>
+      </v-tooltip>
       <v-chip v-if="data.outOfScope" size="x-small" variant="tonal">{{ data.location || 'other site' }}</v-chip>
     </div>
     <Handle type="source" :position="Position.Bottom" class="topo-handle" />
+    <!-- VXLAN tunnels attach at the sides, apart from the cabled links. Kept
+         after the default handles: an edge without a handle id takes the
+         first one of its type. -->
+    <Handle id="tunnel-in" type="target" :position="Position.Left" class="topo-handle" />
+    <Handle id="tunnel-out" type="source" :position="Position.Right" class="topo-handle" />
   </div>
 </template>
 
@@ -64,6 +74,16 @@ const vlanBadge = computed(() => ({
   island: { icon: 'mdi-lan-disconnect', color: 'warning', text: 'Carries this VLAN with no L2 path to a device that routes it' },
   unknown: { icon: 'mdi-help-circle-outline', color: undefined, text: props.data.vlans?.error ? `No VLAN data: ${props.data.vlans.error}` : 'No VLAN data for this device' }
 }[props.data.vlanRole] || null))
+
+// Set only while the map's VXLAN overlay is on (TopologyCanvas adds vxlanRole).
+const vxlanBadge = computed(() => {
+  const ips = props.data.vxlan?.sourceIps?.join(', ')
+  return {
+    vtep: { icon: 'mdi-tunnel-outline', color: 'primary', text: ips ? `VTEP ${ips}` : 'VTEP' },
+    isolated: { icon: 'mdi-lan-disconnect', color: 'warning', text: 'Has this VNI but no remote VTEP for it' },
+    unknown: { icon: 'mdi-help-circle-outline', color: undefined, text: `No VXLAN data: ${props.data.vxlan?.error || 'not read'}` }
+  }[props.data.vxlanRole] || null
+})
 
 const neighborHint = computed(() => {
   const t = props.data.topology

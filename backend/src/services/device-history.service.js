@@ -148,7 +148,7 @@ async function getHistory(deviceId, query = {}) {
     prisma.configBackup.findFirst({
       where: { deviceId, createdAt: { lt: from }, status: 'success' },
       orderBy: { createdAt: 'desc' },
-      select: { createdAt: true },
+      select: { id: true, createdAt: true },
     }),
     prisma.deviceEvent.findMany({
       where: { deviceId, type: 'device.restarted', occurredAt: { gte: from, lte: to } },
@@ -179,7 +179,8 @@ async function getHistory(deviceId, query = {}) {
   // A backup that found a change brackets it: the config changed on the
   // device some time after the previous successful backup.
   const markers = [];
-  let lastSuccess = priorBackup?.createdAt || null;
+  // `changedSinceId` is that backup, so the page can open the diff between the two.
+  let lastSuccess = priorBackup || null;
   for (const b of backups) {
     markers.push({
       kind: 'backup',
@@ -188,11 +189,14 @@ async function getHistory(deviceId, query = {}) {
       status: b.status,
       trigger: b.trigger,
       changed: b.status === 'success' && b.hasChanges === true,
-      ...(b.status === 'success' && b.hasChanges && lastSuccess && { changedSince: lastSuccess }),
+      ...(b.status === 'success' && b.hasChanges && lastSuccess && {
+        changedSince: lastSuccess.createdAt,
+        changedSinceId: lastSuccess.id,
+      }),
       ...(b.error && { error: b.error }),
       ...(b.warning && { warning: b.warning }),
     });
-    if (b.status === 'success') lastSuccess = b.createdAt;
+    if (b.status === 'success') lastSuccess = b;
   }
   for (const r of restarts) markers.push({ kind: 'restart', at: r.occurredAt, source: r.source });
   markers.sort((a, b) => new Date(a.at) - new Date(b.at));

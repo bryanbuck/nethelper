@@ -14,11 +14,17 @@
  * VLAN overlay (vlan-analysis.js): each edge gets `vlans` (carried, pruned,
  * native mismatch, which ends we have data for), each device node a
  * `vlans` summary, and the graph a per-VLAN list for the map's picker.
+ *
+ * VXLAN overlay (vxlan-analysis.js): device nodes get a `vxlan` summary, and
+ * the graph `vxlan` = { tunnels, vnis, unresolved }. Tunnels are not edges:
+ * they follow the routed underlay, not cables, and are drawn only while the
+ * overlay is on.
  */
 
 const { normalizeMac } = require('../../utils/device-key');
 const { normalizePortName } = require('./neighbor');
 const { applyVlanOverlay } = require('./vlan-analysis');
+const { analyzeVxlan } = require('./vxlan-analysis');
 
 const TIER = { gateway: 0, switch: 1, access_point: 2 };
 const GHOST_TIER = { gateway: 0, switch: 1, access_point: 2, phone: 3, host: 3, unknown: 3 };
@@ -124,6 +130,7 @@ function deviceNode(device, state, extra = {}) {
         }
         : null,
       vlans: vlanSummary(state),
+      vxlan: vxlanSummary(state),
       ...extra,
     },
   };
@@ -138,6 +145,23 @@ function vlanSummary(state) {
     source: state.vlanSource || null,
     collectedAt: state.vlanCollectedAt || null,
     error: state.vlanError || null,
+  };
+}
+
+/** A device node's VXLAN summary, or null for a device with no VXLAN read. */
+function vxlanSummary(state) {
+  if (!state?.vxlan && !state?.vxlanError) return null;
+  return {
+    sourceIps: (state.vxlan?.vteps || []).map((v) => v.sourceIp).filter(Boolean),
+    vnis: (state.vxlan?.vnis || []).map(({
+      vni, kind, vlan, vrf, up,
+    }) => ({
+      vni, kind, vlan, vrf, up,
+    })),
+    peerCount: state.vxlan?.peers?.length || 0,
+    source: state.vxlanSource || null,
+    collectedAt: state.vxlanCollectedAt || null,
+    error: state.vxlanError || null,
   };
 }
 
@@ -345,14 +369,73 @@ function serializeEdge(e) {
   };
 }
 
+/**
+ * Keep the VXLAN overlay to this map: tunnels with an end on it, whose far end
+ * (another site's VTEP) joins as an out-of-scope node marked `tunnelOnly`,
+ * shown only with the overlay. VTEPs are matched over every device, so a
+ * site map still names a far VTEP. Mutates graph.nodes.
+ */
+function scopeVxlan(graph, vxlan, deviceById, states) {
+  const onMap = new Set(graph.nodes.map((n) => n.id));
+  const tunnels = vxlan.tunnels.filter((t) => onMap.has(t.source) || onMap.has(t.target));
+  const stateById = new Map(states.map((s) => [s.deviceId, s]));
+  for (const t of tunnels) {
+    for (const id of [t.source, t.target]) {
+      if (onMap.has(id)) continue;
+      const deviceId = id.slice('device:'.length);
+      graph.nodes.push(deviceNode(deviceById.get(deviceId), stateById.get(deviceId), { outOfScope: true, tunnelOnly: true }));
+      onMap.add(id);
+    }
+  }
+  const kept = (node) => onMap.has(node);
+  return {
+    tunnels,
+    vnis: vxlan.vnis
+      .map((entry) => ({
+        ...entry,
+        vteps: entry.vteps.filter((v) => kept(v.node)),
+        tunnels: entry.tunnels.filter((id) => tunnels.some((t) => t.id === id)),
+        isolated: entry.isolated.filter(kept),
+        unresolved: entry.unresolved.filter((u) => kept(u.node)),
+      }))
+      .filter((entry) => entry.vteps.length),
+    unresolved: vxlan.unresolved.filter((u) => kept(u.node)),
+    bridges: vxlan.bridges,
+    open: vxlan.open,
+  };
+}
+
 function buildGraphJson(input) {
   const graph = buildGraph(input);
   const snapshots = new Map();
+  const vxlanSnapshots = new Map();
+  const deviceById = new Map(input.devices.map((d) => [d.id, d]));
   for (const state of input.states || []) {
-    if (state.vlans) snapshots.set(`device:${state.deviceId}`, state.vlans);
+    const id = `device:${state.deviceId}`;
+    if (state.vlans) snapshots.set(id, state.vlans);
+    if (state.vxlan && deviceById.has(state.deviceId)) vxlanSnapshots.set(id, state.vxlan);
   }
-  const vlans = applyVlanOverlay(graph, snapshots);
-  return { ...graph, edges: graph.edges.map(serializeEdge), vlans };
+  const vxlan = scopeVxlan(graph, analyzeVxlan({
+    nodes: input.devices.map((d) => ({ id: `device:${d.id}`, kind: 'device', data: { ipAddress: d.ipAddress } })),
+  }, vxlanSnapshots), deviceById, input.states || []);
+  const {
+    tunnels, vnis, unresolved, bridges, open,
+  } = vxlan;
+  const vniByVlan = new Map();
+  for (const entry of vnis) {
+    for (const vtep of entry.vteps) {
+      if (vtep.vlan === null) continue;
+      if (!vniByVlan.has(vtep.vlan)) vniByVlan.set(vtep.vlan, new Set());
+      vniByVlan.get(vtep.vlan).add(entry.vni);
+    }
+  }
+  const vlans = applyVlanOverlay(graph, snapshots, { bridges, open, vniByVlan });
+  return {
+    ...graph,
+    edges: graph.edges.map(serializeEdge),
+    vlans,
+    vxlan: { tunnels, vnis, unresolved },
+  };
 }
 
 module.exports = {
