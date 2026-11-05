@@ -145,6 +145,7 @@ model User {
   gitBackupConfigs     GitBackupConfig[]
   notificationChannels NotificationChannel[]
   acknowledgedAlerts   Alert[]
+  savedDeviceFilters   SavedDeviceFilter[]
 }
 
 model Device {
@@ -381,6 +382,21 @@ model DeviceGroup {
 
   devices     Device[]
   automations Automation[]
+}
+
+// A user's named Devices-page view (filters, search, sort). Private to its
+// user and deleted with them: nothing to hand over, so not in OWNED_MODELS.
+model SavedDeviceFilter {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  // { filters: { status, type, location, platform, credential, group }, search, sortBy: [{ key, order }] }
+  view      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, name])
 }
 
 model Automation {

@@ -74,6 +74,15 @@ const ADMIN_ONLY = [
   'GET /system/',
 ];
 
+// Mutating routes on the caller's own records, open to every role (viewers
+// included). The only exemptions from the viewer sweep; each is checked below
+// to reach its handler for a viewer.
+const SELF_SERVICE = [
+  'POST /devices/saved-filters',
+  'PUT /devices/saved-filters/:filterId',
+  'DELETE /devices/saved-filters/:filterId',
+];
+
 const UUID = '00000000-0000-4000-8000-000000000000';
 
 function routeTable() {
@@ -108,12 +117,19 @@ beforeAll(async () => {
 });
 
 const routes = routeTable();
-const mutating = routes.filter((r) => r.method !== 'GET');
+const mutating = routes.filter((r) => r.method !== 'GET' && !SELF_SERVICE.includes(key(r)));
 
 test('the sweep found the routers', () => {
   expect(mutating.length).toBeGreaterThan(30);
   const known = new Set(routes.map(key));
-  for (const k of [...RESTRICTED_READS, ...ADMIN_ONLY]) expect(known).toContain(k);
+  for (const k of [...RESTRICTED_READS, ...ADMIN_ONLY, ...SELF_SERVICE]) expect(known).toContain(k);
+});
+
+test.each(SELF_SERVICE.map((k) => [k]))('%s is open to a viewer', async (k) => {
+  const [method, path] = k.split(' ');
+  const res = await call({ method, path }, viewerToken);
+  // An empty body is invalid and the UUID names no filter: 400/404, never 401/403
+  expect([400, 404]).toContain(res.status);
 });
 
 test.each(routes.map((r) => [key(r), r]))('%s requires a token', async (_k, route) => {

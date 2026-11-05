@@ -826,3 +826,5 @@ class DeviceService {
 }
 
 module.exports = new DeviceService();
+// Kept equal to constants/device-view.js SORT_KEYS (tested).
+module.exports.SORT_KEYS = Object.keys(SORT_FIELDS);

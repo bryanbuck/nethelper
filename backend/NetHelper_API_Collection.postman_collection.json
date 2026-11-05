@@ -734,6 +734,111 @@
           "response": []
         },
         {
+          "name": "GET /devices/saved-filters",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/devices/saved-filters",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                "saved-filters"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /devices/saved-filters",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/devices/saved-filters",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                "saved-filters"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"<string>\",\n  \"view\": {}\n}"
+            },
+            "description": "Required: name, view."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /devices/saved-filters/:filterId",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/devices/saved-filters/:filterId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                "saved-filters",
+                ":filterId"
+              ],
+              "variable": [
+                {
+                  "key": "filterId",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"<string>\",\n  \"view\": {}\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /devices/saved-filters/:filterId",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/devices/saved-filters/:filterId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                "saved-filters",
+                ":filterId"
+              ],
+              "variable": [
+                {
+                  "key": "filterId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "GET /devices/groups",
           "request": {
             "method": "GET",

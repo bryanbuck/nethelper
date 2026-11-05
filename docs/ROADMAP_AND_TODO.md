@@ -580,6 +580,21 @@ A rolling feed of what happened to the managed devices, at `/activity` (nav item
 
 ---
 
+### 15. Devices page: saved filters and a remembered view
+**Priority**: Medium
+**Status**: ✅ Merged to `master` 2026-11-04 (not yet released)
+
+**Saved filters.** Named views on the Devices table, opened from its "Saved filters" menu. Each holds the filters, search and sort; it never holds the page or page size. They are stored on the server per user (`SavedDeviceFilter`, `/api/v1/devices/saved-filters`), private and deleted with the user, at most 50 each. Every role, viewers included, manages its own. Saving under an existing name replaces that filter. A changed list offers "Update" for the filter last picked. A saved filter naming a deleted group or credential applies the rest and says so.
+
+**The remembered view.** The whole view is in the URL (`status type location platform credential group q sort page per`; `?status=` and `?group=` links still work), and the last one is kept per user in the browser (`localStorage` `nethelper.devicesView.<userId>`, kept through an auth-failure clear). Opening a bare `/devices`, from the nav item or by coming back from a device, therefore shows the same filters, page and page size. Clear Filters resets it. A remembered page past the end goes to the last page.
+
+**Deferred**:
+- Filters shared with the whole team (a "share" flag; per-user only today).
+- A default saved filter per user (the remembered view covers most of it).
+- Saved views on other tables (backups, alerts, activity).
+
+---
+
 ## ✅ Completed Items
 
 Recently shipped (details in the sections above): Automated Device Discovery (item 4), Configuration Backup Scheduling (item 5), Direct-managed device support / SSH config pull (5a), Central-managed detection core (5b), Multi-Vendor Phases 0–2 (5c).

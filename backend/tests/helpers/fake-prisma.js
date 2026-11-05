@@ -64,6 +64,12 @@ function createFakePrisma() {
       },
     };
   }
+  // Saved filters (role-gates SELF_SERVICE routes): an empty table
+  client.savedDeviceFilter = {
+    async findMany() { return []; },
+    async findFirst() { return null; },
+    async count() { return 0; },
+  };
   client.$transaction = async (fn) => fn(client);
   return client;
 }

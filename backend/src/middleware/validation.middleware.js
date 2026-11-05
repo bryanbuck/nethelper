@@ -191,6 +191,25 @@ const validateQuery = {
   ],
 };
 
+// Saved Devices-page filters (services/saved-filter.service.js normalizes the view)
+const validateSavedFilter = {
+  create: [
+    body('name').isString().trim().isLength({ min: 1, max: 60 }).withMessage('A name of 1 to 60 characters is required'),
+    body('view').isObject().withMessage('view must be an object'),
+    handleValidationErrors,
+  ],
+  update: [
+    param('filterId').isUUID().withMessage('Invalid saved filter ID'),
+    body('name').optional().isString().trim().isLength({ min: 1, max: 60 }).withMessage('Names are 1 to 60 characters'),
+    body('view').optional().isObject().withMessage('view must be an object'),
+    handleValidationErrors,
+  ],
+  remove: [
+    param('filterId').isUUID().withMessage('Invalid saved filter ID'),
+    handleValidationErrors,
+  ],
+};
+
 // API Credential validation rules
 const validateApiCredential = {
   create: [
@@ -439,6 +458,7 @@ module.exports = {
   validateAutomation,
   validateSchedule,
   validateDeviceGroup,
+  validateSavedFilter,
   validateApiCredential,
   validateDiscovery,
   validateBackup,
