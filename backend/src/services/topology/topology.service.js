@@ -80,6 +80,20 @@ function vlanState(result, now) {
   };
 }
 
+/**
+ * The same for the VXLAN columns. Only AOS-CX REST reads VXLAN state so far;
+ * every other transport clears it.
+ */
+function vxlanState(result, now) {
+  if (result.vxlanError) return { vxlanError: result.vxlanError };
+  return {
+    vxlan: result.vxlan || Prisma.DbNull,
+    vxlanSource: result.vxlan ? result.source : null,
+    vxlanCollectedAt: result.vxlan ? now : null,
+    vxlanError: null,
+  };
+}
+
 /** Per-collection-run state: one cloud neighbor read per integration. */
 const newRun = () => ({ cloudNeighbors: new Map() });
 
@@ -117,12 +131,30 @@ class TopologyService {
   }
 
   /**
+   * VLANs for a device whose links came from its cloud: the bulk read's
+   * (Mist), else a per-switch read where the provider has one (Central).
+   * A failed read is `vlanError`; the links still count.
+   */
+  async switchVlans(device, provider, entry) {
+    if (entry.vlans !== undefined) return { vlans: entry.vlans };
+    if (device.type !== 'switch' || !provider.supports('switch-vlans')) return { vlans: null };
+    try {
+      return { vlans: await provider.getSwitchVlans(device.serial) };
+    } catch (error) {
+      logger.debug(`topology: no VLANs from ${provider.label} for ${device.name}: ${error.message}`);
+      return { vlans: null, vlanError: `${error.message}` };
+    }
+  }
+
+  /**
    * Read one device's neighbor table over the first transport that answers,
-   * and its VLAN membership where that transport has it (AOS-CX REST, Mist).
+   * and its VLAN membership where that transport has it (AOS-CX REST, Mist,
+   * Central's per-switch read).
    * `vlans` is a snapshot (vlan-membership.js), or null when the transport
    * gives none; `vlanError` is set when the VLAN read failed (links still count).
+   * `vxlan`/`vxlanError` likewise (vxlan-membership.js; AOS-CX REST only).
    * @param {Object} [run] - per-run state from collectAll (shared cloud reads)
-   * @returns {Promise<{neighbors: Object[], identity: {chassisId, sysName}, source: string, vlans: Object|null, vlanError?: string}>}
+   * @returns {Promise<{neighbors: Object[], identity: {chassisId, sysName}, source: string, vlans: Object|null, vlanError?: string, vxlan?: Object|null, vxlanError?: string}>}
    * @throws {TopologySkip} when no transport can run; other errors are real failures
    */
   async collectNeighbors(device, run = newRun()) {
@@ -160,8 +192,16 @@ class TopologyService {
               vlanError = error.message;
               logger.debug(`topology: no VLANs from ${device.name}: ${error.message}`);
             }
+            let vxlan = null;
+            let vxlanError;
+            try {
+              vxlan = await api.getVxlanState();
+            } catch (error) {
+              vxlanError = error.message;
+              logger.debug(`topology: no VXLAN state from ${device.name}: ${error.message}`);
+            }
             return {
-              neighbors, identity, source: 'AOS-CX REST', vlans, vlanError,
+              neighbors, identity, source: 'AOS-CX REST', vlans, vlanError, vxlan, vxlanError,
             };
           });
         }
@@ -194,7 +234,8 @@ class TopologyService {
             continue;
           }
           return {
-            neighbors: entry.neighbors, identity: entry.identity, source: provider.label, vlans: entry.vlans ?? null,
+            neighbors: entry.neighbors, identity: entry.identity, source: provider.label,
+            ...(await this.switchVlans(device, provider, entry)),
           };
         } catch (error) {
           if (error instanceof CapabilityError) {
@@ -260,6 +301,7 @@ class TopologyService {
       collectedAt: now,
       lastSuccessAt: now,
       ...vlanState(result, now),
+      ...vxlanState(result, now),
     };
     await prisma.$transaction([
       ...creates.map((data) => prisma.deviceLink.create({ data: { ...data, deviceId: device.id } })),

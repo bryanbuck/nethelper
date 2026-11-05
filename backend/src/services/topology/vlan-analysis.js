@@ -12,10 +12,13 @@
  *             known and differ, else null
  *   known     { [nodeId]: boolean } which ends we have port data for
  *
- * Per VLAN (`graph.vlans`): the devices that carry it and route it, and
- * islands: groups of carrying devices joined by links that pass it, with no
- * device routing it, when another group does. A group that touches a link
- * we can't see across is never called an island; the path may go on.
+ * Per VLAN (`graph.vlans`): the devices that carry it and route it, the VNIs
+ * it is mapped to, and islands: groups of carrying devices joined by links
+ * that pass it, with no device routing it, when another group does. A group
+ * that touches a link we can't see across is never called an island; the
+ * path may go on. A VXLAN tunnel carrying a VNI mapped to the VLAN at both
+ * ends joins them like a link (vxlan-analysis.js `bridges`), and a tunnel to
+ * a VTEP we can't see counts as such a link (`open`).
  */
 
 const {
@@ -79,9 +82,13 @@ function edgeStatus(edge, vlan, snapshots) {
 
 /**
  * Fleet VLAN summary over the graph's nodes.
- * @returns {{ id, names: string[], devices: string[], routedOn: string[], islands: string[][] }[]}
+ * @param {{ bridges?: {a, b, vlan}[], open?: {node, vlan}[], vniByVlan?: Map<number, Set<number>> }} [vxlan]
+ * @returns {{ id, names: string[], devices: string[], routedOn: string[], vnis: number[], islands: string[][] }[]}
  */
-function analyzeVlans(nodes, edges, snapshots) {
+function analyzeVlans(nodes, edges, snapshots, vxlan = {}) {
+  const bridges = vxlan.bridges || [];
+  const openVtep = vxlan.open || [];
+  const vniByVlan = vxlan.vniByVlan || new Map();
   const byVlan = new Map();
   for (const node of nodes) {
     const snap = snapshots.get(node.id);
@@ -102,20 +109,26 @@ function analyzeVlans(nodes, edges, snapshots) {
       names: [...entry.names].sort(),
       devices: entry.devices,
       routedOn: entry.routedOn,
-      islands: entry.routedOn.length ? findIslands(entry, edges, snapshots) : [],
+      vnis: [...(vniByVlan.get(entry.id) || [])].sort((a, b) => a - b),
+      islands: entry.routedOn.length
+        ? findIslands(entry, edges, snapshots, {
+          bridges: bridges.filter((b) => b.vlan === entry.id),
+          open: openVtep.filter((o) => o.vlan === entry.id).map((o) => o.node),
+        })
+        : [],
     });
   }
   return out;
 }
 
-function findIslands(entry, edges, snapshots) {
+function findIslands(entry, edges, snapshots, { bridges = [], open: openVteps = [] } = {}) {
   const members = new Set(entry.devices);
   const parent = new Map(entry.devices.map((id) => [id, id]));
   const find = (id) => {
     while (parent.get(id) !== id) id = parent.get(id);
     return id;
   };
-  const open = new Set(); // members touching a link we can't see across
+  const open = new Set(openVteps); // members touching a link we can't see across
 
   for (const edge of edges) {
     const status = edgeStatus(edge, entry.id, snapshots);
@@ -129,6 +142,10 @@ function findIslands(entry, edges, snapshots) {
     }
   }
 
+  for (const { a, b } of bridges) {
+    if (members.has(a) && members.has(b)) parent.set(find(a), find(b));
+  }
+
   const groups = new Map();
   for (const id of entry.devices) {
     const root = find(id);
@@ -140,9 +157,9 @@ function findIslands(entry, edges, snapshots) {
 }
 
 /** Attach `edge.vlans` and the fleet summary. Mutates the edges. */
-function applyVlanOverlay(graph, snapshots) {
+function applyVlanOverlay(graph, snapshots, vxlan) {
   for (const edge of graph.edges) edge.vlans = analyzeEdge(edge, snapshots);
-  return analyzeVlans(graph.nodes, graph.edges, snapshots);
+  return analyzeVlans(graph.nodes, graph.edges, snapshots, vxlan);
 }
 
 module.exports = {

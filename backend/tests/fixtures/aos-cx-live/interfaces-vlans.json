@@ -1,0 +1,575 @@
+{
+  "interfaces": {
+    "1/1/1": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "110": "/rest/v10.10/system/vlans/110"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/1": "/rest/v10.10/system/interfaces/1%2F1%2F1"
+      },
+      "ip4_address": null,
+      "name": "1/1/1",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": {
+        "110": "/rest/v10.10/system/vlans/110"
+      },
+      "vlan_trunks": {}
+    },
+    "1/1/10": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/10": "/rest/v10.10/system/interfaces/1%2F1%2F10"
+      },
+      "ip4_address": null,
+      "name": "1/1/10",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/11": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/11": "/rest/v10.10/system/interfaces/1%2F1%2F11"
+      },
+      "ip4_address": null,
+      "name": "1/1/11",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/12": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/12": "/rest/v10.10/system/interfaces/1%2F1%2F12"
+      },
+      "ip4_address": null,
+      "name": "1/1/12",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/13": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
+      },
+      "ip4_address": null,
+      "name": "1/1/13",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/14": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/14": "/rest/v10.10/system/interfaces/1%2F1%2F14"
+      },
+      "ip4_address": null,
+      "name": "1/1/14",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/15": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/15": "/rest/v10.10/system/interfaces/1%2F1%2F15"
+      },
+      "ip4_address": null,
+      "name": "1/1/15",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/16": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/16": "/rest/v10.10/system/interfaces/1%2F1%2F16"
+      },
+      "ip4_address": null,
+      "name": "1/1/16",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/17": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/17": "/rest/v10.10/system/interfaces/1%2F1%2F17"
+      },
+      "ip4_address": null,
+      "name": "1/1/17",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/18": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/18": "/rest/v10.10/system/interfaces/1%2F1%2F18"
+      },
+      "ip4_address": null,
+      "name": "1/1/18",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/19": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/19": "/rest/v10.10/system/interfaces/1%2F1%2F19"
+      },
+      "ip4_address": null,
+      "name": "1/1/19",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/2": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "110": "/rest/v10.10/system/vlans/110"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/2": "/rest/v10.10/system/interfaces/1%2F1%2F2"
+      },
+      "ip4_address": null,
+      "name": "1/1/2",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": {
+        "110": "/rest/v10.10/system/vlans/110"
+      },
+      "vlan_trunks": {}
+    },
+    "1/1/20": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/20": "/rest/v10.10/system/interfaces/1%2F1%2F20"
+      },
+      "ip4_address": null,
+      "name": "1/1/20",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/21": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/21": "/rest/v10.10/system/interfaces/1%2F1%2F21"
+      },
+      "ip4_address": null,
+      "name": "1/1/21",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/22": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/22": "/rest/v10.10/system/interfaces/1%2F1%2F22"
+      },
+      "ip4_address": null,
+      "name": "1/1/22",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/23": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/23": "/rest/v10.10/system/interfaces/1%2F1%2F23"
+      },
+      "ip4_address": null,
+      "name": "1/1/23",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/24": {
+      "applied_vlan_mode": null,
+      "applied_vlan_tag": null,
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/24": "/rest/v10.10/system/interfaces/1%2F1%2F24"
+      },
+      "ip4_address": null,
+      "name": "1/1/24",
+      "routing": true,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/24.101": {
+      "applied_vlan_mode": null,
+      "applied_vlan_tag": null,
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/24.101": "/rest/v10.10/system/interfaces/1%2F1%2F24.101"
+      },
+      "ip4_address": "172.16.1.99/24",
+      "name": "1/1/24.101",
+      "routing": false,
+      "type": "vlansubint",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/25": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/25": "/rest/v10.10/system/interfaces/1%2F1%2F25"
+      },
+      "ip4_address": null,
+      "name": "1/1/25",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/26": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/26": "/rest/v10.10/system/interfaces/1%2F1%2F26"
+      },
+      "ip4_address": null,
+      "name": "1/1/26",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/27": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+      },
+      "ip4_address": null,
+      "name": "1/1/27",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/28": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/28": "/rest/v10.10/system/interfaces/1%2F1%2F28"
+      },
+      "ip4_address": null,
+      "name": "1/1/28",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/3": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/3": "/rest/v10.10/system/interfaces/1%2F1%2F3"
+      },
+      "ip4_address": null,
+      "name": "1/1/3",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/4": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/4": "/rest/v10.10/system/interfaces/1%2F1%2F4"
+      },
+      "ip4_address": null,
+      "name": "1/1/4",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/5": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/5": "/rest/v10.10/system/interfaces/1%2F1%2F5"
+      },
+      "ip4_address": null,
+      "name": "1/1/5",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/6": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/6": "/rest/v10.10/system/interfaces/1%2F1%2F6"
+      },
+      "ip4_address": null,
+      "name": "1/1/6",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/7": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/7": "/rest/v10.10/system/interfaces/1%2F1%2F7"
+      },
+      "ip4_address": null,
+      "name": "1/1/7",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/8": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/8": "/rest/v10.10/system/interfaces/1%2F1%2F8"
+      },
+      "ip4_address": null,
+      "name": "1/1/8",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "1/1/9": {
+      "applied_vlan_mode": "access",
+      "applied_vlan_tag": {
+        "1": "/rest/v10.10/system/vlans/1"
+      },
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "1/1/9": "/rest/v10.10/system/interfaces/1%2F1%2F9"
+      },
+      "ip4_address": null,
+      "name": "1/1/9",
+      "routing": false,
+      "type": "system",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "loopback0": {
+      "applied_vlan_mode": null,
+      "applied_vlan_tag": null,
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "loopback0": "/rest/v10.10/system/interfaces/loopback0"
+      },
+      "ip4_address": "10.15.20.20/32",
+      "name": "loopback0",
+      "routing": false,
+      "type": "loopback",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "ubt": {
+      "applied_vlan_mode": null,
+      "applied_vlan_tag": null,
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "ubt": "/rest/v10.10/system/interfaces/ubt"
+      },
+      "ip4_address": null,
+      "name": "ubt",
+      "routing": false,
+      "type": "ubt",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "vlan1": {
+      "applied_vlan_mode": null,
+      "applied_vlan_tag": null,
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "vlan1": "/rest/v10.10/system/interfaces/vlan1"
+      },
+      "ip4_address": null,
+      "name": "vlan1",
+      "routing": false,
+      "type": "vlan",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    },
+    "vxlan1": {
+      "applied_vlan_mode": null,
+      "applied_vlan_tag": null,
+      "applied_vlan_trunks": {},
+      "interfaces": {
+        "vxlan1": "/rest/v10.10/system/interfaces/vxlan1"
+      },
+      "ip4_address": null,
+      "name": "vxlan1",
+      "routing": false,
+      "type": "vxlan",
+      "vlan_mode": null,
+      "vlan_tag": null,
+      "vlan_trunks": {}
+    }
+  },
+  "vlans": {
+    "1": {
+      "id": 1,
+      "name": "DEFAULT_VLAN_1"
+    },
+    "110": {
+      "id": 110,
+      "name": "VLAN110"
+    },
+    "3000": {
+      "id": 3000,
+      "name": "VLAN3000"
+    },
+    "7167": {
+      "id": 7167,
+      "name": "VLAN7167"
+    }
+  }
+}

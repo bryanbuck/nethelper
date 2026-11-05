@@ -5,6 +5,7 @@ const ArubaErrorHandler = require('../../utils/aruba-error-handler');
 const { getRedis } = require('../../config/redis');
 const { detectPlatform } = require('../../utils/device-platform');
 const { parseCentralTopology } = require('../topology/parsers/central');
+const { parseCentralVlans } = require('../topology/parsers/central-vlans');
 const { normalizeMac } = require('../../utils/device-key');
 const { debugLog, Services } = require('../../utils/debug-logger');
 
@@ -134,7 +135,7 @@ class ArubaCentralProvider extends BaseCloudProvider {
   }
 
   supports(capability) {
-    return ['inventory', 'status', 'test', 'scope-backup', 'topology', 'address-lookup', 'alarms'].includes(capability);
+    return ['inventory', 'status', 'test', 'scope-backup', 'topology', 'switch-vlans', 'address-lookup', 'alarms'].includes(capability);
     // NOT 'config-backup': the classic /configuration/v2 endpoint is
     // quarantined (see getDeviceConfiguration). CX configs are still backed
     // up over device REST; AOS-S over SSH.
@@ -302,6 +303,38 @@ class ArubaCentralProvider extends BaseCloudProvider {
       }));
     }
     return parseCentralTopology(replies);
+  }
+
+  /**
+   * One switch's VLAN membership (parsers/central-vlans.js), for a switch the
+   * Network Map reads through Central: two GA v1 reads (v1alpha1 is 404,
+   * live tenant 2026-11-04). Called per switch, only for switches no local
+   * read reaches, so a tenant of mostly CX switches with credentials makes
+   * few of these.
+   */
+  async getSwitchVlans(serial) {
+    const base = `/network-monitoring/v1/switches/${encodeURIComponent(serial)}`;
+    const interfaces = await this.listAllMonitoringItems(`${base}/interfaces`, 'switch_vlans');
+    const vlans = await this.listAllMonitoringItems(`${base}/vlans`, 'switch_vlans');
+    return parseCentralVlans({ interfaces, vlans });
+  }
+
+  /**
+   * Every item of a monitoring list (`items`, `total`). The first page is
+   * read without paging parameters, as verified live; more pages only when
+   * `total` says there are more.
+   */
+  async listAllMonitoringItems(endpoint, context) {
+    const items = [];
+    for (;;) {
+      const page = await this.makeRequest('GET', endpoint, {
+        ...(items.length && { params: { limit: 100, offset: items.length } }),
+        context,
+      });
+      const batch = page?.items || [];
+      items.push(...batch);
+      if (!batch.length || items.length >= (page.total ?? items.length)) return items;
+    }
   }
 
   /**

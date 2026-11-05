@@ -5,6 +5,7 @@ const BaseDeviceAPI = require('./base-device-api');
 const cxLive = require('./cx-live');
 const cxTopology = require('../topology/parsers/aos-cx');
 const { parseCxVlans } = require('../topology/parsers/aos-cx-vlans');
+const { parseCxVxlan, vxlanInterfaceNames } = require('../topology/parsers/aos-cx-vxlan');
 const logger = require('../../utils/logger');
 
 // One REST version for every call (login, requests, logout, notifications).
@@ -496,9 +497,38 @@ class CXSwitchAPI extends BaseDeviceAPI {
     const vlans = await this.makeAuthenticatedRequest('GET', '/system/vlans?depth=2&attributes=id,name');
     const interfaces = await this.makeAuthenticatedRequest(
       'GET',
-      '/system/interfaces?depth=2&attributes=name,type,vlan_mode,vlan_tag,vlan_trunks,interfaces,routing,ip4_address'
+      '/system/interfaces?depth=2&attributes=name,type,vlan_mode,vlan_tag,vlan_trunks,'
+      + 'applied_vlan_mode,applied_vlan_tag,applied_vlan_trunks,interfaces,routing,ip4_address'
     );
     return parseCxVlans({ interfaces, vlans });
+  }
+
+  /**
+   * VXLAN state (VTEP source, VNIs, remote VTEPs) for the Network Map's VXLAN
+   * overlay (topology/vxlan-membership.js), or null for a switch with no
+   * VXLAN interface: one GET then, two more plus one per VXLAN interface
+   * otherwise. Interfaces are filtered here rather than with `filter=`, which
+   * older firmware may not take.
+   */
+  async getVxlanState() {
+    const interfaces = await this.makeAuthenticatedRequest(
+      'GET',
+      '/system/interfaces?depth=2&attributes=name,type,admin,options'
+    );
+    const names = vxlanInterfaceNames(interfaces);
+    if (!names.length) return null;
+    const vnis = await this.makeAuthenticatedRequest(
+      'GET',
+      '/system/virtual_network_ids?depth=2&attributes=id,type,state,vlan,vrf,routing,interface'
+    );
+    const tunnelEndpoints = {};
+    for (const name of names) {
+      tunnelEndpoints[name] = await this.makeAuthenticatedRequest(
+        'GET',
+        `/system/interfaces/${encodeURIComponent(name)}/tunnel_endpoints?depth=2&attributes=destination,origin,state,network_id,vrf`
+      );
+    }
+    return parseCxVxlan({ interfaces, vnis, tunnelEndpoints });
   }
 
   /** CPU and memory percentages from the management module. */
