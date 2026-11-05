@@ -611,6 +611,19 @@ A rolling feed of what happened to the managed devices, at `/activity` (nav item
 
 ---
 
+### 17. Device page: boot images (Image Information card)
+**Priority**: Medium
+**Status**: ✅ Merged to `master` 2026-11-04 (not yet released)
+
+The primary/secondary partitions, the default image and the booted image used to exist only in a live poll's reply on the Firmware Status page. Firmware and system polls now store them on the device (`Device.firmwareImages`, migration `20261104220000_device_firmware_images`; `utils/firmware-images.js`), and the device page's **Image Information** card lists both partitions with their versions and Booted/Default chips. It warns when the next reboot would load a different version (the default points at the other partition, or new firmware was copied into the booted one). The page's on-load system poll reads `/firmware` in the same CX session, so an operator opening the page refreshes it at no extra session cost; the card's Refresh runs a firmware poll. Polls on every transport now also write `Device.firmwareVersion`, which only cloud sync did before, so direct devices show up in the Firmware page's Recorded versions. Found on the way: AOS-CX reports the running version as `current_version` (live capture `aos-cx-live/firmware.json`); the poller read a `current_image` that doesn't exist, so the Firmware page's "Current" column was always empty. It is now "Running Version".
+
+**Deferred**:
+- Partitions on other platforms: AOS-S `show flash` over SSH (only a direct AOS-S), Junos dual-root `show system snapshot` over NETCONF. Both need first contact before a parser ships.
+- Refreshing images on a schedule (e.g. with config backups, which already open a CX session); today they are as fresh as the last poll.
+- A Firmware page column or filter for "next reboot changes version" across the fleet.
+
+---
+
 ## ✅ Completed Items
 
 Recently shipped (details in the sections above): Automated Device Discovery (item 4), Configuration Backup Scheduling (item 5), Direct-managed device support / SSH config pull (5a), Central-managed detection core (5b), Multi-Vendor Phases 0–2 (5c).

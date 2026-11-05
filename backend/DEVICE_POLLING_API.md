@@ -39,13 +39,20 @@ A device fails before its poller runs if it has no IP address or no linked devic
 - Every AOS-CX read runs in one cookie session (`withCxSession`: login, read, logout), because AOS-CX REST refuses HTTP Basic auth and allows only a few sessions per user. See `docs/hardware/AOS_CX_NOTES.md`.
 - The CX-only pollers refuse other platforms rather than try a CX login on them. Config backups for every platform go through `config-backup.service.js` `pullConfig()`, not this poller.
 
+### What a poll stores
+
+`firmware` and `system` are the only pollers that write to the device row, and a failed write never fails the poll (`recordFirmware`):
+
+- `Device.firmwareVersion`: the running version, from every transport (AOS-CX `current_version`, NETCONF, the parsed `show version`). Cloud sync and the status refresh write the same column for cloud devices.
+- `Device.firmwareImages` (AOS-CX only): `{ primary, secondary, defaultImage, bootedImage, running, source: 'aos-cx-rest', checkedAt }`, built by `utils/firmware-images.js`. The device page's Image Information card shows it. `GET /devices/:id` returns `imagePoll` (`{ available, reason }`, reason `unsupported` for a platform that reports no partitions) so the page knows whether a poll can fill it.
+
 ### Result fields
 
 - **`firmware`**
-  - AOS-CX: `booted_image`, `current_image`, `default_image`, `primary_version`, `secondary_version`.
+  - AOS-CX: `booted_image`, `default_image` (`primary`|`secondary`), `current_version` (the running version; AOS-CX has no `current_image`), `primary_version`, `secondary_version`, plus `images` (the stored shape below) and `firmwareVersion`. A live reply is `tests/fixtures/aos-cx-live/firmware.json`.
   - Junos: `transport: 'netconf'`, `primary_version`, `model`, `hostname`.
   - SSH: `transport: 'ssh'`, `raw_version` (the `show version` text), and `primary_version` parsed best-effort from it.
-- **`system`**: `hostname`, `platform`, `software_version` and related fields. The transport is reported the same way as for `firmware`.
+- **`system`**: `hostname`, `platform`, `software_version` and related fields. The transport is reported the same way as for `firmware`. On AOS-CX it also reads `/firmware` in the same session (best effort) and returns `firmware_images` (`null` when that read failed).
 - **`backup`**:
   - `running_config` and `startup_config`: REST JSON.
   - `running_config_cli`: `show running-config` text. It is best-effort; when it can't be read, `running_config_cli_error` says why.

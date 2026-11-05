@@ -658,6 +658,16 @@
             </v-card-text>
           </v-card>
         </v-col>
+
+        <!-- Boot images: primary/secondary, booted, default (AOS-CX) -->
+        <v-col v-if="imagesCardShown(device, imagePoll)" cols="12" md="6">
+          <DeviceImagesCard
+            :device="device"
+            :image-poll="imagePoll"
+            :can-edit="canEdit"
+            @patch="applyDevicePatch"
+          />
+        </v-col>
       </v-row>
 
       <!-- Automation runs that targeted this device -->
@@ -722,6 +732,8 @@ import DeviceHistoryPanel from '@/components/devices/DeviceHistoryPanel.vue'
 import DeviceAddressLookup from '@/components/devices/DeviceAddressLookup.vue'
 import DeviceAlertsBanner from '@/components/devices/DeviceAlertsBanner.vue'
 import DeviceRecentRunsCard from '@/components/devices/DeviceRecentRunsCard.vue'
+import DeviceImagesCard from '@/components/devices/DeviceImagesCard.vue'
+import { imagesCardShown, runningVersion } from '@/models/firmware-images'
 import { lastSeenSummary } from '@/models/device-seen'
 import DeviceMergeDialog from '@/components/devices/DeviceMergeDialog.vue'
 import DeviceEditDialog from '@/components/devices/DeviceEditDialog.vue'
@@ -792,6 +804,12 @@ const sameIpDevices = computed(() =>
 const systemPoll = computed(() =>
   systemPollState.value?.id === route.params.id ? systemPollState.value.value : null
 )
+// Whether a poll can read the boot images (GET /devices/:id imagePoll)
+const imagePollState = ref(null)
+const imagePoll = computed(() =>
+  imagePollState.value?.id === route.params.id ? imagePollState.value.value : null
+)
+
 const systemPollReason = computed(() => {
   switch (systemPoll.value?.reason) {
     case 'cloud-only':
@@ -1042,6 +1060,17 @@ const refreshSystemInfo = async () => {
   }
 }
 
+// The system poll reads the boot images in the same session and the backend
+// stores them; show them without another fetch.
+watch(systemData, (data) => {
+  const images = data?.firmware_images
+  if (!images || data.deviceId !== route.params.id) return
+  const patch = { firmwareImages: images }
+  const version = runningVersion(images)
+  if (version) patch.firmwareVersion = version
+  applyDevicePatch(patch)
+})
+
 const clearError = () => {
   error.value = null
   devicesStore.clearError()
@@ -1054,6 +1083,7 @@ const fetchDevice = async () => {
   if (route.params.id !== id || !response?.data) return
   fetchedDevice.value = response.data
   systemPollState.value = { id, value: response.data.systemPoll || null }
+  imagePollState.value = { id, value: response.data.imagePoll || null }
   sameIpState.value = { id, value: response.data.sameIpDevices || [] }
   devicesStore.updateDeviceLocally(id, response.data)
 }

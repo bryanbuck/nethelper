@@ -1,0 +1,17 @@
+{
+  "_comment": "GET /rest/v10.10/firmware, captured 2026-11-04 from two lab switches: a 6200F on ML.10.16 booted from primary, and one on FL.10.16 booted from (and defaulting to) secondary. The key is current_version, not current_image.",
+  "booted-primary": {
+    "current_version": "ML.10.16.1010",
+    "primary_version": "ML.10.16.1010",
+    "secondary_version": "ML.10.16.1006",
+    "default_image": "primary",
+    "booted_image": "primary"
+  },
+  "booted-secondary": {
+    "current_version": "FL.10.16.1006",
+    "primary_version": "FL.10.15.1010",
+    "secondary_version": "FL.10.16.1006",
+    "default_image": "secondary",
+    "booted_image": "secondary"
+  }
+}

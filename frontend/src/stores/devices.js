@@ -395,6 +395,16 @@ export const useDevicesStore = defineStore('devices', () => {
     try {
       const response = await deviceService.pollDeviceFirmware(deviceIds)
 
+      // The backend stored what each poll read; keep the loaded rows in step
+      for (const result of response.results) {
+        if (!result.success) continue
+        const patch = {}
+        if (result.data?.images) patch.firmwareImages = result.data.images
+        const version = result.data?.firmwareVersion || result.data?.primary_version
+        if (version) patch.firmwareVersion = version
+        if (Object.keys(patch).length) updateDeviceLocally(result.deviceId, patch)
+      }
+
       // Merge firmware data with device info
       firmwareData.value = response.results.map(result => {
         const device = devices.value.find(d => d.id === result.deviceId)
@@ -408,7 +418,7 @@ export const useDevicesStore = defineStore('devices', () => {
           error: result.error || null,
           timestamp: result.timestamp,
           booted: result.data?.booted_image || null,
-          current: result.data?.current_image || null,
+          running: result.data?.current_version || result.data?.firmwareVersion || null,
           default: result.data?.default_image || null,
           primary: result.data?.primary_version || null,
           secondary: result.data?.secondary_version || null

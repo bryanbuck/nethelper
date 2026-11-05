@@ -89,4 +89,16 @@ function localPollAvailability(device) {
   return { available: true, reason: null };
 }
 
-module.exports = { resolveTransport, localPollAvailability };
+/**
+ * Whether a poll can read the device's boot images (primary/secondary,
+ * default, booted): today only AOS-CX REST reports them. Same shape and
+ * reasons as localPollAvailability, plus 'unsupported' for other platforms.
+ */
+function imagePollAvailability(device) {
+  if (!isCxRestCapable(device) || !resolveTransport(device, 'poll').includes('device-rest')) {
+    return { available: false, reason: 'unsupported' };
+  }
+  return localPollAvailability(device);
+}
+
+module.exports = { resolveTransport, localPollAvailability, imagePollAvailability };
