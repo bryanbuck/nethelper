@@ -34,6 +34,7 @@ const ROUTERS = [
   ['executions', 'execution.routes'],
   ['settings', 'settings.routes'],
   ['system', 'system.routes'],
+  ['app-backups', 'app-backup.routes'],
 ];
 
 const SECRET_FIELD = /password|secret|token|apikey|privatekey|passphrase/i;

@@ -56,6 +56,8 @@ Backups contain secrets, so only admins and operators can see their contents.
 
 Optional: **Settings → API Credentials → Git mirror** commits every backup to a Git repository. Use a **private** repository and a deploy key made for it, never your personal key (setup in [`deploy/README.md`](../deploy/README.md)).
 
+Back up NetHelper itself too: an admin turns on scheduled backups under **Settings → App Backup** (the database and the config backups in one archive), and keeps the archives and a copy of `ENCRYPTION_KEY` off the server. Restore steps are in [`deploy/README.md`](../deploy/README.md) "Backup and restore".
+
 ## 6. Status and alerts
 
 The status column comes from ping first, then the cloud:

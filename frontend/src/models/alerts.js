@@ -22,6 +22,7 @@ export const ALERT_RULE_LABELS = {
   'live.monitor-down': 'Live monitor lost',
   'backup.failed': 'Backup failed',
   'sync.failed': 'Cloud sync failed',
+  'app-backup.failed': 'App backup failed',
   'automation.raised': 'Raised by automation'
 }
 

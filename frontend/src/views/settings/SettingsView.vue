@@ -31,6 +31,10 @@
               <v-icon start>mdi-send</v-icon>
               Notifications
             </v-tab>
+            <v-tab v-if="authStore.isAdmin" value="app-backup">
+              <v-icon start>mdi-backup-restore</v-icon>
+              App Backup
+            </v-tab>
             <v-tab v-if="canTest" value="testing">
               <v-icon start>mdi-test-tube</v-icon>
               Connection Test
@@ -84,6 +88,15 @@
               </v-card-text>
             </v-window-item>
 
+            <!-- Backups of NetHelper itself (admin only, like its API) -->
+            <v-window-item v-if="authStore.isAdmin" value="app-backup">
+              <v-card-text>
+                <ErrorBoundary :show-details="isDevelopment">
+                  <AppBackupSettings />
+                </ErrorBoundary>
+              </v-card-text>
+            </v-window-item>
+
             <!-- Manual connection test (POST /device-api/test-manual is operator+) -->
             <v-window-item v-if="canTest" value="testing">
               <v-card-text>
@@ -108,6 +121,7 @@ import GitBackupSettings from '@/components/settings/GitBackupSettings.vue'
 import ApiCredentials from '@/components/settings/ApiCredentials.vue'
 import AlertRules from '@/components/settings/AlertRules.vue'
 import NotificationChannels from '@/components/settings/NotificationChannels.vue'
+import AppBackupSettings from '@/components/settings/AppBackupSettings.vue'
 import DeviceApiTestingView from '@/views/settings/DeviceApiTestingView.vue'
 import { useAuthStore } from '@/stores/auth'
 import debugLog, { DebugCategory } from '@/utils/debug'
@@ -123,7 +137,7 @@ const canTest = computed(() => ['admin', 'operator'].includes(authStore.userRole
 // Active tab state - defaults to 'credentials' or route query param (an old
 // or unavailable tab, e.g. the removed General/Advanced, falls back)
 const tabs = computed(() => [
-  'credentials', 'alerts', ...(authStore.isAdmin ? ['notifications'] : []), ...(canTest.value ? ['testing'] : [])
+  'credentials', 'alerts', ...(authStore.isAdmin ? ['notifications', 'app-backup'] : []), ...(canTest.value ? ['testing'] : [])
 ])
 const activeTab = ref(tabs.value.includes(route.query.tab) ? route.query.tab : 'credentials')
 

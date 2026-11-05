@@ -9,6 +9,7 @@
 #   nethelper-admin users                       # interactive user menu
 #   nethelper-admin users create-admin --email you@example.com --name "Your Name"
 #   OLD_ENCRYPTION_KEY='<old key>' nethelper-admin rotate-key [--dry-run]
+#   nethelper-admin restore /var/lib/nethelper/app-backups/<archive> [--dry-run]
 #
 # Paths follow deploy/README.md; override with NETHELPER_HOME (code),
 # NETHELPER_ENV (settings file) and NETHELPER_USER (service user).
@@ -32,6 +33,12 @@ Usage: nethelper-admin <command> [args]
   rotate-key [--dry-run]
                         Re-encrypt stored secrets after changing ENCRYPTION_KEY,
                         with the old key in OLD_ENCRYPTION_KEY. Stop the backend first.
+  restore <archive> [--dry-run] [--yes] [--force] [--key-out FILE]
+                        Restore an application backup (Settings -> App Backup).
+                        Stops nethelper-backend while it runs (not for --dry-run
+                        or --key-out) and starts it again. An encrypted archive's
+                        passphrase comes from NETHELPER_BACKUP_PASSPHRASE, else
+                        a prompt. The archive must be readable by $NETHELPER_USER.
 EOF
 }
 
@@ -88,7 +95,9 @@ run_script() {
   admin_password_set=${NETHELPER_ADMIN_PASSWORD+1}
   old_key=${OLD_ENCRYPTION_KEY-}
   old_key_set=${OLD_ENCRYPTION_KEY+1}
-  unset NETHELPER_ADMIN_PASSWORD OLD_ENCRYPTION_KEY
+  passphrase=${NETHELPER_BACKUP_PASSPHRASE-}
+  passphrase_set=${NETHELPER_BACKUP_PASSPHRASE+1}
+  unset NETHELPER_ADMIN_PASSWORD OLD_ENCRYPTION_KEY NETHELPER_BACKUP_PASSPHRASE
 
   set -a
   # shellcheck disable=SC1090 # the settings file is chosen at run time
@@ -97,9 +106,33 @@ run_script() {
   export NODE_ENV=production CHECKPOINT_DISABLE=1
   [ -n "$admin_password_set" ] && export NETHELPER_ADMIN_PASSWORD="$admin_password"
   [ -n "$old_key_set" ] && export OLD_ENCRYPTION_KEY="$old_key"
+  [ -n "$passphrase_set" ] && export NETHELPER_BACKUP_PASSPHRASE="$passphrase"
 
   cd "$NETHELPER_HOME/backend"
   exec runuser -u "$NETHELPER_USER" -- "$node" "scripts/$script" "$@"
+}
+
+# Restore an application backup with the backend stopped, then start it again.
+restore() {
+  [ $# -gt 0 ] || die "usage: nethelper-admin restore <archive> [--dry-run] [--yes] [--force]"
+  stopped=
+  case " $* " in
+    *" --dry-run "*|*" --key-out "*|*" --help "*) ;;
+    *)
+      if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet nethelper-backend; then
+        echo "Stopping nethelper-backend for the restore"
+        systemctl stop nethelper-backend
+        stopped=1
+      fi
+      ;;
+  esac
+  status=0
+  (run_script app-restore.js --file "$@") || status=$?
+  if [ -n "$stopped" ]; then
+    echo "Starting nethelper-backend"
+    systemctl start nethelper-backend
+  fi
+  return "$status"
 }
 
 [ $# -gt 0 ] || { usage >&2; exit 2; }
@@ -108,6 +141,7 @@ case "$command" in
   init-env) init_env ;;
   users) run_script user-manager.js "$@" ;;
   rotate-key) run_script rotate-encryption-key.js "$@" ;;
+  restore) restore "$@" ;;
   -h|--help|help) usage ;;
   *) usage >&2; die "unknown command: $command" ;;
 esac

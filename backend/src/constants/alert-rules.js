@@ -62,6 +62,12 @@ const ALERT_RULES = {
     severity: 'warning',
     settleSeconds: 0,
   },
+  'app-backup.failed': {
+    label: 'Application backup failed',
+    description: 'A scheduled or manual backup of NetHelper itself (database and config files) fails. Clears on the next successful one.',
+    severity: 'warning',
+    settleSeconds: 0,
+  },
   'automation.raised': {
     label: 'Raised by automation',
     description: 'An automation\'s Raise alert step. The step may set its own severity; this one is the default.',

@@ -4,6 +4,9 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ## [Unreleased]
 
+### Added
+- Application backups: Settings → **App Backup** (admins) archives NetHelper itself on a schedule or on demand: the database, the config-backup files, and optionally the Git mirror repository, with optional passphrase encryption and retention by count and age. A failed run raises the new **Application backup failed** alert. Restore with `nethelper-admin restore` or `scripts/app-restore.js` (see `deploy/README.md` "Backup and restore"). The backend image now includes `pg_dump` 17; on bare metal, install `postgresql-client`.
+
 ## [0.9.0-beta.7] — 2026-10-30
 
 ### Added

@@ -237,6 +237,19 @@ describe('deploy/systemd/nethelper-admin', () => {
     expect(fs.readFileSync(envFile, 'utf8')).toBe('KEEP=1\n');
   });
 
+  test('restore needs an archive, and root to switch to the service user', () => {
+    const envFile = path.join(tmp, 'backend.env');
+    let r = run(['restore'], envFile);
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toContain('usage: nethelper-admin restore <archive>');
+    if (process.getuid && process.getuid() !== 0) {
+      // --dry-run never stops the service; it then needs root like every script command
+      r = run(['restore', '/tmp/x.tar.gz', '--dry-run'], envFile);
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toContain('run as root');
+    }
+  });
+
   test('rejects an unknown command', () => {
     const r = run(['frobnicate'], path.join(tmp, 'backend.env'));
     expect(r.status).not.toBe(0);
