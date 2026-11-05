@@ -6,6 +6,7 @@ const NetconfClient = require('./device-api/netconf-client');
 const { isCxRestCapable, detectPlatform } = require('../utils/device-platform');
 const { resolveTransport } = require('../utils/transport-router');
 const { getPrisma } = require('../config/database');
+const { cxFirmwareImages, runningVersion } = require('../utils/firmware-images');
 const { debugLog, Services } = require('../utils/debug-logger');
 
 // Create service-specific logger
@@ -200,28 +201,36 @@ class DevicePollerService {
       const version = await this.readVersion(device, credentials);
       if (version.transport === 'netconf') {
         const { info } = version;
+        await this.recordFirmware(device, { version: info.version });
         return { transport: 'netconf', primary_version: info.version, model: info.model, hostname: info.hostname };
       }
       if (version.transport === 'ssh') {
         // The raw `show version` text for CLI-only devices.
+        const parsed = this.parseVersionFromText(version.text);
+        await this.recordFirmware(device, { version: parsed });
         return {
           transport: 'ssh',
           raw_version: version.text,
-          primary_version: this.parseVersionFromText(version.text),
+          primary_version: parsed,
         };
       }
 
       const firmwareData = await this.withCxSession(device, credentials,
         (api) => api.makeAuthenticatedRequest('GET', '/firmware'));
 
-      // Extract relevant fields
+      // AOS-CX names the running version current_version (live capture:
+      // tests/fixtures/aos-cx-live/firmware.json).
+      const images = cxFirmwareImages(firmwareData);
       const result = {
         booted_image: firmwareData.booted_image || null,
-        current_image: firmwareData.current_image || null,
         default_image: firmwareData.default_image || null,
+        current_version: firmwareData.current_version || null,
         primary_version: firmwareData.primary_version || null,
         secondary_version: firmwareData.secondary_version || null,
+        images,
+        firmwareVersion: runningVersion(images),
       };
+      await this.recordFirmware(device, { images, version: result.firmwareVersion });
 
       logger.success(`Firmware info retrieved from ${device.name}`, {
         primary: result.primary_version,
@@ -233,6 +242,26 @@ class DevicePollerService {
     } catch (error) {
       logger.error(`Firmware polling failed for ${device.name}`, { error: error.message });
       throw error;
+    }
+  }
+
+  /**
+   * Keep what a poll read on the device row: the boot images (when the
+   * platform reports them) and the running version, so the device page and
+   * the Firmware page's recorded versions don't need a live poll. Best
+   * effort: a failed write is logged and never fails the poll.
+   * @param {Object} device - Device row
+   * @param {{ images?: Object|null, version?: string|null }} read
+   */
+  async recordFirmware(device, { images, version } = {}) {
+    const data = {};
+    if (images) data.firmwareImages = images;
+    if (version && version !== device.firmwareVersion) data.firmwareVersion = version;
+    if (!Object.keys(data).length) return;
+    try {
+      await getPrisma().device.update({ where: { id: device.id }, data });
+    } catch (error) {
+      logger.warn(`Could not store firmware read for ${device.name}`, { error: error.message });
     }
   }
 
@@ -250,20 +279,35 @@ class DevicePollerService {
       const version = await this.readVersion(device, credentials);
       if (version.transport === 'netconf') {
         const { info } = version;
+        await this.recordFirmware(device, { version: info.version });
         return { transport: 'netconf', hostname: info.hostname, platform_name: info.model, software_version: info.version };
       }
       if (version.transport === 'ssh') {
         // CLI-only devices: the raw `show version` text.
+        const parsed = this.parseVersionFromText(version.text);
+        await this.recordFirmware(device, { version: parsed });
         return {
           transport: 'ssh',
           hostname: null,
-          software_version: this.parseVersionFromText(version.text),
+          software_version: parsed,
           raw_version: version.text,
         };
       }
 
-      const systemData = await this.withCxSession(device, credentials,
-        (api) => api.makeAuthenticatedRequest('GET', '/system?depth=1'));
+      // The boot images ride along in the same session (best effort), so the
+      // device page's Image Information card stays current without a second
+      // session; CX allows only a few per user.
+      let firmwareData = null;
+      const systemData = await this.withCxSession(device, credentials, async (api) => {
+        const system = await api.makeAuthenticatedRequest('GET', '/system?depth=1');
+        try {
+          firmwareData = await api.makeAuthenticatedRequest('GET', '/firmware');
+        } catch (error) {
+          logger.warn(`Firmware read failed for ${device.name}`, { error: error.message });
+        }
+        return system;
+      });
+      const images = cxFirmwareImages(firmwareData);
 
       // Extract relevant fields (common fields returned by /system endpoint)
       const result = {
@@ -278,7 +322,9 @@ class DevicePollerService {
         contact: systemData.contact || null,
         location: systemData.location || null,
         description: systemData.description || null,
+        firmware_images: images,
       };
+      await this.recordFirmware(device, { images, version: runningVersion(images) || result.software_version });
 
       logger.success(`System info retrieved from ${device.name}`, {
         hostname: result.hostname,

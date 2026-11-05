@@ -1,7 +1,7 @@
 const { getPrisma } = require('../config/database');
 const { normalizeSerial, normalizeMac } = require('../utils/device-key');
 const { effectiveStatus, statusWhere } = require('../utils/device-status');
-const { localPollAvailability } = require('../utils/transport-router');
+const { localPollAvailability, imagePollAvailability } = require('../utils/transport-router');
 const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory');
 const { ENV_ARUBA_INTEGRATION_ID } = require('./cloud-providers/cloud-provider-factory');
 const alertService = require('./alert.service');
@@ -253,12 +253,14 @@ class DeviceService {
 
       if (!device) return null;
       // Same status mapping as getDevices(), so a fetched row matches a listed one.
-      // systemPoll tells the device page whether polling the device can work.
+      // systemPoll tells the device page whether polling the device can work,
+      // imagePoll whether a poll can read its boot images.
       const [checked] = await this.withCloudChecks([device]);
       return {
         ...checked,
         status: effectiveStatus(device),
         systemPoll: localPollAvailability(device),
+        imagePoll: imagePollAvailability(device),
         sameIpDevices: await this.findSameIpDevices(device),
       };
     } catch (error) {

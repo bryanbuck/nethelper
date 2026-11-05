@@ -11,7 +11,8 @@ const mockApi = {
 };
 
 jest.mock('../../src/services/device-api/cx-switch-api', () => jest.fn(() => mockApi));
-jest.mock('../../src/config/database', () => ({ getPrisma: () => ({}) }));
+const mockDeviceUpdate = jest.fn(async () => ({}));
+jest.mock('../../src/config/database', () => ({ getPrisma: () => ({ device: { update: mockDeviceUpdate } }) }));
 jest.mock('../../src/services/settings.service', () => ({}));
 jest.mock('../../src/services/ssh-device.service', () => ({ getVersion: jest.fn(async () => 'JUNOS 24.4R2.25') }));
 jest.mock('../../src/services/device-api/junos-api', () => {
@@ -125,4 +126,62 @@ test('parseVersionFromText reads the firmware, not the Boot ROM (real 2930F show
   ].join('\n');
   expect(poller.parseVersionFromText(text)).toBe('WC.16.11.0015');
   expect(poller.parseVersionFromText('Cisco IOS XE Software, Version 17.09.04a')).toBe('17.09.04a');
+});
+
+describe('boot images are stored on the device row', () => {
+  const live = require('../fixtures/aos-cx-live/firmware.json');
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockDeviceUpdate.mockResolvedValue({});
+  });
+
+  test('a firmware poll stores the images and the running version (live 10.16 reply)', async () => {
+    mockApi.makeAuthenticatedRequest.mockResolvedValue(live['booted-secondary']);
+    const result = await poller.firmwarePoller({ ...device, firmwareVersion: 'FL.10.15.1010' }, credentials);
+
+    expect(result.current_version).toBe('FL.10.16.1006');
+    expect(result.images).toMatchObject({
+      primary: 'FL.10.15.1010', secondary: 'FL.10.16.1006', defaultImage: 'secondary', bootedImage: 'secondary', source: 'aos-cx-rest',
+    });
+    expect(mockDeviceUpdate).toHaveBeenCalledWith({
+      where: { id: 'd1' },
+      data: { firmwareImages: result.images, firmwareVersion: 'FL.10.16.1006' },
+    });
+  });
+
+  test('the system poll reads /firmware in the same session', async () => {
+    mockApi.makeAuthenticatedRequest.mockImplementation(async (_m, endpoint) => (
+      endpoint === '/firmware' ? live['booted-primary'] : { hostname: 'sw1', software_version: 'ML.10.16.1010' }
+    ));
+    const result = await poller.systemPoller({ ...device, firmwareVersion: 'ML.10.16.1010' }, credentials);
+
+    expect(mockApi.login).toHaveBeenCalledTimes(1);
+    expect(mockApi.makeAuthenticatedRequest.mock.calls.map((c) => c[1])).toEqual(['/system?depth=1', '/firmware']);
+    expect(result.firmware_images).toMatchObject({ primary: 'ML.10.16.1010', bootedImage: 'primary' });
+    // Version unchanged: only the images are written
+    expect(mockDeviceUpdate.mock.calls[0][0].data).toEqual({ firmwareImages: result.firmware_images });
+  });
+
+  test('a failed /firmware read keeps the system result and stores no images', async () => {
+    mockApi.makeAuthenticatedRequest.mockImplementation(async (_m, endpoint) => {
+      if (endpoint === '/firmware') throw new Error('API request failed with status 404');
+      return { hostname: 'sw1', software_version: 'ML.10.16.1010' };
+    });
+    const result = await poller.systemPoller(device, credentials);
+
+    expect(result.hostname).toBe('sw1');
+    expect(result.firmware_images).toBeNull();
+    expect(mockDeviceUpdate.mock.calls[0][0].data).toEqual({ firmwareVersion: 'ML.10.16.1010' });
+  });
+
+  test('a NETCONF poll stores the version only', async () => {
+    await poller.firmwarePoller({ id: 'j1', name: 'ex1', type: 'switch', vendor: 'juniper', platform: 'junos', ipAddress: '10.0.0.3' }, credentials);
+    expect(mockDeviceUpdate).toHaveBeenCalledWith({ where: { id: 'j1' }, data: { firmwareVersion: '24.4R2.25' } });
+  });
+
+  test('a failed write never fails the poll', async () => {
+    mockDeviceUpdate.mockRejectedValue(new Error('db down'));
+    mockApi.makeAuthenticatedRequest.mockResolvedValue(live['booted-primary']);
+    await expect(poller.firmwarePoller(device, credentials)).resolves.toMatchObject({ booted_image: 'primary' });
+  });
 });

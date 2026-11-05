@@ -199,6 +199,10 @@ model Device {
   liveMonitoring Boolean @default(false)
 
   firmwareVersion String?
+  // Boot images as the device last reported them (utils/firmware-images.js):
+  // { primary, secondary, defaultImage, bootedImage, running, source, checkedAt }.
+  // Written by the firmware and system polls; AOS-CX REST only so far.
+  firmwareImages  Json?
   lastSeen        DateTime? // Last seen timestamp (updated by both ping monitoring and Aruba Central sync)
   // Per-source "seen alive" times, so the device page can say who saw it when.
   pingLastSeen    DateTime? // Last ping reply (ping monitor)

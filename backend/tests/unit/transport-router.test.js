@@ -1,4 +1,4 @@
-const { resolveTransport, localPollAvailability } = require('../../src/utils/transport-router');
+const { resolveTransport, localPollAvailability, imagePollAvailability } = require('../../src/utils/transport-router');
 const { detectPlatform, detectVendor, isCxRestCapable, useSshTransport } = require('../../src/utils/device-platform');
 const { TRANSPORT_MATRIX, PLATFORMS } = require('../../src/constants/vendors');
 
@@ -134,5 +134,20 @@ describe('localPollAvailability', () => {
     ['no credential', direct({ vendor: 'aruba', platform: 'aos-cx', ipAddress: '10.0.0.5' }), 'no-credential'],
   ])('%s', (_label, device, reason) => {
     expect(localPollAvailability(device)).toEqual({ available: reason === null, reason });
+  });
+});
+
+describe('imagePollAvailability', () => {
+  const ready = { ipAddress: '10.0.0.5', apiCredentialId: 'cred-1' };
+
+  test.each([
+    ['direct AOS-CX', direct({ vendor: 'aruba', platform: 'aos-cx', ...ready }), null],
+    ['Central AOS-CX over REST', cloud({ vendor: 'aruba', platform: 'aos-cx', ...ready }), null],
+    ['AOS-CX without a credential', direct({ vendor: 'aruba', platform: 'aos-cx', ipAddress: '10.0.0.5' }), 'no-credential'],
+    ['direct AOS-S over SSH', direct({ vendor: 'aruba', platform: 'aos-s', ...ready }), 'unsupported'],
+    ['Mist switch over NETCONF', cloud({ vendor: 'juniper', platform: 'junos', ...ready }), 'unsupported'],
+    ['Mist AP', cloud({ type: 'access_point', vendor: 'juniper', platform: null, ...ready }), 'unsupported'],
+  ])('%s', (_label, device, reason) => {
+    expect(imagePollAvailability(device)).toEqual({ available: reason === null, reason });
   });
 });

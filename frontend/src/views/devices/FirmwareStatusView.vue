@@ -130,15 +130,8 @@
                 <span v-else class="text-grey">{{ item.error ? 'N/A' : '-' }}</span>
               </template>
 
-              <template #item.current="{ item }">
-                <v-chip
-                  v-if="item.success && item.current"
-                  :color="item.current === 'primary' ? 'primary' : 'secondary'"
-                  size="small"
-                  variant="outlined"
-                >
-                  {{ item.current }}
-                </v-chip>
+              <template #item.running="{ item }">
+                <span v-if="item.success && item.running">{{ item.running }}</span>
                 <span v-else class="text-grey">{{ item.error ? 'N/A' : '-' }}</span>
               </template>
 
@@ -266,13 +259,13 @@ const headers = [
   { title: 'Location', key: 'deviceLocation', sortable: true },
   { title: 'Status', key: 'success', sortable: true },
   { title: 'Booted', key: 'booted', sortable: true },
-  { title: 'Current', key: 'current', sortable: true },
+  { title: 'Running Version', key: 'running', sortable: true },
   { title: 'Default', key: 'default', sortable: true },
   { title: 'Primary Version', key: 'primary', sortable: true },
   { title: 'Secondary Version', key: 'secondary', sortable: true },
   { title: 'Error', key: 'error', sortable: false, align: 'center' }
 ]
-const shownHeaders = usePhoneColumns(headers, ['deviceName', 'success', 'current', 'primary', 'secondary', 'error'])
+const shownHeaders = usePhoneColumns(headers, ['deviceName', 'success', 'running', 'primary', 'secondary', 'error'])
 
 const summary = computed(() => {
   const total = firmwareData.value.length
@@ -322,7 +315,7 @@ function exportToCSV() {
     'Location',
     'Status',
     'Booted Image',
-    'Current Image',
+    'Running Version',
     'Default Image',
     'Primary Version',
     'Secondary Version',
@@ -336,7 +329,7 @@ function exportToCSV() {
     item.deviceLocation,
     item.success ? 'Success' : 'Failed',
     item.booted || 'N/A',
-    item.current || 'N/A',
+    item.running || 'N/A',
     item.default || 'N/A',
     item.primary || 'N/A',
     item.secondary || 'N/A',
