@@ -885,8 +885,16 @@ const describeView = (saved) => {
   if (v.filters.type) parts.push(optionTitle(typeOptions, v.filters.type))
   if (v.filters.platform) parts.push(optionTitle(platformFilterOptions, v.filters.platform))
   if (v.filters.location) parts.push(`Location: ${v.filters.location}`)
-  if (v.filters.group) parts.push(`Group: ${optionTitle(groupFilterOptions.value, v.filters.group)}`)
-  if (v.filters.credential) parts.push(`Credential: ${optionTitle(credentialFilterOptions.value, v.filters.credential)}`)
+  // A group or credential that is gone is named as such, not by its id
+  const named = (options, value, loaded) => {
+    const match = options.find((o) => o.value === value)
+    return match ? match.title : (loaded ? 'deleted' : '…')
+  }
+  if (v.filters.group) parts.push(`Group: ${named(groupFilterOptions.value, v.filters.group, groupsStore.loaded)}`)
+  if (v.filters.credential) {
+    const loaded = canEdit.value && (settingsStore.apiCredentials || []).length > 0
+    parts.push(`Credential: ${named(credentialFilterOptions.value, v.filters.credential, loaded)}`)
+  }
   if (v.search) parts.push(`“${v.search}”`)
   if (v.sortBy.length) {
     const header = headers.find((h) => h.key === v.sortBy[0].key)
