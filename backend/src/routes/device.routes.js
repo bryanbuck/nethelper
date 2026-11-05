@@ -3,7 +3,8 @@ const router = express.Router();
 const deviceController = require('../controllers/device.controller');
 const topologyController = require('../controllers/topology.controller');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
-const { validateDevice, validateDeviceGroup, validateQuery, validateUUID } = require('../middleware/validation.middleware');
+const savedFilterController = require('../controllers/saved-filter.controller');
+const { validateDevice, validateDeviceGroup, validateSavedFilter, validateQuery, validateUUID } = require('../middleware/validation.middleware');
 
 // All routes require authentication
 router.use(authenticate);
@@ -41,6 +42,14 @@ router.get('/poll/pollers', deviceController.getAvailablePollers);
 
 // Poll devices for specific information (bulk operation)
 router.post('/poll', authorize('admin', 'operator'), deviceController.pollDevices);
+
+// The signed-in user's saved Devices-page filters. Personal, so every role
+// (viewers too) manages its own: no authorize(); the role-gates test lists
+// these as SELF_SERVICE. Declared before /:deviceId.
+router.get('/saved-filters', savedFilterController.list);
+router.post('/saved-filters', validateSavedFilter.create, savedFilterController.create);
+router.put('/saved-filters/:filterId', validateSavedFilter.update, savedFilterController.update);
+router.delete('/saved-filters/:filterId', validateSavedFilter.remove, savedFilterController.remove);
 
 // Device group routes. Declared before /:deviceId, which would otherwise
 // capture GET /groups as a device lookup.

@@ -2,6 +2,7 @@ import axios from 'axios'
 import router from '@/router'
 import { THEME_STORAGE_KEY } from '@/utils/theme-preference'
 import { clearActivityLog } from '@/utils/activity-log-storage'
+import { LAST_VIEW_PREFIX } from '@/models/device-view'
 
 // Create axios instance with base configuration
 const api = axios.create({
@@ -13,12 +14,18 @@ const api = axios.create({
 })
 
 // On an unrecoverable auth failure, drop everything stored for the session but
-// keep the viewer's theme choice (a display preference, not session data). The
-// status bar's activity log (sessionStorage) belongs to the session too.
+// keep display preferences: the theme and each user's last Devices view (keyed
+// by user id, no secrets). The status bar's activity log (sessionStorage)
+// belongs to the session too.
+const isPreference = (key) => key === THEME_STORAGE_KEY || key.startsWith(LAST_VIEW_PREFIX)
 const clearSessionStorage = () => {
-  const theme = localStorage.getItem(THEME_STORAGE_KEY)
+  const kept = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (key && isPreference(key)) kept.push([key, localStorage.getItem(key)])
+  }
   localStorage.clear()
-  if (theme) localStorage.setItem(THEME_STORAGE_KEY, theme)
+  for (const [key, value] of kept) localStorage.setItem(key, value)
   clearActivityLog()
 }
 

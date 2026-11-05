@@ -31,6 +31,16 @@
           >
             {{ devicesStore.pagination.total }} devices
           </v-chip>
+          <v-chip
+            v-if="currentSaved"
+            class="ml-2"
+            size="small"
+            color="primary"
+            variant="tonal"
+            prepend-icon="mdi-bookmark"
+          >
+            {{ currentSaved.name }}
+          </v-chip>
         </div>
         
         <div class="table-toolbar d-flex flex-wrap flex-sm-nowrap align-center ga-2">
@@ -44,6 +54,7 @@
             class="table-search"
             clearable
             @update:model-value="onSearchInput"
+            @click:clear="commitSearch"
           />
           
           <ActionButton
@@ -62,7 +73,13 @@
             :badge="activeFiltersCount"
             @click="showFilters = !showFilters"
           />
-          
+
+          <DeviceSavedFiltersMenu
+            :view="view"
+            :describe="describeView"
+            @apply="applySaved"
+          />
+
           <v-menu>
             <template #activator="{ props }">
               <ActionButton
@@ -146,13 +163,13 @@
             <v-row>
               <v-col cols="12" sm="6" md="3">
                 <v-select
-                  v-model="filters.status"
+                  :model-value="filters.status"
                   label="Status"
                   :items="statusOptions"
                   variant="outlined"
                   density="compact"
                   clearable
-                  @update:model-value="applyFilters"
+                  @update:model-value="setFilter('status', $event)"
                 >
                   <template #selection="{ item }">
                     <v-chip :color="getStatusColor(item.value)" size="small">
@@ -173,61 +190,61 @@
               
               <v-col cols="12" sm="6" md="3">
                 <v-select
-                  v-model="filters.type"
+                  :model-value="filters.type"
                   label="Device Type"
                   :items="typeOptions"
                   variant="outlined"
                   density="compact"
                   clearable
-                  @update:model-value="applyFilters"
+                  @update:model-value="setFilter('type', $event)"
                 />
               </v-col>
               
               <v-col cols="12" sm="6" md="3">
                 <v-combobox
-                  v-model="filters.location"
+                  :model-value="filters.location"
                   label="Location"
                   :items="locationOptions"
                   variant="outlined"
                   density="compact"
                   clearable
-                  @update:model-value="applyFilters"
+                  @update:model-value="setFilter('location', $event)"
                 />
               </v-col>
               
               <v-col cols="12" sm="6" md="3">
                 <v-select
-                  v-model="filters.platform"
+                  :model-value="filters.platform"
                   label="Platform"
                   :items="platformFilterOptions"
                   variant="outlined"
                   density="compact"
                   clearable
-                  @update:model-value="applyFilters"
+                  @update:model-value="setFilter('platform', $event)"
                 />
               </v-col>
 
               <v-col cols="12" sm="6" md="3">
                 <v-select
-                  v-model="filters.credential"
+                  :model-value="filters.credential"
                   label="Credential"
                   :items="credentialFilterOptions"
                   variant="outlined"
                   density="compact"
                   clearable
-                  @update:model-value="applyFilters"
+                  @update:model-value="setFilter('credential', $event)"
                 />
               </v-col>
 
               <v-col cols="12" sm="6" md="3">
                 <v-select
-                  v-model="filters.group"
+                  :model-value="filters.group"
                   label="Group"
                   :items="groupFilterOptions"
                   variant="outlined"
                   density="compact"
                   clearable
-                  @update:model-value="applyFilters"
+                  @update:model-value="setFilter('group', $event)"
                 />
               </v-col>
 
@@ -235,7 +252,7 @@
                 <v-btn
                   variant="outlined"
                   prepend-icon="mdi-filter-remove"
-                  :disabled="activeFiltersCount === 0"
+                  :disabled="!filteredNow"
                   @click="clearFilters"
                 >
                   Clear Filters
@@ -326,7 +343,9 @@
       <!-- Data Table -->
       <v-data-table-server
         v-model="selectedItems"
-        v-model:options="tableOptions"
+        :page="view.page"
+        :items-per-page="view.itemsPerPage"
+        :sort-by="view.sortBy"
         :headers="shownHeaders"
         :items="devicesStore.devices"
         :items-length="devicesStore.pagination.total"
@@ -334,7 +353,9 @@
         item-value="id"
         show-select
         class="device-data-table"
-        @update:options="loadItems"
+        @update:page="updateView({ page: $event })"
+        @update:items-per-page="updateView({ itemsPerPage: $event, page: 1 })"
+        @update:sort-by="updateView({ sortBy: $event, page: 1 })"
         @click:row="handleRowClick"
       >
         <template #item.name="{ item }">
@@ -614,42 +635,43 @@ import { VendorInfo, PlatformInfo } from '@/models/vendors'
 import { toCsv, downloadCsv } from '@/utils/csv'
 import { useSettingsStore } from '@/stores/settings'
 import ActionButton from '@/components/common/ActionButton.vue'
+import DeviceSavedFiltersMenu from './DeviceSavedFiltersMenu.vue'
+import { useSavedFiltersStore } from '@/stores/savedFilters'
+import {
+  FILTER_KEYS, emptyFilters, normalizeView, viewToQuery, sameView, isFiltered
+} from '@/models/device-view'
 
 const router = useRouter()
 const devicesStore = useDevicesStore()
 const { connected: wsConnected, connecting: wsConnecting } = useWebSocket()
 
 const tableProps = defineProps({
-  // The status filter, two-way (v-model:status-filter) so the Devices page
-  // stat cards can set it and show which one is active
-  statusFilter: { type: String, default: null },
-  // The group filter, two-way like the status filter: the page's Groups
-  // dialog sets it ("Show devices"); 'none' lists devices in no group
-  groupFilter: { type: String, default: null }
+  // The whole list view, two-way (v-model:view): filters, search, sort, page
+  // and page size (models/device-view.js). The Devices page owns it, keeps it
+  // in the URL and remembers it; its stat cards and Groups dialog set filters.
+  view: { type: Object, required: true }
 })
-const emit = defineEmits(['edit-device', 'update:statusFilter', 'update:groupFilter'])
+const emit = defineEmits(['edit-device', 'update:view'])
 
 // Component state
 const selectedItems = ref([])
 const showFilters = ref(false)
-const searchInput = ref('')
 
-// Filters
-const filters = ref({
-  status: tableProps.statusFilter || null,
-  type: null,
-  location: null,
-  platform: null,
-  credential: null,
-  group: tableProps.groupFilter || null
+// The view as last emitted. Several changes can land in one tick (Vuetify's
+// page-size change also resets the page) before the prop catches up, so each
+// patch builds on this, not on the prop.
+const view = ref(normalizeView(tableProps.view))
+watch(() => tableProps.view, (next) => {
+  if (!sameView(next, view.value)) view.value = normalizeView(next)
 })
+const filters = computed(() => view.value.filters)
 
-// Table options
-const tableOptions = ref({
-  page: 1,
-  itemsPerPage: 10,
-  sortBy: []
-})
+const updateView = (patch) => {
+  const next = normalizeView({ ...view.value, ...patch })
+  if (sameView(next, view.value)) return
+  view.value = next
+  emit('update:view', next)
+}
 
 // Table headers
 // No fixed widths: they added up past a laptop screen and squeezed cells into
@@ -771,69 +793,110 @@ const locationOptions = computed(() => [...knownLocations.value].sort((a, b) => 
 const activeFiltersCount = computed(() => {
   return Object.values(filters.value).filter(value => value !== null && value !== '').length
 })
+const filteredNow = computed(() => isFiltered(view.value))
 
 // Methods
-const loadItems = async (options) => {
-  const { page, itemsPerPage, sortBy } = options
-  
+const loadItems = async () => {
+  const { page, itemsPerPage, sortBy, search } = view.value
   await devicesStore.fetchDevicesWithPagination({
     page,
     itemsPerPage,
     sortBy,
-    search: searchInput.value,
+    search,
     filters: filters.value
   })
-}
-
-const onSearchInput = debounce(() => {
-  loadItems({
-    ...tableOptions.value,
-    page: 1
-  })
-}, 500)
-
-const applyFilters = () => {
-  emit('update:statusFilter', filters.value.status || null)
-  emit('update:groupFilter', filters.value.group || null)
-  loadItems({
-    ...tableOptions.value,
-    page: 1
-  })
-}
-
-const clearFilters = () => {
-  filters.value = {
-    status: null,
-    type: null,
-    location: null,
-    platform: null,
-    credential: null,
-    group: null
+  // A remembered page past the end (devices removed since, or a stale link):
+  // go to the last page that has rows. Vuetify clamps only when the total
+  // changes while the table is up, not on the first load.
+  const total = devicesStore.pagination.total
+  if (!devicesStore.error && page > 1 && itemsPerPage > 0 && !devicesStore.devices.length && total > 0) {
+    updateView({ page: Math.ceil(total / itemsPerPage) })
   }
-  searchInput.value = ''
-  emit('update:statusFilter', null)
-  emit('update:groupFilter', null)
-  loadItems({
-    ...tableOptions.value,
-    page: 1
-  })
 }
 
-watch(() => tableProps.groupFilter, (group) => {
-  if ((group || null) === (filters.value.group || null)) return
-  filters.value.group = group || null
-  if (group) showFilters.value = true
-  applyFilters()
-})
+// One load per distinct view (as its URL would say it), including the first
+watch(() => JSON.stringify(viewToQuery(view.value)), () => loadItems(), { immediate: true })
 
-watch(() => tableProps.statusFilter, (status) => {
-  if ((status || null) === (filters.value.status || null)) return
-  filters.value.status = status || null
-  applyFilters()
+// Search: typed into a local field, committed (page 1) after a pause. A view
+// applied from elsewhere (a saved filter, Clear) updates the field.
+const searchInput = ref(view.value.search)
+watch(() => view.value.search, (search) => {
+  if ((searchInput.value || '').trim() !== search) searchInput.value = search
 })
+const onSearchInput = debounce(() => {
+  updateView({ search: searchInput.value || '', page: 1 })
+}, 500)
+const commitSearch = () => {
+  onSearchInput.cancel()
+  updateView({ search: searchInput.value || '', page: 1 })
+}
+
+const setFilter = (key, value) => {
+  updateView({ filters: { ...filters.value, [key]: value || null }, page: 1 })
+}
+
+// Clears filters and search; the sort and page size stay.
+const clearFilters = () => {
+  onSearchInput.cancel()
+  searchInput.value = ''
+  updateView({ filters: emptyFilters(), search: '', page: 1 })
+}
+
+// Open the filter panel when a filter it holds is set from outside it (the
+// Groups dialog, a saved filter, a remembered view); status has its own cards.
+const PANEL_FILTERS = FILTER_KEYS.filter((k) => k !== 'status')
+watch(() => PANEL_FILTERS.map((k) => filters.value[k]).join('|'), (now, before) => {
+  if (!showFilters.value && PANEL_FILTERS.some((k) => filters.value[k]) && now !== before) showFilters.value = true
+}, { immediate: true })
+
+// Saved filters: apply one (its filters, search and sort; the page size stays).
+// A criterion naming a group or credential that is gone is dropped and said.
+const savedFiltersStore = useSavedFiltersStore()
+const currentSaved = computed(() => savedFiltersStore.matching(view.value))
+
+const applySaved = (saved) => {
+  const next = normalizeView({ ...saved, page: 1, itemsPerPage: view.value.itemsPerPage })
+  const dropped = []
+  const group = next.filters.group
+  if (group && group !== 'none' && groupsStore.loaded && !groupsStore.byId.has(group)) {
+    next.filters.group = null
+    dropped.push('its group was deleted')
+  }
+  const credential = next.filters.credential
+  const credentials = settingsStore.apiCredentials || []
+  if (credential && !['none', 'any'].includes(credential) && canEdit.value && credentials.length &&
+      !credentials.some((c) => c.id === credential)) {
+    next.filters.credential = null
+    dropped.push('its credential was deleted')
+  }
+  if (dropped.length) {
+    notifications.showWarning(`Part of the saved filter no longer applies (${dropped.join(', ')}); showing the rest.`)
+  }
+  onSearchInput.cancel()
+  updateView(next)
+}
+
+// A saved view in words, for the saved-filters menu
+const optionTitle = (options, value) => options.find((o) => o.value === value)?.title || value
+const describeView = (saved) => {
+  const v = normalizeView(saved)
+  const parts = []
+  if (v.filters.status) parts.push(optionTitle(statusOptions, v.filters.status))
+  if (v.filters.type) parts.push(optionTitle(typeOptions, v.filters.type))
+  if (v.filters.platform) parts.push(optionTitle(platformFilterOptions, v.filters.platform))
+  if (v.filters.location) parts.push(`Location: ${v.filters.location}`)
+  if (v.filters.group) parts.push(`Group: ${optionTitle(groupFilterOptions.value, v.filters.group)}`)
+  if (v.filters.credential) parts.push(`Credential: ${optionTitle(credentialFilterOptions.value, v.filters.credential)}`)
+  if (v.search) parts.push(`“${v.search}”`)
+  if (v.sortBy.length) {
+    const header = headers.find((h) => h.key === v.sortBy[0].key)
+    parts.push(`by ${header?.title || v.sortBy[0].key} ${v.sortBy[0].order === 'desc' ? '↓' : '↑'}`)
+  }
+  return parts.join(' · ') || 'All devices'
+}
 
 const refreshTable = () => {
-  loadItems(tableOptions.value)
+  loadItems()
 }
 
 const syncDevices = async () => {
@@ -976,8 +1039,8 @@ const exportToCsv = async () => {
     // itemsPerPage -1 = no limit: every row matching the search and filters
     const { data } = await deviceService.getDevicesWithPagination({
       itemsPerPage: -1,
-      sortBy: tableOptions.value.sortBy,
-      search: searchInput.value,
+      sortBy: view.value.sortBy,
+      search: view.value.search,
       filters: filters.value
     })
     await exportRows(data, 'all')
@@ -1126,12 +1189,7 @@ onMounted(() => {
     settingsStore.fetchApiCredentials().catch(() => {})
   }
   groupsStore.ensureGroups().catch(() => {})
-  if (filters.value.group) showFilters.value = true
-  loadItems({
-    page: 1,
-    itemsPerPage: 10,
-    sortBy: []
-  })
+  // The first load runs from the view watcher above
 })
 
 // DevicesView refreshes the table after merging from its duplicate prompt.

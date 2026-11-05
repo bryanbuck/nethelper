@@ -85,8 +85,7 @@
       <!-- Device Table -->
       <DeviceTable
         ref="deviceTable"
-        v-model:status-filter="statusFilter"
-        v-model:group-filter="groupFilter"
+        v-model:view="view"
         @edit-device="handleEditDevice"
       />
 
@@ -267,7 +266,7 @@
       </v-card>
     </v-dialog>
 
-    <DeviceGroupsDialog v-model="groupsDialog" @show-devices="groupFilter = $event" />
+    <DeviceGroupsDialog v-model="groupsDialog" @show-devices="setFilter('group', $event)" />
 
     <DeviceEditDialog
       v-model="showEditDialog"
@@ -308,6 +307,10 @@ import DeviceGroupsDialog from '@/components/devices/DeviceGroupsDialog.vue'
 import ActionButton from '@/components/common/ActionButton.vue'
 import { vendorOptions, platformOptions } from '@/models/vendors'
 import { useDeviceForm, deviceTypes, managementModeOptions, deviceFormRules as rules } from '@/composables/useDeviceForm'
+import {
+  defaultView, normalizeView, viewFromQuery, viewToQuery, hasViewQuery, otherQuery, sameView,
+  readLastView, writeLastView
+} from '@/models/device-view'
 
 const route = useRoute()
 const router = useRouter()
@@ -474,10 +477,43 @@ const handleEditDevice = (device) => {
   showEditDialog.value = true
 }
 
-// Status filter shared with the table. ?status= (the Dashboard's cards)
-// seeds it; on this page the cards change it in place.
-const STATUSES = ['online', 'offline', 'warning', 'maintenance']
-const statusFilter = ref(STATUSES.includes(route.query.status) ? route.query.status : null)
+// The table's view (filters, search, sort, page, page size), owned here. It
+// lives in the URL, so a reload, back/forward or a shared link shows the same
+// list, and is remembered per user in this browser: opening a bare /devices
+// (the nav item, coming back from a device) restores the last one. Clear
+// Filters is how to get the unfiltered list back.
+const userId = authStore.user?.id || null
+const initialView = () => {
+  if (hasViewQuery(route.query)) return viewFromQuery(route.query)
+  return readLastView(userId) || defaultView()
+}
+const view = ref(initialView())
+
+const syncUrl = (v) => {
+  const query = { ...otherQuery(route.query), ...viewToQuery(v) }
+  if (JSON.stringify(query) !== JSON.stringify(route.query)) router.replace({ query })
+}
+// Immediate: a view that came from a link becomes the remembered one too
+watch(view, (v) => {
+  writeLastView(userId, v)
+  syncUrl(v)
+}, { immediate: true })
+// Follow the URL when it changes under us: back/forward, a dashboard card's
+// ?status= link (that replaces the whole view). A bare /devices keeps the view.
+watch(() => route.query, (query) => {
+  if (route.path !== '/devices') return
+  if (!hasViewQuery(query)) {
+    syncUrl(view.value)
+    return
+  }
+  const next = viewFromQuery(query)
+  if (!sameView(next, view.value)) view.value = next
+})
+
+const statusFilter = computed(() => view.value.filters.status)
+const setFilter = (key, value) => {
+  view.value = normalizeView({ ...view.value, filters: { ...view.value.filters, [key]: value || null }, page: 1 })
+}
 
 const statCards = [
   { key: 'online', status: 'online', label: 'Online Devices', color: 'success', icon: 'mdi-check-circle' },
@@ -490,31 +526,11 @@ const isActiveCard = (card) => card.status !== null && statusFilter.value === ca
 
 // Clicking the active card again (or Total) clears the status filter
 const selectStatus = (status) => {
-  statusFilter.value = status && statusFilter.value !== status ? status : null
+  setFilter('status', status && statusFilter.value !== status ? status : null)
 }
 
-// Keep the URL in step, so a reload or a shared link shows the same list
-watch(statusFilter, (status) => {
-  if ((route.query.status || null) === status) return
-  router.replace({ query: { ...route.query, status: status || undefined } })
-})
-// ...and follow it when it changes under us (e.g. the Devices nav item drops ?status=)
-watch(() => route.query.status, (status) => {
-  const next = STATUSES.includes(status) ? status : null
-  if (next !== statusFilter.value) statusFilter.value = next
-})
-
-// Group filter (?group=<id>|none), set from the table or the Groups dialog
+// The Groups dialog's "Show devices" sets the group filter (<id> or 'none')
 const groupsDialog = ref(false)
-const groupFilter = ref(typeof route.query.group === 'string' ? route.query.group : null)
-watch(groupFilter, (group) => {
-  if ((route.query.group || null) === group) return
-  router.replace({ query: { ...route.query, group: group || undefined } })
-})
-watch(() => route.query.group, (group) => {
-  const next = typeof group === 'string' ? group : null
-  if (next !== groupFilter.value) groupFilter.value = next
-})
 
 // Initialize
 onMounted(() => {

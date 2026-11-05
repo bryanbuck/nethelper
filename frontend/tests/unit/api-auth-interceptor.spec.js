@@ -35,4 +35,16 @@ describe('api 401 interceptor', () => {
     expect(await settled(api.get('/devices'))).toBe('rejected')
     expect(await settled(api.post('/auth/login', {}))).toBe('rejected')
   })
+
+  test('ending the session keeps display preferences: theme and each user\'s Devices view', async () => {
+    localStorage.setItem('access_token', 'expired')
+    localStorage.setItem('user', '{}')
+    localStorage.setItem('nethelper.theme', 'dark')
+    localStorage.setItem('nethelper.devicesView.u1', '{"page":3}')
+    expect(await settled(api.get('/devices'))).toBe('rejected')
+    expect(localStorage.getItem('access_token')).toBeNull()
+    expect(localStorage.getItem('user')).toBeNull()
+    expect(localStorage.getItem('nethelper.theme')).toBe('dark')
+    expect(localStorage.getItem('nethelper.devicesView.u1')).toBe('{"page":3}')
+  })
 })
