@@ -582,7 +582,7 @@ A rolling feed of what happened to the managed devices, at `/activity` (nav item
 
 ### 15. Devices page: saved filters and a remembered view
 **Priority**: Medium
-**Status**: Built 2026-11-04 on `feat/device-saved-filters` (not merged yet)
+**Status**: ✅ Merged to `master` 2026-11-04 (not yet released)
 
 **Saved filters.** Named views on the Devices table, opened from its "Saved filters" menu. Each holds the filters, search and sort; it never holds the page or page size. They are stored on the server per user (`SavedDeviceFilter`, `/api/v1/devices/saved-filters`), private and deleted with the user, at most 50 each. Every role, viewers included, manages its own. Saving under an existing name replaces that filter. A changed list offers "Update" for the filter last picked. A saved filter naming a deleted group or credential applies the rest and says so.
 
