@@ -1,7 +1,8 @@
 # NetHelper backend image.
 #   docker build -t nethelper-backend ./backend
 # Runtime tools the API shells out to: nmap + iproute2 (discovery), iputils-ping
-# (ping monitor), git + openssh-client (config-backup Git mirror).
+# (ping monitor), git + openssh-client (config-backup Git mirror),
+# postgresql-client (pg_dump/pg_restore/psql for application backups).
 
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
@@ -20,6 +21,9 @@ RUN apt-get update \
       tini openssl ca-certificates \
       nmap iproute2 iputils-ping \
       git openssh-client \
+      postgresql-common \
+ && /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y \
+ && apt-get install -y --no-install-recommends postgresql-client-17 \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -28,6 +32,7 @@ ENV NODE_ENV=production \
     LOG_FILES=false \
     BACKUP_STORAGE_PATH=/data/config-backups \
     BACKUP_GIT_REPO_PATH=/data/config-repo \
+    APP_BACKUP_PATH=/data/app-backups \
     CHECKPOINT_DISABLE=1 \
     NPM_CONFIG_UPDATE_NOTIFIER=false
 
@@ -38,8 +43,8 @@ COPY src ./src
 COPY scripts ./scripts
 
 # Runs as the image's unprivileged "node" user (uid 1000). /data holds config
-# backups and the Git mirror; mount a volume there.
-RUN mkdir -p /data/config-backups /data/config-repo \
+# backups, the Git mirror and application backups; mount a volume there.
+RUN mkdir -p /data/config-backups /data/config-repo /data/app-backups \
  && chown -R node:node /data \
  && chmod 0755 docker-entrypoint.sh
 USER node

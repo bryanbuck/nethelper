@@ -22,6 +22,7 @@ Hands-on checks that need real equipment, a real host, or a browser login, which
 - [ ] **`deploy/install.sh` on a real Docker host** ("Simpler install" below): a bridge install, a `--host-network` install, and a re-run as an upgrade; check that `docker compose exec -e NAME` passes the variable through. Optionally `nethelper-admin` on bare metal.
 - [ ] **VLAN overlay on hardware** (item 3a below): the CX REST reads were captured on a 6300F on 2026-11-04 (`aos-cx-live/interfaces-vlans.json`) and Central's per-switch VLANs on the 2930F and 6300F. Still open: view `/map` with the VLAN overlay and check a few ports against `show vlan` / `show interface brief`; check the Mist EX's ports, and whether a Mist trunk port lists every allowed VLAN; remove a VLAN from a CX trunk's allowed list, refresh, and check that the link turns dashed with the right port named. Note: the overlay flags Lab-Core 4 ↔ Lab-Edge1 1/1/2 (untagged 110 vs 1); check that it is intended.
 - [ ] **VXLAN overlay on hardware** (item 3a below): the reads and analysis ran live against Lab-Edge0/Edge1 (static VXLAN, VNI 110) on 2026-11-04, but the map UI has not been viewed. Pick Overlay → VXLAN on `/map` and check the tunnel, its panel, and the VNI picker (desktop and phone width). Then remove the `vtep-peer` on one side, refresh, and check that the tunnel turns amber "one side only". When EVPN gear (CX 6300+ with BGP EVPN) is available, capture `tunnel_endpoints` with `origin: evpn` and an L3 VNI.
+- [ ] **Application backup on a real Docker host** (item 16 below, added 2026-11-04): build the backend image (it now installs `postgresql-client-17` from the PGDG apt repo) and check `pg_dump --version` in it; Run now from Settings → App Backup against the Compose `postgres:15`; then restore that archive into a fresh stack with `docker compose run --rm backend node scripts/app-restore.js`. Bare metal was tested on the dev host (pg_dump 15) only.
 - [ ] **Junos SSH CLI fallback on hardware** (Phase 7 below): connection test, polls and a backup with NETCONF disabled.
 
 ---
@@ -592,6 +593,21 @@ A rolling feed of what happened to the managed devices, at `/activity` (nav item
 - Filters shared with the whole team (a "share" flag; per-user only today).
 - A default saved filter per user (the remembered view covers most of it).
 - Saved views on other tables (backups, alerts, activity).
+
+---
+
+### 16. Application backup (NetHelper itself)
+**Priority**: High
+**Status**: Phase 1 merged to `master` 2026-11-04
+
+**Phase 1, local archives** (`services/app-backup.service.js`, Settings → App Backup, admin only). One archive per run in `APP_BACKUP_PATH`: a manifest (versions, newest migration, checksums, an `ENCRYPTION_KEY` fingerprint), `pg_dump -Fc` of the app's schema, the flat config-backup store, optionally the Git mirror repo, the mirror's known_hosts. Made with the system `tar` (like `git`/`nmap`) and read back before it counts. Scheduled by cron (one Bull repeatable job on queue `app-backup`) or Run now; retention by count and age. Optional passphrase encryption (AES-256-GCM, scrypt; `utils/archive-crypto.js`, no dependency); only an encrypted archive may carry `ENCRYPTION_KEY`. Leaving out history leaves out the rows of `DeviceEvent`, `CloudAlarm`, `AuditLog`, `Execution`, `TopologyChange`, `AppBackupRun`. A failure raises `app-backup.failed`. Restore is a CLI (`npm run app:restore`, `nethelper-admin restore`, `docker compose run`) with the service stopped: it checks the archive, then drops and reloads the schema in one `psql --single-transaction` (a failure leaves the database as it was) and moves stored file paths when the folders differ. Models `AppBackupConfig`, `AppBackupRun` (migration `20261104180000_app_backup`).
+
+**Next**:
+- ⏳ **Phase 2, a Git remote destination** (encryption required). It reuses the config mirror's URL validation, SSH command and known_hosts. To settle first: encrypted archives don't delta-compress and history is never rewritten, so every push adds a full archive to the remote for good (GitHub refuses files over 100 MB). Options: push less often than local runs, one deletable branch per month, or a plain-SQL dump that deltas well under the config mirror's trust model.
+- ⏳ **Phase 3, SFTP** (optional): `ssh2`, already a dependency, has an SFTP client. A mounted network share in `APP_BACKUP_PATH` covers NFS/SMB today.
+- ⏳ An "app backup overdue" alert (no success within twice the schedule), for a schedule that silently stops.
+- ⏳ Restore from the UI (deliberately left out: the app would have to replace its own database while running).
+- ⏳ Large downloads go through the browser as a blob; a streamed download link would suit multi-GB archives.
 
 ---
 

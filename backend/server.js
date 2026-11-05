@@ -53,6 +53,11 @@ async function startServer() {
     const configBackupService = require('./src/services/config-backup.service');
     await configBackupService.syncSchedules();
 
+    // Application self-backup: clear interrupted runs, register its schedule
+    await require('./src/services/app-backup.service').startup().catch((error) => {
+      logger.error(`App backup startup failed: ${error.message}`);
+    });
+
     // Re-derive automation cron schedules from their Schedule triggers
     await automationSchedules.syncAll().catch((error) => {
       logger.error(`Automation schedule sync failed: ${error.message}`);

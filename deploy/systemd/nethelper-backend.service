@@ -32,6 +32,7 @@ Environment=TRUST_PROXY=loopback
 Environment=LOG_DIR=/var/log/nethelper
 Environment=BACKUP_STORAGE_PATH=/var/lib/nethelper/config-backups
 Environment=BACKUP_GIT_REPO_PATH=/var/lib/nethelper/config-repo
+Environment=APP_BACKUP_PATH=/var/lib/nethelper/app-backups
 # Prisma's update check prints a banner and leaves a child process behind
 # (systemd: "Found left-over process ... in control group").
 Environment=CHECKPOINT_DISABLE=1

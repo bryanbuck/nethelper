@@ -66,6 +66,7 @@ async function initializeQueues() {
   queues.discovery = createQueue('discovery');
   queues.configBackup = createQueue('config-backup');
   queues.topology = createQueue('topology');
+  queues.appBackup = createQueue('app-backup');
 
   // Import and initialize job processors
   require('../jobs/automation.job')(queues.automation);
@@ -75,6 +76,7 @@ async function initializeQueues() {
   require('../jobs/config-backup.job')(queues.configBackup);
   require('../jobs/topology.job')(queues.topology);
   require('../jobs/notification.job')(queues.notification);
+  require('../jobs/app-backup.job')(queues.appBackup);
 
   logger.info('All job queues initialized');
 }

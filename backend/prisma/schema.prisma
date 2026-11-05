@@ -786,6 +786,43 @@ model GitBackupConfig {
   @@index([userId])
 }
 
+// Application self-backup (app-backup.service.js): one row of settings. The
+// archives on disk (APP_BACKUP_PATH, each with a .json sidecar) are
+// authoritative; AppBackupRun only records runs for the UI.
+model AppBackupConfig {
+  id             String   @id @default(uuid())
+  enabled        Boolean  @default(false) // Scheduled runs; Run now works either way
+  cronExpression String   @default("0 2 * * *")
+  timezone       String   @default("UTC")
+  retainCount    Int      @default(14) // Newest archives kept
+  retainDays     Int? // Also drop archives older than this (newest always kept)
+  includeHistory Boolean  @default(true) // Row data of event/alarm/audit/run history
+  includeGitRepo Boolean  @default(false) // The config-backup Git mirror's repo
+  encrypt        Boolean  @default(false)
+  passphrase     String? // Field-encrypted (utils/encryption.js)
+  includeKey     Boolean  @default(false) // ENCRYPTION_KEY inside encrypted archives
+  updatedById    String? // Plain column: who last saved the settings
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model AppBackupRun {
+  id          String    @id @default(uuid())
+  status      String // running | success | failed
+  trigger     String // manual | scheduled
+  fileName    String?
+  sizeBytes   BigInt?
+  sha256      String?
+  encrypted   Boolean   @default(false)
+  durationMs  Int?
+  error       String?
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  triggeredBy String? // User id for manual runs (plain column)
+
+  @@index([startedAt])
+}
+
 // DEPRECATED (Phase 0 multi-vendor): superseded by CloudIntegration. Rows were
 // copied into CloudIntegration by the multi_vendor_phase0 migration; this table
 // is kept for one release so a rollback path exists, then will be dropped.

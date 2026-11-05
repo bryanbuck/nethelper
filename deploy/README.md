@@ -175,7 +175,7 @@ network.
 |---|---|
 | `nethelper_pgdata` | PostgreSQL database |
 | `nethelper_redisdata` | Redis (job queues, token cache; rebuildable) |
-| `nethelper_nethelper-data` | `/data/config-backups` (flat config files), `/data/config-repo` (Git mirror), and `/data/git-known_hosts` (the mirror's SSH host key) |
+| `nethelper_nethelper-data` | `/data/config-backups` (flat config files), `/data/config-repo` (Git mirror), `/data/git-known_hosts` (the mirror's SSH host key), and `/data/app-backups` (application backups; see **Backup and restore**) |
 
 To mirror backups to a remote over SSH, mount the key read-only into the backend container, then enter that path in Settings → Git mirror. For example, create `deploy/docker-compose.override.yml`:
 
@@ -202,7 +202,7 @@ Tested layout (adjust the unit file if yours differs):
 |---|---|
 | `/opt/nethelper` | The code (a checkout of this repository, or a release tarball) |
 | `/etc/nethelper/backend.env` | Configuration and secrets (mode 0640, owner `root:nethelper`) |
-| `/var/lib/nethelper` | Config backups and the Git mirror; also the service user's home |
+| `/var/lib/nethelper` | Config backups, the Git mirror and application backups; also the service user's home |
 | `/var/log/nethelper` | Log files (rotate at 10 MB, 5 kept; also in the journal) |
 
 1. **Packages.** Install Node.js 22+ at `/usr/bin/node`. Node 20 is end-of-life and some dependencies require 22, so where the distro ships 20 (Debian 12 and 13, Ubuntu 24.04), use NodeSource:
@@ -215,7 +215,7 @@ Tested layout (adjust the unit file if yours differs):
    Then the rest:
 
    ```sh
-   apt install postgresql redis-server nginx nmap iproute2 iputils-ping git openssh-client
+   apt install postgresql postgresql-client redis-server nginx nmap iproute2 iputils-ping git openssh-client
    ```
 
    Tested on Debian 13 with PostgreSQL 17, Redis 8 and nginx 1.26.
@@ -305,14 +305,59 @@ The same entries are also in `/var/log/nethelper/*.log`.
 
 ## Backup and restore
 
-What to back up, in order of importance:
+What a full recovery needs:
 
-1. **`ENCRYPTION_KEY`** (in `deploy/.env` or `/etc/nethelper/backend.env`). Every stored device, cloud, and Git credential is encrypted with it. A database backup without the key restores with unreadable credentials. Keep it somewhere other than the database backups.
-2. **PostgreSQL**: inventory, users, integrations, schedules, and backup metadata.
+1. **`ENCRYPTION_KEY`** (in `deploy/.env` or `/etc/nethelper/backend.env`). Every stored device, cloud, and Git credential is encrypted with it. A database backup without the key restores with unreadable credentials. Keep a copy somewhere other than the backups.
+2. **PostgreSQL**: inventory, users, integrations, schedules, alerts, and backup metadata.
 3. **Config backup files**: the flat files are authoritative for backup content.
 4. **The Git mirror**, if enabled and not pushed to a remote. When it is pushed, the remote is the backup.
 
 Redis only holds queues and caches; it doesn't need backing up.
+
+### Application backups (built in)
+
+**Settings → App Backup** (admins) takes items 2–4 in one archive, on a schedule (default daily at 02:00, newest 14 kept) or with **Run now**. Each archive holds a `pg_dump` of the database, the config-backup files, optionally the Git mirror repository, the mirror's SSH host keys, and a manifest with checksums and versions. A failed run raises the **Application backup failed** alert, which notification channels can send on.
+
+- **Where**: `APP_BACKUP_PATH`, `/data/app-backups` in Docker and `/var/lib/nethelper/app-backups` on bare metal. Archives are mode 0600, with a `.json` summary next to each. That location is on the same disk as what it backs up: copy the archives off the host (download them from the page, or sync the directory), or point `APP_BACKUP_PATH` at another disk or a mounted network share. In Docker, mount it in `deploy/docker-compose.override.yml`:
+
+  ```yaml
+  services:
+    backend:
+      environment:
+        APP_BACKUP_PATH: /backups
+      volumes:
+        - /mnt/nas/nethelper:/backups
+  ```
+
+  The directory must be writable by uid 1000 (Docker) or the `nethelper` user.
+- **Encryption**: optional, with a passphrase (AES-256-GCM). Only an encrypted archive can carry `ENCRYPTION_KEY` (a setting, off by default), so a restore on a new host can read the stored credentials. Keep the passphrase somewhere other than this server: the copy NetHelper stores is lost with it. An unencrypted archive never contains the key, but it does hold device configs with their secrets.
+- **Needs** `pg_dump` and `tar`. The Docker image ships `pg_dump` 17, which dumps PostgreSQL 15–17. On bare metal, install `postgresql-client` of the server's major version or newer. The page says when the tool is missing or too old.
+
+**Restore** with NetHelper stopped. The restore checks the archive first: checksums, that it isn't from a newer NetHelper, that `pg_restore` can read it, and that `ENCRYPTION_KEY` matches the one the backup was made with. Then it replaces the database **in one transaction** (a failure leaves the database as it was), copies the files into place, and moves stored file paths when the folders differ from the backed-up host (e.g. from Docker to bare metal). Newer migrations run when NetHelper starts. `--dry-run` only checks.
+
+Docker Compose:
+
+```sh
+docker compose stop backend
+docker compose run --rm backend node scripts/app-restore.js --file /data/app-backups/<archive> --dry-run
+docker compose run --rm backend node scripts/app-restore.js --file /data/app-backups/<archive>
+docker compose up -d
+```
+
+To restore an archive from elsewhere, copy it into the volume first (`docker compose cp <archive> backend:/data/app-backups/`, with the backend container created), or mount its directory in the `run` command (`-v "$PWD":/restore`).
+
+Bare metal (stops and restarts `nethelper-backend` itself):
+
+```sh
+sudo nethelper-admin restore /var/lib/nethelper/app-backups/<archive> --dry-run
+sudo nethelper-admin restore /var/lib/nethelper/app-backups/<archive>
+```
+
+For an encrypted archive, the passphrase is asked for, or taken from `NETHELPER_BACKUP_PASSPHRASE` (or `--passphrase-file`). On a new host whose `ENCRYPTION_KEY` differs, the restore refuses. If the archive carries the original key, `--key-out <file>` writes it out: put it in the settings as `ENCRYPTION_KEY`, then run the restore again. `--force` restores anyway, leaving stored credentials unreadable (re-enter them in Settings).
+
+### Manual backup (without the app)
+
+The same data by hand, e.g. for a host where the backend doesn't start:
 
 **Docker Compose:**
 
@@ -342,7 +387,7 @@ tar czf nethelper-data-$(date +%F).tgz -C /var/lib/nethelper config-backups conf
 
 Restore with `pg_restore --clean --if-exists -d nethelper`, then untar into `/var/lib/nethelper`. Stop the service while you restore.
 
-The backup rows store absolute file paths. Restore the files to the same location they were taken from: `/data/...` in Docker, or `/var/lib/nethelper/...` on bare metal.
+A manual restore doesn't move stored file paths: restore the files to the same location they were taken from (`/data/...` in Docker, or `/var/lib/nethelper/...` on bare metal).
 
 ---
 
@@ -371,7 +416,7 @@ record every event twice. Live-monitoring settings are in
 
 ## Upgrading
 
-Migrations run automatically on start in both setups. Take a database backup first: migrations are forward-only.
+Migrations run automatically on start in both setups. Take a backup first (Settings → App Backup → Run now): migrations are forward-only.
 
 From a release tarball, unpack the new release next to the old tree and swap them. With Docker Compose, copy `deploy/.env` (and `deploy/docker-compose.override.yml`, if you have one) into the new tree first: they live in the tree.
 

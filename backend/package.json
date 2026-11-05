@@ -16,7 +16,8 @@
     "setup": "npm install && npm run db:generate && npm run db:migrate",
     "key:rotate": "node scripts/rotate-encryption-key.js",
     "ci": "npm run lint && npm test",
-    "postman:generate": "node scripts/generate-postman.js"
+    "postman:generate": "node scripts/generate-postman.js",
+    "app:restore": "node scripts/app-restore.js"
   },
   "dependencies": {
     "@prisma/client": "^5.7.0",

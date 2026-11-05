@@ -25,6 +25,7 @@ const ROUTERS = {
   alerts: require('../../src/routes/alert.routes'),
   activity: require('../../src/routes/activity.routes'),
   system: require('../../src/routes/system.routes'),
+  'app-backups': require('../../src/routes/app-backup.routes'),
 };
 
 // Reads that are still restricted, because the response carries secrets or
@@ -41,6 +42,8 @@ const RESTRICTED_READS = [
   'GET /users/',
   'GET /system/',
   'GET /devices/:deviceId/address-lookup',
+  'GET /app-backups/',
+  'GET /app-backups/:name/download',
 ];
 
 // Operator-level actions that only admins may take.
@@ -72,6 +75,11 @@ const ADMIN_ONLY = [
   'POST /users/:id/reset-password',
   'DELETE /users/:id',
   'GET /system/',
+  'GET /app-backups/',
+  'PUT /app-backups/config',
+  'POST /app-backups/run',
+  'GET /app-backups/:name/download',
+  'DELETE /app-backups/:name',
 ];
 
 // Mutating routes on the caller's own records, open to every role (viewers
