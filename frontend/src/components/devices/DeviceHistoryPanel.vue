@@ -95,6 +95,7 @@
         <span class="legend"><i class="swatch state-online" /> Online</span>
         <span class="legend"><i class="swatch state-offline" /> Offline</span>
         <span v-if="hasCombined" class="legend"><i class="swatch state-warning" /> They disagree</span>
+        <span v-if="hasRemoved" class="legend"><i class="swatch state-removed" /> Removed from the cloud</span>
         <span class="legend"><i class="swatch state-unknown" /> No data</span>
         <span class="legend"><i class="line backup" /> Backup</span>
         <span class="legend"><i class="line backup-changed" /> Backup found a change</span>
@@ -162,7 +163,9 @@ const RANGES = [
   { value: '30d', label: '30 days', short: '30d' },
 ]
 const LANE_ICONS = { ping: 'mdi-lan-connect', cloud: 'mdi-cloud-outline', combined: 'mdi-set-center' }
-const STATE_LABELS = { online: 'Online', offline: 'Offline', warning: 'Warning', maintenance: 'Maintenance', unknown: 'No data' }
+const STATE_LABELS = {
+  online: 'Online', offline: 'Offline', warning: 'Warning', maintenance: 'Maintenance', removed: 'Not in this cloud any more', unknown: 'No data'
+}
 
 const range = ref('24h')
 const history = ref(null)
@@ -254,6 +257,7 @@ const span = (from, to) => {
 
 const hasCombined = computed(() => history.value?.lanes.some((l) => l.key === 'combined'))
 const cloudLane = computed(() => history.value?.lanes.find((l) => l.key === 'cloud'))
+const hasRemoved = computed(() => Boolean(cloudLane.value?.segments.some((s) => s.state === 'removed')))
 const laneLabel = (lane) => (lane.key === 'combined' ? 'Both agree?' : lane.label)
 
 const fmt = (t) => format(new Date(t), loadedRange.value === '24h' ? 'HH:mm' : 'MMM d, HH:mm')
@@ -432,6 +436,9 @@ const totals = computed(() => {
 }
 .state-maintenance {
   background: rgba(var(--v-theme-on-surface), 0.4);
+}
+.state-removed {
+  background: rgba(var(--v-theme-on-surface), 0.25);
 }
 .state-unknown {
   background: repeating-linear-gradient(

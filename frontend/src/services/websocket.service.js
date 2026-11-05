@@ -226,13 +226,14 @@ class WebSocketService {
       this.stores.devices.applySyncResult(data)
       const parts = [`${data.total ?? 0} device(s)`, `${data.created ?? 0} new`]
       if (data.adopted) parts.push(`${data.adopted} matched to existing devices by MAC`)
+      if (data.released) parts.push(`${data.released} no longer in the cloud, now monitored by ping only`)
       const failed = (data.integrations || []).filter((i) => i.error)
-      // The hourly sync is unattended: only a failure is worth a status bar entry.
-      if (data.trigger === 'scheduled' && !failed.length) return
+      // The hourly sync is unattended: only a failure or a removal is worth a status bar entry.
+      if (data.trigger === 'scheduled' && !failed.length && !data.released) return
       const message = `Cloud sync finished: ${parts.join(', ')}.`
         + (data.possibleDuplicates ? ` ${data.possibleDuplicates} possible duplicate(s) to review on the Devices page.` : '')
         + (failed.length ? ` Failed: ${failed.map((i) => i.name).join(', ')}.` : '')
-      if (data.possibleDuplicates || failed.length) this.stores.notifications.showWarning(message, 'Device Sync')
+      if (data.possibleDuplicates || failed.length || data.released) this.stores.notifications.showWarning(message, 'Device Sync')
       else this.stores.notifications.showSuccess(message, 'Device Sync')
     } catch (error) {
       console.error('Error handling device sync completed:', error)

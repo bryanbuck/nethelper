@@ -14,6 +14,7 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 - Devices page: **saved filters** (named filters, search and sort, kept per user on the server, from the table's Saved filters menu; every role manages its own), and a remembered view: the filters, search, sort, page and page size are in the URL, and opening Devices again returns to the last one.
 
 ### Fixed
+- Cloud sync: a device removed from Aruba Central or Mist kept the cloud's last status (usually "online") indefinitely, because sync only updated devices the cloud still listed. A sync now releases a device its integration no longer lists: it becomes a direct device monitored by ping, its cloud alerts resolve, its History tab shows "Removed from <integration>" in the cloud lane, and the sync's status bar entry says how many were released (also for the hourly sync). Only a successful, non-empty inventory read releases anything, and a device another integration listed in the same sync is treated as moved. A released device that reappears in the cloud is matched again by serial.
 - Network Map VLAN overlay: AOS-CX access ports configured with a plain `vlan access` command were missing (AOS-CX 10.16 leaves `vlan_mode` empty on them), which on most switches was most access ports.
 
 ### Security

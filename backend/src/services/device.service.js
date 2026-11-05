@@ -408,7 +408,9 @@ class DeviceService {
    * with ownership following the most recent sync that saw it.
    *
    * @param {string} [integrationId] - CloudIntegration id to sync alone
-   * @returns {Promise<{created, updated, total, integrations: Array}>}
+   * Devices an integration no longer lists are released (releaseRemovedDevices).
+   *
+   * @returns {Promise<{created, updated, adopted, released, total, integrations: Array}>}
    */
   async syncDevicesFromCloud(integrationId = null) {
     const { providers, skipped } = integrationId
@@ -433,13 +435,19 @@ class DeviceService {
       throw new Error('No active cloud integrations configured. Add one in Settings.');
     }
 
-    const totals = { created: 0, updated: 0, adopted: 0, total: 0, integrations: [] };
+    const totals = { created: 0, updated: 0, adopted: 0, released: 0, total: 0, integrations: [] };
+    // Integrations whose whole inventory was read, and every serial any of
+    // them reported: what releaseRemovedDevices() compares against.
+    const read = [];
+    const seenSerials = new Set();
 
     for (const provider of providers) {
-      const summary = { integrationId: provider.id, name: provider.label, created: 0, updated: 0, adopted: 0, total: 0, error: null };
+      const summary = { integrationId: provider.id, name: provider.label, created: 0, updated: 0, adopted: 0, released: 0, total: 0, error: null };
       try {
         const devices = await provider.listInventory();
         summary.total = devices.length;
+        read.push({ provider, summary, count: devices.length });
+        for (const normalized of devices) if (normalized.serial) seenSerials.add(normalized.serial);
         // The env-var fallback integration has no DB row to reference.
         const ownerId = provider.id === ENV_ARUBA_INTEGRATION_ID ? null : provider.id;
         for (const normalized of devices) {
@@ -472,6 +480,11 @@ class DeviceService {
       totals.integrations.push(summary);
     }
 
+    for (const { provider, summary, count } of read) {
+      summary.released = await this.releaseRemovedDevices(provider, seenSerials, count);
+      totals.released += summary.released;
+    }
+
     // A full sync runs every integration that can sync, so a sync.failed
     // alert for any other (deleted, deactivated, or the env fallback once a
     // real integration exists) would never be cleared by a later success.
@@ -495,6 +508,78 @@ class DeviceService {
     }
 
     return totals;
+  }
+
+  /**
+   * Devices an integration owns that its inventory no longer lists (removed
+   * from the cloud) are released: they become direct devices with no cloud,
+   * so ping alone decides their status and the cloud's last word ("online")
+   * doesn't stick. Only after that integration's whole inventory was read; a
+   * serial another integration reported in the same sync is left for that
+   * integration's upsert (a move, not a removal). An empty inventory releases
+   * nothing: it is more likely a token or scope problem than an emptied
+   * cloud. A released device that comes back is matched by serial again.
+   * @param {object} provider - the integration's provider
+   * @param {Set<string>} seenSerials - every serial this sync's reads reported
+   * @param {number} inventoryCount - devices in this integration's inventory
+   * @returns {Promise<number>} devices released
+   */
+  async releaseRemovedDevices(provider, seenSerials, inventoryCount) {
+    const ownerId = provider.id === ENV_ARUBA_INTEGRATION_ID ? null : provider.id;
+    const prisma = getPrisma();
+    let owned;
+    try {
+      owned = await prisma.device.findMany({
+        where: { managementMode: 'cloud', cloudIntegrationId: ownerId },
+        select: { id: true, name: true, serial: true, cloudStatus: true, cloudManagedSource: true },
+      });
+    } catch (error) {
+      logger.warn(`Could not check ${provider.label} for removed devices: ${error.message}`);
+      return 0;
+    }
+    const gone = (owned || []).filter((device) => device.serial && !seenSerials.has(device.serial));
+    if (!gone.length) return 0;
+    if (inventoryCount === 0) {
+      logger.warn(`${provider.label} returned an empty inventory; keeping its ${gone.length} device(s) as they are`);
+      return 0;
+    }
+
+    let released = 0;
+    for (const device of gone) {
+      // The switch's own answer about its cloud (switch-rest) stays; what the
+      // cloud told us about ownership no longer applies.
+      const fromCloud = device.cloudManagedSource !== 'switch-rest';
+      try {
+        const { count } = await prisma.device.updateMany({
+          where: { id: device.id, managementMode: 'cloud', cloudIntegrationId: ownerId },
+          data: {
+            managementMode: 'direct',
+            cloudIntegrationId: null,
+            // Not null-able; with no ping status the display falls back to it.
+            cloudStatus: 'offline',
+            ...(fromCloud && {
+              cloudConnectionStatus: null, cloudManaged: null, cloudManagedSource: null, cloudManagedCheckedAt: null,
+            }),
+          },
+        });
+        if (!count) continue; // changed by someone else meanwhile
+      } catch (error) {
+        logger.warn(`Could not release ${device.name} from ${provider.label}: ${error.message}`);
+        continue;
+      }
+      released++;
+      await deviceEvents.recordStateIfChanged(device, 'cloud.', 'removed', 'cloud', {
+        previous: device.cloudStatus,
+        via: 'sync',
+        provider: provider.providerType || null,
+        integrationName: provider.label,
+      });
+      const subject = { subjectKey: device.id, deviceId: device.id };
+      alertService.clear('device.cloud-offline', subject);
+      alertService.clear('device.cloud-config', subject);
+      logger.info(`${device.name} is no longer in ${provider.label}; now a direct device`, { deviceId: device.id, serial: device.serial });
+    }
+    return released;
   }
 
   /** @deprecated Use syncDevicesFromCloud(); kept as an alias for one release. */

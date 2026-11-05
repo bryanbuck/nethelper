@@ -11,6 +11,8 @@ describe('device event labels', () => {
       'device.restarted',
       // cloud-status.service.js: cloud.<DeviceStatus>
       'cloud.online', 'cloud.offline', 'cloud.warning', 'cloud.maintenance',
+      // device.service.js releaseRemovedDevices(): gone from the cloud's inventory
+      'cloud.removed',
       // ping-monitor.service.js: ping.online|offline
       'ping.online', 'ping.offline',
     ]
@@ -21,6 +23,13 @@ describe('device event labels', () => {
     expect(eventInfo({ type: 'cloud.offline', data: { provider: 'juniper_mist', previous: 'online' } }))
       .toMatchObject({ label: 'Mist reports offline', color: 'error' })
     expect(eventInfo({ type: 'cloud.online', data: {} }).label).toBe('Cloud reports online')
+  })
+
+  test('a removal names the integration, else the provider', () => {
+    expect(eventInfo({ type: 'cloud.removed', data: { integrationName: 'Lab Central', provider: 'aruba_central' } }).label)
+      .toBe('Removed from Lab Central')
+    expect(eventInfo({ type: 'cloud.removed', data: { provider: 'juniper_mist' } }).label).toBe('Removed from Mist')
+    expect(eventInfo({ type: 'cloud.removed', data: {} }).label).toBe('Removed from the cloud')
   })
 
   test('details fold into the label; an unknown type still shows', () => {

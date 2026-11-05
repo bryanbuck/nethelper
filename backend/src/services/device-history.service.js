@@ -84,7 +84,8 @@ function combineSegments(ping, cloud, from, to) {
   for (let i = 0; i < cuts.length - 1; i++) {
     const t = new Date(cuts[i]);
     const p = stateAt(ping, t);
-    const c = stateAt(cloud, t);
+    // A device removed from its cloud has no cloud view any more.
+    const c = stateAt(cloud, t) === 'removed' ? 'unknown' : stateAt(cloud, t);
     let state;
     let reason = null;
     if (p === 'unknown' && c === 'unknown') state = 'unknown';
@@ -109,7 +110,7 @@ async function laneEvents(deviceId, prefix, from, to) {
     prisma.deviceEvent.findFirst({
       where: { deviceId, type: { startsWith: prefix }, occurredAt: { lt: from } },
       orderBy: { occurredAt: 'desc' },
-      select: { type: true, occurredAt: true },
+      select: { type: true, occurredAt: true, data: true },
     }),
     prisma.deviceEvent.findMany({
       where: { deviceId, type: { startsWith: prefix }, occurredAt: { gte: from, lte: to } },
@@ -135,7 +136,12 @@ async function getHistory(deviceId, query = {}) {
   });
   if (!device) return null;
 
-  const hasCloud = device.managementMode === 'cloud' || Boolean(device.cloudIntegrationId);
+  // A device released from its cloud (cloud.removed) keeps its cloud lane.
+  const hasCloud = device.managementMode === 'cloud' || Boolean(device.cloudIntegrationId)
+    || Boolean(await prisma.deviceEvent.findFirst({
+      where: { deviceId, type: { startsWith: 'cloud.' } },
+      select: { id: true },
+    }));
   const [ping, cloud, backups, priorBackup, restarts] = await Promise.all([
     laneEvents(deviceId, 'ping.', from, to),
     hasCloud ? laneEvents(deviceId, 'cloud.', from, to) : null,
@@ -166,10 +172,12 @@ async function getHistory(deviceId, query = {}) {
   }];
   if (cloud) {
     const cloudSegments = buildSegments(cloud.events, cloud.prior, 'cloud.', from, to);
+    // Without an integration (released), the newest event says which it was.
+    const named = [...cloud.events].reverse().find((e) => e.data?.integrationName) || cloud.prior;
     lanes.push({
       key: 'cloud',
-      label: device.cloudIntegration?.name || 'Cloud',
-      provider: device.cloudIntegration?.provider || null,
+      label: device.cloudIntegration?.name || named?.data?.integrationName || 'Cloud',
+      provider: device.cloudIntegration?.provider || named?.data?.provider || null,
       segments: cloudSegments,
       events: cloud.events.map((e) => ({ at: e.occurredAt, state: e.type.slice(6), data: e.data })),
     });

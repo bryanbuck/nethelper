@@ -5,16 +5,21 @@
  * base provider's honest defaults.
  */
 const mockPrisma = {
-  device: { findUnique: jest.fn(), findMany: jest.fn(async () => []), update: jest.fn(), create: jest.fn() },
+  device: {
+    findUnique: jest.fn(), findMany: jest.fn(async () => []), update: jest.fn(), create: jest.fn(), updateMany: jest.fn(),
+  },
   cloudIntegration: { findUnique: jest.fn(), findMany: jest.fn() },
 };
 jest.mock('../../src/config/database', () => ({ getPrisma: () => mockPrisma }));
 jest.mock('../../src/services/alert.service', () => ({ raise: jest.fn(), clear: jest.fn(), clearExcept: jest.fn() }));
+jest.mock('../../src/services/device-events.service', () => ({ recordStateIfChanged: jest.fn(async () => true) }));
 
 const deviceService = require('../../src/services/device.service');
 const alertService = require('../../src/services/alert.service');
 const CloudProviderFactory = require('../../src/services/cloud-providers/cloud-provider-factory');
+const { ENV_ARUBA_INTEGRATION_ID } = CloudProviderFactory;
 const BaseCloudProvider = require('../../src/services/cloud-providers/base-cloud-provider');
+const deviceEvents = require('../../src/services/device-events.service');
 
 const mistSwitch = {
   serial: 'SN2', name: 'JNEX-01', type: 'switch', vendor: 'juniper', platform: 'junos', model: 'EX4000-12MP',
@@ -195,4 +200,116 @@ test('base provider operations nobody implements are CapabilityErrors, not TypeE
   ]) {
     await expect(call()).rejects.toMatchObject({ name: 'CapabilityError' });
   }
+});
+
+describe('syncDevicesFromCloud releases devices the cloud no longer lists', () => {
+  const inventoryOf = (...serials) => serials.map((serial) => ({ ...mistSwitch, serial, name: serial }));
+  const provider = (id, serials, extra = {}) => ({
+    id, label: `${id} cloud`, providerType: 'aruba_central', listInventory: jest.fn(async () => inventoryOf(...serials)), ...extra,
+  });
+  const owned = (id, serial, over = {}) => ({ id, name: `sw-${serial}`, serial, cloudStatus: 'online', cloudManagedSource: 'cloud-inventory', ...over });
+
+  beforeEach(() => {
+    mockPrisma.device.findUnique.mockImplementation(async ({ where }) => existing({ id: `row-${where.serial}`, serial: where.serial }));
+    mockPrisma.device.updateMany.mockResolvedValue({ count: 1 });
+    // Rows the integration owns, asked for by releaseRemovedDevices().
+    mockPrisma.device.findMany.mockImplementation(async ({ where } = {}) => (
+      where?.managementMode === 'cloud' ? [owned('d1', 'SN1'), owned('d2', 'SN2')] : []
+    ));
+  });
+
+  test('a device missing from a full inventory becomes direct with its cloud status cleared', async () => {
+    jest.spyOn(CloudProviderFactory, 'activeIntegrations').mockResolvedValue({ providers: [provider('int-c', ['SN1'])], skipped: [] });
+
+    const result = await deviceService.syncDevicesFromCloud();
+
+    expect(result.released).toBe(1);
+    expect(result.integrations[0].released).toBe(1);
+    expect(mockPrisma.device.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { managementMode: 'cloud', cloudIntegrationId: 'int-c' },
+    }));
+    expect(mockPrisma.device.updateMany).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.device.updateMany).toHaveBeenCalledWith({
+      where: { id: 'd2', managementMode: 'cloud', cloudIntegrationId: 'int-c' },
+      data: {
+        managementMode: 'direct', cloudIntegrationId: null, cloudStatus: 'offline',
+        cloudConnectionStatus: null, cloudManaged: null, cloudManagedSource: null, cloudManagedCheckedAt: null,
+      },
+    });
+    expect(deviceEvents.recordStateIfChanged).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'd2' }), 'cloud.', 'removed', 'cloud',
+      expect.objectContaining({ previous: 'online', integrationName: 'int-c cloud', provider: 'aruba_central' })
+    );
+    expect(alertService.clear).toHaveBeenCalledWith('device.cloud-offline', { subjectKey: 'd2', deviceId: 'd2' });
+    expect(alertService.clear).toHaveBeenCalledWith('device.cloud-config', { subjectKey: 'd2', deviceId: 'd2' });
+  });
+
+  test("keeps the switch's own answer about its cloud", async () => {
+    mockPrisma.device.findMany.mockImplementation(async ({ where } = {}) => (
+      where?.managementMode === 'cloud' ? [owned('d2', 'SN2', { cloudManagedSource: 'switch-rest' })] : []
+    ));
+    jest.spyOn(CloudProviderFactory, 'activeIntegrations').mockResolvedValue({ providers: [provider('int-c', ['SN1'])], skipped: [] });
+
+    await deviceService.syncDevicesFromCloud();
+
+    expect(mockPrisma.device.updateMany.mock.calls[0][0].data).toEqual({ managementMode: 'direct', cloudIntegrationId: null, cloudStatus: 'offline' });
+  });
+
+  test('a failed inventory read releases nothing', async () => {
+    const failing = provider('int-c', [], { listInventory: jest.fn(async () => { throw new Error('timeout'); }) });
+    jest.spyOn(CloudProviderFactory, 'activeIntegrations').mockResolvedValue({ providers: [failing, provider('int-m', ['SN9'])], skipped: [] });
+    mockPrisma.device.findMany.mockImplementation(async ({ where } = {}) => (
+      where?.cloudIntegrationId === 'int-c' ? [owned('d1', 'SN1')] : []
+    ));
+
+    const result = await deviceService.syncDevicesFromCloud();
+
+    expect(result.released).toBe(0);
+    expect(mockPrisma.device.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('an empty inventory releases nothing', async () => {
+    jest.spyOn(CloudProviderFactory, 'activeIntegrations').mockResolvedValue({ providers: [provider('int-c', [])], skipped: [] });
+
+    const result = await deviceService.syncDevicesFromCloud();
+
+    expect(result.released).toBe(0);
+    expect(mockPrisma.device.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('a device another integration reported in the same sync moved; it is not released', async () => {
+    mockPrisma.device.findMany.mockImplementation(async ({ where } = {}) => (
+      where?.cloudIntegrationId === 'int-a' ? [owned('d1', 'SN1'), owned('d2', 'SN2')] : []
+    ));
+    jest.spyOn(CloudProviderFactory, 'activeIntegrations').mockResolvedValue({
+      providers: [provider('int-a', ['SN1']), provider('int-b', ['SN2'])], skipped: [],
+    });
+
+    const result = await deviceService.syncDevicesFromCloud();
+
+    expect(result.released).toBe(0);
+    expect(mockPrisma.device.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('a row changed meanwhile is not counted or recorded', async () => {
+    mockPrisma.device.updateMany.mockResolvedValue({ count: 0 });
+    jest.spyOn(CloudProviderFactory, 'activeIntegrations').mockResolvedValue({ providers: [provider('int-c', ['SN1'])], skipped: [] });
+
+    const result = await deviceService.syncDevicesFromCloud();
+
+    expect(result.released).toBe(0);
+    expect(deviceEvents.recordStateIfChanged).not.toHaveBeenCalledWith(expect.anything(), 'cloud.', 'removed', expect.anything(), expect.anything());
+  });
+
+  test('the env-var Central fallback checks the rows with no integration id', async () => {
+    jest.spyOn(CloudProviderFactory, 'activeIntegrations').mockResolvedValue({
+      providers: [provider(ENV_ARUBA_INTEGRATION_ID, ['SN1'])], skipped: [],
+    });
+
+    await deviceService.syncDevicesFromCloud();
+
+    expect(mockPrisma.device.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { managementMode: 'cloud', cloudIntegrationId: null },
+    }));
+  });
 });

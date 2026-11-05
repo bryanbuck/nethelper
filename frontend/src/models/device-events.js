@@ -22,6 +22,8 @@ export const DEVICE_EVENTS = {
   'cloud.offline': { label: 'Cloud reports offline', icon: 'mdi-cloud-off-outline', color: 'error' },
   'cloud.warning': { label: 'Cloud reports warning', icon: 'mdi-cloud-alert-outline', color: 'warning' },
   'cloud.maintenance': { label: 'Cloud reports maintenance', icon: 'mdi-cloud-cog-outline', color: 'medium-emphasis' },
+  // Sync found the device gone from its cloud's inventory and made it a direct device.
+  'cloud.removed': { label: 'Removed from the cloud', icon: 'mdi-cloud-remove-outline', color: 'medium-emphasis' },
   'device.restarted': { label: 'Restarted', icon: 'mdi-restart', color: 'warning' },
   'ping.online': { label: 'Answers ping', icon: 'mdi-lan-check', color: 'success' },
   'ping.offline': { label: 'Stopped answering ping', icon: 'mdi-lan-disconnect', color: 'error' },
@@ -46,6 +48,10 @@ export function eventInfo(e) {
   const info = DEVICE_EVENTS[e.type] || { label: e.type, icon: 'mdi-information-outline', color: 'medium-emphasis' }
   if (e.type === 'port.link.up' && e.data?.speedMbps) return { ...info, label: `link up at ${speedLabel(e.data.speedMbps)}` }
   if (e.type === 'port.poe.up' && e.data?.pdClass) return { ...info, label: `PoE delivering (${e.data.pdClass})` }
+  if (e.type === 'cloud.removed') {
+    const where = e.data?.integrationName || (e.data?.provider && cloudProviderLabel(e.data.provider))
+    return where ? { ...info, label: `Removed from ${where}` } : info
+  }
   if (e.type.startsWith('cloud.') && e.data?.provider) {
     return { ...info, label: `${cloudProviderLabel(e.data.provider)} reports ${e.type.slice('cloud.'.length)}` }
   }

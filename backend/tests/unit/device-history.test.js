@@ -73,6 +73,14 @@ describe('combineSegments', () => {
   });
 });
 
+describe('combineSegments after a removal', () => {
+  test('a device removed from its cloud follows ping alone', () => {
+    const ping = [{ from, to, state: 'online' }];
+    const cloud = [{ from, to: t('06:00'), state: 'online' }, { from: t('06:00'), to, state: 'removed' }];
+    expect(combineSegments(ping, cloud, from, to)).toEqual([{ from, to, state: 'online' }]);
+  });
+});
+
 describe('getHistory', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -113,5 +121,20 @@ describe('getHistory', () => {
       expect.objectContaining({ id: 'b2', status: 'failed', error: 'timeout', changed: false }),
       expect.objectContaining({ id: 'b3', changed: true, changedSince: t('01:00'), changedSinceId: 'b1' }),
     ]);
+  });
+
+  test('a device released from its cloud keeps the cloud lane, named from its events', async () => {
+    mockPrisma.device.findUnique.mockResolvedValue({ id: 'd1', managementMode: 'direct', cloudIntegrationId: null, cloudIntegration: null });
+    mockPrisma.deviceEvent.findFirst.mockImplementation(async ({ where }) => (where.occurredAt ? null : { id: 'e0' }));
+    mockPrisma.deviceEvent.findMany.mockImplementation(async ({ where }) => (where.type?.startsWith === 'cloud.' ? [
+      { occurredAt: t('01:00'), type: 'cloud.online', data: {} },
+      { occurredAt: t('06:00'), type: 'cloud.removed', data: { previous: 'online', integrationName: 'Lab Central', provider: 'aruba_central' } },
+    ] : []));
+
+    const history = await getHistory('d1', { from: from.toISOString(), to: to.toISOString() });
+
+    expect(history.lanes.map((l) => l.key)).toEqual(['ping', 'cloud', 'combined']);
+    expect(history.lanes[1]).toMatchObject({ label: 'Lab Central', provider: 'aruba_central' });
+    expect(history.lanes[1].segments.at(-1)).toMatchObject({ from: t('06:00'), state: 'removed' });
   });
 });
