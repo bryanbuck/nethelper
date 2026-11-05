@@ -12,9 +12,11 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 - Network Map VLAN overlay: switches whose neighbors come from Aruba Central now get their VLANs from Central too.
 - Device page History tab: a config change opens its diff. Click a change window, its backup marker, or an entry in the new Config changes list under the chart (operators and admins, like backup contents).
 - Devices page: **saved filters** (named filters, search and sort, kept per user on the server, from the table's Saved filters menu; every role manages its own), and a remembered view: the filters, search, sort, page and page size are in the URL, and opening Devices again returns to the last one.
+- Device page: an **Image Information** card for AOS-CX switches lists the primary and secondary images with their versions, tags the booted and default one, and warns when the next reboot would load a different version. It shows what the last poll read (opening the page as an operator or admin reads it again, in the same switch session as the system information), with a Refresh button.
 
 ### Fixed
 - Cloud sync: a device removed from Aruba Central or Mist kept the cloud's last status (usually "online") indefinitely, because sync only updated devices the cloud still listed. A sync now releases a device its integration no longer lists: it becomes a direct device monitored by ping, its cloud alerts resolve, its History tab shows "Removed from <integration>" in the cloud lane, and the sync's status bar entry says how many were released (also for the hourly sync). Only a successful, non-empty inventory read releases anything, and a device another integration listed in the same sync is treated as moved. A released device that reappears in the cloud is matched again by serial.
+- Firmware Status: the Current column was always empty on AOS-CX (the switch names the field `current_version`); it is now **Running Version**. Polls also record the version on the device, so directly managed devices show up under Recorded versions, as that card said they would.
 - Network Map VLAN overlay: AOS-CX access ports configured with a plain `vlan access` command were missing (AOS-CX 10.16 leaves `vlan_mode` empty on them), which on most switches was most access ports.
 
 ### Security
@@ -22,7 +24,7 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ### Upgrading from 0.9.0-beta.7
 - Take a backup first: migrations are forward-only (from this release on, Settings → App Backup → Run now). **Docker Compose**: run `deploy/install.sh` from the new tree (it keeps your `.env` values). **Bare metal**: follow "Upgrading" in [`deploy/README.md`](deploy/README.md), and install `postgresql-client` (the server's major version or newer) for application backups.
-- Three migrations, all additive: `20261104120000_topology_vxlan` (VXLAN columns on `DeviceTopologyState`), `20261104150000_saved_device_filters` (new table `SavedDeviceFilter`), `20261104180000_app_backup` (new tables `AppBackupConfig`, `AppBackupRun`). New optional setting `APP_BACKUP_PATH` (defaults: `/data/app-backups` in Docker, `/var/lib/nethelper/app-backups` with the systemd unit); scheduled application backups are off until an admin turns them on.
+- Four migrations, all additive: `20261104120000_topology_vxlan` (VXLAN columns on `DeviceTopologyState`), `20261104150000_saved_device_filters` (new table `SavedDeviceFilter`), `20261104180000_app_backup` (new tables `AppBackupConfig`, `AppBackupRun`), `20261104220000_device_firmware_images` (column `Device.firmwareImages`). New optional setting `APP_BACKUP_PATH` (defaults: `/data/app-backups` in Docker, `/var/lib/nethelper/app-backups` with the systemd unit); scheduled application backups are off until an admin turns them on.
 
 ## [0.9.0-beta.7] — 2026-10-30
 
