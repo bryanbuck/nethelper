@@ -147,12 +147,29 @@ describe('notes', () => {
 });
 
 describe('search', () => {
+  const rawSql = () => mockPrisma.$queryRaw.mock.calls.map(([strings]) => strings.join('?'));
+
   it('matches a MAC fragment in any spelling through the raw query', async () => {
-    mockPrisma.$queryRaw.mockResolvedValue([{ id: 'c1' }]);
+    mockPrisma.$queryRaw.mockResolvedValueOnce([{ id: 'c1' }]).mockResolvedValueOnce([{ id: 'c2' }]);
     mockPrisma.portClient.findMany.mockResolvedValue([]);
     await portView.search('AA-BB.CC');
     expect(mockPrisma.$queryRaw.mock.calls[0].slice(1)).toEqual(['%aabbcc%']);
-    expect(mockPrisma.portClient.findMany.mock.calls[0][0].where.OR).toEqual(expect.arrayContaining([{ id: { in: ['c1'] } }]));
+    expect(mockPrisma.portClient.findMany.mock.calls[0][0].where.OR).toEqual(expect.arrayContaining([{ id: { in: ['c1', 'c2'] } }]));
+  });
+
+  it('matches what a cloud classifies a client as and its LLDP name', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([{ id: 'cam' }]);
+    await portView.search('camera');
+    expect(rawSql()).toHaveLength(1); // no MAC query for a word
+    expect(rawSql()[0]).toMatch(/"profile"->>'os' ILIKE/);
+    expect(rawSql()[0]).toMatch(/"lldp"->>'sysName' ILIKE/);
+    expect(mockPrisma.$queryRaw.mock.calls[0].slice(1)).toEqual(['%camera%', '%camera%', '%camera%', '%camera%']);
+    expect(mockPrisma.portClient.findMany.mock.calls[0][0].where.OR).toEqual(expect.arrayContaining([{ id: { in: ['cam'] } }]));
+  });
+
+  it('escapes LIKE wildcards in the text', async () => {
+    await portView.search('50%_off');
+    expect(mockPrisma.$queryRaw.mock.calls[0][1]).toBe('%50\\%\\_off%');
   });
 
   it('matches an IP prefix and text fields, but not MAC for plain words', async () => {
@@ -160,7 +177,7 @@ describe('search', () => {
     expect(mockPrisma.$queryRaw).not.toHaveBeenCalled();
     expect(mockPrisma.portClient.findMany.mock.calls[0][0].where.OR).toEqual(expect.arrayContaining([{ ip: { startsWith: '192.168.20' } }]));
     await portView.search('printer');
-    expect(mockPrisma.$queryRaw).not.toHaveBeenCalled();
+    expect(rawSql().some((sql) => sql.includes('replace("mac"'))).toBe(false);
     const noteWhere = mockPrisma.portNote.findMany.mock.calls[1][0].where.OR;
     expect(noteWhere).toEqual(expect.arrayContaining([{ label: { contains: 'printer', mode: 'insensitive' } }]));
     expect(noteWhere.some((c) => 'expectedMac' in c)).toBe(false);

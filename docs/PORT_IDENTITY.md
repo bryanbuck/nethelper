@@ -163,6 +163,31 @@ The response also carries `reads` (per source: `readAt`, `lastSuccessAt`, `error
 
 **Cloud profiling is evidence, not fact.** Central classifies the USB-C dock behind the lab's Cisco phone as "Cisco IP Phone" too. Show `profile.source` ("Aruba Central classifies this as …"); the user's note is the final word.
 
+## UI
+
+**Device page Ports tab** (`?tab=ports`, switches only; `?port=` filters to a port and expands it). Files: `components/devices/DevicePortsPanel.vue`, service `services/ports.service.js` (no store), display model `models/port-clients.js` (its value lists are parity-tested against `client-aging.js`).
+- One row per port: link dot, **your label** (or Add), the switch's own description, the port's kind (a pencil icon when the note set it), connected devices with a freshness icon and their best name, and VLAN.
+  - A device's best name is its hostname, then its own LLDP name, then the cloud's classification (never "Unclassified"), then vendor, then MAC.
+  - An AP port names the AP from LLDP (linked when it's in inventory) and counts what's behind it; an uplink shows only a count.
+- Filters: All / With a device / With a label, an "Uplinks and access points" switch, and a text filter (port, label, client, IP, MAC, LLDP name).
+- An expanded row (`PortDetails.vue`) shows the note, the LLDP neighbors, and every sighting shown: Central's classification as a claim ("Aruba Central classifies this as …"), user, MAC and vendor (or "Private (random) MAC"), IP, VLAN, freshness and first seen, a link to the new port for a `moved` client, and the sources.
+- "Read now" is operator+. The tab reloads on `ports:updated` for its switch and reports on `ports:collected`.
+
+**Note dialog** (`PortNoteDialog.vue`, fullscreen on phones):
+- The form: label (64-character counter), location, owner, port kind, expected device (a MAC to pick from what's been seen, or typed), and notes.
+- Beside it, the evidence: the switch's description, LLDP neighbors, and every kept sighting, with **Use** (to the label), **Owner** (the 802.1X user) and **Pin** (as the expected device).
+- Below, the note's history. Viewers open it read-only from the eye button.
+
+**Elsewhere:**
+- Your label shows under the port on the Live tab and the Neighbors tab (`composables/usePortLabels.js`, which reloads on `ports:updated`).
+- **Where is…** on the Devices page header (`PortSearchDialog.vue`) is the fleet-wide search. Results link to `/devices/:id?tab=ports&port=…`.
+
+**Checked on 2026-11-10** in headless Chromium against the dev DB copy, at 1440 px and 390 px: no horizontal scroll and no console errors.
+- Five tabs fit a phone once the device page's tab row uses 8px padding.
+- "camera" found the six cameras through Central's classification.
+- The Sw-Studio 1/1/4 deep link opened expanded.
+- It also showed **description drift on real gear**. Sw-CoreA's AP ports are described "AP01/AP11/AP21", but LLDP hears AP11/AP21/AP01 on them: the APs were moved and the descriptions weren't updated. That is the case phase 2 (and the drift idea) is for.
+
 ## Progress
 
 - [x] Data model: migration `20261110120000_port_identity` (additive: four new tables).
@@ -173,7 +198,8 @@ The response also carries `reads` (per source: `readAt`, `lastSuccessAt`, `error
 - [ ] Vendor names for MACs outside the ~55 curated Aruba/Juniper prefixes: a bundled IEEE OUI table (`scripts/update-oui.js`), shared with discovery.
 - [ ] Watch the aging run for a few days on real data: misses for quiet clients, link-down, and a client moved by hand.
 - [x] API (2026-11-10): ports view, one port with note history, note `PUT`/`DELETE` with revisions, read-now, fleet-wide search (`services/ports/port-view.service.js`, `controllers/port.controller.js`). Run against the dev DB copy. The read summary now also stores each port's own name and description, and `PortReadState.createdAt` records the first read (migration `20261110140000_port_read_state_created`).
-- [ ] UI: device page Ports tab, note dialog with evidence, labels on the Live/Neighbors tabs and the map, search.
+- [x] UI (2026-11-10): device page Ports tab, note dialog with evidence and history, labels on the Live and Neighbors tabs, the "Where is…" search. Search now also matches the cloud's classification and the client's LLDP name.
+- [ ] Labels on the Network Map (edge tooltips, node drawer).
 - [ ] Phase 1b: Junos NETCONF, AOS-S and IOS SSH MAC/ARP parsers (spec-derived until hardware).
 - [ ] Phase 1.5: alert rules for an unexpected or missing pinned client; Activity category.
 - [ ] Phase 2 (design first): push a note's label to the port description (AOS-CX REST, Mist, Junos/AOS-S/IOS direct); NetHelper's first write to devices.

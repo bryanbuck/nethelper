@@ -131,6 +131,7 @@
               >
                 <td>
                   <div class="font-weight-medium">{{ p.port }}</div>
+                  <div v-if="noteFor(p.port)?.label" class="text-caption" title="Your port label">{{ noteFor(p.port).label }}</div>
                   <div v-if="p.description" class="text-caption text-medium-emphasis">{{ p.description }}</div>
                 </td>
                 <td>
@@ -158,7 +159,10 @@
                 :class="{ 'recently-changed': recentlyChanged(p.port) }"
               >
                 <td class="font-weight-medium">{{ p.port }}</td>
-                <td class="text-medium-emphasis">{{ p.description || '' }}</td>
+                <td>
+                  <div v-if="noteFor(p.port)?.label" title="Your port label">{{ noteFor(p.port).label }}</div>
+                  <div class="text-medium-emphasis">{{ p.description || '' }}</div>
+                </td>
                 <td>
                   <v-chip :color="linkChip(p).color" size="x-small" variant="tonal">
                     <v-icon start :icon="linkChip(p).icon" size="x-small" />
@@ -207,11 +211,14 @@ import { PlatformInfo, liveStateMode, cloudProviderLabel } from '@/models/vendor
 import LiveSparkline from '@/components/devices/LiveSparkline.vue'
 import DeviceEventsCard from '@/components/devices/DeviceEventsCard.vue'
 import { speedLabel } from '@/models/device-events'
+import { usePortLabels } from '@/composables/usePortLabels'
 
 const props = defineProps({
   device: { type: Object, required: true },
 })
 const emit = defineEmits(['update'])
+// Port Identity: the user's port labels next to the switch's descriptions.
+const { noteFor } = usePortLabels(() => props.device)
 
 const live = useLiveStore()
 const authStore = useAuthStore()

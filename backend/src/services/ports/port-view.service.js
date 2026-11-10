@@ -303,7 +303,8 @@ class PortViewService {
 
   /**
    * Fleet-wide "where is this?": sightings by MAC (any spelling, or 4+ hex
-   * digits of it), IP, hostname, user or vendor, and notes by any text field.
+   * digits of it), IP, hostname, user, vendor, a cloud's classification
+   * (os/function/category) or the client's LLDP name, and notes by any text field.
    */
   async search(q, { limit = 50 } = {}) {
     const prisma = getPrisma();
@@ -315,13 +316,21 @@ class PortViewService {
     const macIds = !ipLike && /^[0-9a-f]{4,12}$/.test(hex)
       ? (await prisma.$queryRaw`SELECT "id" FROM "PortClient" WHERE replace("mac", ':', '') LIKE ${`%${hex}%`} LIMIT 500`).map((r) => r.id)
       : [];
+    // What a cloud classifies the client as, and its own LLDP name ("camera", "phone", "SEP…").
+    const like = `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    const textIds = ipLike ? [] : (await prisma.$queryRaw`
+      SELECT "id" FROM "PortClient"
+      WHERE "profile"->>'os' ILIKE ${like} OR "profile"->>'function' ILIKE ${like}
+         OR "profile"->>'category' ILIKE ${like} OR "lldp"->>'sysName' ILIKE ${like}
+      LIMIT 500`).map((r) => r.id);
+    const ids = [...new Set([...macIds, ...textIds])];
     const contains = { contains: text, mode: 'insensitive' };
     const deviceSelect = { select: { id: true, name: true } };
     const [clients, notes] = await Promise.all([
       prisma.portClient.findMany({
         where: {
           OR: [
-            ...(macIds.length ? [{ id: { in: macIds } }] : []),
+            ...(ids.length ? [{ id: { in: ids } }] : []),
             { ip: text.includes('.') ? { startsWith: text } : { equals: text } },
             { hostname: contains },
             { username: contains },
