@@ -6,6 +6,7 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ### Added
 - Device page **Live** tab (AOS-CX): **Mode** and **VLAN** columns, read from the switch and kept current by its notification stream. An access port shows its VLAN, a trunk its native and allowed VLANs, and a port in a LAG the LAG's VLANs. On a phone they appear under the port name.
+- Devices page: a **Back Up** button in the selection toolbar (operators and admins) queues a config backup of the selected devices, including ones on other table pages. Results appear in the status bar as each device finishes, and devices with no per-device config (such as cloud-managed APs) are counted as skipped.
 
 ### Fixed
 - Device page Live tab: a port description changed on the switch now shows up as it changes, instead of at the next full re-read (up to 10 minutes later).

@@ -274,6 +274,16 @@
             </div>
             
             <div class="d-flex flex-wrap align-center ga-2">
+              <v-btn
+                v-if="canEdit"
+                variant="outlined"
+                size="small"
+                prepend-icon="mdi-backup-restore"
+                :loading="bulkBackupBusy"
+                @click="bulkBackup"
+              >
+                Back Up
+              </v-btn>
               <v-menu v-if="canEdit">
                 <template #activator="{ props }">
                   <v-btn
@@ -629,6 +639,7 @@ import DeviceMergeDialog from './DeviceMergeDialog.vue'
 import DeviceCredentialDialog from './DeviceCredentialDialog.vue'
 import DeviceGroupMembershipDialog from './DeviceGroupMembershipDialog.vue'
 import { useGroupsStore } from '@/stores/groups'
+import { useBackupsStore } from '@/stores/backups'
 import { cloudProviderLabel, platformOptions } from '@/models/vendors'
 import { unreachableFromHere, answersPingButCloudOffline, DeviceTypeInfo, deviceTypeInfo } from '@/models/Device'
 import { VendorInfo, PlatformInfo } from '@/models/vendors'
@@ -986,6 +997,26 @@ const bulkLiveMonitoring = async (enabled) => {
   if (changed) notifications.showSuccess(`Live monitoring turned ${verb} for ${changed} device(s)`)
   if (failures.length) {
     notifications.showWarning(failures.join('\n'), `${failures.length} device(s) not changed`)
+  }
+}
+
+// Config backup of the selection: one queued run (POST /backups/run). The
+// results reach the status bar per device and per run through the backup:*
+// socket events, as from the Config Backups page; devices with no per-device
+// config (cloud APs) are counted as skipped there, not failed.
+const backupsStore = useBackupsStore()
+const bulkBackupBusy = ref(false)
+
+const bulkBackup = async () => {
+  const count = selectedItems.value.length
+  bulkBackupBusy.value = true
+  try {
+    await backupsStore.runBackup([...selectedItems.value])
+    notifications.showInfo(`Backup queued for ${count} device(s)`, 'Config Backup')
+  } catch (err) {
+    notifications.showError(err.userMessage || err.message || 'Failed to queue the backup', 'Config Backup')
+  } finally {
+    bulkBackupBusy.value = false
   }
 }
 
