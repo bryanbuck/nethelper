@@ -17,7 +17,7 @@ describe('notifications store (activity log)', () => {
 
   test('a message leaves the bar after its timeout but stays in the history', () => {
     const store = useNotificationsStore()
-    store.showSuccess('Backed up 3 devices', 'Backup Run Complete')
+    store.showSuccess('Backed up 3 devices', 'Backup Run Complete', { history: true })
     expect(store.current.message).toBe('Backed up 3 devices')
     vi.advanceTimersByTime(3000)
     expect(store.current).toBeNull()
@@ -28,7 +28,7 @@ describe('notifications store (activity log)', () => {
   test('a persistent message is pinned until dismissed, behind newer messages', () => {
     const store = useNotificationsStore()
     const pinned = store.addNotification({ type: 'warning', title: 'Connection Lost', persistent: true })
-    store.showInfo('Something else')
+    store.showInfo('Something else', 'Info', { history: true })
     expect(store.current.message).toBe('Something else')
     vi.advanceTimersByTime(3000)
     expect(store.current.id).toBe(pinned)
@@ -49,21 +49,21 @@ describe('notifications store (activity log)', () => {
 
   test('ids are unique for messages added in the same millisecond', () => {
     const store = useNotificationsStore()
-    store.showInfo('a')
-    store.showInfo('b')
+    store.showInfo('a', 'Info', { history: true })
+    store.showInfo('b', 'Info', { history: true })
     expect(store.entries).toHaveLength(2)
   })
 
   test('history is capped, newest first', () => {
     const store = useNotificationsStore()
-    for (let i = 0; i < MAX_ENTRIES + 5; i++) store.showInfo(`m${i}`)
+    for (let i = 0; i < MAX_ENTRIES + 5; i++) store.showInfo(`m${i}`, 'Info', { history: true })
     expect(store.entries).toHaveLength(MAX_ENTRIES)
     expect(store.entries[0].message).toBe(`m${MAX_ENTRIES + 4}`)
   })
 
   test('unseen counts track problems separately and reset when seen', () => {
     const store = useNotificationsStore()
-    store.showInfo('fine')
+    store.showInfo('fine', 'Info', { history: true })
     store.showError('broke')
     store.showWarning('hmm')
     expect(store.unseenCount).toBe(3)
@@ -106,6 +106,72 @@ describe('notifications store (activity log)', () => {
     setActivePinia(createPinia())
     sessionStorage.setItem(ACTIVITY_LOG_KEY, JSON.stringify([{ nope: true }, 'x']))
     expect(useNotificationsStore().entries).toEqual([])
+  })
+
+  test('a flash shows in the bar for its timeout but never enters the history', () => {
+    const store = useNotificationsStore()
+    store.showSuccess('Layout saved')
+    expect(store.current.message).toBe('Layout saved')
+    expect(store.entries).toHaveLength(0)
+    expect(store.unseenCount).toBe(0)
+    expect(stored()).toEqual([])
+    vi.advanceTimersByTime(3000)
+    expect(store.current).toBeNull()
+    expect(store.flash).toBeNull()
+  })
+
+  test('successes and info flash unless kept; errors and warnings are kept', () => {
+    const store = useNotificationsStore()
+    store.showSuccess('Saved')
+    store.showInfo('Queued')
+    store.showSuccess('Backup run finished', 'Backup Run Complete', { history: true })
+    store.showError('broke')
+    store.showWarning('hmm')
+    expect(store.entries.map((e) => e.message)).toEqual(['hmm', 'broke', 'Backup run finished'])
+  })
+
+  test('a flash under an entry\'s id replaces it; an entry under a flash\'s id is the record', () => {
+    const store = useNotificationsStore()
+    store.addNotification({ id: 'socket-connection', title: 'Connection Lost', persistent: true, transient: true })
+    store.addNotification({ id: 'socket-connection', title: 'Connection Restored', history: false })
+    expect(store.entries).toHaveLength(0)
+    expect(store.current.title).toBe('Connection Restored')
+
+    store.addNotification({ id: 'q1', title: 'Backup queued', history: false })
+    store.addNotification({ id: 'q1', title: 'Backup Complete' })
+    expect(store.entries.map((e) => e.title)).toEqual(['Backup Complete'])
+    vi.advanceTimersByTime(10000)
+    expect(store.entries.map((e) => e.title)).toEqual(['Backup Complete'])
+  })
+
+  test('a flash never pins, and dismissing it leaves the bar to the pinned message', () => {
+    const store = useNotificationsStore()
+    store.addNotification({ title: 'Automation failed', persistent: true })
+    store.addNotification({ title: 'Saved', persistent: true, history: false })
+    expect(store.current.title).toBe('Saved')
+    store.dismissCurrent()
+    expect(store.current.title).toBe('Automation failed')
+  })
+
+  test('a pinned transient message stays until removed, and takes its pop-up along', () => {
+    const store = useNotificationsStore()
+    store.addNotification({ id: 'alert_1', type: 'error', title: 'Switch down', persistent: true, transient: true, popup: true, timeout: 8000 })
+    vi.advanceTimersByTime(60000)
+    expect(store.current.title).toBe('Switch down')
+    store.addNotification({ id: 'alert_2', type: 'error', title: 'Core down', persistent: true, transient: true, popup: true, timeout: 8000 })
+    store.remove('alert_2')
+    expect(store.popup).toBeNull()
+    expect(store.current.title).toBe('Switch down')
+  })
+
+  test('dismissing a transient message removes it; a lasting one stays in the history', () => {
+    const store = useNotificationsStore()
+    store.addNotification({ id: 'socket-connection', title: 'Connection Lost', persistent: true, transient: true })
+    store.dismissCurrent()
+    expect(store.entries).toHaveLength(0)
+    store.addNotification({ title: 'Automation failed', persistent: true })
+    store.dismissCurrent()
+    expect(store.entries).toHaveLength(1)
   })
 
   test('clearHistory empties the log, the bar, the pop-up and storage', () => {

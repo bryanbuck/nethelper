@@ -77,7 +77,7 @@ describe('websocket service', () => {
     expect(sockets).toHaveLength(1)
   })
 
-  test('the status bar logs a lost connection once and replaces it on reconnect', async () => {
+  test('the status bar logs a lost connection once and drops it after reconnecting', async () => {
     await service.connect('http://x')
     const log = service.stores.notifications
     log.clearHistory()
@@ -88,22 +88,115 @@ describe('websocket service', () => {
     sockets[0].fire('disconnect', 'transport close')
     expect(log.connection).toBe('reconnecting')
     expect(log.current.title).toBe('Connection Lost')
-    sockets[0].fire('connect')
     expect(log.entries).toHaveLength(1)
-    expect(log.entries[0].title).toBe('Connection Restored')
-    expect(log.entries[0].pinned).toBe(false)
+    sockets[0].fire('connect')
+    expect(log.current.title).toBe('Connection Restored') // a flash in the bar
+    expect(log.entries).toHaveLength(0) // the outage is over: nothing left in the history
   })
 
-  test('a critical alert pops up with a stored route action', async () => {
+  test('the dot is never green before the first connect, and the first connect says nothing', async () => {
+    await service.connect('http://x')
+    const log = service.stores.notifications
+    log.clearHistory()
+    expect(log.connection).toBe('connecting')
+    sockets[0].fire('connect_error', new Error('server down')) // still retrying
+    expect(log.connection).toBe('connecting')
+    sockets[0].fire('connect')
+    expect(log.connection).toBe('connected')
+    expect(log.current).toBeNull()
+    service.closeSocket()
+    expect(log.connection).toBe('idle')
+  })
+
+  test('a failed connection leaves the log when the socket is closed', async () => {
+    await service.connect('http://x')
+    const log = service.stores.notifications
+    log.clearHistory()
+    service.notifyConnectionFailed()
+    expect(log.current.title).toBe('Connection Failed')
+    service.closeSocket()
+    expect(log.entries).toHaveLength(0)
+  })
+
+  test('a critical alert pops up and stays pinned only while it is open', async () => {
     await service.connect('http://x')
     const log = service.stores.notifications
     log.clearHistory()
     service.handleNewAlert({ alert: { id: 'a1', severity: 'critical', title: 'Switch down', message: 'core-1' } })
     expect(log.popup.title).toBe('Switch down')
+    expect(log.current.title).toBe('Switch down')
     expect(log.entries[0].actions).toEqual([{ label: 'View', to: '/alerts' }])
-    service.handleNewAlert({ alert: { id: 'a2', severity: 'warning', title: 'PoE fault', message: 'ap-3' } })
-    expect(log.current.title).toBe('PoE fault')
-    expect(log.popup.title).toBe('Switch down') // warnings stay in the bar
+
+    service.handleAlertUpdated({ alerts: [{ id: 'a1', status: 'open', occurrences: 2 }] }) // a bump
+    expect(log.entries).toHaveLength(1)
+    service.handleAlertUpdated({ alerts: [{ id: 'a1', status: 'resolved' }] })
+    expect(log.entries).toHaveLength(0)
+    expect(log.popup).toBeNull()
+    expect(log.current).toBeNull()
+  })
+
+  test('warning and info alerts flash in the bar but stay out of the history (bell, Alerts page, Activity)', async () => {
+    await service.connect('http://x')
+    const log = service.stores.notifications
+    log.clearHistory()
+    service.handleNewAlert({ alert: { id: 'a2', severity: 'warning', title: 'sw-1 is offline in the cloud', message: '' } })
+    expect(log.current.title).toBe('sw-1 is offline in the cloud')
+    expect(log.current.actions).toEqual([{ label: 'View', to: '/alerts' }])
+    expect(log.popup).toBeNull()
+    service.handleNewAlert({ alert: { id: 'a3', severity: 'info', title: 'Note', message: '' } })
+    expect(log.entries).toHaveLength(0)
+    expect(log.unseenCount).toBe(0)
+  })
+
+  test('unattended backups speak only through a failed run summary', async () => {
+    await service.connect('http://x')
+    const log = service.stores.notifications
+    log.clearHistory()
+    service.handleBackupCompleted({ backupId: 'b1', deviceId: 'd1', deviceName: 'sw-1', trigger: 'scheduled', batch: true })
+    service.handleBackupFailed({ backupId: 'b2', deviceId: 'd2', deviceName: 'sw-2', trigger: 'scheduled', batch: true, error: 'timed out' })
+    service.handleBackupCompleted({ backupId: 'b3', deviceId: 'd3', deviceName: 'sw-3', trigger: 'automation' })
+    service.handleBackupRunCompleted({ trigger: 'scheduled', total: 2, succeeded: 2, failed: 0 })
+    expect(log.entries).toHaveLength(0)
+    service.handleBackupRunCompleted({ trigger: 'scheduled', total: 2, succeeded: 1, failed: 1 })
+    expect(log.entries).toHaveLength(1)
+    expect(log.entries[0].type).toBe('warning')
+  })
+
+  test('a manual run logs its summary and failures, not each success', async () => {
+    await service.connect('http://x')
+    const log = service.stores.notifications
+    log.clearHistory()
+    service.handleBackupCompleted({ backupId: 'b1', deviceId: 'd1', deviceName: 'sw-1', trigger: 'manual', batch: true })
+    service.handleBackupCompleted({ backupId: 'b2', deviceId: 'd2', deviceName: 'sw-2', trigger: 'manual', batch: true, warning: 'NETCONF refused' })
+    service.handleBackupFailed({ backupId: 'b3', deviceId: 'd3', deviceName: 'sw-3', trigger: 'manual', batch: true, error: 'timed out' })
+    service.handleBackupRunCompleted({ trigger: 'manual', total: 3, succeeded: 2, failed: 1 })
+    expect(log.entries.map((e) => e.title)).toEqual(['Backup Run Complete', 'Backup Failed', 'Backup Incomplete'])
+  })
+
+  test('a single-device backup replaces its queued entry', async () => {
+    const { backupEntryId } = await import('@/services/websocket.service')
+    await service.connect('http://x')
+    const log = service.stores.notifications
+    log.clearHistory()
+    log.addNotification({ id: backupEntryId('d1'), title: 'Config Backup', message: 'Backup of sw-1 queued', history: false })
+    expect(log.entries).toHaveLength(0)
+    service.handleBackupCompleted({ backupId: 'b1', deviceId: 'd1', deviceName: 'sw-1', trigger: 'manual', batch: false })
+    expect(log.entries).toHaveLength(1)
+    expect(log.entries[0].title).toBe('Backup Complete')
+    expect(log.current.title).toBe('Backup Complete')
+  })
+
+  test('a manual automation run is one entry: started, then its result', async () => {
+    await service.connect('http://x')
+    const log = service.stores.notifications
+    log.clearHistory()
+    const data = { executionId: 'e1', automationId: 'au1', automation: { name: 'Nightly' }, trigger: 'manual' }
+    service.handleAutomationStarted(data)
+    expect(log.current.message).toBe('Automation "Nightly" has started')
+    expect(log.entries).toHaveLength(0)
+    service.handleAutomationCompleted({ ...data, status: 'success' })
+    expect(log.entries).toHaveLength(1)
+    expect(log.entries[0].message).toBe('Automation "Nightly" completed successfully')
   })
 
   test('a device with no per-device config stays out of the status bar', async () => {
