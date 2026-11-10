@@ -8,9 +8,9 @@ The single forward-looking backlog for NetHelper: features and improvements plan
 
 ## 🧑‍🔧 Waiting on the maintainer
 
-Hands-on checks that need real equipment, a real host, or a browser login, which development sessions can't do themselves. Each item names where its details live; tick it here and update that place when done. Add new ones here rather than only inside a feature's section. Items marked **Before 0.9.0** gate that release (see "Releases" below); the rest can wait.
+Hands-on checks that need real equipment, a real host, or a browser login, which development sessions can't do themselves. Each item names where its details live; tick it here and update that place when done. Add new ones here rather than only inside a feature's section. Items marked **First** were planned to gate 0.9.0; it shipped on 2026-11-10 with them still in progress (the maintainer's call), so they come before the rest. Their step-by-step runbook is a private checklist page kept by the maintainer.
 
-- [ ] **Before 0.9.0. Browser click-through of the beta.4 sprint** (added 2026-10-23):
+- [ ] **First. Browser click-through of the beta.4 sprint** (added 2026-10-23):
   - Device page: the Last Seen card keeps "Confirmed by <cloud> N minutes ago" current with the page left open (#46/#50); switching the History range quickly never shows the wrong window (#52).
   - Dashboard: the status cards follow a device going offline/online within seconds, without a full reload every 30 s (#51).
   - Settings → API Credentials: the credential test dialog lists the right devices (#51).
@@ -19,11 +19,11 @@ Hands-on checks that need real equipment, a real host, or a browser login, which
   - Icons on the device page buttons have their gap back (#27).
   - After the Vite 8 / vue-router 5 upgrade: sign-in redirect back to the page you asked for, admin-only pages, `/schedule` and `/settings/device-api-testing` redirects, the dev server's live reload.
 - [ ] **Alert notifications, live** (item 2 below): a Test send to a real mailbox and to a Slack or Teams webhook; then unplug a ping-monitored device and check one message on open and one on resolve.
-- [ ] **Before 0.9.0. `deploy/install.sh` on a real Docker host** ("Simpler install" below): a bridge install, a `--host-network` install, and a re-run as an upgrade; check that `docker compose exec -e NAME` passes the variable through. Optionally `nethelper-admin` on bare metal.
+- [ ] **First. `deploy/install.sh` on a real Docker host** ("Simpler install" below): a bridge install, a `--host-network` install, and a re-run as an upgrade; check that `docker compose exec -e NAME` passes the variable through. Optionally `nethelper-admin` on bare metal.
 - [ ] **VLAN overlay on hardware** (item 3a below): the CX REST reads were captured on a 6300F on 2026-11-04 (`aos-cx-live/interfaces-vlans.json`) and Central's per-switch VLANs on the 2930F and 6300F. Still open: view `/map` with the VLAN overlay and check a few ports against `show vlan` / `show interface brief`; check the Mist EX's ports, and whether a Mist trunk port lists every allowed VLAN; remove a VLAN from a CX trunk's allowed list, refresh, and check that the link turns dashed with the right port named. Note: the overlay flags Lab-Core 4 ↔ Lab-Edge1 1/1/2 (untagged 110 vs 1); check that it is intended.
 - [ ] **VXLAN overlay on hardware** (item 3a below): the reads and analysis ran live against Lab-Edge0/Edge1 (static VXLAN, VNI 110) on 2026-11-04, but the map UI has not been viewed. Pick Overlay → VXLAN on `/map` and check the tunnel, its panel, and the VNI picker (desktop and phone width). Then remove the `vtep-peer` on one side, refresh, and check that the tunnel turns amber "one side only". When EVPN gear (CX 6300+ with BGP EVPN) is available, capture `tunnel_endpoints` with `origin: evpn` and an L3 VNI.
 - [x] **Live tab VLAN/description push on hardware** (item 3 below, done 2026-11-09): description, access VLAN, access → trunk, allowed-list-only and LAG VLAN changes made from Central all reached the Live tab within seconds (`docs/hardware/AOS_CX_NOTES.md`). Not tried: adding a port to a LAG (the automatic resubscribe).
-- [ ] **Before 0.9.0. Application backup on a real Docker host** (item 16 below, added 2026-11-04): build the backend image (it now installs `postgresql-client-17` from the PGDG apt repo) and check `pg_dump --version` in it; Run now from Settings → App Backup against the Compose `postgres:15`; then restore that archive into a fresh stack with `docker compose run --rm backend node scripts/app-restore.js`. Bare metal was tested on the dev host (pg_dump 15) only.
+- [ ] **First. Application backup on a real Docker host** (item 16 below, added 2026-11-04): build the backend image (it now installs `postgresql-client-17` from the PGDG apt repo) and check `pg_dump --version` in it; Run now from Settings → App Backup against the Compose `postgres:15`; then restore that archive into a fresh stack with `docker compose run --rm backend node scripts/app-restore.js`. Bare metal was tested on the dev host (pg_dump 15) only.
 - [ ] **Junos SSH CLI fallback on hardware** (Phase 7 below): connection test, polls and a backup with NETCONF disabled.
 
 ---
@@ -34,15 +34,15 @@ Hands-on checks that need real equipment, a real host, or a browser login, which
 
 ## 🚀 Releases
 
-**Status**: 0.9 betas `v0.9.0-beta.1` (2026-10-20) to `v0.9.0-beta.8` (2026-11-04); the repository went public with `v0.9.0-beta.6` (2026-10-29). **`0.9.0`**, the first release without a pre-release suffix, is prepared on `release/0.9.0` (2026-11-09) and is tagged once the three **Before 0.9.0** checks in "Waiting on the maintainer" pass: `deploy/install.sh` and the published images on a real Docker host, application backup and restore there, and the browser click-through. What each version changed is in [`CHANGELOG.md`](../CHANGELOG.md), and what was tested on real equipment is in [`SUPPORT.md`](SUPPORT.md). Bugs and requests are GitHub Issues; a fix closes its issue from the commit (`Fixes #N`) and adds a line under `[Unreleased]` in `CHANGELOG.md`. Release steps: `CONTRIBUTING.md` → "Releasing". `0.9.0` is the first tag that moves the `latest` image tag and makes a non-pre-release GitHub release: dry-run `release.yml` from the Actions tab first, and pull `latest` anonymously afterwards.
+**Status**: **`0.9.0` released 2026-11-10**, the first release without a pre-release suffix and the first to move the `latest` image tag. Before it, the 0.9 betas `v0.9.0-beta.1` (2026-10-20) to `v0.9.0-beta.8` (2026-11-04); the repository went public with `v0.9.0-beta.6` (2026-10-29). 0.9.0 shipped before the three **First** checks in "Waiting on the maintainer" were finished (the maintainer's decision, 2026-11-10): `deploy/install.sh` and the images on a real Docker host (under way), application backup and restore there, and the browser click-through. Problems they find ship as 0.9.x patch releases. What each version changed is in [`CHANGELOG.md`](../CHANGELOG.md), and what was tested on real equipment is in [`SUPPORT.md`](SUPPORT.md). Bugs and requests are GitHub Issues; a fix closes its issue from the commit (`Fixes #N`) and adds a line under `[Unreleased]` in `CHANGELOG.md`. Release steps: `CONTRIBUTING.md` → "Releasing".
 
-Deferred past 0.9.0 (decided 2026-11-09; none blocks the release):
+Deferred past 0.9.0 (decided 2026-11-09):
 - ⏳ Tokens are kept in `localStorage`, so an XSS would expose them; the CSP is the guard. Consider an httpOnly, SameSite refresh-token cookie. Logout still revokes only the refresh token (a password change or reset ends every session at once).
 - ⏳ A browser E2E smoke test (login → add device → backup → diff), run against a stack stood up by `deploy/install.sh -y`. For 0.9.0 the maintainer's install and click-through checks cover it by hand.
 - ⏳ arm64 images (the release publishes amd64 only; `install.sh --build` builds on an arm64 host).
-- ⏳ Deferred major upgrades: Prisma 7 (`prisma` + `@prisma/client` together; fails CI as a bump), Vuetify 4, ESLint 10 (both tiers) and Express 5 (all fail CI as bumps), Pinia 4 (passes CI, but no breaking-change notes and a new npm releaser; check against the running UI first). Jest 30 and supertest 7 (backend, dev only) pass CI.
+- ⏳ Deferred major upgrades: Prisma 7 (`prisma` + `@prisma/client` together; fails CI as a bump), Vuetify 4, ESLint 10 (both tiers) and Express 5 (all fail CI as bumps), Pinia 4 (passes CI, but no breaking-change notes and a new npm releaser; check against the running UI first). Jest 30 and supertest 7 (backend, dev only) pass CI. Their Dependabot PRs (#64, #65, #67–#70) were closed on 2026-11-09; Dependabot opens new ones for later versions.
 - ⏳ CodeQL (first scan 2026-10-30): two real findings fixed in `v0.9.0-beta.7` (sort key lookup, base URL trim). Left open as accepted or tracked: request forgery in `cx-switch-api.js` (connecting to operator-entered device IPs is the product), disabled certificate validation for AOS-CX REST (switches use self-signed certificates; an opt-in verify/pin setting would close it), tokens in `localStorage` (the httpOnly cookie item above), and the first-admin password printed once by `user-manager.js` (by design).
-- Dev-only Dependabot alerts (2026-11-09): `minimatch` 10.2 (moderate; nodemon in the backend, ESLint plugins and `@vue/test-utils` in the frontend) and `deepmerge` 4.3.1 (low, under Jest 29; no fixed release). Neither ships in the images.
+- Dev-only Dependabot alerts, dismissed as tolerable risk on 2026-11-09: `minimatch` 10.2 (moderate; nodemon in the backend, ESLint plugins and `@vue/test-utils` in the frontend) and `deepmerge` 4.3.1 (low, under Jest 29; no fixed release). Neither ships in the images.
 - Accepted: a moderate `uuid` advisory inside `bull` (the fix is a breaking bull major, and bull doesn't pass the affected argument).
 - Considered and not done: a browser first-run setup (a one-time token from the log), which would add new auth surface. Revisit if the installer isn't enough.
 
@@ -638,5 +638,5 @@ The old per-tier backlogs (`backend_todo.txt` / `frontend_todo.txt`, dated March
 
 ---
 
-**Last Updated**: 2026-11-09 (0.9.0 release prep)
+**Last Updated**: 2026-11-10 (0.9.0 release)
 **Maintained By**: Development Team
