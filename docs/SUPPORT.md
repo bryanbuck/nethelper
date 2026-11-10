@@ -1,4 +1,4 @@
-# NetHelper 0.9 beta: what's supported
+# NetHelper 0.9: what's supported
 
 NetHelper inventories network devices, tracks whether they're up, and backs up their configurations with change history. It works across vendors and across management planes: cloud-managed (Aruba Central, Juniper Mist) and direct (SSH, REST, NETCONF).
 
@@ -40,6 +40,9 @@ Notes:
 | AOS-S SSH | Run against a 2930F on WC.16.11 (2026-10-20): connection test, firmware/system polls, LLDP neighbors, backup, and a diff of a removed VLAN. First contact found the CLI draws a VT100 screen (prompt and echo between cursor moves, so every command timed out) and that an operator login's `show running-config` error was stored as a backup; both are fixed. **The account needs manager rights** to read the configuration |
 | Docker Compose / bare-metal packaging | Both installed from `deploy/README.md` on clean Debian 13 VMs (2026-10-20): Compose with the host-network override (discovery with MACs), an in-place upgrade, the Git mirror pushing to a private GitHub repo; bare metal with systemd, nginx and TLS, surviving a reboot. The run found and fixed several runbook bugs (see `CHANGELOG.md`). `deploy/install.sh`, the GHCR images and `nethelper-admin` (2026-10-21) are tested in CI against a stand-in for Docker, and have not yet been run on a real host |
 | Cloud status and events (Mist) | An AP unplugged on 2026-10-20 showed offline about 3 minutes later (ping alert, then Mist's), and both alerts closed by themselves when it came back |
+| Network Map VLAN and VXLAN overlays | VLAN membership read from a 6300F over REST and from Central for a 2930F and a 6300F (2026-11-04). The first capture showed AOS-CX leaves `vlan_mode` empty on plain access ports, which hid most access ports (fixed). VXLAN reads and the tunnel analysis ran against two 6300Fs with a static VXLAN tunnel the same day. Not yet done: checking the map's overlays against the switches' own `show` output, and tunnels learned through EVPN |
+| AOS-CX boot images and Live tab VLANs | The `/firmware` read was captured from AOS-CX 10.16 switches (2026-11-04): the switch names the running version `current_version`, which also fixed the Firmware Status page. Description, access VLAN, access → trunk, allowed-VLAN and LAG VLAN changes made from Central reached the Live tab within seconds (2026-11-09) |
+| Application backup | Archives ran on a bare-metal host with `pg_dump` 15 (2026-11-04). Not yet run in the Docker image (`pg_dump` 17) or restored into a fresh Compose stack |
 
 A mock follows the spec, but real equipment is where response-shape surprises show up. **Reports from real Mist orgs, Junos boxes, and AOS-S switches are the most useful thing you can send.**
 
@@ -74,7 +77,7 @@ Deleting a user keeps everything they set up (integrations, credentials, the Git
 Open an issue at [github.com/bryanbuck/nethelper/issues](https://github.com/bryanbuck/nethelper/issues). For a security problem, don't open an issue: see [`SECURITY.md`](../SECURITY.md). Include:
 
 1. **What you did and what happened**, including the exact error text or a screenshot.
-2. **The version.** It's in the page footer (for example `NetHelper 0.9.0-beta.6`), and `GET /health` returns it too.
+2. **The version.** It's in the page footer (for example `NetHelper 0.9.0`), and `GET /health` returns it too.
 3. **Which platform and management plane**: for example "AOS-S 2930F, direct over SSH" or "Mist switch EX4100".
 4. **Backend logs from around that time**:
    - Docker: `docker compose logs --since 30m backend`

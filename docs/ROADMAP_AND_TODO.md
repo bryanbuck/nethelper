@@ -8,9 +8,9 @@ The single forward-looking backlog for NetHelper: features and improvements plan
 
 ## 🧑‍🔧 Waiting on the maintainer
 
-Hands-on checks that need real equipment, a real host, or a browser login, which development sessions can't do themselves. Each item names where its details live; tick it here and update that place when done. Add new ones here rather than only inside a feature's section.
+Hands-on checks that need real equipment, a real host, or a browser login, which development sessions can't do themselves. Each item names where its details live; tick it here and update that place when done. Add new ones here rather than only inside a feature's section. Items marked **Before 0.9.0** gate that release (see "Releases" below); the rest can wait.
 
-- [ ] **Browser click-through of the beta.4 sprint** (added 2026-10-23):
+- [ ] **Before 0.9.0. Browser click-through of the beta.4 sprint** (added 2026-10-23):
   - Device page: the Last Seen card keeps "Confirmed by <cloud> N minutes ago" current with the page left open (#46/#50); switching the History range quickly never shows the wrong window (#52).
   - Dashboard: the status cards follow a device going offline/online within seconds, without a full reload every 30 s (#51).
   - Settings → API Credentials: the credential test dialog lists the right devices (#51).
@@ -19,11 +19,11 @@ Hands-on checks that need real equipment, a real host, or a browser login, which
   - Icons on the device page buttons have their gap back (#27).
   - After the Vite 8 / vue-router 5 upgrade: sign-in redirect back to the page you asked for, admin-only pages, `/schedule` and `/settings/device-api-testing` redirects, the dev server's live reload.
 - [ ] **Alert notifications, live** (item 2 below): a Test send to a real mailbox and to a Slack or Teams webhook; then unplug a ping-monitored device and check one message on open and one on resolve.
-- [ ] **`deploy/install.sh` on a real Docker host** ("Simpler install" below): a bridge install, a `--host-network` install, and a re-run as an upgrade; check that `docker compose exec -e NAME` passes the variable through. Optionally `nethelper-admin` on bare metal.
+- [ ] **Before 0.9.0. `deploy/install.sh` on a real Docker host** ("Simpler install" below): a bridge install, a `--host-network` install, and a re-run as an upgrade; check that `docker compose exec -e NAME` passes the variable through. Optionally `nethelper-admin` on bare metal.
 - [ ] **VLAN overlay on hardware** (item 3a below): the CX REST reads were captured on a 6300F on 2026-11-04 (`aos-cx-live/interfaces-vlans.json`) and Central's per-switch VLANs on the 2930F and 6300F. Still open: view `/map` with the VLAN overlay and check a few ports against `show vlan` / `show interface brief`; check the Mist EX's ports, and whether a Mist trunk port lists every allowed VLAN; remove a VLAN from a CX trunk's allowed list, refresh, and check that the link turns dashed with the right port named. Note: the overlay flags Lab-Core 4 ↔ Lab-Edge1 1/1/2 (untagged 110 vs 1); check that it is intended.
 - [ ] **VXLAN overlay on hardware** (item 3a below): the reads and analysis ran live against Lab-Edge0/Edge1 (static VXLAN, VNI 110) on 2026-11-04, but the map UI has not been viewed. Pick Overlay → VXLAN on `/map` and check the tunnel, its panel, and the VNI picker (desktop and phone width). Then remove the `vtep-peer` on one side, refresh, and check that the tunnel turns amber "one side only". When EVPN gear (CX 6300+ with BGP EVPN) is available, capture `tunnel_endpoints` with `origin: evpn` and an L3 VNI.
 - [x] **Live tab VLAN/description push on hardware** (item 3 below, done 2026-11-09): description, access VLAN, access → trunk, allowed-list-only and LAG VLAN changes made from Central all reached the Live tab within seconds (`docs/hardware/AOS_CX_NOTES.md`). Not tried: adding a port to a LAG (the automatic resubscribe).
-- [ ] **Application backup on a real Docker host** (item 16 below, added 2026-11-04): build the backend image (it now installs `postgresql-client-17` from the PGDG apt repo) and check `pg_dump --version` in it; Run now from Settings → App Backup against the Compose `postgres:15`; then restore that archive into a fresh stack with `docker compose run --rm backend node scripts/app-restore.js`. Bare metal was tested on the dev host (pg_dump 15) only.
+- [ ] **Before 0.9.0. Application backup on a real Docker host** (item 16 below, added 2026-11-04): build the backend image (it now installs `postgresql-client-17` from the PGDG apt repo) and check `pg_dump --version` in it; Run now from Settings → App Backup against the Compose `postgres:15`; then restore that archive into a fresh stack with `docker compose run --rm backend node scripts/app-restore.js`. Bare metal was tested on the dev host (pg_dump 15) only.
 - [ ] **Junos SSH CLI fallback on hardware** (Phase 7 below): connection test, polls and a backup with NETCONF disabled.
 
 ---
@@ -34,15 +34,15 @@ Hands-on checks that need real equipment, a real host, or a browser login, which
 
 ## 🚀 Releases
 
-**Status**: the 0.9 beta. `v0.9.0-beta.1` (2026-10-20) to `v0.9.0-beta.5` (2026-10-25) were private; the repository goes public with `v0.9.0-beta.6` (prepared 2026-10-29), and `0.9.0` follows once the open items below and in "Waiting on the maintainer" are done; what each one changed is in [`CHANGELOG.md`](../CHANGELOG.md), and what was tested on real equipment is in [`SUPPORT.md`](SUPPORT.md). Bugs and requests are GitHub Issues; a fix closes its issue from the commit (`Fixes #N`) and adds a line under `[Unreleased]` in `CHANGELOG.md`. Release steps: `CONTRIBUTING.md` → "Releasing".
+**Status**: 0.9 betas `v0.9.0-beta.1` (2026-10-20) to `v0.9.0-beta.8` (2026-11-04); the repository went public with `v0.9.0-beta.6` (2026-10-29). **`0.9.0`**, the first release without a pre-release suffix, is prepared on `release/0.9.0` (2026-11-09) and is tagged once the three **Before 0.9.0** checks in "Waiting on the maintainer" pass: `deploy/install.sh` and the published images on a real Docker host, application backup and restore there, and the browser click-through. What each version changed is in [`CHANGELOG.md`](../CHANGELOG.md), and what was tested on real equipment is in [`SUPPORT.md`](SUPPORT.md). Bugs and requests are GitHub Issues; a fix closes its issue from the commit (`Fixes #N`) and adds a line under `[Unreleased]` in `CHANGELOG.md`. Release steps: `CONTRIBUTING.md` → "Releasing". `0.9.0` is the first tag that moves the `latest` image tag and makes a non-pre-release GitHub release: dry-run `release.yml` from the Actions tab first, and pull `latest` anonymously afterwards.
 
-Still open from the beta's security and packaging work:
+Deferred past 0.9.0 (decided 2026-11-09; none blocks the release):
 - ⏳ Tokens are kept in `localStorage`, so an XSS would expose them; the CSP is the guard. Consider an httpOnly, SameSite refresh-token cookie. Logout still revokes only the refresh token (a password change or reset ends every session at once).
-- ⏳ A browser E2E smoke test (login → add device → backup → diff), run against a stack stood up by `deploy/install.sh -y`.
-- ⏳ arm64 images (the release publishes amd64 only).
-- ⏳ `deploy/install.sh` and the published images haven't been run on a real Docker host yet (tested in CI against a fake `docker`, `deploy-scripts.test.js`); see "Waiting on the maintainer" above.
-- ⏳ Deferred major upgrades (Dependabot PRs closed 2026-10-30): Prisma 7 (`prisma` + `@prisma/client` together; fails CI as a bump), Vuetify 4 and ESLint 10 (fail CI), Pinia 4 (passes CI, but no breaking-change notes and a new npm releaser; check against the running UI first).
+- ⏳ A browser E2E smoke test (login → add device → backup → diff), run against a stack stood up by `deploy/install.sh -y`. For 0.9.0 the maintainer's install and click-through checks cover it by hand.
+- ⏳ arm64 images (the release publishes amd64 only; `install.sh --build` builds on an arm64 host).
+- ⏳ Deferred major upgrades: Prisma 7 (`prisma` + `@prisma/client` together; fails CI as a bump), Vuetify 4, ESLint 10 (both tiers) and Express 5 (all fail CI as bumps), Pinia 4 (passes CI, but no breaking-change notes and a new npm releaser; check against the running UI first). Jest 30 and supertest 7 (backend, dev only) pass CI.
 - ⏳ CodeQL (first scan 2026-10-30): two real findings fixed in `v0.9.0-beta.7` (sort key lookup, base URL trim). Left open as accepted or tracked: request forgery in `cx-switch-api.js` (connecting to operator-entered device IPs is the product), disabled certificate validation for AOS-CX REST (switches use self-signed certificates; an opt-in verify/pin setting would close it), tokens in `localStorage` (the httpOnly cookie item above), and the first-admin password printed once by `user-manager.js` (by design).
+- Dev-only Dependabot alerts (2026-11-09): `minimatch` 10.2 (moderate; nodemon in the backend, ESLint plugins and `@vue/test-utils` in the frontend) and `deepmerge` 4.3.1 (low, under Jest 29; no fixed release). Neither ships in the images.
 - Accepted: a moderate `uuid` advisory inside `bull` (the fix is a breaking bull major, and bull doesn't pass the affected argument).
 - Considered and not done: a browser first-run setup (a one-time token from the log), which would add new auth surface. Revisit if the installer isn't enough.
 
@@ -78,7 +78,7 @@ Still open from the beta's security and packaging work:
 
 ### 2. Device Alerting
 **Priority**: Medium
-**Status**: 🔨 v1 shipped 2026-10-16 (branch `feature/alerts`): stateful, in-app alerts; email/webhook notification channels 2026-10-23
+**Status**: ✅ v1 in `v0.9.0-beta.1` (2026-10-20): stateful, in-app alerts; email/webhook notification channels in `v0.9.0-beta.4` (2026-10-24). The items under Deferred below are still open
 
 Shipped (`services/alert.service.js`, rules in `constants/alert-rules.js`, page `/alerts`):
 - ✅ Stateful alerts: one unresolved alert per condition and subject (`Alert.openKey` unique), occurrences counted, auto-resolve when the condition clears, acknowledge/resolve by operators. Resolved alerts pruned after `ALERT_RETENTION_DAYS` (90).
@@ -186,7 +186,7 @@ Two `--get`s with the same path but different queries write to the same file, so
 
 ### 3. Live Device State & Performance Dashboards
 **Priority**: Medium
-**Status**: 🔨 Started 2026-10-15 (branch `feat/live-state`): live port/PoE state for AOS-CX
+**Status**: ✅ AOS-CX in `v0.9.0-beta.1` (2026-10-20): live port/PoE state; Mode/VLAN columns and pushed description changes in 0.9.0. Other platforms are under Deferred below
 
 Shipped on the branch (design: `MULTI_VENDOR_ROADMAP.md` §8c):
 - ✅ Always-on, opt-in event monitoring (`Device.liveMonitoring`, `DeviceEvent` table, `device:event`), pushed by AOS-CX REST notifications. Works on Central-managed switches (read-only local access). Validated on a 6200F (ML.10.16.1010), including a PoE cut pushed from Central.
@@ -221,7 +221,7 @@ Enhanced visualization for device performance metrics:
 
 ### 3b. Automation engine (minimal)
 **Priority**: Medium
-**Status**: 🔨 v1 shipped 2026-10-16: the builder's graph runs for a small set of nodes
+**Status**: ✅ v1 in `v0.9.0-beta.1` (2026-10-20), still labeled experimental: the builder's graph runs for a small set of nodes
 
 Before this, nothing ran a saved automation: Run Now wrote `pending` Execution rows only, and the old step engine (`automation.service.js`, deleted) read a `workflow.steps` field the schema no longer had.
 
@@ -244,7 +244,7 @@ Deferred:
 
 ### 3a. Network Map (topology from LLDP/CDP)
 **Priority**: Medium
-**Status**: 🔨 Built 2026-10-16 (branch `worktree-network-map`; design: `MULTI_VENDOR_ROADMAP.md` §8d)
+**Status**: ✅ In `v0.9.0-beta.1` (2026-10-20); VLAN overlay in `v0.9.0-beta.4`, VXLAN overlay in `v0.9.0-beta.8` (design: `MULTI_VENDOR_ROADMAP.md` §8d)
 
 A `/map` page to explore the managed network visually, built from each device's neighbor table plus Discovery hosts.
 - ✅ Neighbor collection over existing transports: AOS-CX REST (validated on the 6200F test switch, including under Central management), Junos NETCONF/CLI, AOS-S and IOS-XE SSH (spec-derived parsers, not yet run on hardware). Scheduled (`TOPOLOGY_INTERVAL`, default 6 h) and on demand.
@@ -473,7 +473,7 @@ Comprehensive audit trail:
 
 ### 11. Built-in UI Themes
 **Priority**: Low
-**Status**: ✅ Shipped in `release/beta` (spike 2026-10-15; leftovers done 2026-10-19): Light, Dark and Classic (circa-2010 admin portal) themes, a theme menu, and the choice saved per browser
+**Status**: ✅ Shipped in `v0.9.0-beta.1` (2026-10-20): Light, Dark and Classic (circa-2010 admin portal) themes, a theme menu, and the choice saved per browser
 
 Built-in themes only. Users can't define their own. Palettes are in `frontend/src/plugins/themes.js`, component defaults in `plugins/theme-defaults.js`, and `tests/unit/theme.spec.js` holds foreground text to 4.5:1.
 - Done: theme tokens instead of hardcoded colors across the automations builder; vue-flow CSS imported and themed; Dark primary changed to `#2D6A00`.
@@ -585,7 +585,7 @@ A rolling feed of what happened to the managed devices, at `/activity` (nav item
 
 ### 15. Devices page: saved filters and a remembered view
 **Priority**: Medium
-**Status**: ✅ Merged to `master` 2026-11-04 (not yet released)
+**Status**: ✅ Shipped in `v0.9.0-beta.8` (2026-11-04)
 
 **Saved filters.** Named views on the Devices table, opened from its "Saved filters" menu. Each holds the filters, search and sort; it never holds the page or page size. They are stored on the server per user (`SavedDeviceFilter`, `/api/v1/devices/saved-filters`), private and deleted with the user, at most 50 each. Every role, viewers included, manages its own. Saving under an existing name replaces that filter. A changed list offers "Update" for the filter last picked. A saved filter naming a deleted group or credential applies the rest and says so.
 
@@ -600,7 +600,7 @@ A rolling feed of what happened to the managed devices, at `/activity` (nav item
 
 ### 16. Application backup (NetHelper itself)
 **Priority**: High
-**Status**: Phase 1 merged to `master` 2026-11-04
+**Status**: Phase 1 shipped in `v0.9.0-beta.8` (2026-11-04)
 
 **Phase 1, local archives** (`services/app-backup.service.js`, Settings → App Backup, admin only). One archive per run in `APP_BACKUP_PATH`: a manifest (versions, newest migration, checksums, an `ENCRYPTION_KEY` fingerprint), `pg_dump -Fc` of the app's schema, the flat config-backup store, optionally the Git mirror repo, the mirror's known_hosts. Made with the system `tar` (like `git`/`nmap`) and read back before it counts. Scheduled by cron (one Bull repeatable job on queue `app-backup`) or Run now; retention by count and age. Optional passphrase encryption (AES-256-GCM, scrypt; `utils/archive-crypto.js`, no dependency); only an encrypted archive may carry `ENCRYPTION_KEY`. Leaving out history leaves out the rows of `DeviceEvent`, `CloudAlarm`, `AuditLog`, `Execution`, `TopologyChange`, `AppBackupRun`. A failure raises `app-backup.failed`. Restore is a CLI (`npm run app:restore`, `nethelper-admin restore`, `docker compose run`) with the service stopped: it checks the archive, then drops and reloads the schema in one `psql --single-transaction` (a failure leaves the database as it was) and moves stored file paths when the folders differ. Models `AppBackupConfig`, `AppBackupRun` (migration `20261104180000_app_backup`).
 
@@ -615,7 +615,7 @@ A rolling feed of what happened to the managed devices, at `/activity` (nav item
 
 ### 17. Device page: boot images (Image Information card)
 **Priority**: Medium
-**Status**: ✅ Merged to `master` 2026-11-04 (not yet released)
+**Status**: ✅ Shipped in `v0.9.0-beta.8` (2026-11-04)
 
 The primary/secondary partitions, the default image and the booted image used to exist only in a live poll's reply on the Firmware Status page. Firmware and system polls now store them on the device (`Device.firmwareImages`, migration `20261104220000_device_firmware_images`; `utils/firmware-images.js`), and the device page's **Image Information** card lists both partitions with their versions and Booted/Default chips. It warns when the next reboot would load a different version (the default points at the other partition, or new firmware was copied into the booted one). The page's on-load system poll reads `/firmware` in the same CX session, so an operator opening the page refreshes it at no extra session cost; the card's Refresh runs a firmware poll. Polls on every transport now also write `Device.firmwareVersion`, which only cloud sync did before, so direct devices show up in the Firmware page's Recorded versions. Found on the way: AOS-CX reports the running version as `current_version` (live capture `aos-cx-live/firmware.json`); the poller read a `current_image` that doesn't exist, so the Firmware page's "Current" column was always empty. It is now "Running Version".
 
@@ -638,5 +638,5 @@ The old per-tier backlogs (`backend_todo.txt` / `frontend_todo.txt`, dated March
 
 ---
 
-**Last Updated**: 2026-10-25 (beta.5 cleanup)
+**Last Updated**: 2026-11-09 (0.9.0 release prep)
 **Maintained By**: Development Team
