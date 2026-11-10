@@ -18,7 +18,7 @@ body:
     attributes:
       label: Version
       description: From the page footer, or `GET /health`.
-      placeholder: 0.9.0-beta.6
+      placeholder: 0.9.0
     validations:
       required: true
   - type: input

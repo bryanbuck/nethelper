@@ -1,14 +1,14 @@
 # Multi-Vendor Support Roadmap — Juniper & Cisco
 
-**Status**: Planning (2026-07-12)
+**Status**: Phases 0–2 shipped (2026-07-12; first hardware contact 2026-10-19, released in the 0.9 betas): Aruba Central, Juniper Mist, AOS-CX REST, AOS-S SSH, Junos NETCONF/SSH. Phases 3–4 (Cisco Meraki, Catalyst) not started. Sections 8b–8f record the architecture built on top since. Updated 2026-11-09.
 **Scope**: Extend NetHelper beyond Aruba to Juniper (Mist cloud + Junos direct) and Cisco (Meraki Dashboard + Catalyst direct via SSH, RESTCONF optional).
 **MVP bar per new vendor**: inventory sync + status, config backup, connection testing. Polling and automation come later.
 
 ---
 
-## 1. Where we are today
+## 1. Starting point (2026-07, before Phase 0)
 
-NetHelper is Aruba-only, and the vendor coupling is uneven — some layers are already generic, others are hardcoded:
+Kept as the record of what the plan started from; none of it describes the code today (the vendor fields, `CloudProvider` layer and transport router replaced it). NetHelper was Aruba-only, and the vendor coupling was uneven — some layers were already generic, others hardcoded:
 
 | Layer | State |
 |---|---|
@@ -321,20 +321,20 @@ The deciding argument was correctness, not elegance. Screen-scraping an interact
 
 **First hardware contact (2026-10-19)**, an EX4000-12MP on 24.4R2.25 managed by Mist, read over NETCONF with the device credential (captures in `tests/fixtures/junos-live/`). The framing, `<get-software-information/>` parsing and the LLDP parser all worked unchanged. Two surprises: an account whose login class lacks `view-configuration` gets a committed config made of `/* ACCESS-DENIED */` placeholders, not an RPC error, so a "successful" backup held nothing (now refused by `assertJunosConfigReadable`; a Mist-managed switch falls back to Mist's copy with a `ConfigBackup.warning`); and the chassis MAC is `fpc-mac-base` per FPC, not `public-base-address`. With `view-configuration` granted, the full pull ran (5.5 KB `set` config plus Mist's object; stable on a repeat run). Junos still withholds `scripts`, `event-options`, `secret` and `extension-service` from such an account, so a partly withheld read is kept and the withheld hierarchies go in the backup's warning; only a read with nothing readable is refused (the maintainer's call, 2026-10-19). Still not run on hardware: the SSH CLI fallback.
 
-### Phase 3 — Cisco Meraki (cloud)
+### Phase 3 — Cisco Meraki (cloud) — not started
 
 - `meraki.provider.js`: API-key auth (`X-Cisco-Meraki-API-Key`), testConnection via `GET /organizations`, org devices + statuses, rate-limit throttle (~10 req/s/org).
 - **Config backup = settings snapshot** — Meraki exposes no running-config. Serialize a defined set of API-readable settings (start minimal: device attributes, switch ports, wireless SSIDs, L3 firewall rules) to stable canonical JSON, stored through the same backup pipeline (`format: 'meraki-settings-json'`), labeled honestly in the UI ("settings snapshot, not running-config").
 - **Verify**: inventory/status sync; snapshot backups diff meaningfully when a dashboard setting changes; UI labels the backup type correctly.
 
-### Phase 4 — Cisco Catalyst direct (SSH; RESTCONF optional)
+### Phase 4 — Cisco Catalyst direct (SSH; RESTCONF optional) — not started
 
 - `cisco-ios` SSH profile; `cisco/ios-xe` matrix row; manual add + test + backup. Optional: `catalyst-api.js` RESTCONF for structured status where enabled.
 - **Verify**: same as Phase 2 against a Catalyst; enable-mode edge case documented or handled.
 
 ### Post-MVP (explicitly out of scope above)
 
-Per-vendor pollers (generalize `device-poller.service.js`), automation actions for new vendors, Juniper/Cisco discovery OUI tables, Mist WebSocket streaming, NETCONF, restore/rollback (direction in §8b: a future `restore` transport operation, direct and atomic platforms only; cloud writes are a separate feature).
+Per-vendor pollers (generalize `device-poller.service.js`), automation actions for new vendors, Cisco discovery OUI tables, restore/rollback (direction in §8b: a future `restore` transport operation, direct and atomic platforms only; cloud writes are a separate feature). Since built: NETCONF (Phase 2), Mist WebSocket streaming (§8f), Juniper/Mist OUIs in discovery.
 
 ## 8b. Config-backup storage (2026-09-14)
 

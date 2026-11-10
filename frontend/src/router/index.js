@@ -216,8 +216,8 @@ const routes = [
   },
 
   // 404 catch-all
-  // Automation scheduling/execution pages are not built yet (automation is
-  // experimental for the beta); send old bookmarks to the automations list.
+  // Old automation URLs: schedules come from each automation's Schedule
+  // trigger and run history lives under /automations; keep old bookmarks working.
   { path: '/schedule', redirect: '/automations' },
   { path: '/executions/:pathMatch(.*)*', redirect: '/automations/executions' },
   {
