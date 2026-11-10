@@ -1,0 +1,1206 @@
+{
+  "9": {
+    "dynamic,02:00:00:00:00:01": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:01",
+      "port": {
+        "1/1/21": "/rest/v10.10/system/interfaces/1%2F1%2F21"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:02": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:02",
+      "port": {
+        "1/1/22": "/rest/v10.10/system/interfaces/1%2F1%2F22"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:03": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:03",
+      "port": {
+        "1/1/20": "/rest/v10.10/system/interfaces/1%2F1%2F20"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:04": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:04",
+      "port": {
+        "1/1/14": "/rest/v10.10/system/interfaces/1%2F1%2F14"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    }
+  },
+  "10": {
+    "dynamic,02:00:00:00:00:05": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:05",
+      "port": {
+        "1/1/28": "/rest/v10.10/system/interfaces/1%2F1%2F28"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:06": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:06",
+      "port": {
+        "1/1/28": "/rest/v10.10/system/interfaces/1%2F1%2F28"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:07": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:07",
+      "port": {
+        "lag3": "/rest/v10.10/system/interfaces/lag3"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:08": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:08",
+      "port": {
+        "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:09": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:09",
+      "port": {
+        "1/1/28": "/rest/v10.10/system/interfaces/1%2F1%2F28"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:0a": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:0a",
+      "port": {
+        "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:0b": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:0b",
+      "port": {
+        "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:0c": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:0c",
+      "port": {
+        "1/1/28": "/rest/v10.10/system/interfaces/1%2F1%2F28"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:0d": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:0d",
+      "port": {
+        "1/1/28": "/rest/v10.10/system/interfaces/1%2F1%2F28"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:0e": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:0e",
+      "port": {
+        "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:0f": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:0f",
+      "port": {
+        "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:10": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:10",
+      "port": {
+        "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:11": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:11",
+      "port": {
+        "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:12": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:12",
+      "port": {
+        "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:13": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:13",
+      "port": {
+        "1/1/28": "/rest/v10.10/system/interfaces/1%2F1%2F28"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:14": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:14",
+      "port": {
+        "1/1/12": "/rest/v10.10/system/interfaces/1%2F1%2F12"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:15": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:15",
+      "port": {
+        "1/1/12": "/rest/v10.10/system/interfaces/1%2F1%2F12"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:16": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:16",
+      "port": {
+        "1/1/5": "/rest/v10.10/system/interfaces/1%2F1%2F5"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:17": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:17",
+      "port": {
+        "1/1/28": "/rest/v10.10/system/interfaces/1%2F1%2F28"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:18": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:18",
+      "port": {
+        "1/1/26": "/rest/v10.10/system/interfaces/1%2F1%2F26"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:19": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:19",
+      "port": {
+        "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:1a": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:1a",
+      "port": {
+        "1/1/10": "/rest/v10.10/system/interfaces/1%2F1%2F10"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:1b": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:1b",
+      "port": {
+        "1/1/2": "/rest/v10.10/system/interfaces/1%2F1%2F2"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:1c": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:1c",
+      "port": {
+        "1/1/12": "/rest/v10.10/system/interfaces/1%2F1%2F12"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    }
+  },
+  "11": {
+    "dynamic,02:00:00:00:00:1d": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:1d",
+      "port": {
+        "1/1/11": "/rest/v10.10/system/interfaces/1%2F1%2F11"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    }
+  },
+  "17": {
+    "dynamic,02:00:00:00:00:1e": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:1e",
+      "port": {
+        "1/1/18": "/rest/v10.10/system/interfaces/1%2F1%2F18"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:1f": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:1f",
+      "port": {
+        "1/1/7": "/rest/v10.10/system/interfaces/1%2F1%2F7"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:20": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:20",
+      "port": {
+        "1/1/6": "/rest/v10.10/system/interfaces/1%2F1%2F6"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:21": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:21",
+      "port": {
+        "1/1/17": "/rest/v10.10/system/interfaces/1%2F1%2F17"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:22": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:22",
+      "port": {
+        "1/1/8": "/rest/v10.10/system/interfaces/1%2F1%2F8"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:23": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:23",
+      "port": {
+        "1/1/9": "/rest/v10.10/system/interfaces/1%2F1%2F9"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    }
+  },
+  "18": {
+    "dynamic,02:00:00:00:00:24": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:24",
+      "port": {
+        "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:25": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:25",
+      "port": {
+        "1/1/2": "/rest/v10.10/system/interfaces/1%2F1%2F2"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    }
+  },
+  "19": {
+    "dynamic,02:00:00:00:00:26": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:26",
+      "port": {
+        "1/1/5": "/rest/v10.10/system/interfaces/1%2F1%2F5"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:27": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:27",
+      "port": {
+        "1/1/22": "/rest/v10.10/system/interfaces/1%2F1%2F22"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:28": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:28",
+      "port": {
+        "1/1/5": "/rest/v10.10/system/interfaces/1%2F1%2F5"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:29": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:29",
+      "port": {
+        "1/1/22": "/rest/v10.10/system/interfaces/1%2F1%2F22"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:2a": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:2a",
+      "port": {
+        "1/1/21": "/rest/v10.10/system/interfaces/1%2F1%2F21"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:2b": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:2b",
+      "port": {
+        "1/1/21": "/rest/v10.10/system/interfaces/1%2F1%2F21"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:01": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:01",
+      "port": {
+        "1/1/21": "/rest/v10.10/system/interfaces/1%2F1%2F21"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:02": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:02",
+      "port": {
+        "1/1/22": "/rest/v10.10/system/interfaces/1%2F1%2F22"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:03": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:03",
+      "port": {
+        "1/1/20": "/rest/v10.10/system/interfaces/1%2F1%2F20"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:2c": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:2c",
+      "port": {
+        "1/1/5": "/rest/v10.10/system/interfaces/1%2F1%2F5"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:2d": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:2d",
+      "port": {
+        "1/1/21": "/rest/v10.10/system/interfaces/1%2F1%2F21"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:2e": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:2e",
+      "port": {
+        "1/1/21": "/rest/v10.10/system/interfaces/1%2F1%2F21"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:2f": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:2f",
+      "port": {
+        "1/1/20": "/rest/v10.10/system/interfaces/1%2F1%2F20"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:30": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:30",
+      "port": {
+        "1/1/19": "/rest/v10.10/system/interfaces/1%2F1%2F19"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:31": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:31",
+      "port": {
+        "1/1/20": "/rest/v10.10/system/interfaces/1%2F1%2F20"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    }
+  },
+  "20": {
+    "dynamic,02:00:00:00:00:32": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:32",
+      "port": {
+        "1/1/20": "/rest/v10.10/system/interfaces/1%2F1%2F20"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:2a": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:2a",
+      "port": {
+        "1/1/21": "/rest/v10.10/system/interfaces/1%2F1%2F21"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:33": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:33",
+      "port": {
+        "1/1/20": "/rest/v10.10/system/interfaces/1%2F1%2F20"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:34": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:34",
+      "port": {
+        "1/1/22": "/rest/v10.10/system/interfaces/1%2F1%2F22"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:35": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:35",
+      "port": {
+        "1/1/22": "/rest/v10.10/system/interfaces/1%2F1%2F22"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:01": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:01",
+      "port": {
+        "1/1/21": "/rest/v10.10/system/interfaces/1%2F1%2F21"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:36": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:36",
+      "port": {
+        "1/1/22": "/rest/v10.10/system/interfaces/1%2F1%2F22"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:37": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:37",
+      "port": {
+        "1/1/2": "/rest/v10.10/system/interfaces/1%2F1%2F2"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:02": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:02",
+      "port": {
+        "1/1/22": "/rest/v10.10/system/interfaces/1%2F1%2F22"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:03": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:03",
+      "port": {
+        "1/1/20": "/rest/v10.10/system/interfaces/1%2F1%2F20"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:38": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:38",
+      "port": {
+        "1/1/20": "/rest/v10.10/system/interfaces/1%2F1%2F20"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:04": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:04",
+      "port": {
+        "1/1/14": "/rest/v10.10/system/interfaces/1%2F1%2F14"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:39": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:39",
+      "port": {
+        "1/1/24": "/rest/v10.10/system/interfaces/1%2F1%2F24"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:3a": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:3a",
+      "port": {
+        "1/1/22": "/rest/v10.10/system/interfaces/1%2F1%2F22"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:3b": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:3b",
+      "port": {
+        "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:31": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:31",
+      "port": {
+        "1/1/20": "/rest/v10.10/system/interfaces/1%2F1%2F20"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:3c": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:3c",
+      "port": {
+        "1/1/20": "/rest/v10.10/system/interfaces/1%2F1%2F20"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:3d": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:3d",
+      "port": {
+        "1/1/21": "/rest/v10.10/system/interfaces/1%2F1%2F21"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    }
+  },
+  "21": {
+    "dynamic,02:00:00:00:00:3e": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:3e",
+      "port": {
+        "1/1/2": "/rest/v10.10/system/interfaces/1%2F1%2F2"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    }
+  },
+  "42": {
+    "dynamic,02:00:00:00:00:3f": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:3f",
+      "port": {
+        "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:40": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:40",
+      "port": {
+        "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:41": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:41",
+      "port": {
+        "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:42": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:42",
+      "port": {
+        "1/1/28": "/rest/v10.10/system/interfaces/1%2F1%2F28"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    }
+  },
+  "50": {
+    "dynamic,02:00:00:00:00:43": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:43",
+      "port": {
+        "1/1/28": "/rest/v10.10/system/interfaces/1%2F1%2F28"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:44": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:44",
+      "port": {
+        "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:45": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:45",
+      "port": {
+        "1/1/1": "/rest/v10.10/system/interfaces/1%2F1%2F1"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    }
+  },
+  "51": {
+    "dynamic,02:00:00:00:00:46": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:46",
+      "port": {
+        "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:47": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:47",
+      "port": {
+        "1/1/28": "/rest/v10.10/system/interfaces/1%2F1%2F28"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:48": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:48",
+      "port": {
+        "1/1/26": "/rest/v10.10/system/interfaces/1%2F1%2F26"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:49": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:49",
+      "port": {
+        "1/1/26": "/rest/v10.10/system/interfaces/1%2F1%2F26"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:4a": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:4a",
+      "port": {
+        "1/1/23": "/rest/v10.10/system/interfaces/1%2F1%2F23"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    }
+  },
+  "99": {
+    "dynamic,02:00:00:00:00:4b": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:4b",
+      "port": {
+        "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:4c": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:4c",
+      "port": {
+        "1/1/28": "/rest/v10.10/system/interfaces/1%2F1%2F28"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:4d": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:4d",
+      "port": {
+        "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:4e": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:4e",
+      "port": {
+        "1/1/20": "/rest/v10.10/system/interfaces/1%2F1%2F20"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:4f": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:4f",
+      "port": {
+        "1/1/20": "/rest/v10.10/system/interfaces/1%2F1%2F20"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:50": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:50",
+      "port": {
+        "1/1/21": "/rest/v10.10/system/interfaces/1%2F1%2F21"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:51": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:51",
+      "port": {
+        "1/1/20": "/rest/v10.10/system/interfaces/1%2F1%2F20"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:52": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:52",
+      "port": {
+        "1/1/22": "/rest/v10.10/system/interfaces/1%2F1%2F22"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:53": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:53",
+      "port": {
+        "1/1/21": "/rest/v10.10/system/interfaces/1%2F1%2F21"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:54": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:54",
+      "port": {
+        "1/1/22": "/rest/v10.10/system/interfaces/1%2F1%2F22"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    }
+  },
+  "252": {
+    "dynamic,02:00:00:00:00:55": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:55",
+      "port": {
+        "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:56": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:56",
+      "port": {
+        "1/1/28": "/rest/v10.10/system/interfaces/1%2F1%2F28"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:57": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:57",
+      "port": {
+        "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    }
+  },
+  "888": {
+    "dynamic,02:00:00:00:00:58": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:58",
+      "port": {
+        "1/1/28": "/rest/v10.10/system/interfaces/1%2F1%2F28"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    },
+    "dynamic,02:00:00:00:00:59": {
+      "from": "dynamic",
+      "mac_addr": "02:00:00:00:00:59",
+      "port": {
+        "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+      },
+      "network_infra_mac": true,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    }
+  }
+}
