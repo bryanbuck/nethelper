@@ -1,9 +1,13 @@
 <template>
   <v-footer app height="32" class="status-bar pa-0">
+    <!-- The menu's content box is at least as wide as its activator (the whole
+         bar), so the empty space right of the card counted as inside and a click
+         there didn't close it. The box lets clicks through; only the card takes them. -->
     <v-menu
       v-model="historyOpen"
       location="top start"
       offset="4"
+      content-class="status-history-overlay"
       :close-on-content-click="false"
     >
       <template #activator="{ props: menuProps }">
@@ -12,8 +16,8 @@
           class="status-message"
           :class="{ 'status-message--active': current }"
           :style="current ? { '--status-tint': `var(--v-theme-${current.type})` } : null"
-          :title="current ? lineText(current) : 'Show activity history'"
-          aria-label="Activity history"
+          :title="current ? lineText(current) : 'Show message history'"
+          aria-label="Message history"
           v-bind="menuProps"
         >
           <v-badge
@@ -37,15 +41,18 @@
             </span>
             <span class="status-message__time">{{ relativeTime(current.createdAt) }}</span>
           </template>
-          <span v-else class="status-message__text status-message__idle">
-            No new activity<template v-if="latest"> · last {{ relativeTime(latest.createdAt) }}</template>
+          <!-- Nothing current: NetHelper's own state, which never says Ready
+               unless real-time updates are connected (the dot is green). -->
+          <span v-else class="status-message__body status-message__idle" data-testid="status-idle">
+            <v-icon v-if="idle.icon" :color="idle.color" size="16">{{ idle.icon }}</v-icon>
+            <span class="status-message__text">{{ idle.text }}</span>
           </span>
         </button>
       </template>
 
       <v-card class="status-history" elevation="8">
         <div class="status-history__header">
-          <span class="text-subtitle-2">Activity</span>
+          <span class="text-subtitle-2">Messages</span>
           <span class="text-caption text-medium-emphasis">{{ store.entries.length }} this session</span>
           <v-spacer />
           <v-btn-toggle v-model="filter" mandatory density="compact" variant="outlined" divided>
@@ -64,7 +71,7 @@
         <v-divider />
 
         <div v-if="!shownEntries.length" class="status-history__empty text-body-2 text-medium-emphasis">
-          {{ filter === 'problems' ? 'No warnings or errors this session.' : 'Nothing has happened yet this session.' }}
+          {{ filter === 'problems' ? 'No warnings or errors this session.' : 'No messages yet this session.' }}
         </div>
         <div v-else class="status-history__list">
           <div
@@ -196,7 +203,6 @@ const filter = ref('all')
 const newSinceOpen = ref(new Set())
 
 const current = computed(() => store.current)
-const latest = computed(() => store.entries[0] || null)
 const isProblem = (entry) => entry.type === 'warning' || entry.type === 'error'
 const shownEntries = computed(() =>
   filter.value === 'problems' ? store.entries.filter(isProblem) : store.entries
@@ -220,11 +226,24 @@ const lineText = (entry) => [entry.title, entry.message].filter(Boolean).join(' 
 
 const CONNECTION_LABELS = {
   idle: 'Real-time updates: not connected',
+  connecting: 'Real-time updates: connecting',
   connected: 'Real-time updates: connected',
   reconnecting: 'Real-time updates: reconnecting',
   failed: 'Real-time updates: connection failed'
 }
 const connectionLabel = computed(() => CONNECTION_LABELS[store.connection] || CONNECTION_LABELS.idle)
+
+// The bar's text when no message is current. It follows the connection dot:
+// "Ready" only while real-time updates are connected. Reconnecting is not
+// ready-but-degraded: pages still load, but nothing on them updates live.
+const IDLE_STATES = {
+  connected: { text: 'Ready' },
+  connecting: { text: 'Connecting…' },
+  idle: { text: 'Not connected to real-time updates' },
+  reconnecting: { text: 'Connection lost, reconnecting…', icon: 'mdi-alert', color: 'warning' },
+  failed: { text: 'Real-time updates unavailable. Refresh the page.', icon: 'mdi-alert-circle', color: 'error' }
+}
+const idle = computed(() => IDLE_STATES[store.connection] || IDLE_STATES.idle)
 
 // Relative times tick while the bar is mounted.
 const now = ref(Date.now())
@@ -360,6 +379,7 @@ function runAction(item) {
   background: rgba(var(--v-theme-on-surface), var(--v-disabled-opacity));
 }
 .status-meta__dot--connected { background: rgb(var(--v-theme-success)); }
+.status-meta__dot--connecting { background: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
 .status-meta__dot--reconnecting { background: rgb(var(--v-theme-warning)); }
 .status-meta__dot--failed { background: rgb(var(--v-theme-error)); }
 
@@ -401,5 +421,15 @@ function runAction(item) {
 .status-history__empty {
   padding: 24px 12px;
   text-align: center;
+}
+</style>
+
+<!-- Not scoped: the overlay's content box is Vuetify's element, teleported out of this component. -->
+<style>
+.v-overlay__content.status-history-overlay {
+  pointer-events: none;
+}
+.v-overlay__content.status-history-overlay > * {
+  pointer-events: auto;
 }
 </style>

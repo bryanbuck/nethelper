@@ -125,7 +125,7 @@ class ConfigBackupService {
     // counted apart so an "all devices" run doesn't report them as failures.
     const results = { total: devices.length, succeeded: 0, failed: 0, unsupported: 0 };
     for (const device of devices) {
-      const outcome = await this.backupDeviceOutcome(device, { scheduleId, trigger, triggeredBy });
+      const outcome = await this.backupDeviceOutcome(device, { scheduleId, trigger, triggeredBy, batch: devices.length > 1 });
       if (outcome === 'success') results.succeeded++;
       else if (outcome === 'unsupported') results.unsupported++;
       else results.failed++;
@@ -162,6 +162,7 @@ class ConfigBackupService {
 
     this.emit('backup:run:completed', {
       scheduleId: scheduleId || null,
+      trigger,
       ...results,
       ...(scopes && { scopes }),
       gitPushed: push.pushed === true,
@@ -182,7 +183,9 @@ class ConfigBackupService {
    * backupDevice, returning 'success', 'failed', or 'unsupported' (the
    * platform has no per-device config: a CapabilityError).
    */
-  async backupDeviceOutcome(device, { scheduleId = null, trigger = 'manual', triggeredBy = null } = {}) {
+  // batch: part of a multi-device run, whose run:completed summarises it (the
+  // status bar logs only the summary and the failures of a manual run).
+  async backupDeviceOutcome(device, { scheduleId = null, trigger = 'manual', triggeredBy = null, batch = false } = {}) {
     const prisma = getPrisma();
     const record = await prisma.configBackup.create({
       data: {
@@ -275,6 +278,8 @@ class ConfigBackupService {
         backupId: updated.id,
         deviceId: device.id,
         deviceName: device.name,
+        trigger,
+        batch,
         hasChanges,
         kinds: captured.map((a) => a.kind),
         ...(warning && { warning }),
@@ -314,6 +319,8 @@ class ConfigBackupService {
         backupId: record.id,
         deviceId: device.id,
         deviceName: device.name,
+        trigger,
+        batch,
         error: error.message,
         ...(unsupported && { unsupported: true }),
       });

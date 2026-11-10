@@ -94,7 +94,7 @@ class ScopeBackupService {
         return { pushed: false };
       });
       gitPushed = pushed.pushed === true;
-      this.emit('backup:run:completed', { scope: true, scheduleId: schedule?.id || null, ...results, gitPushed });
+      this.emit('backup:run:completed', { scope: true, scheduleId: schedule?.id || null, trigger, ...results, gitPushed });
     }
 
     logger.info('Scope backup run completed', results);
@@ -176,6 +176,8 @@ class ScopeBackupService {
         scopeType: scope.scopeType,
         scopeName: scope.name,
         integrationName: identity.integrationName,
+        trigger,
+        batch: true, // scopes are always backed up in a run
         hasChanges,
       });
       alertService.clear('backup.failed', { subjectKey: scopeSubject(identity) });
@@ -195,6 +197,8 @@ class ScopeBackupService {
         scopeBackupId: record.id,
         scopeType: scope.scopeType,
         scopeName: scope.name,
+        trigger,
+        batch: true,
         error: error.message,
       });
       if (error.name !== 'CapabilityError') {

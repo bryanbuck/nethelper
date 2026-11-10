@@ -345,7 +345,8 @@ async function runNow() {
   running.value = true
   try {
     await appBackupService.runNow()
-    notifications.showSuccess('Application backup started')
+    // A flash: the result is what stays in the history.
+    notifications.showInfo('Application backup started', 'App Backup')
   } catch (error) {
     running.value = false
     notifications.showError(error.userMessage || error.message)
@@ -392,7 +393,7 @@ function runColor(status) {
 const { on: onSocket, off: offSocket } = useWebSocket()
 const onCompleted = (e) => {
   running.value = false
-  if (e?.run?.trigger === 'manual') notifications.showSuccess(`Application backup written: ${e.archive?.name}`)
+  if (e?.run?.trigger === 'manual') notifications.showSuccess(`Application backup written: ${e.archive?.name}`, 'App Backup', { history: true })
   load({ keepForm: true })
 }
 const onFailed = (e) => {
