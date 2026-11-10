@@ -4,11 +4,13 @@
  */
 const calls = [];
 const mockRows = new Map(); // id -> row, so tx.device.update returns the full row like Prisma
+const mockTxRows = {}; // model -> rows tx.<model>.findMany returns
 const mockTx = new Proxy({}, {
   get: (_, model) => new Proxy({}, {
     get: (__, op) => jest.fn(async (args) => {
       calls.push([`${model}.${op}`, args]);
       if (model === 'device' && op === 'update') return { ...mockRows.get(args.where.id), ...args.data };
+      if (op === 'findMany') return mockTxRows[model] || [];
       return { count: 0 };
     }),
   }),
@@ -130,6 +132,7 @@ describe('merge', () => {
     expect(ops).toEqual(expect.arrayContaining([
       'deviceEvent.updateMany', 'cloudAlarm.updateMany', 'execution.updateMany', 'configBackup.updateMany',
       'discoveredDevice.updateMany', 'topologyChange.updateMany', 'backupSchedule.update', 'alert.updateMany',
+      'portNote.findMany', 'portNoteRevision.updateMany',
     ]));
     expect(ops.indexOf('device.deleteMany')).toBeLessThan(ops.indexOf('device.update'));
     expect(calls.find(([op]) => op === 'backupSchedule.update')[1].data.deviceSelection.deviceIds).toEqual(['d-direct']);
@@ -205,5 +208,43 @@ describe('cloud sync adoption', () => {
     await expect(deviceService.upsertCloudDevice(normalized, 'int-1')).resolves.toBe('created');
     mockPrisma.device.findMany.mockResolvedValue([]);
     await expect(deviceService.upsertCloudDevice({ ...normalized, macAddress: null }, 'int-1')).resolves.toBe('created');
+  });
+});
+
+describe('merge: port notes (Port Identity)', () => {
+  const { foldNote } = require('../../src/services/ports/port-note-merge');
+
+  afterEach(() => { delete mockTxRows.portNote; });
+
+  it('moves a source note to the target, or folds it into the target note for the same port', async () => {
+    mockPrisma.device.findMany.mockResolvedValue([direct(), cloud()]);
+    mockRows.set('d-direct', direct());
+    mockPrisma.backupSchedule.findMany.mockResolvedValue([]);
+    mockTxRows.portNote = [
+      { id: 'n-t', deviceId: 'd-direct', port: '1/1/1', label: 'Room 214', kind: 'auto', notes: null },
+      { id: 'n-s1', deviceId: 'd-cloud', port: '1/1/1', label: 'Rm 214', owner: 'Finance', kind: 'static', notes: 'printer' },
+      { id: 'n-s2', deviceId: 'd-cloud', port: '1/1/2', label: 'Desk 3', kind: 'auto' },
+    ];
+    calls.length = 0;
+
+    await deviceMerge.merge('d-direct', ['d-cloud']);
+
+    const updates = calls.filter(([op]) => op === 'portNote.update').map(([, a]) => a);
+    expect(updates).toEqual(expect.arrayContaining([
+      { where: { id: 'n-s2' }, data: { deviceId: 'd-direct' } },
+      { where: { id: 'n-t' }, data: { owner: 'Finance', kind: 'static', notes: expect.stringContaining('label: Rm 214') } },
+    ]));
+    expect(calls.find(([op]) => op === 'portNoteRevision.updateMany')[1])
+      .toEqual({ where: { deviceId: { in: ['d-cloud'] } }, data: { deviceId: 'd-direct' } });
+  });
+
+  it('foldNote fills empty fields and appends conflicts and notes under a merged-from line', () => {
+    const data = foldNote(
+      { label: 'A', location: null, kind: 'dynamic', notes: 'keep' },
+      { label: 'B', location: 'Bldg 2', kind: 'static', notes: 'other' },
+      'Sw-Old',
+    );
+    expect(data).toEqual({ location: 'Bldg 2', notes: 'keep\n\n[merged from Sw-Old]\nlabel: B\nkind: static\nother' });
+    expect(foldNote({ label: 'A', kind: 'auto' }, { label: 'A', kind: 'auto' }, 'x')).toEqual({});
   });
 });

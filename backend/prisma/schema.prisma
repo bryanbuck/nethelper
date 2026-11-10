@@ -146,6 +146,8 @@ model User {
   notificationChannels NotificationChannel[]
   acknowledgedAlerts   Alert[]
   savedDeviceFilters   SavedDeviceFilter[]
+  portNotes            PortNote[]            @relation("PortNoteUpdatedBy")
+  portNoteRevisions    PortNoteRevision[]
 }
 
 model Device {
@@ -229,6 +231,10 @@ model Device {
   topologyChanges TopologyChange[]
   alerts          Alert[]
   cloudAlarms     CloudAlarm[]
+  portNotes       PortNote[]
+  portRevisions   PortNoteRevision[]
+  portClients     PortClient[]
+  portReadStates  PortReadState[]
 
   @@index([apiCredentialId])
   @@index([cloudIntegrationId])
@@ -847,4 +853,98 @@ model ArubaCentralConfig {
 
   @@index([userId])
   @@index([isActive])
+}
+
+// ---------------------------------------------------------------------------
+// Port Identity (branch wip/port-identity, docs/PORT_IDENTITY.md).
+// `port` is always the normalizePortName() key (services/topology/neighbor.js)
+// so every source lines up; `portLabel` keeps the device's own spelling.
+
+// What a user knows about a switch port. Belongs to the port, never to the
+// client on it. `label` (<= 64 chars) is what phase 2 may push to the port's
+// description. `kind` overrides the derived port kind.
+model PortNote {
+  id          String   @id @default(uuid())
+  device      Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId    String
+  port        String
+  portLabel   String
+  label       String?  @db.VarChar(64)
+  location    String?
+  owner       String?
+  notes       String?
+  kind        String   @default("auto") // auto | static | dynamic | uplink | unused
+  expectedMac String? // normalized MAC the user pinned as "should be here"
+  updatedBy   User?    @relation("PortNoteUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([deviceId, port])
+  @@index([expectedMac])
+}
+
+// One row per note save or clear: the note's values after it. Keyed by
+// device + port (not the note row) so a port's history survives a clear.
+model PortNoteRevision {
+  id        String   @id @default(uuid())
+  device    Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId  String
+  port      String
+  action    String // set | clear
+  values    Json     @default("{}")
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId    String?
+  createdAt DateTime @default(now())
+
+  @@index([deviceId, port, createdAt])
+}
+
+// A wired client seen on a switch port. Updated by services/ports/client-aging.js:
+// present while reads list it; unconfirmed after PORT_CLIENT_MISS_LIMIT
+// successful reads leave it out; gone after twice that, on link down, when the
+// MAC shows up on another port (moved), or when another MAC takes a static
+// port. A failed read changes nothing (PortReadState says how old it is).
+model PortClient {
+  id          String    @id @default(uuid())
+  device      Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId    String
+  port        String
+  portLabel   String
+  mac         String // normalized (utils/device-key.js normalizeMac)
+  ip          String?
+  hostname    String?
+  vendor      String?
+  vlan        Int?
+  sources     Json      @default("[]") // mac-table | lldp | cloud-wired | arp
+  lldp        Json? // { sysName, capabilities, portDesc } when the client speaks LLDP
+  state       String    @default("present") // present | unconfirmed | gone
+  missedReads Int       @default(0)
+  firstSeen   DateTime  @default(now())
+  lastSeen    DateTime  @default(now())
+  goneAt      DateTime?
+  goneReason  String? // omitted | link-down | moved | port-reassigned
+  goneDetail  Json? // e.g. moved: { deviceId, port }
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([deviceId, port, mac])
+  @@index([deviceId, state])
+  @@index([mac])
+  @@index([ip])
+}
+
+// Per device and source (device-rest | cloud): when its ports were last read,
+// whether that worked, and per-port counts (uplinks keep a count, not clients).
+model PortReadState {
+  id            String    @id @default(uuid())
+  device        Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId      String
+  source        String
+  readAt        DateTime?
+  lastSuccessAt DateTime?
+  error         String?
+  portSummary   Json      @default("{}") // { <port>: { macCount, uplink, linkUp } }
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([deviceId, source])
 }
