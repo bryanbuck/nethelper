@@ -66,13 +66,34 @@
             @click="syncDevices"
           />
           
+          <!-- Filter adds a field; once anything is filtered it becomes Clear
+               (more fields come from the bar's "Add filter") -->
           <ActionButton
+            v-if="hasFilters"
             variant="outlined"
-            icon="mdi-filter"
-            label="Filters"
-            :badge="activeFiltersCount"
-            @click="showFilters = !showFilters"
+            icon="mdi-filter-remove"
+            label="Clear"
+            @click="clearFilters"
           />
+          <v-menu v-else>
+            <template #activator="{ props }">
+              <ActionButton
+                variant="outlined"
+                icon="mdi-filter-plus"
+                label="Filter"
+                v-bind="props"
+              />
+            </template>
+            <v-list density="compact">
+              <v-list-item
+                v-for="f in addableFilters"
+                :key="f.key"
+                :prepend-icon="f.icon"
+                :title="f.label"
+                @click="addFilter(f.key)"
+              />
+            </v-list>
+          </v-menu>
 
           <DeviceSavedFiltersMenu
             :view="view"
@@ -156,114 +177,113 @@
         </div>
       </v-alert>
 
-      <!-- Filters Section -->
+      <!-- Filters: only the fields in use (or just added), plus "Add filter" -->
       <v-expand-transition>
-        <div v-show="showFilters">
-          <v-card-text class="border-b">
-            <v-row>
-              <v-col cols="12" sm="6" md="3">
-                <v-select
-                  :model-value="filters.status"
-                  label="Status"
-                  :items="statusOptions"
-                  variant="outlined"
-                  density="compact"
-                  clearable
-                  @update:model-value="setFilter('status', $event)"
-                >
-                  <template #selection="{ item }">
+        <div v-if="shownFilterKeys.length">
+          <div class="filter-bar d-flex flex-wrap align-center ga-2 px-4 py-2">
+            <v-select
+              v-if="shownFilterKeys.includes('status')"
+              v-model:menu="filterMenus.status"
+              :model-value="filters.status"
+              label="Status"
+              :items="statusOptions"
+              v-bind="filterFieldProps"
+              @update:model-value="setFilter('status', $event)"
+            >
+              <template #selection="{ item }">
+                <v-chip :color="getStatusColor(item.value)" size="x-small">
+                  {{ item.title }}
+                </v-chip>
+              </template>
+              <template #item="{ props, item }">
+                <v-list-item v-bind="props">
+                  <template #prepend>
                     <v-chip :color="getStatusColor(item.value)" size="small">
                       {{ item.title }}
                     </v-chip>
                   </template>
-                  <template #item="{ props, item }">
-                    <v-list-item v-bind="props">
-                      <template #prepend>
-                        <v-chip :color="getStatusColor(item.value)" size="small">
-                          {{ item.title }}
-                        </v-chip>
-                      </template>
-                    </v-list-item>
-                  </template>
-                </v-select>
-              </v-col>
-              
-              <v-col cols="12" sm="6" md="3">
-                <v-select
-                  :model-value="filters.type"
-                  label="Device Type"
-                  :items="typeOptions"
-                  variant="outlined"
-                  density="compact"
-                  clearable
-                  @update:model-value="setFilter('type', $event)"
-                />
-              </v-col>
-              
-              <v-col cols="12" sm="6" md="3">
-                <v-combobox
-                  :model-value="filters.location"
-                  label="Location"
-                  :items="locationOptions"
-                  variant="outlined"
-                  density="compact"
-                  clearable
-                  @update:model-value="setFilter('location', $event)"
-                />
-              </v-col>
-              
-              <v-col cols="12" sm="6" md="3">
-                <v-select
-                  :model-value="filters.platform"
-                  label="Platform"
-                  :items="platformFilterOptions"
-                  variant="outlined"
-                  density="compact"
-                  clearable
-                  @update:model-value="setFilter('platform', $event)"
-                />
-              </v-col>
+                </v-list-item>
+              </template>
+            </v-select>
 
-              <v-col cols="12" sm="6" md="3">
-                <v-select
-                  :model-value="filters.credential"
-                  label="Credential"
-                  :items="credentialFilterOptions"
-                  variant="outlined"
-                  density="compact"
-                  clearable
-                  @update:model-value="setFilter('credential', $event)"
-                />
-              </v-col>
+            <v-select
+              v-if="shownFilterKeys.includes('type')"
+              v-model:menu="filterMenus.type"
+              :model-value="filters.type"
+              label="Device Type"
+              :items="typeOptions"
+              v-bind="filterFieldProps"
+              @update:model-value="setFilter('type', $event)"
+            />
 
-              <v-col cols="12" sm="6" md="3">
-                <v-select
-                  :model-value="filters.group"
-                  label="Group"
-                  :items="groupFilterOptions"
-                  variant="outlined"
-                  density="compact"
-                  clearable
-                  @update:model-value="setFilter('group', $event)"
-                />
-              </v-col>
+            <v-combobox
+              v-if="shownFilterKeys.includes('location')"
+              ref="locationField"
+              v-model:menu="filterMenus.location"
+              :model-value="filters.location"
+              label="Location"
+              :items="locationOptions"
+              v-bind="filterFieldProps"
+              @update:model-value="setFilter('location', $event)"
+              @update:focused="onLocationFocus"
+            />
 
-              <v-col cols="12" sm="6" md="3" class="d-flex align-center">
+            <v-select
+              v-if="shownFilterKeys.includes('platform')"
+              v-model:menu="filterMenus.platform"
+              :model-value="filters.platform"
+              label="Platform"
+              :items="platformFilterOptions"
+              v-bind="filterFieldProps"
+              @update:model-value="setFilter('platform', $event)"
+            />
+
+            <v-select
+              v-if="shownFilterKeys.includes('credential')"
+              v-model:menu="filterMenus.credential"
+              :model-value="filters.credential"
+              label="Credential"
+              :items="credentialFilterOptions"
+              v-bind="filterFieldProps"
+              @update:model-value="setFilter('credential', $event)"
+            />
+
+            <v-select
+              v-if="shownFilterKeys.includes('group')"
+              v-model:menu="filterMenus.group"
+              :model-value="filters.group"
+              label="Group"
+              :items="groupFilterOptions"
+              v-bind="filterFieldProps"
+              @update:model-value="setFilter('group', $event)"
+            />
+
+            <v-menu v-if="addableFilters.length">
+              <template #activator="{ props }">
                 <v-btn
-                  variant="outlined"
-                  prepend-icon="mdi-filter-remove"
-                  :disabled="!filteredNow"
-                  @click="clearFilters"
+                  v-bind="props"
+                  variant="tonal"
+                  size="small"
+                  prepend-icon="mdi-plus"
                 >
-                  Clear Filters
+                  Add filter
                 </v-btn>
-              </v-col>
-            </v-row>
-          </v-card-text>
+              </template>
+              <v-list density="compact">
+                <v-list-item
+                  v-for="f in addableFilters"
+                  :key="f.key"
+                  :prepend-icon="f.icon"
+                  :title="f.label"
+                  @click="addFilter(f.key)"
+                />
+              </v-list>
+            </v-menu>
+          </div>
           <v-divider></v-divider>
         </div>
       </v-expand-transition>
-      
+
       <!-- Bulk Actions Bar: above the table, pinned under the app bar while the page scrolls -->
       <v-slide-y-transition>
         <v-card-actions v-if="selectedItems.length > 0" class="bulk-actions-bar">
@@ -274,6 +294,16 @@
             </div>
             
             <div class="d-flex flex-wrap align-center ga-2">
+              <v-btn
+                v-if="canEdit"
+                variant="outlined"
+                size="small"
+                prepend-icon="mdi-backup-restore"
+                :loading="bulkBackupBusy"
+                @click="bulkBackup"
+              >
+                Back Up
+              </v-btn>
               <v-menu v-if="canEdit">
                 <template #activator="{ props }">
                   <v-btn
@@ -564,8 +594,8 @@
             <div class="text-body-2 text-medium-emphasis mb-4">
               Try adjusting your search or filters
             </div>
-            <v-btn color="primary" @click="clearFilters">
-              Clear All Filters
+            <v-btn color="primary" @click="clearAll">
+              Clear Search and Filters
             </v-btn>
           </div>
         </template>
@@ -613,7 +643,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useDevicesStore } from '@/stores/devices'
@@ -629,6 +659,7 @@ import DeviceMergeDialog from './DeviceMergeDialog.vue'
 import DeviceCredentialDialog from './DeviceCredentialDialog.vue'
 import DeviceGroupMembershipDialog from './DeviceGroupMembershipDialog.vue'
 import { useGroupsStore } from '@/stores/groups'
+import { useBackupsStore } from '@/stores/backups'
 import { cloudProviderLabel, platformOptions } from '@/models/vendors'
 import { unreachableFromHere, answersPingButCloudOffline, DeviceTypeInfo, deviceTypeInfo } from '@/models/Device'
 import { VendorInfo, PlatformInfo } from '@/models/vendors'
@@ -638,7 +669,7 @@ import ActionButton from '@/components/common/ActionButton.vue'
 import DeviceSavedFiltersMenu from './DeviceSavedFiltersMenu.vue'
 import { useSavedFiltersStore } from '@/stores/savedFilters'
 import {
-  FILTER_KEYS, emptyFilters, normalizeView, viewToQuery, sameView, isFiltered
+  FILTER_KEYS, emptyFilters, normalizeView, viewToQuery, sameView
 } from '@/models/device-view'
 
 const router = useRouter()
@@ -655,7 +686,6 @@ const emit = defineEmits(['edit-device', 'update:view'])
 
 // Component state
 const selectedItems = ref([])
-const showFilters = ref(false)
 
 // The view as last emitted. Several changes can land in one tick (Vuetify's
 // page-size change also resets the page) before the prop catches up, so each
@@ -790,10 +820,8 @@ watch(() => devicesStore.devices, (rows) => {
 const locationOptions = computed(() => [...knownLocations.value].sort((a, b) => a.localeCompare(b)))
 
 // Computed properties
-const activeFiltersCount = computed(() => {
-  return Object.values(filters.value).filter(value => value !== null && value !== '').length
-})
-const filteredNow = computed(() => isFiltered(view.value))
+// Filters only: the search box is separate (it has its own clear)
+const hasFilters = computed(() => FILTER_KEYS.some((k) => filters.value[k]))
 
 // Methods
 const loadItems = async () => {
@@ -832,22 +860,74 @@ const commitSearch = () => {
 }
 
 const setFilter = (key, value) => {
+  // Location is typed into: it stays while focused, even emptied
+  if (key !== 'location') dropPending(key)
   updateView({ filters: { ...filters.value, [key]: value || null }, page: 1 })
 }
 
-// Clears filters and search; the sort and page size stay.
+// The toolbar's Clear: filters only; the search, sort and page size stay.
 const clearFilters = () => {
+  pendingFilters.value = []
+  updateView({ filters: emptyFilters(), page: 1 })
+}
+
+// The empty table's reset: filters and search
+const clearAll = () => {
   onSearchInput.cancel()
   searchInput.value = ''
+  pendingFilters.value = []
   updateView({ filters: emptyFilters(), search: '', page: 1 })
 }
 
-// Open the filter panel when a filter it holds is set from outside it (the
-// Groups dialog, a saved filter, a remembered view); status has its own cards.
-const PANEL_FILTERS = FILTER_KEYS.filter((k) => k !== 'status')
-watch(() => PANEL_FILTERS.map((k) => filters.value[k]).join('|'), (now, before) => {
-  if (!showFilters.value && PANEL_FILTERS.some((k) => filters.value[k]) && now !== before) showFilters.value = true
-}, { immediate: true })
+// The filter bar shows only the filters in use, plus any just added from
+// "Add filter" and not yet given a value (in the order of FILTER_DEFS).
+// Clearing a field's value removes it from the bar.
+const FILTER_DEFS = [
+  { key: 'status', label: 'Status', icon: 'mdi-circle-slice-8' },
+  { key: 'type', label: 'Device Type', icon: 'mdi-shape-outline' },
+  { key: 'location', label: 'Location', icon: 'mdi-map-marker-outline' },
+  { key: 'platform', label: 'Platform', icon: 'mdi-chip' },
+  { key: 'credential', label: 'Credential', icon: 'mdi-key-outline' },
+  { key: 'group', label: 'Group', icon: 'mdi-folder-outline' }
+]
+const pendingFilters = ref([])
+const filterMenus = reactive(Object.fromEntries(FILTER_KEYS.map((k) => [k, false])))
+const shownFilterKeys = computed(() =>
+  FILTER_DEFS.map((f) => f.key).filter((k) => filters.value[k] || pendingFilters.value.includes(k))
+)
+const addableFilters = computed(() => FILTER_DEFS.filter((f) => !shownFilterKeys.value.includes(f.key)))
+const filterFieldProps = {
+  variant: 'outlined',
+  density: 'compact',
+  hideDetails: true,
+  clearable: true,
+  class: 'filter-field'
+}
+
+const dropPending = (key) => {
+  if (pendingFilters.value.includes(key)) pendingFilters.value = pendingFilters.value.filter((k) => k !== key)
+}
+
+// Adds the field, focuses it and opens its list, so picking a filter is two clicks
+const locationField = ref(null)
+const addFilter = async (key) => {
+  if (!pendingFilters.value.includes(key)) pendingFilters.value = [...pendingFilters.value, key]
+  await nextTick()
+  if (key === 'location') locationField.value?.focus()
+  filterMenus[key] = true
+}
+
+// A field added and closed without a value goes away again. Location is typed
+// into (its list may be empty), so it goes when it loses focus instead.
+watch(() => ({ ...filterMenus }), (menus) => {
+  for (const k of pendingFilters.value) {
+    if (k !== 'location' && !menus[k] && !filters.value[k]) dropPending(k)
+  }
+})
+const onLocationFocus = (focused) => {
+  if (focused && !pendingFilters.value.includes('location')) pendingFilters.value = [...pendingFilters.value, 'location']
+  if (!focused) dropPending('location')
+}
 
 // Saved filters: apply one (its filters, search and sort; the page size stays).
 // A criterion naming a group or credential that is gone is dropped and said.
@@ -986,6 +1066,26 @@ const bulkLiveMonitoring = async (enabled) => {
   if (changed) notifications.showSuccess(`Live monitoring turned ${verb} for ${changed} device(s)`)
   if (failures.length) {
     notifications.showWarning(failures.join('\n'), `${failures.length} device(s) not changed`)
+  }
+}
+
+// Config backup of the selection: one queued run (POST /backups/run). The
+// results reach the status bar per device and per run through the backup:*
+// socket events, as from the Config Backups page; devices with no per-device
+// config (cloud APs) are counted as skipped there, not failed.
+const backupsStore = useBackupsStore()
+const bulkBackupBusy = ref(false)
+
+const bulkBackup = async () => {
+  const count = selectedItems.value.length
+  bulkBackupBusy.value = true
+  try {
+    await backupsStore.runBackup([...selectedItems.value])
+    notifications.showInfo(`Backup queued for ${count} device(s)`, 'Config Backup')
+  } catch (err) {
+    notifications.showError(err.userMessage || err.message || 'Failed to queue the backup', 'Config Backup')
+  } finally {
+    bulkBackupBusy.value = false
   }
 }
 
@@ -1219,6 +1319,12 @@ defineExpose({ refreshTable })
   min-width: 250px;
 }
 
+/* One compact row; a field is as wide as a short value needs */
+.filter-field {
+  flex: 0 1 200px;
+  min-width: 160px;
+}
+
 /* Phones: rows stack, so the table grows with the page instead of scrolling
    inside a box; the toolbar takes its own line with a full-width search. */
 @media (max-width: 599.98px) {
@@ -1229,6 +1335,16 @@ defineExpose({ refreshTable })
 
   .table-toolbar {
     width: 100%;
+  }
+
+  .filter-bar {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  .filter-field {
+    flex: 1 1 140px;
+    min-width: 140px;
   }
 
   .table-search {
