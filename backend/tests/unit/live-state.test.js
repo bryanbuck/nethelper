@@ -35,6 +35,7 @@ describe('cx-live normalizePortState', () => {
       linkUp: true,
       speedMbps: 1000,
       duplex: 'full',
+      vlan: null, // this capture didn't read VLAN attributes
       poe: { status: 'delivering', pdType: 'Type1', pdClass: 'Class2', powerW: expect.any(Number) },
     });
   });
@@ -71,6 +72,106 @@ describe('cx-live parseNotification', () => {
     expect(withValues).toEqual([
       { port: '1/1/4', operation: 'modified', link: { linkUp: false, speedMbps: null } },
     ]);
+  });
+});
+
+describe('cx-live VLAN membership', () => {
+  // Real capture (6300F, FL.10.16, Central-managed): access, two trunks, and
+  // lag3 whose members 1/1/15-16 have no VLAN config of their own.
+  const lagCapture = require('../fixtures/aos-cx-live/interfaces-vlans-lag.json');
+  // Spec-derived: allowed-all trunk, native-tagged LAG, routed port.
+  const spec = require('../fixtures/aos-cx-vlans.json').interfaces;
+  const row = (ifs, name) => cxLive.normalizePortState(ifs, {}).find((p) => p.port === name);
+
+  test('access, trunk (native also in the allowed list, as the switch reports it) and LAG members', () => {
+    expect(row(lagCapture, '1/1/1').vlan).toEqual({ mode: 'access', untagged: 50 });
+    expect(row(lagCapture, '1/1/13').vlan).toEqual({
+      mode: 'trunk', native: 20, nativeTagged: false, allowed: [18, 20], allAllowed: false,
+    });
+    expect(row(lagCapture, '1/1/15').vlan).toEqual({ mode: 'access', untagged: 10, lag: 'lag3' });
+    expect(row(lagCapture, '1/1/16').vlan).toEqual({ mode: 'access', untagged: 10, lag: 'lag3' });
+    expect(cxLive.normalizePortState(lagCapture, {}).map((p) => p.port)).not.toContain('lag3');
+  });
+
+  test('allowed-all trunk, native-tagged LAG, routed port', () => {
+    expect(row(spec, '1/1/50').vlan).toMatchObject({ mode: 'trunk', native: 1, allowed: [], allAllowed: true });
+    expect(row(spec, '1/1/51').vlan).toEqual({
+      mode: 'trunk', native: 99, nativeTagged: true, allowed: [10, 30], allAllowed: false, lag: 'lag1',
+    });
+    expect(row(spec, '1/1/52').vlan).toEqual({ mode: 'routed' });
+  });
+
+  const frame = (port, values, seq = 2) => ({
+    type: 'notification',
+    data: [{
+      topicname: `t-${port}`,
+      sequence_number: seq,
+      resources: [{ uri: `/rest/v10.10/system/interfaces/${encodeURIComponent(port)}`, operation: 'modified', values }],
+    }],
+  });
+  const vlanRef = (...ids) => Object.fromEntries(ids.map((id) => [String(id), `/rest/v10.10/system/vlans/${id}`]));
+
+  test('a partial VLAN update is recomputed against the last known attributes', () => {
+    const context = cxLive.makeVlanContext(lagCapture);
+    const { updates } = cxLive.parseNotification(frame('1/1/13', { applied_vlan_trunks: vlanRef(18, 20, 30) }), context);
+    expect(updates).toEqual([{
+      port: '1/1/13',
+      operation: 'modified',
+      link: { vlan: { mode: 'trunk', native: 20, nativeTagged: false, allowed: [18, 20, 30], allAllowed: false } },
+    }]);
+    // The context keeps the change for the next partial update.
+    const next = cxLive.parseNotification(frame('1/1/13', { applied_vlan_tag: vlanRef(18) }, 3), context);
+    expect(next.updates[0].link.vlan).toMatchObject({ native: 18, allowed: [18, 20, 30] });
+  });
+
+  test('access <-> trunk, description, and no VLAN handling without a context', () => {
+    const context = cxLive.makeVlanContext(lagCapture);
+    const { updates } = cxLive.parseNotification(frame('1/1/1', {
+      applied_vlan_mode: 'native-untagged', applied_vlan_tag: vlanRef(1), applied_vlan_trunks: {}, description: 'Moved',
+    }), context);
+    expect(updates[0].link).toEqual({
+      description: 'Moved',
+      vlan: { mode: 'trunk', native: 1, nativeTagged: false, allowed: [], allAllowed: true },
+    });
+    expect(cxLive.parseNotification(frame('1/1/1', { applied_vlan_mode: 'access' })).updates[0])
+      .toEqual({ port: '1/1/1', operation: 'modified' });
+  });
+
+  test("a LAG's VLAN change reaches every member port", () => {
+    const context = cxLive.makeVlanContext(lagCapture);
+    const { updates } = cxLive.parseNotification(frame('lag3', { applied_vlan_tag: vlanRef(11) }), context);
+    expect(updates.filter((u) => u.port !== 'lag3')).toEqual([
+      { port: '1/1/15', operation: 'modified', link: { vlan: { mode: 'access', untagged: 11, lag: 'lag3' } } },
+      { port: '1/1/16', operation: 'modified', link: { vlan: { mode: 'access', untagged: 11, lag: 'lag3' } } },
+    ]);
+    expect(updates.some((u) => u.resync)).toBe(false);
+  });
+
+  test('a LAG membership change, or a port joining an unknown LAG, asks for a resync', () => {
+    const context = cxLive.makeVlanContext(lagCapture);
+    const members = { '1/1/15': '/rest/v10.10/system/interfaces/1%2F1%2F15' };
+    expect(cxLive.parseNotification(frame('lag3', { interfaces: members }), context).updates[0].resync).toBe(true);
+    const joined = { applied_vlan_mode: null, applied_vlan_tag: null, vlan_mode: null, vlan_tag: null, routing: null };
+    expect(cxLive.parseNotification(frame('1/1/13', joined), cxLive.makeVlanContext(lagCapture)).updates[0].resync).toBe(true);
+  });
+
+  test("the real subscribe ack's values (full, LAG members included) change nothing", () => {
+    const ack = require('../fixtures/aos-cx-live/notifications-vlan-ack.json');
+    const context = cxLive.makeVlanContext(lagCapture);
+    const { updates } = cxLive.parseNotification(ack, context);
+    expect(updates.some((u) => u.resync)).toBe(false);
+    const rows = new Map(cxLive.normalizePortState(lagCapture, {}).map((p) => [p.port, p]));
+    for (const update of updates.filter((u) => rows.has(u.port) && u.link?.vlan !== undefined)) {
+      expect(update.link.vlan).toEqual(rows.get(update.port).vlan);
+    }
+    expect(updates.filter((u) => u.port === '1/1/15' && u.link?.vlan)).not.toHaveLength(0);
+  });
+
+  test('VLAN and description changes are not events', () => {
+    const before = row(lagCapture, '1/1/13');
+    const after = mergePort(before, { link: { description: 'x', vlan: { mode: 'access', untagged: 5 } } });
+    expect(after.vlan).toEqual({ mode: 'access', untagged: 5 });
+    expect(diffPort(before, after)).toEqual([]);
   });
 });
 

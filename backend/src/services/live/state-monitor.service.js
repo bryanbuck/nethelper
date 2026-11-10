@@ -249,6 +249,14 @@ class DeviceMonitor {
       await this.safeResync('gap', gen);
       return;
     }
+    // The device API says the port layout changed (a LAG's members, or a
+    // port that joined a LAG created after we subscribed). Rare; reconnect so
+    // the snapshot and the subscribed topics both match the new layout.
+    if (updates.some((u) => u.resync)) {
+      logger.info(`Live port layout changed on ${this.device.name}; resubscribing`);
+      await this.recycle(gen);
+      return;
+    }
 
     for (const update of updates) {
       const before = this.ports.get(update.port);

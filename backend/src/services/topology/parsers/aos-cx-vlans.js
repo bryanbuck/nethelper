@@ -94,4 +94,8 @@ function parseCxVlans({ interfaces = {}, vlans = {} } = {}) {
   return makeVlanSnapshot({ vlans: vlanList, ports, routed });
 }
 
-module.exports = { parseCxVlans };
+// effective/portMembership/memberNames are also the Live tab's VLAN reading
+// (device-api/cx-live.js), so the two never disagree on what a port carries.
+module.exports = {
+  parseCxVlans, effective, portMembership, memberNames,
+};

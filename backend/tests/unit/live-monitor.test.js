@@ -174,6 +174,33 @@ describe('StateMonitorService', () => {
     expect(api.closed).toBe(1);
   });
 
+  test('a VLAN/description update patches the row and records no event', async () => {
+    await service.hold(cx(), 'always');
+    await api.handlers.onUpdate({ ...linkFrame(1, true), initial: true });
+    mockEmit.mockClear();
+    const vlan = { mode: 'trunk', native: 1, nativeTagged: false, allowed: [10], allAllowed: false };
+    await api.handlers.onUpdate({
+      updates: [{ port: '1/1/1', operation: 'modified', link: { description: 'AP', vlan } }],
+      sequences: [{ topic: 't-1/1/1', seq: 2 }],
+    });
+    expect(mockEvents).toHaveLength(0);
+    expect(service.getSnapshot('d1').ports.find((p) => p.port === '1/1/1')).toMatchObject({ description: 'AP', vlan });
+    expect(mockEmit).toHaveBeenCalledWith('device:live:port', expect.objectContaining({ port: expect.objectContaining({ vlan }) }));
+  });
+
+  test('a port layout change (resync flag) resubscribes without disconnect events', async () => {
+    await service.hold(cx(), 'always');
+    await api.handlers.onUpdate({ ...linkFrame(1, true), initial: true });
+    await api.handlers.onUpdate({
+      updates: [{ port: 'lag3', operation: 'modified', resync: true }],
+      sequences: [{ topic: 't-lag3', seq: 2 }],
+    });
+    expect(api.getPortState).toHaveBeenCalledTimes(2);
+    expect(api.openNotificationStream).toHaveBeenCalledTimes(2);
+    expect(api.closed).toBe(1);
+    expect(mockEvents).toHaveLength(0);
+  });
+
   test('no credential is a CapabilityError: reported once, never retried', async () => {
     jest.useFakeTimers();
     try {

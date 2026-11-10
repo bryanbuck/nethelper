@@ -94,7 +94,7 @@
         </v-card-title>
         <v-divider />
         <v-table density="compact" class="live-ports">
-          <!-- Phones: three columns (port, state, rates) instead of seven -->
+          <!-- Phones: three columns (port, state, rates) instead of nine -->
           <thead v-if="xs">
             <tr>
               <th>Port</th>
@@ -106,6 +106,8 @@
             <tr>
               <th>Port</th>
               <th>Description</th>
+              <th>Mode</th>
+              <th>VLAN</th>
               <th>Link</th>
               <th>PoE</th>
               <th class="text-end">In</th>
@@ -115,13 +117,13 @@
           </thead>
           <tbody>
             <tr v-if="live.state === 'connecting' && !live.ports.length">
-              <td colspan="7" class="text-center text-medium-emphasis py-6">
+              <td :colspan="columnCount" class="text-center text-medium-emphasis py-6">
                 <v-progress-circular indeterminate size="20" class="mr-2" />
                 Reading port state from the device…
               </td>
             </tr>
             <tr v-else-if="!live.ports.length">
-              <td colspan="7" class="text-center text-medium-emphasis py-6">No ports reported yet.</td>
+              <td :colspan="columnCount" class="text-center text-medium-emphasis py-6">No ports reported yet.</td>
             </tr>
             <template v-else-if="xs">
               <tr
@@ -133,6 +135,7 @@
                   <div class="font-weight-medium">{{ p.port }}</div>
                   <div v-if="noteFor(p.port)?.label" class="text-caption" title="Your port label">{{ noteFor(p.port).label }}</div>
                   <div v-if="p.description" class="text-caption text-medium-emphasis">{{ p.description }}</div>
+                  <div v-if="p.vlan" class="text-caption text-medium-emphasis">{{ vlanSummary(p.vlan) }}</div>
                 </td>
                 <td>
                   <div class="d-flex flex-wrap ga-1 py-1">
@@ -162,6 +165,13 @@
                 <td>
                   <div v-if="noteFor(p.port)?.label" title="Your port label">{{ noteFor(p.port).label }}</div>
                   <div class="text-medium-emphasis">{{ p.description || '' }}</div>
+                </td>
+                <td class="text-no-wrap">
+                  <div>{{ vlanModeLabel(p.vlan) }}</div>
+                  <div v-if="p.vlan?.lag" class="text-caption text-medium-emphasis">in {{ p.vlan.lag }}</div>
+                </td>
+                <td class="tabular-wrap">
+                  <div v-for="line in vlanLines(p.vlan)" :key="line">{{ line }}</div>
                 </td>
                 <td>
                   <v-chip :color="linkChip(p).color" size="x-small" variant="tonal">
@@ -212,6 +222,7 @@ import LiveSparkline from '@/components/devices/LiveSparkline.vue'
 import DeviceEventsCard from '@/components/devices/DeviceEventsCard.vue'
 import { speedLabel } from '@/models/device-events'
 import { usePortLabels } from '@/composables/usePortLabels'
+import { vlanLines, vlanModeLabel, vlanSummary } from '@/models/live-vlan'
 
 const props = defineProps({
   device: { type: Object, required: true },
@@ -227,6 +238,7 @@ const notifications = useNotificationsStore()
 useWebSocket()
 // Phones get the compact three-column ports table.
 const { xs } = useDisplay()
+const columnCount = computed(() => (xs.value ? 3 : 9))
 
 const toggling = ref(false)
 const now = ref(Date.now())
@@ -260,7 +272,7 @@ const cloudEventsNote = computed(() => {
 })
 
 const deliveryNote = computed(() => {
-  if (mode.value === 'push') return 'The switch pushes link and PoE changes as they happen (about a second).'
+  if (mode.value === 'push') return 'The switch pushes link, PoE, VLAN and description changes as they happen (about a second).'
   if (mode.value === 'poll') return 'Link and PoE state is re-read every minute.'
   return ''
 })
@@ -365,6 +377,13 @@ onUnmounted(() => {
 .tabular {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* A long allowed list wraps inside a bounded cell instead of widening the table. */
+.tabular-wrap {
+  font-variant-numeric: tabular-nums;
+  min-width: 9rem;
+  max-width: 18rem;
 }
 
 .live-ports tr.recently-changed td {
