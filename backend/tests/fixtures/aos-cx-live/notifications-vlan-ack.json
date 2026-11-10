@@ -1,0 +1,115 @@
+{
+  "type": "success",
+  "data": [
+    {
+      "topicname": "/rest/v10.10/system/interfaces/1%2F1%2F15?attributes=link_state,description,applied_vlan_mode,applied_vlan_tag,applied_vlan_trunks,vlan_mode,vlan_tag,vlan_trunks,routing,interfaces",
+      "resources": [
+        {
+          "operation": "",
+          "uri": "/rest/v10.10/system/interfaces/1%2F1%2F15",
+          "values": {
+            "description": "Server LAN 1",
+            "link_state": "up"
+          }
+        }
+      ],
+      "subscription_id": "17744784262017277222",
+      "sequence_number": 1
+    },
+    {
+      "topicname": "/rest/v10.10/system/interfaces/lag3?attributes=link_state,description,applied_vlan_mode,applied_vlan_tag,applied_vlan_trunks,vlan_mode,vlan_tag,vlan_trunks,routing,interfaces",
+      "resources": [
+        {
+          "operation": "",
+          "uri": "/rest/v10.10/system/interfaces/lag3",
+          "values": {
+            "applied_vlan_mode": "access",
+            "applied_vlan_tag": {
+              "10": "/rest/v10.10/system/vlans/10"
+            },
+            "applied_vlan_trunks": {},
+            "description": "Server LAG",
+            "interfaces": {
+              "1/1/15": "/rest/v10.10/system/interfaces/1%2F1%2F15",
+              "1/1/16": "/rest/v10.10/system/interfaces/1%2F1%2F16"
+            },
+            "routing": false,
+            "vlan_mode": null,
+            "vlan_tag": {
+              "10": "/rest/v10.10/system/vlans/10"
+            },
+            "vlan_trunks": {}
+          }
+        }
+      ],
+      "subscription_id": "17744784262017277222",
+      "sequence_number": 1
+    },
+    {
+      "topicname": "/rest/v10.10/system/interfaces/1%2F1%2F1?attributes=link_state,description,applied_vlan_mode,applied_vlan_tag,applied_vlan_trunks,vlan_mode,vlan_tag,vlan_trunks,routing,interfaces",
+      "resources": [
+        {
+          "operation": "",
+          "uri": "/rest/v10.10/system/interfaces/1%2F1%2F1",
+          "values": {
+            "applied_vlan_mode": "access",
+            "applied_vlan_tag": {
+              "50": "/rest/v10.10/system/vlans/50"
+            },
+            "applied_vlan_trunks": {},
+            "description": "Uplink",
+            "interfaces": {
+              "1/1/1": "/rest/v10.10/system/interfaces/1%2F1%2F1"
+            },
+            "link_state": "up",
+            "routing": false,
+            "vlan_mode": null,
+            "vlan_tag": {
+              "50": "/rest/v10.10/system/vlans/50"
+            },
+            "vlan_trunks": {}
+          }
+        }
+      ],
+      "subscription_id": "17744784262017277222",
+      "sequence_number": 1
+    },
+    {
+      "topicname": "/rest/v10.10/system/interfaces/1%2F1%2F13?attributes=link_state,description,applied_vlan_mode,applied_vlan_tag,applied_vlan_trunks,vlan_mode,vlan_tag,vlan_trunks,routing,interfaces",
+      "resources": [
+        {
+          "operation": "",
+          "uri": "/rest/v10.10/system/interfaces/1%2F1%2F13",
+          "values": {
+            "applied_vlan_mode": "native-untagged",
+            "applied_vlan_tag": {
+              "20": "/rest/v10.10/system/vlans/20"
+            },
+            "applied_vlan_trunks": {
+              "18": "/rest/v10.10/system/vlans/18",
+              "20": "/rest/v10.10/system/vlans/20"
+            },
+            "description": "Phone and printer",
+            "interfaces": {
+              "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
+            },
+            "link_state": "up",
+            "routing": false,
+            "vlan_mode": "native-untagged",
+            "vlan_tag": {
+              "20": "/rest/v10.10/system/vlans/20"
+            },
+            "vlan_trunks": {
+              "18": "/rest/v10.10/system/vlans/18",
+              "20": "/rest/v10.10/system/vlans/20"
+            }
+          }
+        }
+      ],
+      "subscription_id": "17744784262017277222",
+      "sequence_number": 1
+    }
+  ],
+  "subscriber_name": "uz5x87dno5dx",
+  "code": 201
+}
