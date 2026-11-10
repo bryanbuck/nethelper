@@ -65,7 +65,17 @@ token; send `{"type":"subscribe","topics":[{"name": "<REST URI>"}]}`.
   (`/system/interfaces?attributes=…`) does not** (empty `values`). Change
   notifications on the collection topic are likewise empty: they say which
   resource changed, not to what. NetHelper subscribes one topic per physical
-  port plus the PoE wildcard.
+  port (link, `description`, VLAN attributes), one per LAG (VLAN attributes
+  and `interfaces`), plus the PoE wildcard.
+- **VLAN and description attributes on a topic** (6300F, FL.10.16, 2026-11-09,
+  Central-managed): a per-port or LAG topic with
+  `attributes=description,applied_vlan_*,vlan_*,routing,interfaces` is accepted,
+  and the ack carries their current values
+  (`tests/fixtures/aos-cx-live/notifications-vlan-ack.json`). A LAG's member
+  ports report null VLAN attributes; only the `lag*` interface has them. On a
+  trunk the native VLAN is also listed in `vlan_trunks` (native 20, allowed
+  18,20, as `show running-config` writes it). **Not yet observed:** a change
+  frame for these attributes (needs a config change on a switch).
 - Notifications carry **only the changed attributes** (`pd_type` and `status`
   arrive in separate frames), with `operation: "modified"` and the resource URI.
 - `sequence_number` is **per topic**, starting at 1 in the ack, used for gap

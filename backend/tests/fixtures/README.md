@@ -101,6 +101,13 @@ counterpart (6300F, FL.10.16.1060, 2026-11-04, `{ interfaces, vlans }`): referen
 are id maps, and a port set with only `vlan access <n>` has `vlan_mode: null`, so
 the parser reads `applied_vlan_*` first.
 
+`aos-cx-live/interfaces-vlans-lag.json` and `notifications-vlan-ack.json` are
+**live** captures from a third 6300F (FL.10.16, Central-managed, 2026-11-09,
+descriptions anonymised): the interfaces read behind the Live tab's VLAN columns
+(an access port, two trunks, and `lag3` whose members 1/1/15-16 carry no VLAN
+attributes of their own), and the subscribe ack for per-port and LAG topics with
+the description and VLAN attributes.
+
 `aos-cx-live/vxlan-edge0.json` / `vxlan-edge1.json` are **live** captures of two
 6300Fs (FL.10.16.1060, 2026-11-04) joined by a static VXLAN (VNI 110 ↔ VLAN 110,
 loopback0 sources 10.15.20.20 / 10.15.20.25): `{ interfaces, vnis,

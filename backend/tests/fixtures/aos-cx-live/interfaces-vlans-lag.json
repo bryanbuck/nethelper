@@ -1,0 +1,147 @@
+{
+  "1/1/1": {
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "50": "/rest/v10.10/system/vlans/50"
+    },
+    "applied_vlan_trunks": {},
+    "description": "Uplink",
+    "interfaces": {
+      "1/1/1": "/rest/v10.10/system/interfaces/1%2F1%2F1"
+    },
+    "link_state": "up",
+    "name": "1/1/1",
+    "routing": false,
+    "type": "system",
+    "vlan_mode": null,
+    "vlan_tag": {
+      "50": "/rest/v10.10/system/vlans/50"
+    },
+    "vlan_trunks": {}
+  },
+  "1/1/13": {
+    "applied_vlan_mode": "native-untagged",
+    "applied_vlan_tag": {
+      "20": "/rest/v10.10/system/vlans/20"
+    },
+    "applied_vlan_trunks": {
+      "18": "/rest/v10.10/system/vlans/18",
+      "20": "/rest/v10.10/system/vlans/20"
+    },
+    "description": "Phone and printer",
+    "interfaces": {
+      "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
+    },
+    "link_state": "up",
+    "name": "1/1/13",
+    "routing": false,
+    "type": "system",
+    "vlan_mode": "native-untagged",
+    "vlan_tag": {
+      "20": "/rest/v10.10/system/vlans/20"
+    },
+    "vlan_trunks": {
+      "18": "/rest/v10.10/system/vlans/18",
+      "20": "/rest/v10.10/system/vlans/20"
+    }
+  },
+  "1/1/14": {
+    "applied_vlan_mode": "native-untagged",
+    "applied_vlan_tag": {
+      "9": "/rest/v10.10/system/vlans/9"
+    },
+    "applied_vlan_trunks": {
+      "9": "/rest/v10.10/system/vlans/9",
+      "10": "/rest/v10.10/system/vlans/10",
+      "19": "/rest/v10.10/system/vlans/19",
+      "20": "/rest/v10.10/system/vlans/20",
+      "21": "/rest/v10.10/system/vlans/21",
+      "99": "/rest/v10.10/system/vlans/99"
+    },
+    "description": "AP trunk",
+    "interfaces": {
+      "1/1/14": "/rest/v10.10/system/interfaces/1%2F1%2F14"
+    },
+    "link_state": "up",
+    "name": "1/1/14",
+    "routing": false,
+    "type": "system",
+    "vlan_mode": "native-untagged",
+    "vlan_tag": {
+      "9": "/rest/v10.10/system/vlans/9"
+    },
+    "vlan_trunks": {
+      "9": "/rest/v10.10/system/vlans/9",
+      "10": "/rest/v10.10/system/vlans/10",
+      "19": "/rest/v10.10/system/vlans/19",
+      "20": "/rest/v10.10/system/vlans/20",
+      "21": "/rest/v10.10/system/vlans/21",
+      "99": "/rest/v10.10/system/vlans/99"
+    }
+  },
+  "1/1/15": {
+    "applied_vlan_mode": null,
+    "applied_vlan_tag": null,
+    "applied_vlan_trunks": null,
+    "description": "Server LAN 1",
+    "interfaces": null,
+    "link_state": "up",
+    "name": "1/1/15",
+    "routing": null,
+    "type": "system",
+    "vlan_mode": null,
+    "vlan_tag": null,
+    "vlan_trunks": null
+  },
+  "1/1/16": {
+    "applied_vlan_mode": null,
+    "applied_vlan_tag": null,
+    "applied_vlan_trunks": null,
+    "description": "Server LAN 2",
+    "interfaces": null,
+    "link_state": "up",
+    "name": "1/1/16",
+    "routing": null,
+    "type": "system",
+    "vlan_mode": null,
+    "vlan_tag": null,
+    "vlan_trunks": null
+  },
+  "lag3": {
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "10": "/rest/v10.10/system/vlans/10"
+    },
+    "applied_vlan_trunks": {},
+    "description": "Server LAG",
+    "interfaces": {
+      "1/1/15": "/rest/v10.10/system/interfaces/1%2F1%2F15",
+      "1/1/16": "/rest/v10.10/system/interfaces/1%2F1%2F16"
+    },
+    "link_state": null,
+    "name": "lag3",
+    "routing": false,
+    "type": "lag",
+    "vlan_mode": null,
+    "vlan_tag": {
+      "10": "/rest/v10.10/system/vlans/10"
+    },
+    "vlan_trunks": {}
+  },
+  "loopback0": {
+    "applied_vlan_mode": null,
+    "applied_vlan_tag": null,
+    "applied_vlan_trunks": {},
+    "description": null,
+    "interfaces": {
+      "loopback0": "/rest/v10.10/system/interfaces/loopback0"
+    },
+    "link_state": "up",
+    "name": "loopback0",
+    "routing": false,
+    "type": "loopback",
+    "vlan_mode": null,
+    "vlan_tag": null,
+    "vlan_trunks": {}
+  }
+}

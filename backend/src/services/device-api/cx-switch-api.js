@@ -420,12 +420,15 @@ class CXSwitchAPI extends BaseDeviceAPI {
   /**
    * Normalized state of every physical port, including PoE where the port
    * has it. Two GETs; used as the baseline before subscribing and to resync.
+   * Also keeps the raw VLAN attributes (this.liveVlanContext) that the
+   * notification stream's partial VLAN updates are applied to.
    */
   async getPortState() {
     const interfaces = await this.makeAuthenticatedRequest(
       'GET',
-      '/system/interfaces?depth=2&attributes=name,type,description,link_state,link_speed,duplex,user_config'
+      `/system/interfaces?depth=2&attributes=name,type,description,link_state,link_speed,duplex,user_config,interfaces,${cxLive.VLAN_ATTRIBUTES.join(',')}`
     );
+    this.liveVlanContext = cxLive.makeVlanContext(interfaces);
     let poe = {};
     try {
       poe = await this.makeAuthenticatedRequest(
@@ -436,7 +439,7 @@ class CXSwitchAPI extends BaseDeviceAPI {
       // Non-PoE models have no poe_interface resources.
       if (error.status !== 404) throw error;
     }
-    return cxLive.normalizePortState(interfaces, poe);
+    return cxLive.normalizePortState(interfaces, poe, this.liveVlanContext);
   }
 
   /** Current PoE draw per port, { "1/1/4": 4.24, ... }; empty on non-PoE models. */
@@ -546,8 +549,10 @@ class CXSwitchAPI extends BaseDeviceAPI {
 
   /**
    * Open the REST notification WebSocket and subscribe to changes for the
-   * given ports (link) plus PoE status on all ports. Uses this instance's
-   * session, so it does not consume another REST session.
+   * given ports (link, description, VLANs) plus PoE status on all ports, and
+   * to each LAG known from the last getPortState() (its VLANs and members;
+   * the member ports carry the LAG's VLANs). Uses this instance's session, so
+   * it does not consume another REST session.
    *
    * @param {string[]} ports - physical port names, e.g. ['1/1/1', ...]
    * @param {Object} handlers
@@ -560,9 +565,14 @@ class CXSwitchAPI extends BaseDeviceAPI {
     if (!this.hasValidSession()) await this.login();
 
     const prefix = `/rest/v${this.apiVersion}`;
+    const vlanAttributes = cxLive.VLAN_ATTRIBUTES.join(',');
+    const lags = [...(this.liveVlanContext?.lagMembers.keys() || [])];
     const topics = [
       ...ports.map((port) => (
-        `${prefix}/system/interfaces/${encodeURIComponent(port)}?attributes=link_state,link_speed,duplex,user_config`
+        `${prefix}/system/interfaces/${encodeURIComponent(port)}?attributes=link_state,link_speed,duplex,user_config,description,${vlanAttributes}`
+      )),
+      ...lags.map((lag) => (
+        `${prefix}/system/interfaces/${encodeURIComponent(lag)}?attributes=interfaces,${vlanAttributes}`
       )),
       `${prefix}/system/interfaces/*/poe_interface?attributes=status,pd_type`,
     ];
@@ -598,7 +608,9 @@ class CXSwitchAPI extends BaseDeviceAPI {
           }
           return;
         }
-        if (message.type === 'notification') onUpdate?.(cxLive.parseNotification(message));
+        // VLAN changes apply to the context of the latest getPortState() (a
+        // resync replaces it); the ack above is left out like the rest of its values.
+        if (message.type === 'notification') onUpdate?.(cxLive.parseNotification(message, this.liveVlanContext));
       });
 
       ws.on('unexpected-response', (_req, res) => {
