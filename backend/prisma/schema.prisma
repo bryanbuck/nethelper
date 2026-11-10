@@ -916,6 +916,8 @@ model PortClient {
   hostname    String?
   vendor      String?
   vlan        Int?
+  username    String? // 802.1X identity a cloud reported (Central userName)
+  profile     Json? // a cloud's client profiling: { category, function, os, vendor, randomMac, source }
   sources     Json      @default("[]") // mac-table | lldp | cloud-wired | arp
   lldp        Json? // { sysName, capabilities, portDesc } when the client speaks LLDP
   state       String    @default("present") // present | unconfirmed | gone

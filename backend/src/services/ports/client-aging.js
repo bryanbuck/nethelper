@@ -68,14 +68,19 @@ function normalizeObservations(observed) {
       hostname: o.hostname || null,
       vendor: o.vendor || null,
       vlan: Number.isInteger(o.vlan) ? o.vlan : null,
+      username: o.username || null,
+      profile: o.profile || null,
       sources: union([], o.sources || (o.source ? [o.source] : [])),
       lldp: o.lldp || null,
+      seenAt: o.seenAt ? new Date(o.seenAt) : null,
+      firstSeen: o.firstSeen ? new Date(o.firstSeen) : null,
     };
     if (!prev) {
       byKey.set(k, entry);
       continue;
     }
-    for (const f of ['ip', 'hostname', 'vendor', 'vlan', 'lldp']) prev[f] = prev[f] ?? entry[f];
+    for (const f of ['ip', 'hostname', 'vendor', 'vlan', 'username', 'profile', 'lldp', 'firstSeen']) prev[f] = prev[f] ?? entry[f];
+    if (entry.seenAt && (!prev.seenAt || entry.seenAt > prev.seenAt)) prev.seenAt = entry.seenAt;
     prev.sources = union(prev.sources, entry.sources);
   }
   return [...byKey.values()];
@@ -122,7 +127,8 @@ function summarizePorts(observed, { uplinkPorts = new Set(), apPorts = new Map()
  * Apply one successful read to a device's stored sightings.
  *
  * @param existing  PortClient rows of this device (any state)
- * @param observed  the read's clients (summarizePorts().clients)
+ * @param observed  the read's clients (summarizePorts().clients). An entry's
+ *                  `seenAt`/`firstSeen` (a cloud's own times) win over readAt.
  * @param opts.readAt       Date of the read
  * @param opts.linkUp       Map port -> boolean (false = link down)
  * @param opts.staticPorts  Set of ports whose kind is static
@@ -150,6 +156,7 @@ function applyRead(existing, observed, {
     if (!macsByPort.has(o.port)) macsByPort.set(o.port, new Set());
     macsByPort.get(o.port).add(o.mac);
     const row = rows.get(k);
+    const seenAt = o.seenAt || readAt;
     if (!row) {
       create.push({
         port: o.port,
@@ -159,12 +166,14 @@ function applyRead(existing, observed, {
         hostname: o.hostname,
         vendor: o.vendor,
         vlan: o.vlan,
+        username: o.username || null,
+        profile: o.profile || null,
         sources: o.sources,
         lldp: o.lldp,
         state: 'present',
         missedReads: 0,
-        firstSeen: readAt,
-        lastSeen: readAt,
+        firstSeen: o.firstSeen && o.firstSeen < seenAt ? o.firstSeen : seenAt,
+        lastSeen: seenAt,
       });
       continue;
     }
@@ -172,14 +181,16 @@ function applyRead(existing, observed, {
     if (row.state !== 'present') data.state = 'present';
     if (row.missedReads) data.missedReads = 0;
     if (row.goneAt || row.goneReason || row.goneDetail) Object.assign(data, { goneAt: null, goneReason: null, goneDetail: null });
-    for (const f of ['ip', 'hostname', 'vendor', 'vlan']) {
+    for (const f of ['ip', 'hostname', 'vendor', 'vlan', 'username']) {
       if (o[f] != null && o[f] !== row[f]) data[f] = o[f];
     }
-    if (o.lldp && JSON.stringify(o.lldp) !== JSON.stringify(row.lldp)) data.lldp = o.lldp;
+    for (const f of ['lldp', 'profile']) {
+      if (o[f] && JSON.stringify(o[f]) !== JSON.stringify(row[f])) data[f] = o[f];
+    }
     const sources = union(row.sources, o.sources);
     if (JSON.stringify(sources) !== JSON.stringify(union(row.sources, []))) data.sources = sources;
     if (o.portLabel && o.portLabel !== row.portLabel) data.portLabel = o.portLabel;
-    if (Object.keys(data).length) update.push({ id: row.id, data: { ...data, lastSeen: readAt } });
+    if (Object.keys(data).length || time(seenAt) !== time(readAt)) update.push({ id: row.id, data: { ...data, lastSeen: seenAt } });
     else touch.push(row.id);
   }
 

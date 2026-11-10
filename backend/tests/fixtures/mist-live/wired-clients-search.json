@@ -6,7 +6,7 @@
       "timestamp": 1793710789.415,
       "device_mac_port": [
         {
-          "device_mac": "02000000006e",
+          "device_mac": "4c4ab400006e",
           "port_id": "ge-0/0/11",
           "start": "2026-10-07T15:45:37.663+0000",
           "when": "2026-11-03T12:59:49.415+0000",
@@ -18,7 +18,7 @@
         }
       ],
       "device_mac": [
-        "02000000006e"
+        "4c4ab400006e"
       ],
       "username": [],
       "vlan": [
@@ -41,8 +41,8 @@
       "last_port_id": "ge-0/0/11",
       "last_hostname": "Lab-Core",
       "last_ip": "172.16.10.1",
-      "last_device_mac": "02000000006e",
-      "mac": "02000000005a"
+      "last_device_mac": "4c4ab400006e",
+      "mac": "f4034300005a"
     }
   ],
   "limit": 1000,

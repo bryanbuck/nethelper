@@ -5,6 +5,7 @@ const { CLOUD_PROVIDERS } = require('../../constants/vendors');
 const { parseMistNeighbors } = require('../topology/parsers/mist');
 const { MistStream } = require('../cloud/mist-stream');
 const { normalizeMac } = require('../../utils/device-key');
+const { parseMistWiredClients } = require('../ports/parsers/cloud-clients');
 const logger = require('../../utils/logger');
 
 /**
@@ -130,7 +131,7 @@ class MistProvider extends BaseCloudProvider {
   }
 
   supports(capability) {
-    return ['inventory', 'status', 'test', 'config-backup', 'scope-backup', 'topology', 'events', 'address-lookup', 'alarms'].includes(capability);
+    return ['inventory', 'status', 'test', 'config-backup', 'scope-backup', 'topology', 'events', 'address-lookup', 'alarms', 'wired-clients'].includes(capability);
   }
 
   get orgId() {
@@ -238,6 +239,22 @@ class MistProvider extends BaseCloudProvider {
       data = await this.request('GET', data.next, { context });
     }
     return items;
+  }
+
+  /**
+   * Port Identity: wired clients seen in the last `windowMs`, as observations
+   * keyed to their switch's MAC (services/ports/parsers/cloud-clients.js).
+   * Mist keeps listing a client after its switch goes quiet, so each entry's
+   * own `when` decides `present`, not the listing.
+   */
+  async listWiredClients({ windowMs = 60 * 60 * 1000 } = {}) {
+    const end = Date.now();
+    const start = end - windowMs;
+    const results = await this.searchAll(`/api/v1/orgs/${this.orgId}/wired_clients/search`, {
+      params: { start: Math.floor(start / 1000), end: Math.ceil(end / 1000) },
+      context: 'port_clients',
+    });
+    return parseMistWiredClients(results, new Date(start));
   }
 
   async testConnection() {

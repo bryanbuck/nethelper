@@ -148,6 +148,18 @@ class BaseCloudProvider {
   }
 
   /**
+   * Port Identity: every wired client the cloud knows, keyed to its switch.
+   * One bulk read; the collector shares it across a run.
+   * @param {{ windowMs?: number }} [opts] - how far back a sighting counts as present
+   * @returns {Promise<Object[]>} observations: { switch: { serial?, mac? }, port,
+   *   mac, ip, hostname, username, vendor, vlan, profile, sources, present,
+   *   seenAt, firstSeen } (services/ports/parsers/cloud-clients.js)
+   */
+  async listWiredClients(opts) { // eslint-disable-line no-unused-vars
+    this.unsupported('wired-clients');
+  }
+
+  /**
    * Alarms the cloud raised since `since`, for the read-only mirror
    * (services/cloud-alarm.service.js). Device-related alarms only; types
    * that only repeat what NetHelper already records (device offline/online,
@@ -201,7 +213,7 @@ class BaseCloudProvider {
 
   /**
    * Capability probe used by transport routing and the UI.
-   * @param {string} capability - 'inventory' | 'status' | 'config-backup' | 'scope-backup' | 'topology' | 'switch-vlans' | 'events' | 'address-lookup' | 'alarms' | 'test'
+   * @param {string} capability - 'inventory' | 'status' | 'config-backup' | 'scope-backup' | 'topology' | 'switch-vlans' | 'events' | 'address-lookup' | 'alarms' | 'wired-clients' | 'test'
    * @returns {boolean}
    */
   supports(capability) { // eslint-disable-line no-unused-vars

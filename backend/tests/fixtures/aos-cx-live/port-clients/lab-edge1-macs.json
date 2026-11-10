@@ -1,8 +1,8 @@
 {
   "110": {
-    "dynamic,02:00:00:00:00:5a": {
+    "dynamic,f4:03:43:00:00:5a": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:5a",
+      "mac_addr": "f4:03:43:00:00:5a",
       "port": {
         "vxlan1": "/rest/v10.10/system/interfaces/vxlan1"
       },

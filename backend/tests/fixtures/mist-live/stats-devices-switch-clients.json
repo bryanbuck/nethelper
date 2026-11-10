@@ -1,17 +1,17 @@
 [
   {
-    "mac": "02000000006e",
+    "mac": "4c4ab400006e",
     "name": "JNEX-01",
     "status": "disconnected",
     "last_seen": 1793712599,
     "clients": [
       {
-        "device_mac": "02000000006e",
+        "device_mac": "4c4ab400006e",
         "port_ids": [
           "ge-0/0/11"
         ],
         "source": "lldp",
-        "mac": "02000000005a"
+        "mac": "f4034300005a"
       }
     ],
     "mac_table_stats": {

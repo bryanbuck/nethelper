@@ -471,6 +471,31 @@ class CXSwitchAPI extends BaseDeviceAPI {
   // Topology (services/topology/). Parsing lives in topology/parsers/aos-cx.js.
   // ---------------------------------------------------------------------
 
+  /**
+   * Port Identity: the switch's MAC table, ARP table and the port facts
+   * needed to read them (type, link, LAG members, untagged VLAN). Three GETs
+   * on the caller's session. A switch that routes nothing answers ARP with
+   * an empty table; an ARP failure leaves `arp` empty rather than failing
+   * the read.
+   * @returns {Promise<{ interfaces: Object, macs: Object, arp: Object, arpError?: string }>} raw replies
+   *   (parsed by services/ports/parsers/aos-cx-clients.js)
+   */
+  async getClientTables() {
+    const interfaces = await this.makeAuthenticatedRequest(
+      'GET',
+      '/system/interfaces?depth=2&attributes=name,type,description,link_state,admin_state,user_config,interfaces,applied_vlan_tag'
+    );
+    const macs = await this.makeAuthenticatedRequest('GET', '/system/vlans/*/macs?depth=2');
+    let arp = {};
+    let arpError;
+    try {
+      arp = await this.makeAuthenticatedRequest('GET', '/system/vrfs/*/neighbors?depth=2');
+    } catch (error) {
+      arpError = error.message;
+    }
+    return { interfaces, macs, arp, ...(arpError && { arpError }) };
+  }
+
   /** LLDP neighbors on every port, normalized (see topology/neighbor.js). */
   async getLldpNeighbors() {
     try {

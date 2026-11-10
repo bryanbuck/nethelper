@@ -17,7 +17,7 @@
       "address_family": "ipv4",
       "from": "dynamic",
       "ip_address": "192.168.0.12",
-      "mac": "02:00:00:00:00:5d",
+      "mac": "e4:de:40:00:00:5d",
       "phy_port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -30,7 +30,7 @@
       "address_family": "ipv4",
       "from": "dynamic",
       "ip_address": "192.168.0.169",
-      "mac": "02:00:00:00:00:08",
+      "mac": "00:50:56:00:00:08",
       "phy_port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -43,7 +43,7 @@
       "address_family": "ipv4",
       "from": "dynamic",
       "ip_address": "192.168.0.20",
-      "mac": "02:00:00:00:00:05",
+      "mac": "00:0c:29:00:00:05",
       "phy_port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -56,7 +56,7 @@
       "address_family": "ipv4",
       "from": "dynamic",
       "ip_address": "192.168.0.22",
-      "mac": "02:00:00:00:00:0a",
+      "mac": "00:50:56:00:00:0a",
       "phy_port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -69,7 +69,7 @@
       "address_family": "ipv4",
       "from": "dynamic",
       "ip_address": "192.168.0.33",
-      "mac": "02:00:00:00:00:12",
+      "mac": "00:50:56:00:00:12",
       "phy_port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -82,7 +82,7 @@
       "address_family": "ipv4",
       "from": "dynamic",
       "ip_address": "192.168.0.34",
-      "mac": "02:00:00:00:00:13",
+      "mac": "00:50:56:00:00:13",
       "phy_port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },

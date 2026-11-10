@@ -1,8 +1,8 @@
 {
   "10": {
-    "dynamic,02:00:00:00:00:05": {
+    "dynamic,00:0c:29:00:00:05": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:05",
+      "mac_addr": "00:0c:29:00:00:05",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -12,9 +12,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:06": {
+    "dynamic,00:0c:29:00:00:06": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:06",
+      "mac_addr": "00:0c:29:00:00:06",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -24,9 +24,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:07": {
+    "dynamic,00:11:32:00:00:07": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:07",
+      "mac_addr": "00:11:32:00:00:07",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -36,9 +36,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:08": {
+    "dynamic,00:50:56:00:00:08": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:08",
+      "mac_addr": "00:50:56:00:00:08",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -48,9 +48,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:09": {
+    "dynamic,00:50:56:00:00:09": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:09",
+      "mac_addr": "00:50:56:00:00:09",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -60,9 +60,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:0a": {
+    "dynamic,00:50:56:00:00:0a": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:0a",
+      "mac_addr": "00:50:56:00:00:0a",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -72,9 +72,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:0c": {
+    "dynamic,00:50:56:00:00:0c": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:0c",
+      "mac_addr": "00:50:56:00:00:0c",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -84,9 +84,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:0d": {
+    "dynamic,00:50:56:00:00:0d": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:0d",
+      "mac_addr": "00:50:56:00:00:0d",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -96,9 +96,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:0e": {
+    "dynamic,00:50:56:00:00:0e": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:0e",
+      "mac_addr": "00:50:56:00:00:0e",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -108,9 +108,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:0f": {
+    "dynamic,00:50:56:00:00:0f": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:0f",
+      "mac_addr": "00:50:56:00:00:0f",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -120,9 +120,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:11": {
+    "dynamic,00:50:56:00:00:11": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:11",
+      "mac_addr": "00:50:56:00:00:11",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -132,9 +132,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:12": {
+    "dynamic,00:50:56:00:00:12": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:12",
+      "mac_addr": "00:50:56:00:00:12",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -144,9 +144,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:13": {
+    "dynamic,00:50:56:00:00:13": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:13",
+      "mac_addr": "00:50:56:00:00:13",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -156,9 +156,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:14": {
+    "dynamic,00:c0:b7:00:00:14": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:14",
+      "mac_addr": "00:c0:b7:00:00:14",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -168,9 +168,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:15": {
+    "dynamic,00:c0:b7:00:00:15": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:15",
+      "mac_addr": "00:c0:b7:00:00:15",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -192,9 +192,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:16": {
+    "dynamic,20:4c:03:00:00:16": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:16",
+      "mac_addr": "20:4c:03:00:00:16",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -204,9 +204,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:17": {
+    "dynamic,74:a2:e6:00:00:17": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:17",
+      "mac_addr": "74:a2:e6:00:00:17",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -216,9 +216,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:5d": {
+    "dynamic,e4:de:40:00:00:5d": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:5d",
+      "mac_addr": "e4:de:40:00:00:5d",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -228,9 +228,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:1c": {
+    "dynamic,fc:9d:05:00:00:1c": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:1c",
+      "mac_addr": "fc:9d:05:00:00:1c",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -254,9 +254,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:1e": {
+    "dynamic,a0:60:32:00:00:1e": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:1e",
+      "mac_addr": "a0:60:32:00:00:1e",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -266,9 +266,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:1f": {
+    "dynamic,a0:60:32:00:00:1f": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:1f",
+      "mac_addr": "a0:60:32:00:00:1f",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -278,9 +278,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:20": {
+    "dynamic,a0:60:32:00:00:20": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:20",
+      "mac_addr": "a0:60:32:00:00:20",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -290,9 +290,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:21": {
+    "dynamic,a0:60:32:00:00:21": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:21",
+      "mac_addr": "a0:60:32:00:00:21",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -302,9 +302,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:22": {
+    "dynamic,a0:60:32:00:00:22": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:22",
+      "mac_addr": "a0:60:32:00:00:22",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -314,9 +314,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:23": {
+    "dynamic,a0:60:32:00:00:23": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:23",
+      "mac_addr": "a0:60:32:00:00:23",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -326,9 +326,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:5d": {
+    "dynamic,e4:de:40:00:00:5d": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:5d",
+      "mac_addr": "e4:de:40:00:00:5d",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -340,9 +340,9 @@
     }
   },
   "18": {
-    "dynamic,02:00:00:00:00:24": {
+    "dynamic,00:1f:9e:00:00:24": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:24",
+      "mac_addr": "00:1f:9e:00:00:24",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -364,9 +364,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:25": {
+    "dynamic,04:2a:e2:00:00:25": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:25",
+      "mac_addr": "04:2a:e2:00:00:25",
       "port": {
         "1/1/4": "/rest/v10.10/system/interfaces/1%2F1%2F4"
       },
@@ -376,9 +376,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:5d": {
+    "dynamic,e4:de:40:00:00:5d": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:5d",
+      "mac_addr": "e4:de:40:00:00:5d",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -390,9 +390,9 @@
     }
   },
   "19": {
-    "dynamic,02:00:00:00:00:27": {
+    "dynamic,00:0f:60:00:00:27": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:27",
+      "mac_addr": "00:0f:60:00:00:27",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -402,9 +402,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:28": {
+    "dynamic,00:a0:de:00:00:28": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:28",
+      "mac_addr": "00:a0:de:00:00:28",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -426,9 +426,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:29": {
+    "dynamic,16:56:70:00:00:29": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:29",
+      "mac_addr": "16:56:70:00:00:29",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -438,9 +438,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:2a": {
+    "dynamic,28:de:65:00:00:2a": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:2a",
+      "mac_addr": "28:de:65:00:00:2a",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -450,9 +450,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:2b": {
+    "dynamic,50:14:79:00:00:2b": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:2b",
+      "mac_addr": "50:14:79:00:00:2b",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -462,9 +462,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:01": {
+    "dynamic,54:d7:e3:00:00:01": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:01",
+      "mac_addr": "54:d7:e3:00:00:01",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -474,9 +474,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:03": {
+    "dynamic,74:9e:75:00:00:03": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:03",
+      "mac_addr": "74:9e:75:00:00:03",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -486,9 +486,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:2c": {
+    "dynamic,88:de:a9:00:00:2c": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:2c",
+      "mac_addr": "88:de:a9:00:00:2c",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -498,9 +498,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:2e": {
+    "dynamic,ac:ae:19:00:00:2e": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:2e",
+      "mac_addr": "ac:ae:19:00:00:2e",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -510,9 +510,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:5d": {
+    "dynamic,e4:de:40:00:00:5d": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:5d",
+      "mac_addr": "e4:de:40:00:00:5d",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -522,9 +522,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:31": {
+    "dynamic,f0:1a:a0:00:00:31": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:31",
+      "mac_addr": "f0:1a:a0:00:00:31",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -548,9 +548,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:2a": {
+    "dynamic,28:de:65:00:00:2a": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:2a",
+      "mac_addr": "28:de:65:00:00:2a",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -560,9 +560,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:35": {
+    "dynamic,4a:17:1f:00:00:35": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:35",
+      "mac_addr": "4a:17:1f:00:00:35",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -572,9 +572,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:01": {
+    "dynamic,54:d7:e3:00:00:01": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:01",
+      "mac_addr": "54:d7:e3:00:00:01",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -584,9 +584,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:36": {
+    "dynamic,56:7e:4c:00:00:36": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:36",
+      "mac_addr": "56:7e:4c:00:00:36",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -596,9 +596,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:37": {
+    "dynamic,64:4b:f0:00:00:37": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:37",
+      "mac_addr": "64:4b:f0:00:00:37",
       "port": {
         "1/1/4": "/rest/v10.10/system/interfaces/1%2F1%2F4"
       },
@@ -608,9 +608,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:02": {
+    "dynamic,74:9e:75:00:00:02": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:02",
+      "mac_addr": "74:9e:75:00:00:02",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -620,9 +620,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:03": {
+    "dynamic,74:9e:75:00:00:03": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:03",
+      "mac_addr": "74:9e:75:00:00:03",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -632,9 +632,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:04": {
+    "dynamic,8c:79:09:00:00:04": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:04",
+      "mac_addr": "8c:79:09:00:00:04",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -644,9 +644,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:3a": {
+    "dynamic,b8:27:eb:00:00:3a": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:3a",
+      "mac_addr": "b8:27:eb:00:00:3a",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -656,9 +656,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:3b": {
+    "dynamic,dc:cd:2f:00:00:3b": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:3b",
+      "mac_addr": "dc:cd:2f:00:00:3b",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -668,9 +668,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:5d": {
+    "dynamic,e4:de:40:00:00:5d": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:5d",
+      "mac_addr": "e4:de:40:00:00:5d",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -680,9 +680,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:31": {
+    "dynamic,f0:1a:a0:00:00:31": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:31",
+      "mac_addr": "f0:1a:a0:00:00:31",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -692,9 +692,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:3c": {
+    "dynamic,fa:e9:3d:00:00:3c": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:3c",
+      "mac_addr": "fa:e9:3d:00:00:3c",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -718,9 +718,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:3e": {
+    "dynamic,38:c9:86:00:00:3e": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:3e",
+      "mac_addr": "38:c9:86:00:00:3e",
       "port": {
         "1/1/1": "/rest/v10.10/system/interfaces/1%2F1%2F1"
       },
@@ -730,9 +730,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:5d": {
+    "dynamic,e4:de:40:00:00:5d": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:5d",
+      "mac_addr": "e4:de:40:00:00:5d",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -744,9 +744,9 @@
     }
   },
   "42": {
-    "dynamic,02:00:00:00:00:3f": {
+    "dynamic,00:00:5e:00:00:3f": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:3f",
+      "mac_addr": "00:00:5e:00:00:3f",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -756,9 +756,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:41": {
+    "dynamic,00:50:56:00:00:41": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:41",
+      "mac_addr": "00:50:56:00:00:41",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -770,9 +770,9 @@
     }
   },
   "50": {
-    "dynamic,02:00:00:00:00:43": {
+    "dynamic,00:50:56:00:00:43": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:43",
+      "mac_addr": "00:50:56:00:00:43",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -782,9 +782,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:44": {
+    "dynamic,00:50:56:00:00:44": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:44",
+      "mac_addr": "00:50:56:00:00:44",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -794,9 +794,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:45": {
+    "dynamic,18:a5:ff:00:00:45": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:45",
+      "mac_addr": "18:a5:ff:00:00:45",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -808,9 +808,9 @@
     }
   },
   "51": {
-    "dynamic,02:00:00:00:00:46": {
+    "dynamic,00:50:56:00:00:46": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:46",
+      "mac_addr": "00:50:56:00:00:46",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -820,9 +820,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:47": {
+    "dynamic,00:50:56:00:00:47": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:47",
+      "mac_addr": "00:50:56:00:00:47",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -832,9 +832,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:49": {
+    "dynamic,a6:8a:06:00:00:49": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:49",
+      "mac_addr": "a6:8a:06:00:00:49",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -846,9 +846,9 @@
     }
   },
   "99": {
-    "dynamic,02:00:00:00:00:4b": {
+    "dynamic,00:00:5e:00:00:4b": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:4b",
+      "mac_addr": "00:00:5e:00:00:4b",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -858,9 +858,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:4f": {
+    "dynamic,24:4c:ab:00:00:4f": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:4f",
+      "mac_addr": "24:4c:ab:00:00:4f",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -870,9 +870,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:53": {
+    "dynamic,c8:c9:a3:00:00:53": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:53",
+      "mac_addr": "c8:c9:a3:00:00:53",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },
@@ -882,9 +882,9 @@
       "selected": true,
       "denied": false
     },
-    "dynamic,02:00:00:00:00:54": {
+    "dynamic,fc:0f:e7:00:00:54": {
       "from": "dynamic",
-      "mac_addr": "02:00:00:00:00:54",
+      "mac_addr": "fc:0f:e7:00:00:54",
       "port": {
         "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
       },

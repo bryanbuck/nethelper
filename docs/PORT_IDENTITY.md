@@ -60,7 +60,7 @@ sightings and read states cascade away and are rebuilt by the next read.
 
 ## What the live captures showed (2026-11-10)
 
-All reads were GET-only. Raw captures stay on the dev host, outside the repo. Fixtures were made with an allow-list scrubber: it keeps one MAC mapping across all sources, replaces hostnames, 802.1X user names, SSIDs, port descriptions and LLDP names, and makes wireless clients' profiles generic.
+All reads were GET-only. Raw captures stay on the dev host, outside the repo. Fixtures were made with an allow-list scrubber: it keeps one MAC mapping across all sources (each MAC keeps its vendor prefix, the OUI, and gets a new device half), replaces hostnames, 802.1X user names, SSIDs, port descriptions and LLDP names, and makes wireless clients' profiles generic.
 
 **AOS-CX REST** (Sw-CoreA 6300F, Sw-Studio 6200F, Lab-Edge0/1 6300F; `tests/fixtures/aos-cx-live/port-clients/`):
 - `GET system/vlans/*/macs?depth=2` returns `{ <vlan>: { "<from>,<mac>": { mac_addr, from, port: { "<port>": ref }, inactivity_timeout: 300, network_infra_mac, ... } } }`. It took 30–330 ms per switch.
@@ -100,13 +100,57 @@ All reads were GET-only. Raw captures stay on the dev host, outside the repo. Fi
 - Uplink rule: also a non-telephone bridging LLDP neighbor, and `network_infra_mac` from CX.
 - The kept VLAN is the client's untagged/data VLAN when it was learned in several.
 
+## The collector (`backend/src/services/ports/`)
+
+One run (Bull queue `port-clients`, job `collect`, every `PORT_CLIENT_INTERVAL`, default 30 minutes):
+
+1. **Read** every switch. `resolveTransport(device, 'clients')` routes like topology: local REST when the device has an IP, then the cloud, never SSH to a cloud-managed device.
+   - AOS-CX REST: `CXSwitchAPI.getClientTables()` makes three GETs on one session (interfaces, MAC table, ARP), parsed by `parsers/aos-cx-clients.js`.
+   - Each cloud's wired-client list is read **once per integration per run** and shared by its switches: `listWiredClients()`, capability `wired-clients`, parsed by `parsers/cloud-clients.js`.
+     - Central walks `clientPages()`, the generator the address lookup now shares; it is capped at 20 pages of 1000 with a warning.
+     - Mist searches `wired_clients/search` over the last two intervals.
+   - Junos, AOS-S and IOS direct reads are empty rows in the transport matrix for now.
+2. **Fleet-wide MAC to IP** from every switch's ARP table, then the clouds' client IPs.
+3. **Per switch** (`client-merge.js`, then `client-aging.js`):
+   - classify ports (uplink, AP, edge);
+   - take presence from the switch's own MAC table when it was read, otherwise from the cloud;
+   - enrich: cloud identity (hostname, 802.1X user, Central's profile, and Central's "connected since" when it is the same port), ARP IP, the LLDP identity of the client itself, and OUI vendor (never for a random MAC);
+   - age the stored sightings, and write one transaction plus the `PortReadState` row.
+4. **Moves**: a MAC present on exactly one edge port in this run ends its live sightings elsewhere.
+5. **Retention**: gone sightings are pruned after `PORT_CLIENT_RETENTION_DAYS`, keeping each port's newest.
+
+**Failures:**
+- A failed switch read changes no sighting. It records `PortReadState(source: device-rest).error`.
+- A cloud-managed switch whose REST read fails falls back to its cloud. That cloud then decides presence for the switch.
+
+**Between runs:** `device-events.service.js` now has an in-process `events` emitter (`'recorded'`). A `port.link.down` event from the live monitor or the Mist stream ends that port's sightings at once.
+
+**Writing JSON columns:** nullable JSON columns are written as SQL NULL (`Prisma.DbNull`), never JSON `null`.
+
+**Socket events:**
+- `ports:updated` (`{ deviceId }`) when a switch's sightings changed.
+- `ports:collected` (the run summary) at the end of a run.
+
+**Settings:** `PORT_CLIENTS_ENABLED` (default `true`), `PORT_CLIENT_INTERVAL` (`1800000`), `PORT_CLIENT_CONCURRENCY` (`4`), `PORT_CLIENT_MISS_LIMIT` (`2`), `PORT_CLIENT_RETENTION_DAYS` (`30`).
+
+**First live runs (2026-11-10, dev DB copy):**
+- 12 switches: 11 read and 1 failed (Agg1, offline), in about 2 seconds.
+- 40 clients stored.
+- The second run changed nothing: all 40 present, no misses.
+- On Sw-CoreA, the AP ports hold only their AP, and the uplinks to Sw-Studio, Sw-Mgmt, Lab-Core, a small switch and a gateway hold only counts.
+- Of the 40 clients, 35 have an IP (the core switch's ARP covers the access switch's clients), 35 have a Central profile (cameras, UPS, NAS, printer, IP phone, and so on), and 4 have their own LLDP identity.
+- Sw-Mgmt (AOS-S, Central only) has Central's 4 connected clients.
+- A hypervisor trunk (an LLDP neighbor with no name or capabilities) keeps its 12 VMs as clients.
+
 ## Progress
 
 - [x] Data model: migration `20261110120000_port_identity` (additive: four new tables).
 - [x] Aging rules, port kinds and freshness, with unit tests.
 - [x] Device merge handles port notes.
 - [x] Live captures (2026-11-10): AOS-CX MAC table and ARP on four switches, Central client list (two tenants), Mist wired clients; scrubbed fixtures committed (see "What the live captures showed").
-- [ ] Collection: `clients` operation in the transport matrix, AOS-CX REST, Mist and Central readers, Bull job `port-clients`, enrichment (IEEE OUI table), link-down hook.
+- [x] Collection (2026-11-10): `clients` transport operation, AOS-CX REST tables, Central and Mist wired clients, fleet-wide ARP, port classes, moves, link-down hook, Bull job `port-clients`, migration `20261110130000_port_client_identity` (`username`, `profile`). Run live against the dev DB copy.
+- [ ] Vendor names for MACs outside the ~55 curated Aruba/Juniper prefixes: a bundled IEEE OUI table (`scripts/update-oui.js`), shared with discovery.
+- [ ] Watch the aging run for a few days on real data: misses for quiet clients, link-down, and a client moved by hand.
 - [ ] API: `GET /devices/:id/ports`, note `PUT`/`DELETE`, `POST /devices/:id/ports/read`, `GET /ports/search`.
 - [ ] UI: device page Ports tab, note dialog with evidence, labels on the Live/Neighbors tabs and the map, search.
 - [ ] Phase 1b: Junos NETCONF, AOS-S and IOS SSH MAC/ARP parsers (spec-derived until hardware).
