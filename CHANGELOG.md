@@ -6,7 +6,7 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ### Added
 - Device page **Live** tab (AOS-CX): **Mode** and **VLAN** columns, read from the switch and kept current by its notification stream. An access port shows its VLAN, a trunk its native and allowed VLANs, and a port in a LAG the LAG's VLANs. On a phone they appear under the port name.
-- Devices page: a **Back Up** button in the selection toolbar (operators and admins) queues a config backup of the selected devices, including ones on other table pages. Results appear in the status bar as each device finishes, and devices with no per-device config (such as cloud-managed APs) are counted as skipped.
+- Devices page: a **Back Up** button in the selection toolbar (operators and admins) queues a config backup of the selected devices, including ones on other table pages. The status bar reports the run when it finishes (a single device's result, or a summary plus any failures for several), and devices with no per-device config (such as cloud-managed APs) are counted as skipped.
 
 ### Changed
 - Status bar: the bar still shows every message, but its activity history now keeps only what you might have missed: errors, warnings, critical alerts, a lost connection, and the results of work you started that runs in the background (cloud sync, discovery, backups, automation runs, Network Map refresh, application backup, bulk connection tests). Confirmations of what you just did (saved, deleted, queued, started), "Connection restored", and warning or info alerts (such as "offline in the cloud", still with a View button) show in the bar for a few seconds and stay out of the history and its count. Those alerts remain on the alert bell, the Alerts page and the Activity feed.
