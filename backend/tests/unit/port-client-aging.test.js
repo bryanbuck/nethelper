@@ -35,7 +35,9 @@ function row(over = {}) {
     ...over,
   };
 }
-const obs = (over = {}) => ({ port: '1/1/1', portLabel: '1/1/1', mac: MAC_A, vlan: 10, sources: ['mac-table'], ...over });
+const obs = (over = {}) => ({
+  port: '1/1/1', mac: MAC_A, vlan: 10, sources: ['mac-table'], ...over, portLabel: over.portLabel || over.port || '1/1/1',
+});
 
 describe('normalizeObservations', () => {
   it('normalizes port and MAC, merges duplicates and their sources, drops unusable entries', () => {
@@ -64,12 +66,12 @@ describe('summarizePorts', () => {
     const observed = normalizeObservations([obs({ port: '1/1/5', mac: MAC_A }), obs({ port: '1/1/5', mac: MAC_B })]);
     const { clients, summary } = summarizePorts(observed, { apPorts: new Map([['1/1/5', MAC_A]]) });
     expect(clients.map((c) => c.mac)).toEqual([MAC_A]);
-    expect(summary['1/1/5']).toEqual({ macCount: 2, uplink: false, ap: MAC_A });
+    expect(summary['1/1/5']).toEqual({ label: '1/1/5', macCount: 2, uplink: false, ap: MAC_A });
   });
 
   it('records link state for ports with no clients', () => {
     const { summary } = summarizePorts([], { linkUp: new Map([['1/1/7', false]]) });
-    expect(summary['1/1/7']).toEqual({ macCount: 0, uplink: false, linkUp: false });
+    expect(summary['1/1/7']).toEqual({ label: '1/1/7', macCount: 0, uplink: false, linkUp: false });
   });
 });
 

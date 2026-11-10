@@ -228,6 +228,15 @@ class PortClientService {
     const observed = aging.normalizeObservations(enrich(raw, { arpByMac: ctx.arpByMac, lldp, vendorOf }));
     const linkUp = linkStates(read.direct?.ifaces);
     const { clients, summary } = aging.summarizePorts(observed, { uplinkPorts, apPorts, linkUp });
+    // Every physical port and LAG the switch reported, with its own name and
+    // description, so the Ports view lists empty ports too.
+    for (const [key, p] of read.direct?.ifaces?.ports || []) {
+      if (p.type !== 'system' && p.type !== 'lag') continue;
+      summary[key] = {
+        macCount: 0, uplink: uplinkPorts.has(key), ...summary[key], label: p.port, description: p.description || null,
+        ...(typeof p.linkUp === 'boolean' && { linkUp: p.linkUp }),
+      };
+    }
 
     const staticPorts = new Set(notes.filter((n) => n.kind === 'static').map((n) => n.port));
     const byPort = new Map();

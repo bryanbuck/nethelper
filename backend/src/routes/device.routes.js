@@ -2,12 +2,18 @@ const express = require('express');
 const router = express.Router();
 const deviceController = require('../controllers/device.controller');
 const topologyController = require('../controllers/topology.controller');
+const portController = require('../controllers/port.controller');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
 const savedFilterController = require('../controllers/saved-filter.controller');
-const { validateDevice, validateDeviceGroup, validateSavedFilter, validateQuery, validateUUID } = require('../middleware/validation.middleware');
+const {
+  validateDevice, validateDeviceGroup, validateSavedFilter, validateQuery, validateUUID, validatePorts,
+} = require('../middleware/validation.middleware');
 
 // All routes require authentication
 router.use(authenticate);
+
+// Port Identity: where is this MAC / IP / host / note text, fleet-wide
+router.get('/ports/search', validatePorts.search, portController.search);
 
 // Get all devices
 router.get('/', validateQuery.deviceList, deviceController.getDevices);
@@ -104,6 +110,14 @@ router.get('/:deviceId/address-lookup', authorize('admin', 'operator'), validate
 
 // Network Map: this device's LLDP/CDP neighbors
 router.get('/:deviceId/neighbors', validateUUID('deviceId'), topologyController.getDeviceNeighbors);
+
+// Port Identity: the switch's ports (clients, notes, neighbors, VLANs), one
+// port with its note history, port notes, and a client read on demand.
+router.get('/:deviceId/ports', validatePorts.device, portController.getPorts);
+router.post('/:deviceId/ports/read', authorize('admin', 'operator'), validatePorts.device, portController.readNow);
+router.get('/:deviceId/ports/:port', validatePorts.port, portController.getPort);
+router.put('/:deviceId/ports/:port/note', authorize('admin', 'operator'), validatePorts.note, portController.setNote);
+router.delete('/:deviceId/ports/:port/note', authorize('admin', 'operator'), validatePorts.port, portController.clearNote);
 
 router.patch(
   '/:deviceId/live-monitoring',

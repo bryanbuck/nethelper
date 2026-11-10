@@ -142,6 +142,27 @@ One run (Bull queue `port-clients`, job `collect`, every `PORT_CLIENT_INTERVAL`,
 - Sw-Mgmt (AOS-S, Central only) has Central's 4 connected clients.
 - A hypervisor trunk (an LLDP neighbor with no name or capabilities) keeps its 12 VMs as clients.
 
+## API (all under `/api/v1/devices`, authenticated)
+
+| Route | Who | What |
+|---|---|---|
+| `GET /ports/search?q=` | all roles | Fleet-wide search. Sightings match by MAC (any spelling, or 4+ hex digits of one), IP (exact, or a prefix when it has a dot), hostname, user or vendor; notes match any text field or the pinned MAC. Returns `{ clients, notes }`, live sightings first. |
+| `GET /:deviceId/ports` | all roles | Every port the device's reads, sightings, notes, LLDP links or VLAN snapshot know (see below). |
+| `GET /:deviceId/ports/:port` | all roles | One port: every kept sighting, plus the note's revisions (newest 50). |
+| `PUT /:deviceId/ports/:port/note` | operator+ | Save the note. Accepts `label` (≤ 64), `location`, `owner` (≤ 255), `notes` (≤ 4000), `kind` (`auto|static|dynamic|uplink|unused`), `expectedMac`, and optionally `portLabel`. A field sent as `null`/`''` is cleared; a note left empty is deleted. Each save writes a `PortNoteRevision`. |
+| `DELETE /:deviceId/ports/:port/note` | operator+ | Clear the note (revision `clear`). |
+| `POST /:deviceId/ports/read` | operator+ | Queue a client read of this switch on the `port-clients` queue (202; 409 while one is queued for it). |
+
+**Port names in URLs** are URL-encoded (`1%2F1%2F4`). The key is `normalizePortName()`, so `GigabitEthernet1/0/4` and `Gi1/0/4` are the same port.
+
+**Port view:** `{ port, label, description, linkUp, macCount, uplink, ap, kind: { kind, source, reason }, note, expected: { mac, present }, clients, goneCount, neighbors, vlan }`.
+- `clients` lists the live sightings, then those gone in the last 7 days, or the newest gone one when there's nothing else.
+- Each client carries `freshness` (`confirmed|unconfirmed|stale|gone`) and `since`.
+
+The response also carries `reads` (per source: `readAt`, `lastSuccessAt`, `error`), `lastSuccessAt`, `observingSince` (the first read; `unused` needs 30 days of watching) and `intervalMs`.
+
+**Cloud profiling is evidence, not fact.** Central classifies the USB-C dock behind the lab's Cisco phone as "Cisco IP Phone" too. Show `profile.source` ("Aruba Central classifies this as …"); the user's note is the final word.
+
 ## Progress
 
 - [x] Data model: migration `20261110120000_port_identity` (additive: four new tables).
@@ -151,7 +172,7 @@ One run (Bull queue `port-clients`, job `collect`, every `PORT_CLIENT_INTERVAL`,
 - [x] Collection (2026-11-10): `clients` transport operation, AOS-CX REST tables, Central and Mist wired clients, fleet-wide ARP, port classes, moves, link-down hook, Bull job `port-clients`, migration `20261110130000_port_client_identity` (`username`, `profile`). Run live against the dev DB copy.
 - [ ] Vendor names for MACs outside the ~55 curated Aruba/Juniper prefixes: a bundled IEEE OUI table (`scripts/update-oui.js`), shared with discovery.
 - [ ] Watch the aging run for a few days on real data: misses for quiet clients, link-down, and a client moved by hand.
-- [ ] API: `GET /devices/:id/ports`, note `PUT`/`DELETE`, `POST /devices/:id/ports/read`, `GET /ports/search`.
+- [x] API (2026-11-10): ports view, one port with note history, note `PUT`/`DELETE` with revisions, read-now, fleet-wide search (`services/ports/port-view.service.js`, `controllers/port.controller.js`). Run against the dev DB copy. The read summary now also stores each port's own name and description, and `PortReadState.createdAt` records the first read (migration `20261110140000_port_read_state_created`).
 - [ ] UI: device page Ports tab, note dialog with evidence, labels on the Live/Neighbors tabs and the map, search.
 - [ ] Phase 1b: Junos NETCONF, AOS-S and IOS SSH MAC/ARP parsers (spec-derived until hardware).
 - [ ] Phase 1.5: alert rules for an unexpected or missing pinned client; Activity category.

@@ -108,7 +108,9 @@ function summarizePorts(observed, { uplinkPorts = new Set(), apPorts = new Map()
   for (const [port, list] of byPort) {
     const uplink = uplinkPorts.has(port) || list.length > maxPerPort;
     const apMac = normalizeMac(apPorts.get(port));
-    summary[port] = { macCount: list.length, uplink, ...(apMac ? { ap: apMac } : {}) };
+    summary[port] = {
+      label: list[0].portLabel || port, macCount: list.length, uplink, ...(apMac ? { ap: apMac } : {}),
+    };
     if (linkUp.has(port)) summary[port].linkUp = linkUp.get(port);
     if (uplink) continue;
     if (apMac) {
@@ -118,7 +120,7 @@ function summarizePorts(observed, { uplinkPorts = new Set(), apPorts = new Map()
     clients.push(...list);
   }
   for (const [port, up] of linkUp) {
-    if (!summary[port]) summary[port] = { macCount: 0, uplink: uplinkPorts.has(port), linkUp: up };
+    if (!summary[port]) summary[port] = { label: port, macCount: 0, uplink: uplinkPorts.has(port), linkUp: up };
   }
   return { clients, summary };
 }

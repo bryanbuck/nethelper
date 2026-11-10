@@ -945,7 +945,8 @@ model PortReadState {
   readAt        DateTime?
   lastSuccessAt DateTime?
   error         String?
-  portSummary   Json      @default("{}") // { <port>: { macCount, uplink, linkUp } }
+  portSummary   Json      @default("{}") // { <port>: { label, description, macCount, uplink, ap, linkUp } }
+  createdAt     DateTime  @default(now()) // first read: how long the ports have been watched
   updatedAt     DateTime  @updatedAt
 
   @@unique([deviceId, source])
