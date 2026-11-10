@@ -1070,9 +1070,10 @@ const bulkLiveMonitoring = async (enabled) => {
 }
 
 // Config backup of the selection: one queued run (POST /backups/run). The
-// results reach the status bar per device and per run through the backup:*
-// socket events, as from the Config Backups page; devices with no per-device
-// config (cloud APs) are counted as skipped there, not failed.
+// results reach the status bar through the backup:* socket events, as from the
+// Config Backups page: one device's result, or for several the run summary
+// plus each failure; devices with no per-device config (cloud APs) are counted
+// as skipped there, not failed. "Queued" is a flash; the result is kept.
 const backupsStore = useBackupsStore()
 const bulkBackupBusy = ref(false)
 
