@@ -66,13 +66,34 @@
             @click="syncDevices"
           />
           
+          <!-- Filter adds a field; once anything is filtered it becomes Clear
+               (more fields come from the bar's "Add filter") -->
           <ActionButton
+            v-if="hasFilters"
             variant="outlined"
-            icon="mdi-filter"
-            label="Filters"
-            :badge="activeFiltersCount"
-            @click="showFilters = !showFilters"
+            icon="mdi-filter-remove"
+            label="Clear"
+            @click="clearFilters"
           />
+          <v-menu v-else>
+            <template #activator="{ props }">
+              <ActionButton
+                variant="outlined"
+                icon="mdi-filter-plus"
+                label="Filter"
+                v-bind="props"
+              />
+            </template>
+            <v-list density="compact">
+              <v-list-item
+                v-for="f in addableFilters"
+                :key="f.key"
+                :prepend-icon="f.icon"
+                :title="f.label"
+                @click="addFilter(f.key)"
+              />
+            </v-list>
+          </v-menu>
 
           <DeviceSavedFiltersMenu
             :view="view"
@@ -158,7 +179,7 @@
 
       <!-- Filters: only the fields in use (or just added), plus "Add filter" -->
       <v-expand-transition>
-        <div v-show="showFilters">
+        <div v-if="shownFilterKeys.length">
           <div class="filter-bar d-flex flex-wrap align-center ga-2 px-4 py-2">
             <v-select
               v-if="shownFilterKeys.includes('status')"
@@ -258,16 +279,6 @@
                 />
               </v-list>
             </v-menu>
-
-            <v-btn
-              v-if="filteredNow"
-              variant="text"
-              size="small"
-              prepend-icon="mdi-filter-remove"
-              @click="clearFilters"
-            >
-              Clear
-            </v-btn>
           </div>
           <v-divider></v-divider>
         </div>
@@ -583,8 +594,8 @@
             <div class="text-body-2 text-medium-emphasis mb-4">
               Try adjusting your search or filters
             </div>
-            <v-btn color="primary" @click="clearFilters">
-              Clear All Filters
+            <v-btn color="primary" @click="clearAll">
+              Clear Search and Filters
             </v-btn>
           </div>
         </template>
@@ -658,7 +669,7 @@ import ActionButton from '@/components/common/ActionButton.vue'
 import DeviceSavedFiltersMenu from './DeviceSavedFiltersMenu.vue'
 import { useSavedFiltersStore } from '@/stores/savedFilters'
 import {
-  FILTER_KEYS, emptyFilters, normalizeView, viewToQuery, sameView, isFiltered
+  FILTER_KEYS, emptyFilters, normalizeView, viewToQuery, sameView
 } from '@/models/device-view'
 
 const router = useRouter()
@@ -675,7 +686,6 @@ const emit = defineEmits(['edit-device', 'update:view'])
 
 // Component state
 const selectedItems = ref([])
-const showFilters = ref(false)
 
 // The view as last emitted. Several changes can land in one tick (Vuetify's
 // page-size change also resets the page) before the prop catches up, so each
@@ -810,10 +820,8 @@ watch(() => devicesStore.devices, (rows) => {
 const locationOptions = computed(() => [...knownLocations.value].sort((a, b) => a.localeCompare(b)))
 
 // Computed properties
-const activeFiltersCount = computed(() => {
-  return Object.values(filters.value).filter(value => value !== null && value !== '').length
-})
-const filteredNow = computed(() => isFiltered(view.value))
+// Filters only: the search box is separate (it has its own clear)
+const hasFilters = computed(() => FILTER_KEYS.some((k) => filters.value[k]))
 
 // Methods
 const loadItems = async () => {
@@ -857,8 +865,14 @@ const setFilter = (key, value) => {
   updateView({ filters: { ...filters.value, [key]: value || null }, page: 1 })
 }
 
-// Clears filters and search; the sort and page size stay.
+// The toolbar's Clear: filters only; the search, sort and page size stay.
 const clearFilters = () => {
+  pendingFilters.value = []
+  updateView({ filters: emptyFilters(), page: 1 })
+}
+
+// The empty table's reset: filters and search
+const clearAll = () => {
   onSearchInput.cancel()
   searchInput.value = ''
   pendingFilters.value = []
@@ -914,12 +928,6 @@ const onLocationFocus = (focused) => {
   if (focused && !pendingFilters.value.includes('location')) pendingFilters.value = [...pendingFilters.value, 'location']
   if (!focused) dropPending('location')
 }
-
-// Open the filter bar when a filter is set from outside it (the stat cards,
-// the Groups dialog, a saved filter, a remembered view).
-watch(() => FILTER_KEYS.map((k) => filters.value[k]).join('|'), (now, before) => {
-  if (!showFilters.value && FILTER_KEYS.some((k) => filters.value[k]) && now !== before) showFilters.value = true
-}, { immediate: true })
 
 // Saved filters: apply one (its filters, search and sort; the page size stays).
 // A criterion naming a group or credential that is gone is dropped and said.
