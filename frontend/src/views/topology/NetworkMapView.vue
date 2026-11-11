@@ -1023,7 +1023,7 @@ watch(() => topologyStore.staleAt, async () => {
     const parts = [`${run.ok} of ${run.total} devices read`]
     if (run.changes) parts.push(`${run.changes} link change${run.changes === 1 ? '' : 's'}`)
     if (run.failed) parts.push(`${run.failed} failed`)
-    notifications.showSuccess(parts.join(', '), 'Topology refreshed')
+    notifications.showSuccess(parts.join(', '), 'Topology refreshed', { history: true })
   }
   if (panel.value === 'changes') topologyStore.fetchChanges({ sinceHours: changesWindow.value }).catch(() => {})
 })

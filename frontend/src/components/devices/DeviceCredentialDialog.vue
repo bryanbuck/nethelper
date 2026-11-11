@@ -298,7 +298,8 @@ const runTests = async (devices) => {
   testing.value = false
 
   if (failed) notifications.showWarning(`${ok} connected, ${failed} failed. See the dialog for reasons.`, 'Connection tests')
-  else notifications.showSuccess(`All ${ok} device(s) connected`)
+  // Tests take a while and may finish after the dialog is closed: kept.
+  else notifications.showSuccess(`All ${ok} device(s) connected`, 'Connection tests', { history: true })
 }
 
 const apply = async () => {

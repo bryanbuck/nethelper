@@ -2,13 +2,29 @@
 
 All notable changes to NetHelper. Versions follow [Semantic Versioning](https://semver.org/); pre-1.0 releases may change behavior between minor versions.
 
-## [Unreleased]
+## [0.9.0] — 2026-11-10
+
+The first 0.9 release without a pre-release suffix: everything from `0.9.0-beta.1` to `0.9.0-beta.8` (below), plus the changes listed here. It is still pre-1.0, so behavior may change between minor versions, and automations remain experimental. What is supported and what has been tested on real equipment: [`docs/SUPPORT.md`](docs/SUPPORT.md).
 
 ### Added
 - Device page **Live** tab (AOS-CX): **Mode** and **VLAN** columns, read from the switch and kept current by its notification stream. An access port shows its VLAN, a trunk its native and allowed VLANs, and a port in a LAG the LAG's VLANs. On a phone they appear under the port name.
+- Devices page: a **Back Up** button in the selection toolbar (operators and admins) queues a config backup of the selected devices, including ones on other table pages. The status bar reports the run when it finishes (a single device's result, or a summary plus any failures for several), and devices with no per-device config (such as cloud-managed APs) are counted as skipped.
+
+### Changed
+- Status bar: the bar still shows every message, but its activity history now keeps only what you might have missed: errors, warnings, critical alerts, a lost connection, and the results of work you started that runs in the background (cloud sync, discovery, backups, automation runs, Network Map refresh, application backup, bulk connection tests). Confirmations of what you just did (saved, deleted, queued, started), "Connection restored", and warning or info alerts (such as "offline in the cloud", still with a View button) show in the bar for a few seconds and stay out of the history and its count. Those alerts remain on the alert bell, the Alerts page and the Activity feed.
+- Status bar: with nothing to report it now shows NetHelper's state instead of "No new activity": **Ready** only while real-time updates are connected (the green dot on the right), otherwise Connecting…, Connection lost, reconnecting…, or Real-time updates unavailable. Its history is now titled Messages, to set it apart from the Activity feed.
+- Status bar: a critical alert still pops up, and its history entry now goes away once the alert is acknowledged or resolved. "Connection lost" goes away when the connection comes back.
+- Scheduled and automation-triggered config backups report only a failed run, and a manual run of several devices reports its summary and its failures, not each success.
+- The app bar and status bar no longer show a "Beta" label.
+- The release images are also tagged `latest` (pre-releases never moved it). `deploy/install.sh` and the Compose file keep using the exact version.
 
 ### Fixed
 - Device page Live tab: a port description changed on the switch now shows up as it changes, instead of at the next full re-read (up to 10 minutes later).
+- Status bar: the activity history now closes when you click anywhere outside it. A click to the right of it used to count as inside.
+
+### Upgrading from 0.9.0-beta.8
+- No database migrations and no new settings. Take a backup first anyway (Settings → App Backup → Run now). **Docker Compose**: run `deploy/install.sh` from the new tree (it keeps your `.env` values). **Bare metal**: follow "Upgrading" in [`deploy/README.md`](deploy/README.md).
+- From an older beta, also follow the "Upgrading" notes of each version in between.
 
 ## [0.9.0-beta.8] — 2026-11-04
 

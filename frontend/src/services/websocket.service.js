@@ -13,8 +13,20 @@ import { useBackupsStore } from '@/stores/backups'
 import { useTopologyStore } from '@/stores/topology'
 import { useAlertsStore } from '@/stores/alerts'
 
-// One activity-log slot for the socket state: lost/restored/failed replace each other.
+// One activity-log slot for the socket state: lost/restored/failed replace each
+// other. Lost and failed are pinned while true; "restored" only flashes and
+// takes the lost entry with it, so an outage that is over leaves nothing behind.
 const CONNECTION_ENTRY_ID = 'socket-connection'
+
+// Unattended work (schedules, automations) reaches the status bar only when it
+// fails, and only as its run summary. Events from an older backend carry no trigger.
+const unattended = (data) => Boolean(data?.trigger) && data.trigger !== 'manual'
+
+// A critical alert's pinned entry; it goes when the alert is acknowledged or resolved.
+const alertEntryId = (alertId) => `alert_${alertId}`
+
+// A manual single-device backup: "queued" (device page) and its result share this.
+export const backupEntryId = (deviceId) => `backup-device-${deviceId}`
 
 class WebSocketService {
   constructor() {
@@ -82,6 +94,7 @@ class WebSocketService {
 
     try {
       this.socket = io(wsUrl, { ...defaultOptions, ...options })
+      this.stores.notifications.setConnection('connecting')
       
       this.setupConnectionHandlers()
       this.setupEventHandlers()
@@ -104,15 +117,16 @@ class WebSocketService {
       console.log('WebSocket connected')
 
       // The first connect only lights the status bar; a reconnect replaces the
-      // pinned "Connection Lost" entry (same id) so the log doesn't stack them.
+      // pinned "Connection Lost" entry (same id) with a "restored" flash.
       const notifications = this.stores.notifications
-      if (notifications.connection !== 'idle' && notifications.connection !== 'connected') {
+      if (notifications.connection === 'reconnecting' || notifications.connection === 'failed') {
         notifications.addNotification({
           id: CONNECTION_ENTRY_ID,
           type: 'success',
           title: 'Connection Restored',
           message: 'Real-time updates are active again',
-          timeout: 3000
+          timeout: 3000,
+          history: false
         })
       }
       notifications.setConnection('connected')
@@ -127,7 +141,8 @@ class WebSocketService {
         type: 'warning',
         title: 'Connection Lost',
         message: 'Attempting to reconnect...',
-        persistent: true
+        persistent: true,
+        transient: true
       })
       
       // The one case Socket.io doesn't retry by itself.
@@ -234,7 +249,7 @@ class WebSocketService {
         + (data.possibleDuplicates ? ` ${data.possibleDuplicates} possible duplicate(s) to review on the Devices page.` : '')
         + (failed.length ? ` Failed: ${failed.map((i) => i.name).join(', ')}.` : '')
       if (data.possibleDuplicates || failed.length || data.released) this.stores.notifications.showWarning(message, 'Device Sync')
-      else this.stores.notifications.showSuccess(message, 'Device Sync')
+      else this.stores.notifications.showSuccess(message, 'Device Sync', { history: true })
     } catch (error) {
       console.error('Error handling device sync completed:', error)
     }
@@ -277,7 +292,8 @@ class WebSocketService {
 
       this.stores.notifications.showSuccess(
         `Found ${totalHosts} host(s), ${vendorHosts} from a known vendor`,
-        'Discovery Scan Complete'
+        'Discovery Scan Complete',
+        { history: true }
       )
     } catch (error) {
       console.error('Error handling discovery completed:', error)
@@ -320,12 +336,18 @@ class WebSocketService {
 
       this.stores.backups.applyBackupEvent(data)
 
+      // A run's successes are in its summary; unattended ones say nothing.
+      if (unattended(data) || (data.batch && !warning)) return
+
       const message = `Configuration backup for ${this.backupSubject(data)} completed${hasChanges ? ' (configuration changed)' : ''}`
-      if (warning) {
-        this.stores.notifications.showWarning(`${message}. ${warning}`, 'Backup Incomplete')
-      } else {
-        this.stores.notifications.showSuccess(message, 'Backup Complete')
-      }
+      // Same id as the device page's "queued" entry, which this replaces.
+      this.stores.notifications.addNotification({
+        id: data.scope ? undefined : backupEntryId(data.deviceId),
+        type: warning ? 'warning' : 'success',
+        title: warning ? 'Backup Incomplete' : 'Backup Complete',
+        message: warning ? `${message}. ${warning}` : message,
+        timeout: warning ? 4000 : 3000
+      })
     } catch (error) {
       console.error('Error handling backup completed:', error)
     }
@@ -344,13 +366,16 @@ class WebSocketService {
       this.stores.backups.applyBackupEvent(data)
 
       // A platform with no per-device config (Mist APs): expected on an "all
-      // devices" run, so only the run summary counts it.
-      if (data.unsupported) return
+      // devices" run, so only the run summary counts it. An unattended failure
+      // is in its run summary and in the backup.failed alert.
+      if (data.unsupported || unattended(data)) return
 
-      this.stores.notifications.showError(
-        `Configuration backup for ${this.backupSubject(data)} failed: ${errorMessage || 'Unknown error'}`,
-        'Backup Failed'
-      )
+      this.stores.notifications.addNotification({
+        id: data.scope ? undefined : backupEntryId(data.deviceId),
+        type: 'error',
+        title: 'Backup Failed',
+        message: `Configuration backup for ${this.backupSubject(data)} failed: ${errorMessage || 'Unknown error'}`
+      })
     } catch (error) {
       console.error('Error handling backup failed:', error)
     }
@@ -374,6 +399,8 @@ class WebSocketService {
 
       this.stores.backups.handleRunCompleted(data)
 
+      if (unattended(data) && !(failed > 0)) return
+
       if (failed > 0) {
         this.stores.notifications.showWarning(
           `Backup run finished: ${succeeded}/${total - skipped} succeeded, ${failed} failed${skippedNote}`,
@@ -382,7 +409,8 @@ class WebSocketService {
       } else {
         this.stores.notifications.showSuccess(
           `Backup run finished: ${succeeded}/${total - skipped} ${data.scope ? 'cloud scope(s)' : 'device(s)'} backed up${skippedNote}`,
-          'Backup Run Complete'
+          'Backup Run Complete',
+          { history: true }
         )
       }
     } catch (error) {
@@ -436,6 +464,10 @@ class WebSocketService {
 
   /**
    * A server-side alert opened (services/alert.service.js on the backend).
+   * Alerts are kept on the bell and the Alerts page, and device state changes
+   * in Activity, so a warning or info alert only flashes in the bar (with
+   * View); the history isn't another copy of them. A critical alert pops up and
+   * stays pinned in the bar and the history, only while it is open.
    * @param {Object} data - { alert, summary }
    */
   handleNewAlert(data) {
@@ -444,14 +476,17 @@ class WebSocketService {
       this.stores.alerts.handleNew(data)
       if (!alert) return
 
+      const critical = alert.severity === 'critical'
       this.stores.notifications.addNotification({
-        id: `alert_${alert.id}`,
-        type: alert.severity === 'critical' ? 'error' : alert.severity === 'warning' ? 'warning' : 'info',
+        id: alertEntryId(alert.id),
+        type: critical ? 'error' : alert.severity === 'warning' ? 'warning' : 'info',
         title: alert.title,
         message: alert.message,
-        persistent: alert.severity === 'critical',
-        popup: alert.severity === 'critical',
-        timeout: 8000,
+        persistent: critical,
+        transient: critical,
+        popup: critical,
+        history: critical,
+        timeout: critical ? 8000 : 6000,
         actions: [{ label: 'View', to: '/alerts' }]
       })
 
@@ -470,6 +505,12 @@ class WebSocketService {
    */
   handleAlertUpdated(data) {
     this.stores.alerts.handleUpdated(data)
+    // Someone acknowledged it, or it cleared: its pin (and pop-up) go.
+    for (const alert of data?.alerts || []) {
+      if (alert?.id && alert.status && alert.status !== 'open') {
+        this.stores.notifications.remove(alertEntryId(alert.id))
+      }
+    }
   }
 
   notifyConnectionFailed() {
@@ -479,7 +520,8 @@ class WebSocketService {
       type: 'error',
       title: 'Connection Failed',
       message: 'Unable to establish real-time connection. Please refresh the page.',
-      persistent: true
+      persistent: true,
+      transient: true
     })
   }
 
@@ -552,6 +594,8 @@ class WebSocketService {
     this.socket.removeAllListeners()
     this.socket.disconnect()
     this.socket = null
+    // A closed socket is no longer lost or failed: the next connect() speaks for itself.
+    this.stores.notifications?.remove(CONNECTION_ENTRY_ID)
     this.stores.notifications?.setConnection('idle')
   }
 

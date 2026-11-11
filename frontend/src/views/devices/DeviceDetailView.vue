@@ -748,6 +748,7 @@ import DeviceEditDialog from '@/components/devices/DeviceEditDialog.vue'
 import ActionButton from '@/components/common/ActionButton.vue'
 import { useBackupsStore } from '@/stores/backups'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { backupEntryId } from '@/services/websocket.service'
 import deviceService from '@/services/device.service'
 import deviceApiService from '@/services/deviceApi.service'
 import { cloudProviderLabel, VendorInfo, PlatformInfo } from '@/models/vendors'
@@ -1264,7 +1265,15 @@ const backUpNow = async () => {
   onSocket('backup:failed', handler)
   try {
     await backupsStore.runBackup([deviceId])
-    notificationStore.showInfo(`Backup of ${device.value?.name || 'this device'} queued`, 'Config Backup')
+    // A flash; the backup:completed/failed entry (same id) is the record.
+    notificationStore.addNotification({
+      id: backupEntryId(deviceId),
+      type: 'info',
+      title: 'Config Backup',
+      message: `Backup of ${device.value?.name || 'this device'} queued`,
+      timeout: 3000,
+      history: false
+    })
   } catch (err) {
     stopBackupWait()
     notificationStore.showError(err.userMessage || err.message || 'Failed to queue the backup', 'Config Backup')
