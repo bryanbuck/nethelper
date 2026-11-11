@@ -36,7 +36,7 @@ const { decryptStream, isEncryptedHeader } = require('../src/utils/archive-crypt
 const { pgEnvFromUrl, parseToolMajor } = require('../src/utils/pg-env');
 const {
   configBackupDir, defaultGitRepoDir, knownHostsPath, keyFingerprint, codeMigration,
-  planRestore, restoreSql,
+  planRestore, restoreSql, restoreScriptFilter,
 } = require('../src/utils/app-backup-common');
 
 function parseArgs(argv) {
@@ -129,8 +129,15 @@ async function otherConnections(env) {
   return Number(out.trim()) || 0;
 }
 
-/** pg_restore's script, between our before/after SQL, into one psql transaction. */
-function loadDump(dumpFile, sql, env) {
+async function serverMajor(env) {
+  const out = await run('psql', ['-X', '-A', '-t', '-c', 'SHOW server_version_num'], { env });
+  const num = Number(out.trim());
+  return Number.isFinite(num) && num > 0 ? Math.floor(num / 10000) : null;
+}
+
+/** pg_restore's script, between our before/after SQL, into one psql transaction.
+ * The script is filtered for settings the server doesn't know (restoreScriptFilter). */
+function loadDump(dumpFile, sql, env, major) {
   return new Promise((resolve, reject) => {
     const childEnv = { ...process.env, ...env };
     const psql = spawn('psql', ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '--single-transaction', '-o', '/dev/null'], { env: childEnv, stdio: ['pipe', 'inherit', 'pipe'] });
@@ -140,13 +147,19 @@ function loadDump(dumpFile, sql, env) {
     restore.stderr.on('data', (chunk) => { errors += chunk; });
     psql.stdin.on('error', () => {}); // psql stopped early; its exit code says why
     psql.stdin.write(sql.before);
-    restore.stdout.pipe(psql.stdin, { end: false });
+    const filter = restoreScriptFilter(major);
+    restore.stdout.pipe(filter).pipe(psql.stdin, { end: false });
+    // Finish only once pg_restore has exited AND the filter has passed on its
+    // last line, so our closing SQL (the COMMIT side) never overtakes the script.
     let restoreCode = null;
-    restore.on('close', (code) => {
-      restoreCode = code;
-      if (code === 0) psql.stdin.end(sql.after);
+    let drained = false;
+    const finish = () => {
+      if (restoreCode === null || !drained) return;
+      if (restoreCode === 0) psql.stdin.end(sql.after);
       else psql.stdin.destroy(); // no COMMIT reaches psql: the transaction rolls back
-    });
+    };
+    filter.on('end', () => { drained = true; finish(); });
+    restore.on('close', (code) => { restoreCode = code; finish(); });
     restore.on('error', reject);
     psql.on('error', reject);
     psql.on('close', (code) => {
@@ -219,6 +232,8 @@ async function main() {
     if (plan.errors.length || (plan.blockers.length && !opts.force)) return 1;
 
     await run('pg_restore', ['--list', dumpFile]); // the dump itself reads
+    const major = await serverMajor(env);
+    say(`Server:    PostgreSQL ${major ?? 'version unknown'}`);
     const others = await otherConnections(env);
     if (others > 0) {
       const msg = `${others} other connection(s) to the database are open: stop NetHelper first`;
@@ -242,7 +257,7 @@ async function main() {
     }
 
     say('Restoring the database (one transaction)...');
-    await loadDump(dumpFile, restoreSql(schema, plan.rewrites), env);
+    await loadDump(dumpFile, restoreSql(schema, plan.rewrites), env, major);
     for (const copy of plan.copies) {
       say(`Copying ${copy.member}/ to ${copy.target}`);
       await copyDir(path.join(dir, copy.member), copy.target);
@@ -268,4 +283,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { parseArgs };
+module.exports = { parseArgs, loadDump, serverMajor };

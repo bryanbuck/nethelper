@@ -2,6 +2,11 @@
 
 All notable changes to NetHelper. Versions follow [Semantic Versioning](https://semver.org/); pre-1.0 releases may change behavior between minor versions.
 
+## [Unreleased]
+
+### Fixed
+- Application backup restore into the Docker Compose stack failed with `unrecognized configuration parameter "transaction_timeout"` and left the database as it was. The image's `pg_restore` 17 always writes that setting, which PostgreSQL 15 and 16 don't know. The restore now leaves out settings the server doesn't know, and its checks (also in `--dry-run`) print the server's version.
+
 ## [0.9.0] — 2026-11-10
 
 The first 0.9 release without a pre-release suffix: everything from `0.9.0-beta.1` to `0.9.0-beta.8` (below), plus the changes listed here. It is still pre-1.0, so behavior may change between minor versions, and automations remain experimental. What is supported and what has been tested on real equipment: [`docs/SUPPORT.md`](docs/SUPPORT.md).

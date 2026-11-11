@@ -20,7 +20,9 @@ jest.mock('../../src/config/bull', () => ({ getQueue: () => ({ getRepeatableJobs
 
 const { encryptStream, decryptStream, isEncryptedHeader } = require('../../src/utils/archive-crypto');
 const { pgEnvFromUrl, parseToolMajor } = require('../../src/utils/pg-env');
-const { planRestore, restoreSql, keyFingerprint, codeMigration } = require('../../src/utils/app-backup-common');
+const {
+  planRestore, restoreSql, keyFingerprint, codeMigration, restoreScriptFilter,
+} = require('../../src/utils/app-backup-common');
 const appBackup = require('../../src/services/app-backup.service');
 const encryption = require('../../src/utils/encryption');
 
@@ -252,5 +254,59 @@ describe('app-backup.service', () => {
     } finally {
       appBackup.running = null;
     }
+  });
+});
+
+describe('restore script filter', () => {
+  // pg_restore 17's script header, as `pg_restore -f -` writes it.
+  const header = [
+    '--',
+    '-- PostgreSQL database dump',
+    '--',
+    "SET statement_timeout = 0;",
+    "SET lock_timeout = 0;",
+    "SET idle_in_transaction_session_timeout = 0;",
+    "SET transaction_timeout = 0;",
+    "SET client_encoding = 'UTF8';",
+    "COPY public.\"Device\" (name) FROM stdin;",
+    'SET transaction_timeout = 0; is only data here',
+    '\\.',
+    '',
+  ].join('\n');
+
+  async function filtered(major, chunks) {
+    let out = '';
+    await pipeline(Readable.from(chunks), restoreScriptFilter(major), new Writable({
+      write(chunk, _enc, done) { out += chunk.toString('utf8'); done(); },
+    }));
+    return out;
+  }
+
+  test.each([15, 16])('drops SET transaction_timeout for a PostgreSQL %i server', async (major) => {
+    const out = await filtered(major, [Buffer.from(header)]);
+    expect(out).not.toMatch(/^SET transaction_timeout = 0;$/m);
+    expect(out).toBe(header.replace('SET transaction_timeout = 0;\n', ''));
+    expect(out).toContain('SET transaction_timeout = 0; is only data here'); // data, not a whole SET line
+  });
+
+  test.each([17, 18])('keeps the script unchanged for a PostgreSQL %i server', async (major) => {
+    expect(await filtered(major, [Buffer.from(header)])).toBe(header);
+  });
+
+  test('an unknown server version is treated as too old for the setting', async () => {
+    expect(await filtered(null, [Buffer.from(header)])).toBe(header.replace('SET transaction_timeout = 0;\n', ''));
+  });
+
+  test('a line split across chunks, and a character split across chunks, come through whole', async () => {
+    const text = `SET transaction_timeout = 0;\nINSERT INTO t VALUES ('Café ✓');\n`;
+    const bytes = Buffer.from(text);
+    const cut1 = 10; // inside the SET line
+    const cut2 = bytes.indexOf(Buffer.from('✓')) + 1; // inside the 3-byte check mark
+    const out = await filtered(15, [bytes.subarray(0, cut1), bytes.subarray(cut1, cut2), bytes.subarray(cut2)]);
+    expect(out).toBe("INSERT INTO t VALUES ('Café ✓');\n");
+  });
+
+  test('a last line without a newline is kept', async () => {
+    expect(await filtered(15, [Buffer.from('SELECT 1;\nSELECT 2;')])).toBe('SELECT 1;\nSELECT 2;');
   });
 });
