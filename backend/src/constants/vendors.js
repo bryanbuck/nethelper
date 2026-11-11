@@ -180,8 +180,8 @@ const TRANSPORT_MATRIX = {
     live: [],
     topology: ['device-rest', 'ssh'],
   },
-  // Cisco Catalyst — Phase 4. Direct SSH uses the ios-xe CLI profile; not yet
-  // validated on hardware. Topology reads CDP and LLDP.
+  // Cisco IOS and IOS-XE (Phase 4): SSH only, one CLI profile for both. Run on
+  // a 3560E (IOS 15.0(1)SE2). Topology reads CDP and LLDP.
   'cisco/ios-xe': { config: ['ssh'], test: ['ssh'], poll: ['ssh'], live: [], topology: ['ssh'] },
   // Meraki is cloud-only (Phase 3, not implemented). No direct transports, so a
   // Meraki row marked "direct" reports "no transport" instead of trying SSH.

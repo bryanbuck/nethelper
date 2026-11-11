@@ -3074,7 +3074,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"<string>\",\n  \"type\": \"switch\",\n  \"deviceId\": \"<uuid>\",\n  \"username\": \"<string>\",\n  \"password\": \"\",\n  \"apiKey\": \"\",\n  \"apiSecret\": \"\",\n  \"notes\": \"<string>\",\n  \"metadata\": {}\n}"
+              "raw": "{\n  \"name\": \"<string>\",\n  \"type\": \"switch\",\n  \"deviceId\": \"<uuid>\",\n  \"username\": \"<string>\",\n  \"password\": \"\",\n  \"apiKey\": \"\",\n  \"apiSecret\": \"\",\n  \"enableSecret\": \"\",\n  \"notes\": \"<string>\",\n  \"metadata\": {}\n}"
             },
             "description": "Required: name, type."
           },
@@ -3109,7 +3109,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"<string>\",\n  \"type\": \"switch\",\n  \"deviceId\": \"<uuid>\",\n  \"username\": \"<string>\",\n  \"password\": \"\",\n  \"apiKey\": \"\",\n  \"apiSecret\": \"\",\n  \"notes\": \"<string>\",\n  \"metadata\": {}\n}"
+              "raw": "{\n  \"name\": \"<string>\",\n  \"type\": \"switch\",\n  \"deviceId\": \"<uuid>\",\n  \"username\": \"<string>\",\n  \"password\": \"\",\n  \"apiKey\": \"\",\n  \"apiSecret\": \"\",\n  \"enableSecret\": \"\",\n  \"notes\": \"<string>\",\n  \"metadata\": {}\n}"
             }
           },
           "response": []

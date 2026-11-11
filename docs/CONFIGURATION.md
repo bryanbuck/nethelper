@@ -84,7 +84,7 @@ Production writes JSON logs to stdout. Values under secret-looking keys (passwor
 | `PING_MONITOR_BATCH_SIZE` | `20` | Devices pinged concurrently. |
 | `PING_MONITOR_FAILURE_THRESHOLD` | `3` | Consecutive failures before a device is marked offline. |
 | `DISCOVERY_SCAN_TIMEOUT` | `300000` | Milliseconds allowed per nmap run. |
-| `SSH_PORT` | `22` | SSH CLI transport (AOS-S, Junos fallback, IOS-XE). |
+| `SSH_PORT` | `22` | SSH CLI transport (AOS-S, Junos fallback, Cisco IOS/IOS-XE). |
 | `NETCONF_PORT` | `830` | Junos NETCONF. |
 | `SSH_CONNECT_TIMEOUT` | `15000` | Milliseconds; SSH and NETCONF. |
 | `SSH_COMMAND_TIMEOUT` | `45000` | Milliseconds; SSH and NETCONF. |

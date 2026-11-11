@@ -136,6 +136,7 @@ class SettingsService {
         password: credentialData.password ? encryption.encrypt(credentialData.password) : null,
         apiKey: credentialData.apiKey ? encryption.encrypt(credentialData.apiKey) : null,
         apiSecret: credentialData.apiSecret ? encryption.encrypt(credentialData.apiSecret) : null,
+        enableSecret: credentialData.enableSecret ? encryption.encrypt(credentialData.enableSecret) : null,
         notes: credentialData.notes || null,
         metadata: credentialData.metadata || null,
         userId,
@@ -180,9 +181,9 @@ class SettingsService {
         ...(updateData.metadata !== undefined && { metadata: updateData.metadata }),
       };
 
-      // Only encrypt and update password/apiKey/apiSecret if provided. The
+      // Only encrypt and update the secret fields if provided. The
       // mask maskCredential() hands out means "unchanged", never a new value.
-      for (const field of ['password', 'apiKey', 'apiSecret']) {
+      for (const field of ['password', 'apiKey', 'apiSecret', 'enableSecret']) {
         const value = updateData[field];
         if (value === undefined || value === SECRET_MASK) continue;
         encryptedUpdateData[field] = value ? encryption.encrypt(value) : null;
@@ -332,6 +333,7 @@ class SettingsService {
       password: credential.password ? SECRET_MASK : null,
       apiKey: credential.apiKey ? SECRET_MASK : null,
       apiSecret: credential.apiSecret ? SECRET_MASK : null,
+      enableSecret: credential.enableSecret ? SECRET_MASK : null,
       notes: credential.notes,
       lastTested: credential.lastTested,
       lastTestStatus: credential.lastTestStatus,
@@ -382,6 +384,7 @@ class SettingsService {
       password: credential.password ? encryption.decrypt(credential.password) : null,
       apiKey: credential.apiKey ? encryption.decrypt(credential.apiKey) : null,
       apiSecret: credential.apiSecret ? encryption.decrypt(credential.apiSecret) : null,
+      enableSecret: credential.enableSecret ? encryption.decrypt(credential.enableSecret) : null,
     };
   }
 

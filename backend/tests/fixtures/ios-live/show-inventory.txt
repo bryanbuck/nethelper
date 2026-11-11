@@ -1,0 +1,11 @@
+NAME: "1", DESCR: "WS-C3560E-24PD"
+PID: WS-C3560E-24PD-S  , VID: V04  , SN: FDO0000X11
+
+NAME: "Power Supply 0", DESCR: "FRU Power Supply"
+PID: C3K-PWR-750WAC    , VID: V01A , SN: AZS0000X11
+
+NAME: "Slot 1 - TenGig Converter Module", DESCR: "TenGig Converter Module"
+PID: CVR-X2-SFP10G     , VID: V02  , SN: FOC0000X11     
+
+NAME: "TenGigabitEthernet0/1", DESCR: "SFP-10GBase-CX1"
+PID: SFP-H10GB-CU3M      , VID: V03  , SN: CSC0000X15

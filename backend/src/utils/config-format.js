@@ -75,6 +75,24 @@ function assertJunosConfigReadable(text) {
   throw error;
 }
 
+const IOS_PRIVILEGE_HINT = 'On Cisco IOS the login must reach privilege 15: use a privilege-15 account, '
+  + 'or add the enable secret to the device credential.';
+
+/**
+ * Throw when an IOS / IOS-XE `show running-config` came back without the
+ * lines every full read has. A login between privilege 2 and 14 that may run
+ * the command gets no error, only the few commands its level can set (often
+ * just "boot-start-marker / boot-end-marker / end"). Every real config has a
+ * hostname or an interface, a factory-default one included. Rule from
+ * Cisco's documentation; not yet seen on hardware.
+ */
+function assertIosConfigReadable(text) {
+  if (/^(?:hostname|interface) \S/m.test(String(text || ''))) return;
+  const error = new Error(`The device returned only part of its configuration. ${IOS_PRIVILEGE_HINT}`);
+  error.code = 'CONFIG_ACCESS_DENIED';
+  throw error;
+}
+
 // What a CLI prints instead of a config when the command is refused.
 const CLI_ERROR_REGEX = /^(?:invalid input\b|% ?invalid\b|% ?unknown command|% ?incomplete command|% ?authorization failed|insufficient privilege|permission denied|syntax error|error:)/i;
 
@@ -87,9 +105,10 @@ const CLI_ERROR_REGEX = /^(?:invalid input\b|% ?invalid\b|% ?unknown command|% ?
 function assertCliConfigReadable(text, platform) {
   const lines = String(text || '').split('\n').map((line) => line.trim()).filter(Boolean);
   if (lines.length > 3 || !lines.some((line) => CLI_ERROR_REGEX.test(line))) return;
-  const hint = platform === 'aos-s'
-    ? ' On AOS-S an operator login cannot read the configuration: use a manager account.'
-    : ' Check that the device account may read the configuration.';
+  const hint = {
+    'aos-s': ' On AOS-S an operator login cannot read the configuration: use a manager account.',
+    'ios-xe': ` ${IOS_PRIVILEGE_HINT}`,
+  }[platform] || ' Check that the device account may read the configuration.';
   const error = new Error(`The device refused to show its configuration ("${lines[0]}").${hint}`);
   error.code = 'CONFIG_ACCESS_DENIED';
   throw error;
@@ -98,6 +117,7 @@ function assertCliConfigReadable(text, platform) {
 module.exports = {
   assertCliConfigReadable,
   assertJunosConfigReadable,
+  assertIosConfigReadable,
   junosDeniedHierarchies,
   CONFIG_FORMATS,
   ARTIFACT_KINDS,
