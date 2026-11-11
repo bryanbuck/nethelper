@@ -113,6 +113,7 @@ Production writes JSON logs to stdout. Values under secret-looking keys (passwor
 | Variable | Default | Notes |
 |---|---|---|
 | `SYSTEM_SAMPLE_INTERVAL_MS` | `5000` | Milliseconds between samples of process, request, socket and queue stats (minimum 1000). The last hour is kept in memory and lost on restart. Database, Redis, disk and usage figures are read at most once a minute, and only while an admin has the page open. |
+| `UPDATE_CHECK_ENABLED` | `true` | Once a day (and a minute after start) NetHelper reads this project's public release list on GitHub: one anonymous request to `api.github.com`, with nothing about your install in it. When a newer version is out, admins see it on the System Status page and on the version at the right of the status bar, with the command to run on the host. NetHelper never updates itself. A pre-release is offered only to an install that runs a pre-release. `false` turns the check off; a host without internet access just shows that it couldn't check. |
 
 ### Cloud sync and status
 

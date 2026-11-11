@@ -84,4 +84,4 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       # shellcheck is preinstalled on GitHub's Ubuntu runners.
-      - run: shellcheck deploy/install.sh deploy/systemd/nethelper-admin backend/docker-entrypoint.sh
+      - run: shellcheck deploy/install.sh deploy/upgrade-lib.sh deploy/systemd/nethelper-admin backend/docker-entrypoint.sh

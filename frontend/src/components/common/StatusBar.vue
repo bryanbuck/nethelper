@@ -136,7 +136,7 @@
       class="status-meta d-none d-sm-flex"
       :class="{ 'status-meta--link': authStore.isAdmin }"
       :type="authStore.isAdmin ? 'button' : undefined"
-      :title="authStore.isAdmin ? `System status · ${connectionLabel}` : connectionLabel"
+      :title="metaTitle"
       :aria-label="authStore.isAdmin ? 'System status' : undefined"
       @click="authStore.isAdmin && router.push('/system')"
     >
@@ -145,6 +145,10 @@
         :class="`status-meta__dot--${store.connection}`"
       />
       <span>NetHelper {{ version }}<template v-if="versionLabel"> · {{ versionLabel }}</template></span>
+      <span v-if="updates.updateAvailable" class="status-meta__update" data-testid="update-marker">
+        <v-icon size="14">mdi-arrow-up-circle</v-icon>
+        {{ updates.latestVersion }} available
+      </span>
       <v-icon v-if="authStore.isAdmin" size="14" class="status-meta__icon">mdi-monitor-dashboard</v-icon>
     </component>
   </v-footer>
@@ -185,6 +189,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
+import { useUpdateCheckStore } from '@/stores/updateCheck'
 import { prereleaseLabel } from '@/utils/version'
 
 const props = defineProps({
@@ -196,6 +201,17 @@ const versionLabel = computed(() => prereleaseLabel(props.version))
 const store = useNotificationsStore()
 const authStore = useAuthStore()
 const router = useRouter()
+
+// Admins see when a newer release is out; the indicator leads to System Status,
+// which has the command to run on the server.
+const updates = useUpdateCheckStore()
+watch(() => authStore.isAdmin, (admin) => (admin ? updates.start() : updates.stop()), { immediate: true })
+onBeforeUnmount(() => updates.stop())
+const metaTitle = computed(() => {
+  if (!authStore.isAdmin) return connectionLabel.value
+  const update = updates.updateAvailable ? `NetHelper ${updates.latestVersion} is available · ` : ''
+  return `${update}System status · ${connectionLabel.value}`
+})
 
 const historyOpen = ref(false)
 const filter = ref('all')
@@ -371,6 +387,13 @@ function runAction(item) {
 }
 .status-meta__icon {
   opacity: var(--v-medium-emphasis-opacity);
+}
+.status-meta__update {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: rgb(var(--v-theme-primary-text));
+  font-weight: 500;
 }
 .status-meta__dot {
   width: 8px;

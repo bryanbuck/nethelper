@@ -22,6 +22,8 @@
         {{ store.error }}<template v-if="store.mode === 'polling'"> · refreshing over HTTP every 15 s</template>
       </v-alert>
 
+      <UpdateStatusCard class="mb-4" />
+
       <div v-if="!store.ready && store.mode !== 'error'" class="d-flex justify-center py-12">
         <v-progress-circular indeterminate color="primary" />
       </div>
@@ -288,6 +290,7 @@ import { computed, h, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useSystemStore } from '@/stores/system'
 import { useWebSocket } from '@/composables/useWebSocket'
 import LiveSparkline from '@/components/devices/LiveSparkline.vue'
+import UpdateStatusCard from '@/components/system/UpdateStatusCard.vue'
 import {
   formatBytes, formatDuration, formatNumber, formatPercent, formatMs,
   perMinute, peakOf, share, queueLabel, STREAM_STATE_COLORS

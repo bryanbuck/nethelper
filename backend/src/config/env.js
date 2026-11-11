@@ -80,6 +80,8 @@ const schema = Joi.object({
   EXECUTION_RETENTION_DAYS: Joi.number().integer().min(1).default(90),
   // System Status page sample interval (milliseconds; the last hour is kept in memory).
   SYSTEM_SAMPLE_INTERVAL_MS: Joi.number().integer().min(1000).default(5000),
+  // Daily anonymous check of the public release list (services/update-check.service.js).
+  UPDATE_CHECK_ENABLED: Joi.string().valid('true', 'false').default('true'),
 
   // Scheduled cloud sync and the lighter cloud status refresh (jobs/device-sync.job.js). Milliseconds.
   CLOUD_SYNC_ENABLED: Joi.string().valid('true', 'false').default('true'),
