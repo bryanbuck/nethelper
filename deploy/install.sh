@@ -4,6 +4,7 @@
 #   cd deploy && ./install.sh            # interactive
 #   ./install.sh -y --admin-email you@example.com --admin-name "Your Name"
 #   ./install.sh --env-only              # just write deploy/.env, run Compose yourself
+#   ./install.sh --upgrade               # move a release-tarball install to the newest release
 #
 # What it does, in order (each docker command is echoed as it runs; the manual
 # steps are in README.md, "Installing by hand"):
@@ -13,9 +14,15 @@
 #   3. pulls the release images, or builds them locally,
 #   4. starts the stack and waits until it is healthy,
 #   5. creates the first admin if there are no users yet.
-# Re-running it is safe, and is how you upgrade (take a database backup first).
+# Re-running it is safe.
 #
-# It does not install Docker, set up TLS, or take backups.
+# --upgrade (an install from a release tarball) downloads the newest release
+# next to this tree and checks it, takes an application backup, swaps the
+# trees (deploy/.env and docker-compose.override.yml carried over, the old tree
+# kept as <tree>.previous), then runs the new release's install.sh. A git
+# checkout upgrades with `git pull` and a plain ./install.sh.
+#
+# It does not install Docker or set up TLS.
 
 set -eu
 
@@ -31,6 +38,11 @@ Usage: ./install.sh [options]
   --admin-name NAME     First admin's name
   --no-admin            Don't create a first admin
   --env-only            Write or complete deploy/.env, then stop
+  --upgrade             Upgrade this install to the newest release: download and
+                        check it, back up, swap the trees, restart (an install
+                        from a release tarball; a git checkout uses git pull)
+  --version VERSION     With --upgrade: that release instead of the newest
+  --no-backup           With --upgrade: don't take an application backup first
   -y, --yes             Don't ask anything; use defaults and the options given
   -h, --help            Show this help
 
@@ -55,6 +67,9 @@ ADMIN_NAME=
 NO_ADMIN=
 ENV_ONLY=
 ASSUME_YES=
+UPGRADE=
+VERSION_OPT=
+NO_BACKUP=
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -68,6 +83,10 @@ while [ $# -gt 0 ]; do
     --admin-name=*) ADMIN_NAME=${1#*=} ;;
     --no-admin) NO_ADMIN=1 ;;
     --env-only) ENV_ONLY=1 ;;
+    --upgrade) UPGRADE=1 ;;
+    --version) [ $# -ge 2 ] || die "--version needs a value"; VERSION_OPT=$2; shift ;;
+    --version=*) VERSION_OPT=${1#*=} ;;
+    --no-backup) NO_BACKUP=1 ;;
     -y|--yes) ASSUME_YES=1 ;;
     -h|--help) usage; exit 0 ;;
     *) usage >&2; die "unknown option: $1" ;;
@@ -79,6 +98,11 @@ if [ -n "$HTTP_PORT_OPT" ]; then
   case "$HTTP_PORT_OPT" in
     ''|*[!0-9]*) die "--http-port must be a number" ;;
   esac
+fi
+
+if [ -n "$UPGRADE" ] && [ -n "$ENV_ONLY" ]; then die "--upgrade and --env-only don't go together"; fi
+if [ -z "$UPGRADE" ] && { [ -n "$VERSION_OPT" ] || [ -n "$NO_BACKUP" ]; }; then
+  die "--version and --no-backup only apply to --upgrade"
 fi
 
 # Prompts only when someone is at the terminal and -y wasn't given.
@@ -139,6 +163,89 @@ if [ -z "$ENV_ONLY" ]; then
   [ "$compose_major" -ge 2 ] || die "Compose v2 or later is required (found $compose_version)"
   say "Docker Compose $compose_version"
 fi
+
+# --- Upgrade (--upgrade) ------------------------------------------------------
+
+# Run by the release being replaced, so it only fetches, backs up and swaps;
+# the new release's own install.sh does the rest.
+upgrade() {
+  [ -f upgrade-lib.sh ] || die "deploy/upgrade-lib.sh is missing from this tree"
+  # shellcheck disable=SC1091 # checked on its own
+  . ./upgrade-lib.sh
+
+  [ ! -e ../.git ] || die "this is a git checkout, not a release tarball: upgrade it with 'git pull' (or check out the release tag), then run ./install.sh"
+  [ -f "$ENV_FILE" ] || die "deploy/.env is missing, so there is no install here to upgrade; run ./install.sh to install"
+  current=$(cat ../VERSION 2>/dev/null || true)
+  [ -n "$current" ] || die "../VERSION is missing: can't tell which version this tree is"
+  pinned=$(env_get NETHELPER_VERSION)
+  [ -z "$pinned" ] || die "deploy/.env pins NETHELPER_VERSION=$pinned, which would keep the old images running. Delete that line, then run this again."
+  tree=$(cd .. && pwd -P)
+  parent=$(dirname "$tree")
+  [ -w "$parent" ] || die "can't write to $parent, where the new release is unpacked next to this tree; run as a user who can"
+  up_check_previous "$tree"
+
+  step "Finding the release"
+  work=$(mktemp -d "$parent/.nethelper-upgrade.XXXXXX")
+  trap 'rm -rf "$work"' EXIT
+  if [ -n "$VERSION_OPT" ]; then
+    target=${VERSION_OPT#v}
+    up_check_version "$target"
+  else
+    target=$(up_latest_version "$work")
+  fi
+  if [ "$target" = "$current" ]; then
+    say "This install is already NetHelper $current; nothing to do."
+    exit 0
+  fi
+  say "Installed: $current    New: $target"
+  up_fetch_release "$target" "$work"
+  new="$work/nethelper-$target"
+  up_refuse_downgrade "$tree" "$new"
+  migrations=$(up_added_migrations "$tree" "$new")
+
+  if ! ask_yes_no "Upgrade NetHelper $current to $target now? It will be down for a minute or two. [Y/n]" y; then
+    say "Stopped; nothing was changed."
+    exit 0
+  fi
+
+  step "Backup"
+  archive=
+  if [ -n "$NO_BACKUP" ]; then
+    say "Skipped (--no-backup)."
+  else
+    say "Taking an application backup first, with the settings from Settings -> App Backup."
+    say "+ docker compose exec -T backend node scripts/app-backup.js"
+    if backup_output=$(docker compose exec -T backend node scripts/app-backup.js); then
+      archive=$(printf '%s\n' "$backup_output" | sed -n 's/^archive: //p' | tail -n 1 | tr -d '\r')
+      say "Backup written: ${archive:-(name not reported)}"
+    else
+      die "the backup failed (its error is above), so nothing was changed. Fix it, or run again with --no-backup if you already have a backup."
+    fi
+  fi
+
+  step "Switching to NetHelper $target"
+  cp -p "$ENV_FILE" "$new/deploy/.env"
+  if [ -f docker-compose.override.yml ]; then
+    cp -p docker-compose.override.yml "$new/deploy/docker-compose.override.yml"
+  fi
+  up_swap_trees "$tree" "$new"
+  say "$tree is now $target; $current is kept at $tree.previous."
+  cd "$tree/deploy"
+  set -- -y --no-admin
+  if [ -n "$BUILD" ]; then set -- "$@" --build; fi
+  if sh ./install.sh "$@"; then
+    step "Upgraded to NetHelper $target"
+    say "- The $current tree is kept at $tree.previous; delete it once you're happy with $target."
+    say "- Only deploy/.env and deploy/docker-compose.override.yml were carried over. Anything"
+    say "  else you added to the old tree is still in $tree.previous."
+    say "- A shell that was inside the old tree is now in $tree.previous: cd $tree/deploy"
+    exit 0
+  fi
+  up_rollback_help "$tree" "$current" "$target" "$archive" "$migrations" "cd $tree/deploy && ./install.sh"
+  exit 1
+}
+
+if [ -n "$UPGRADE" ]; then upgrade; fi
 
 # --- 2. deploy/.env -----------------------------------------------------------
 
@@ -338,7 +445,12 @@ say "  clear text, so beyond a trusted management network put TLS in front"
 say "  (README.md, \"TLS\")."
 say "- After signing in: change the admin's password (account menu), then follow"
 say "  docs/GETTING_STARTED.md."
-say "- To upgrade later: take a database backup (README.md, \"Backup and restore\"),"
-say "  update this tree, and run ./install.sh again."
+if [ -e ../.git ]; then
+  say "- To upgrade later: take a backup (Settings -> App Backup), git pull, and run"
+  say "  ./install.sh again."
+else
+  say "- To upgrade later: ./install.sh --upgrade (backs up, fetches the newest release,"
+  say "  swaps this tree for it and restarts)."
+fi
 [ -n "$created_env" ] && say "- Keep a copy of deploy/.env: it holds ENCRYPTION_KEY."
 exit 0
