@@ -490,6 +490,7 @@ model ApiCredential {
   password       String? // Encrypted
   apiKey         String? // Encrypted
   apiSecret      String? // Encrypted
+  enableSecret   String? // Encrypted. Cisco IOS enable secret, typed only when the login lands at '>'
   notes          String?
   lastTested     DateTime?
   lastTestStatus TestStatus?

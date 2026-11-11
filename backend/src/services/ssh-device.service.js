@@ -4,8 +4,9 @@ const { debugLog, Services } = require('../utils/debug-logger');
 const aosSTopology = require('./topology/parsers/aos-s');
 const junosTopology = require('./topology/parsers/junos');
 const iosTopology = require('./topology/parsers/ios');
+const { cleanIosConfig } = require('../utils/ios-cli');
 const { normalizePortName } = require('./topology/neighbor');
-const { assertJunosConfigReadable, assertCliConfigReadable } = require('../utils/config-format');
+const { assertJunosConfigReadable, assertIosConfigReadable, assertCliConfigReadable } = require('../utils/config-format');
 
 const logger = debugLog.createLogger(Services.DEVICE);
 
@@ -26,8 +27,12 @@ const logger = debugLog.createLogger(Services.DEVICE);
 // `config` returns in one shot. `config`/`version` are the data commands.
 // `configHeader` (optional) matches a banner line the CLI prints before the
 // config, which is dropped so the text can be pasted back.
+// `cleanConfig` (optional) turns the raw output into stable config text.
 // `neighbors` (optional) lists the LLDP/CDP commands and parsers behind
-// getNeighbors(); `identity` reads the device's own LLDP chassis id/name.
+// getNeighbors() (`with` = a second command whose output the parser also
+// takes); `identity` reads the device's own LLDP chassis id/name.
+// `elevate` (optional) is the command that raises a '>' login to '#', typed
+// only when the credential carries an enable secret.
 const PLATFORM_PROFILES = {
   'aos-s': {
     paging: 'no page',
@@ -52,15 +57,19 @@ const PLATFORM_PROFILES = {
     neighbors: [{ command: 'show lldp neighbors', parse: junosTopology.parseLldpNeighborsCli }],
     identity: { command: 'show lldp local-information', parse: junosTopology.parseLocalInfoCli },
   },
-  // Cisco IOS / IOS-XE (Catalyst). CDP is on by default, LLDP often is not;
-  // read both and keep whichever answers.
+  // Cisco IOS and IOS-XE (Catalyst): one profile, the commands are the same
+  // from IOS 12.2 to IOS-XE 17. CDP is on by default, LLDP often is not; read
+  // both and keep whichever answers. Older IOS leaves the local port out of
+  // the LLDP detail, so the summary table is read with it.
   'ios-xe': {
     paging: 'terminal length 0',
     config: 'show running-config',
+    cleanConfig: cleanIosConfig,
     version: 'show version',
+    elevate: 'enable',
     neighbors: [
       { command: 'show cdp neighbors detail', parse: iosTopology.parseCdpDetail },
-      { command: 'show lldp neighbors detail', parse: iosTopology.parseLldpDetail },
+      { command: 'show lldp neighbors detail', with: 'show lldp neighbors', parse: iosTopology.parseLldpDetail },
     ],
   },
   // Generic IOS-like fallback (CLI gear we could not classify)
@@ -120,14 +129,19 @@ function cleanTerminal(text) {
  * @param {Object} [timing] - settleMs: quiet time before the first prompt is
  *   trusted (a banner line of '#'s can look like one); nudgeMs: send one
  *   newline if no prompt has appeared by then
+ * @param {{command:string, secret:string}} [timing.elevate] - when the first
+ *   prompt ends in '>' (IOS user EXEC), type `command`, answer its
+ *   "Password:" with `secret`, and carry on at the '#' prompt that follows.
+ *   A refused secret ends the session with code ENABLE_REFUSED.
  */
-function driveShell(stream, queue, done, { settleMs = 300, nudgeMs = 8000 } = {}) {
+function driveShell(stream, queue, done, { settleMs = 300, nudgeMs = 8000, elevate = null } = {}) {
   const outputs = {};
   let buffer = '';
   let prompt = null; // learned from the first prompt, without trailing space
   let index = -1;
   let finished = false;
   let keyPressed = false;
+  let elevating = null; // 'command': elevate command typed; 'secret': secret typed
   let settleTimer = null;
   const nudgeTimer = setTimeout(() => {
     if (prompt === null && !finished) stream.write('\n');
@@ -173,8 +187,42 @@ function driveShell(stream, queue, done, { settleMs = 300, nudgeMs = 8000 } = {}
         if (finished) return;
         prompt = match[1].trim();
         clearTimeout(nudgeTimer);
+        if (elevate?.secret && prompt.endsWith('>')) {
+          elevating = 'command';
+          buffer = '';
+          stream.write(elevate.command + '\n');
+          return;
+        }
         sendNext();
       }, settleMs);
+      return;
+    }
+
+    if (elevating) {
+      const clean = cleanTerminal(buffer);
+      const refused = (detail) => {
+        const error = new Error(`The device refused the enable secret${detail ? ` ("${detail}")` : ''}`);
+        error.code = 'ENABLE_REFUSED';
+        finish(error);
+      };
+      if (/password:\s*$/i.test(clean)) {
+        // Asked again after our answer: the secret was wrong.
+        if (elevating === 'secret') return refused(null);
+        elevating = 'secret';
+        buffer = '';
+        stream.write(elevate.secret + '\n');
+        return;
+      }
+      const match = clean.match(PROMPT_LINE_REGEX);
+      if (!match) return;
+      const next = match[1].trim();
+      if (!next.endsWith('#')) {
+        // Back at '>': "% No password set", "% Access denied", "% Bad secrets".
+        return refused(clean.split('\n').map((l) => l.trim()).find((l) => l.startsWith('%')) || null);
+      }
+      prompt = next;
+      elevating = null;
+      sendNext();
       return;
     }
 
@@ -287,6 +335,10 @@ class SshDeviceService {
             clearTimeout(overallTimer);
             delete outputs._paging;
             finish(shellErr, outputs);
+          }, {
+            elevate: profile.elevate && credentials.enableSecret
+              ? { command: profile.elevate, secret: credentials.enableSecret }
+              : null,
           });
 
           stream.stderr.on('data', (data) => {
@@ -338,11 +390,14 @@ class SshDeviceService {
       const lines = config.split('\n');
       if (profile.configHeader.test(lines[0])) config = lines.slice(1).join('\n').trim();
     }
+    // An error-only answer is refused before cleaning, which would keep it.
+    assertCliConfigReadable(config || '', detectPlatform(device));
+    if (config && profile.cleanConfig) config = profile.cleanConfig(config);
     if (!config || config.length === 0) {
       throw new Error('SSH returned an empty running configuration');
     }
-    assertCliConfigReadable(config, detectPlatform(device));
     if (profile === PLATFORM_PROFILES.junos) assertJunosConfigReadable(config);
+    if (profile === PLATFORM_PROFILES['ios-xe']) assertIosConfigReadable(config);
     return config;
   }
 
@@ -356,7 +411,10 @@ class SshDeviceService {
     if (!profile.neighbors) {
       throw new Error('No neighbor commands for this CLI platform');
     }
-    const commands = profile.neighbors.map((n, i) => ({ label: `n${i}`, command: n.command }));
+    const commands = profile.neighbors.flatMap((n, i) => [
+      { label: `n${i}`, command: n.command },
+      ...(n.with ? [{ label: `w${i}`, command: n.with }] : []),
+    ]);
     if (profile.identity) commands.push({ label: 'identity', command: profile.identity.command });
     const outputs = await this.runCommands(device, credentials, commands);
 
@@ -366,7 +424,7 @@ class SshDeviceService {
     const seen = new Set();
     const neighbors = [];
     profile.neighbors.forEach((n, i) => {
-      for (const neighbor of n.parse(outputs[`n${i}`] || '')) {
+      for (const neighbor of n.parse(outputs[`n${i}`] || '', outputs[`w${i}`] || '')) {
         const key = `${normalizePortName(neighbor.localPort)}|${(neighbor.sysName || neighbor.chassisId).toLowerCase().split('.')[0]}`;
         if (seen.has(key)) continue;
         seen.add(key);

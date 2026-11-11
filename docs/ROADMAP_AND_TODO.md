@@ -261,7 +261,7 @@ Deferred:
 - ⏳ VLANs over Junos (`get-ethernet-switching-interface-information`, an operational RPC that may avoid the `vlans` ACCESS-DENIED config reads hit; would give a Mist EX its trunk native VLAN) and AOS-S over SSH (`show vlans ports … detail`; only for a direct AOS-S, since one under Central now reads Central). Deferred on 2026-11-04 because JNEX-01 was unreachable and the lab's only AOS-S is Central-managed: both need first contact before shipping a parser.
 - ⏳ VLAN overlay: the AP check (an SSID's VLAN not allowed on the AP's switch port), Central gateway VLANs, config-backup parsing as a fallback, a device-page Ports tab (port, mode/native/tagged, neighbor, mismatch notes), VLAN changes in the Activity feed.
 - ⏳ VXLAN overlay: Junos VTEPs over NETCONF (`get-ethernet-switching-vxlan-rvtep-info`, `get-evpn-instance-information`), Mist's `evpn_topologies` as fabric context (roles, pods; intended design, not tunnel state), Central NetConductor fabrics, EVPN BGP session state, an alert rule for a tunnel going down or one-sided, tunnel changes in the Activity feed.
-- ⏳ Run the Junos, AOS-S and IOS-XE parsers against real output and replace the spec-derived test strings with captures.
+- ⏳ Run the remaining spec-derived parsers against real output: Junos CLI, and IOS CDP detail (IOS LLDP was run on a 3560E on 2026-11-11, AOS-S on 2026-10-20).
 - ⏳ Endpoint attachment from switch MAC tables (AOS-CX `system/vlans/*/macs`), so Discovery hosts hang off their switch port, plus a "where is this MAC/IP?" search.
 - ⏳ Live link-state edges (color an edge from `device:event` port changes for live-monitored devices).
 - ⏳ Manual links and annotations for things LLDP can't see (ISP handoff, unmanaged switches).
@@ -372,8 +372,9 @@ Switch-side probe facts: `docs/hardware/AOS_CX_NOTES.md` ("Central management pr
 **Priority**: High
 **Status**: 🔨 Phases 0–2 complete (2026-07-12) — vendor abstraction + multi-cloud
 groundwork shipped (Aruba behavior unchanged), Juniper Mist live as the second cloud
-platform, and Junos devices reachable directly over NETCONF. Phases 3–4 (Meraki,
-Catalyst direct) not started.
+platform, and Junos devices reachable directly over NETCONF. Phase 4 (Cisco IOS /
+IOS-XE direct over SSH) built 2026-11-11 and first run on a 3560E; Phase 3 (Meraki)
+not started on master.
 
 Extend device support beyond Aruba to Juniper (Mist cloud + Junos direct SSH) and Cisco
 (Meraki Dashboard API + Catalyst direct SSH). MVP bar per vendor: inventory sync + status,

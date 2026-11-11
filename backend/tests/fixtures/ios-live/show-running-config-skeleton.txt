@@ -1,0 +1,19 @@
+Building configuration...
+
+Current configuration : 9219 bytes
+!
+! Last configuration change at 19:07:04 CST Sun Feb 28 1993 by admin
+!
+version 15.0
+no service pad
+service timestamps debug datetime msec
+service timestamps log datetime msec
+service password-encryption
+!
+hostname Switch1
+!
+interface GigabitEthernet0/1
+ switchport mode access
+!
+ntp server 10.0.0.33
+end

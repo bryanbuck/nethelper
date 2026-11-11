@@ -8,6 +8,8 @@ const { resolveTransport } = require('../utils/transport-router');
 const { getPrisma } = require('../config/database');
 const { cxFirmwareImages, runningVersion } = require('../utils/firmware-images');
 const { debugLog, Services } = require('../utils/debug-logger');
+const { parseShowVersion } = require('../utils/ios-cli');
+const { normalizeMac, normalizeSerial } = require('../utils/device-key');
 
 // Create service-specific logger
 const logger = debugLog.createLogger(Services.DEVICE);
@@ -208,10 +210,12 @@ class DevicePollerService {
         // The raw `show version` text for CLI-only devices.
         const parsed = this.parseVersionFromText(version.text);
         await this.recordFirmware(device, { version: parsed });
+        const identity = await this.recordIdentity(device, version.text);
         return {
           transport: 'ssh',
           raw_version: version.text,
           primary_version: parsed,
+          ...(identity ? { model: identity.model, hostname: identity.hostname } : {}),
         };
       }
 
@@ -266,6 +270,38 @@ class DevicePollerService {
   }
 
   /**
+   * Fill in what `show version` says about the switch itself (Cisco IOS /
+   * IOS-XE): model, serial and base MAC, each only where the row has none, so
+   * a hand-added switch gets them on its first poll and nothing a user or a
+   * cloud set is overwritten. Best effort, like recordFirmware.
+   * @returns {Promise<Object|null>} the parsed identity, or null for other platforms
+   */
+  async recordIdentity(device, versionText) {
+    if (detectPlatform(device) !== 'ios-xe') return null;
+    const info = parseShowVersion(versionText);
+    const data = {};
+    if (info.model && (!device.model || /^unknown$/i.test(device.model.trim()))) data.model = info.model;
+    const mac = normalizeMac(info.mac);
+    if (mac && !device.macAddress) data.macAddress = mac;
+    const serial = normalizeSerial(info.serial);
+    if (serial && !device.serial) data.serial = serial;
+    if (!Object.keys(data).length) return info;
+    const prisma = getPrisma();
+    try {
+      await prisma.device.update({ where: { id: device.id }, data });
+    } catch (error) {
+      // Most likely the serial is already another row's (it is unique): keep
+      // the rest. The shared MAC then shows the pair as possible duplicates.
+      logger.warn(`Could not store identity read for ${device.name}`, { error: error.message });
+      delete data.serial;
+      if (Object.keys(data).length) {
+        await prisma.device.update({ where: { id: device.id }, data }).catch(() => {});
+      }
+    }
+    return info;
+  }
+
+  /**
    * System Poller Module
    * Polls system information from AOS-CX switches
    * @param {Object} device - Device object from database
@@ -286,9 +322,11 @@ class DevicePollerService {
         // CLI-only devices: the raw `show version` text.
         const parsed = this.parseVersionFromText(version.text);
         await this.recordFirmware(device, { version: parsed });
+        const identity = await this.recordIdentity(device, version.text);
         return {
           transport: 'ssh',
-          hostname: null,
+          hostname: identity?.hostname || null,
+          platform_name: identity?.model || null,
           software_version: parsed,
           raw_version: version.text,
         };
@@ -594,6 +632,7 @@ class DevicePollerService {
     if (!text) return null;
     const body = text.split('\n').filter((line) => !/boot\s*rom/i.test(line)).join('\n');
     const patterns = [
+      /Cisco IOS[^\n]*?Version\s+([^,\s]+)/i,  // Cisco: 15.0(1)SE2, 16.12.04
       /\b([A-Z]{2}\.\d{2}\.\d{2}\.\d{4})\b/,   // HPE: WC.16.11.0015, FL.10.16.1006
       /Version[:\s]+([A-Za-z0-9._-]+)/i,
       /revision\s*:\s*([A-Za-z0-9._-]+)/i,

@@ -4,6 +4,9 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ## [Unreleased]
 
+### Added
+- **Cisco IOS and IOS-XE switches, managed directly over SSH**: connection test, config backups with diffs and schedules, firmware/model/serial/MAC from `show version`, and CDP/LLDP neighbors on the Network Map. One SSH path covers classic IOS and IOS-XE, with nothing to enable on the switch beyond SSH. The login must reach privilege 15; a device credential can carry an **Enable Secret** for a login that lands at `>`. First run on a Catalyst 3560E (IOS 15.0(1)SE2); IOS-XE and the enable path have not met hardware yet. See [`docs/hardware/IOS_NOTES.md`](docs/hardware/IOS_NOTES.md).
+
 ### Fixed
 - Application backup restore into the Docker Compose stack failed with `unrecognized configuration parameter "transaction_timeout"` and left the database as it was. The image's `pg_restore` 17 always writes that setting, which PostgreSQL 15 and 16 don't know. The restore now leaves out settings the server doesn't know, and its checks (also in `--dry-run`) print the server's version.
 

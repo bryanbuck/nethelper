@@ -150,7 +150,7 @@ describe('getRunningConfig', () => {
 
   test('leaves other platforms untouched', async () => {
     jest.spyOn(service, 'runCommands').mockResolvedValue({ config: 'Current configuration:\nhostname X' });
-    await expect(service.getRunningConfig({ ipAddress: '10.0.0.1', vendor: 'cisco', platform: 'ios-xe' }, creds))
+    await expect(service.getRunningConfig({ ipAddress: '10.0.0.1', vendor: 'juniper', platform: 'junos' }, creds))
       .resolves.toBe('Current configuration:\nhostname X');
   });
 
@@ -247,5 +247,184 @@ describe('AOS-S on real hardware (2930F, WC.16.11)', () => {
     // AOS-S prints MACs as 02aa00-0000a1 (not the manual's spaced form); matching uses .mac.
     expect(neighbors[0].mac).toBe('02:aa:00:00:00:a1');
     expect(aosS.parseLocalDevice(out.identity)).toEqual({ chassisId: '02:aa:00:00:00:01', sysName: 'Lab-Core' });
+  });
+});
+
+describe('Cisco IOS on real hardware (3560E, IOS 15.0(1)SE2)', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const service = require('../../src/services/ssh-device.service');
+  const { cleanIosConfig, parseShowVersion } = require('../../src/utils/ios-cli');
+  const ios = require('../../src/services/topology/parsers/ios');
+  const live = (name) => fs.readFileSync(path.join(__dirname, '../fixtures/ios-live', name), 'utf8');
+  const device = { ipAddress: '10.0.0.1', vendor: 'cisco', platform: 'ios-xe' };
+  const creds = { username: 'u', password: 'p' };
+  afterEach(() => jest.restoreAllMocks());
+
+  // Replay the recorded session: each {tx} is a point where the driver must
+  // have typed that text before the following chunks arrive.
+  test('drives the recorded session (echo one character per chunk)', async () => {
+    const { chunks } = JSON.parse(live('ssh-session.json'));
+    const stream = new EventEmitter();
+    let at = 0;
+    const feed = () => {
+      while (at < chunks.length && typeof chunks[at] === 'string') stream.emit('data', Buffer.from(chunks[at++]));
+    };
+    stream.write = (text) => {
+      expect(chunks[at]).toEqual({ tx: text });
+      at++;
+      setImmediate(feed);
+    };
+    const result = drive(stream, [
+      { label: '_paging', command: 'terminal length 0' },
+      { label: 'summary', command: 'show lldp neighbors' },
+    ]);
+    feed();
+    const out = await result;
+    expect(out._paging).toBe('');
+    expect(ios.parseLldpSummary(out.summary)).toEqual([{ deviceId: 'sw-core1', localPort: 'Te0/1', portId: '1/1/25' }]);
+  });
+
+  test('config text is stable: header, change stamps and ntp clock-period are dropped', async () => {
+    const raw = live('show-running-config-skeleton.txt').trim();
+    const cleaned = cleanIosConfig(raw);
+    expect(cleaned.split('\n')[0]).toBe('version 15.0');
+    expect(cleaned).not.toMatch(/Building configuration|Current configuration|Last configuration change/);
+    expect(cleaned).toMatch(/^hostname Switch1$/m);
+    expect(cleaned.endsWith('end')).toBe(true);
+
+    // A `write memory` and a clock adjustment change the output, not the config.
+    const later = raw
+      .replace('! Last configuration change at 19:07:04 CST Sun Feb 28 1993 by admin',
+        '! Last configuration change at 08:00:00 CST Mon Mar 1 1993 by admin\n! NVRAM config last updated at 08:00:05 CST Mon Mar 1 1993 by admin')
+      .replace('Current configuration : 9219 bytes', 'Current configuration : 9301 bytes')
+      .replace('ntp server', 'ntp clock-period 36028811\nntp server');
+    expect(cleanIosConfig(later)).toBe(cleaned);
+
+    jest.spyOn(service, 'runCommands').mockResolvedValue({ config: raw });
+    await expect(service.getRunningConfig(device, creds)).resolves.toBe(cleaned);
+  });
+
+  test('a login at the ">" prompt is told what to fix', async () => {
+    const refused = "show running-config\n          ^\n% Invalid input detected at '^' marker.";
+    jest.spyOn(service, 'runCommands').mockResolvedValue({ config: refused.split('\n').slice(1).join('\n') });
+    await expect(service.getRunningConfig(device, creds))
+      .rejects.toMatchObject({ code: 'CONFIG_ACCESS_DENIED', message: expect.stringMatching(/privilege 15.*enable secret/) });
+  });
+
+  test('a partial config from a low-privilege login is refused, not stored', async () => {
+    const partial = 'Building configuration...\n\nCurrent configuration : 55 bytes\n!\nboot-start-marker\nboot-end-marker\n!\nend';
+    jest.spyOn(service, 'runCommands').mockResolvedValue({ config: partial });
+    await expect(service.getRunningConfig(device, creds))
+      .rejects.toMatchObject({ code: 'CONFIG_ACCESS_DENIED', message: expect.stringMatching(/only part of its configuration/) });
+  });
+
+  test('show version: version, model, serial, base MAC, hostname', () => {
+    expect(parseShowVersion(live('show-version.txt'))).toEqual({
+      version: '15.0(1)SE2', model: 'WS-C3560E-24PD-S', serial: 'FDO0000X11',
+      mac: 'A8:B1:D4:00:11:00', hostname: 'Switch1', os: 'IOS',
+    });
+  });
+
+  test('show version on IOS-XE (from the command reference)', () => {
+    const xe = [
+      'Cisco IOS XE Software, Version 16.12.04',
+      'Cisco IOS Software [Gibraltar], Catalyst L3 Switch Software (CAT9K_IOSXE), Version 16.12.4, RELEASE SOFTWARE (fc5)',
+      'sw9300 uptime is 2 weeks, 1 day',
+      'cisco C9300-24P (X86) processor with 1343703K/6147K bytes of memory.',
+      'Processor board ID FCW0000X001',
+      'Base Ethernet MAC Address          : 70:1f:53:00:11:00',
+      'Model Number                       : C9300-24P',
+      'System Serial Number               : FCW0000X001',
+    ].join('\n');
+    expect(parseShowVersion(xe)).toEqual({
+      version: '16.12.04', model: 'C9300-24P', serial: 'FCW0000X001', mac: '70:1f:53:00:11:00', hostname: 'sw9300', os: 'IOS-XE',
+    });
+    expect(parseShowVersion('Software revision WC.16.11.0015').version).toBeNull();
+  });
+
+  test('neighbors: the LLDP summary is read in the same session and supplies the local port', async () => {
+    const run = jest.spyOn(service, 'runCommands').mockResolvedValue({
+      n0: '', n1: live('show-lldp-neighbors-detail.txt'), w1: live('show-lldp-neighbors.txt'),
+    });
+    const { neighbors } = await service.getNeighbors(device, creds);
+    expect(run.mock.calls[0][2].map((c) => c.command)).toEqual([
+      'show cdp neighbors detail', 'show lldp neighbors detail', 'show lldp neighbors',
+    ]);
+    expect(neighbors).toEqual([expect.objectContaining({ localPort: 'Te0/1', sysName: 'sw-core1' })]);
+  });
+});
+
+describe('enable (IOS user EXEC to privileged EXEC)', () => {
+  // A fake IOS: '>' until `enable` is answered with the right secret.
+  function iosShell({ secret = 'en4ble', hasSecret = true } = {}) {
+    const stream = new EventEmitter();
+    let prompt = 'Switch1>';
+    let awaiting = false;
+    let tries = 0;
+    stream.written = [];
+    const emit = (text) => setImmediate(() => stream.emit('data', Buffer.from(text)));
+    stream.write = (text) => {
+      stream.written.push(text);
+      const line = text.replace(/\n$/, '');
+      if (awaiting) {
+        if (line === secret) { awaiting = false; prompt = 'Switch1#'; return emit(`\r\n${prompt}`); }
+        if (++tries >= 3) { awaiting = false; return emit(`\r\n% Bad secrets\r\n\r\n${prompt}`); }
+        return emit('\r\nPassword: ');
+      }
+      if (line === 'enable') {
+        if (!hasSecret) return emit(`enable\r\n% No password set\r\n${prompt}`);
+        awaiting = true;
+        return emit('enable\r\nPassword: ');
+      }
+      if (line === 'show running-config' && prompt.endsWith('>')) {
+        return emit(`${line}\r\n          ^\r\n% Invalid input detected at '^' marker.\r\n\r\n${prompt}`);
+      }
+      emit(`${line}\r\n${line === 'show running-config' ? 'hostname Switch1\r\n' : ''}${prompt}`);
+    };
+    stream.start = () => emit(`\r\n${prompt}`);
+    return stream;
+  }
+  const IOS_QUEUE = [
+    { label: '_paging', command: 'terminal length 0' },
+    { label: 'config', command: 'show running-config' },
+  ];
+  const run = (stream, elevate) => {
+    const result = drive(stream, IOS_QUEUE, { ...TIMING, elevate });
+    stream.start();
+    return result;
+  };
+
+  test('types enable and the secret, then runs at the "#" prompt', async () => {
+    const stream = iosShell();
+    await expect(run(stream, { command: 'enable', secret: 'en4ble' })).resolves.toEqual({ _paging: '', config: 'hostname Switch1' });
+    expect(stream.written).toEqual(['enable\n', 'en4ble\n', 'terminal length 0\n', 'show running-config\n']);
+  });
+
+  test('a wrong secret fails once, without retrying it', async () => {
+    const stream = iosShell();
+    await expect(run(stream, { command: 'enable', secret: 'wrong' })).rejects.toMatchObject({ code: 'ENABLE_REFUSED' });
+    expect(stream.written).toEqual(['enable\n', 'wrong\n']);
+  });
+
+  test('a switch with no enable secret set says so', async () => {
+    const stream = iosShell({ hasSecret: false });
+    await expect(run(stream, { command: 'enable', secret: 'x' }))
+      .rejects.toMatchObject({ code: 'ENABLE_REFUSED', message: expect.stringContaining('% No password set') });
+  });
+
+  test('without a secret nothing is typed: the ">" login just runs', async () => {
+    const stream = iosShell();
+    const out = await run(stream, null);
+    expect(stream.written).toEqual(['terminal length 0\n', 'show running-config\n']);
+    expect(out.config).toMatch(/Invalid input detected/);
+  });
+
+  test('a login already at "#" is never elevated', async () => {
+    const stream = fakeShell({ prompt: 'Switch1#', respond: () => '' });
+    const result = drive(stream, IOS_QUEUE, { ...TIMING, elevate: { command: 'enable', secret: 'x' } });
+    stream.ready();
+    await result;
+    expect(stream.written).toEqual(['terminal length 0\n', 'show running-config\n']);
   });
 });

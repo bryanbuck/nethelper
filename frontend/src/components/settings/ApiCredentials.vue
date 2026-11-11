@@ -214,6 +214,29 @@
               @click:append-inner="showSecret = !showSecret"
             ></v-text-field>
 
+            <v-text-field
+              v-model="formData.enableSecret"
+              label="Enable Secret (Optional, Cisco IOS)"
+              :type="showEnable ? 'text' : 'password'"
+              variant="outlined"
+              prepend-inner-icon="mdi-shield-key"
+              :append-inner-icon="showEnable ? 'mdi-eye' : 'mdi-eye-off'"
+              :disabled="clearEnableSecret"
+              :hint="enableSecretHint"
+              persistent-hint
+              autocomplete="new-password"
+              class="mb-2"
+              @click:append-inner="showEnable = !showEnable"
+            ></v-text-field>
+            <v-checkbox
+              v-if="dialogMode === 'edit' && editingItem?.enableSecret"
+              v-model="clearEnableSecret"
+              label="Remove the stored enable secret"
+              density="compact"
+              hide-details
+              class="mb-2"
+            ></v-checkbox>
+
             <v-textarea
               v-model="formData.notes"
               label="Notes (Optional)"
@@ -415,6 +438,13 @@ const formValid = ref(false)
 const showPassword = ref(false)
 const showSecret = ref(false)
 const showApiKey = ref(false)
+const showEnable = ref(false)
+const clearEnableSecret = ref(false)
+const enableSecretHint = computed(() => (
+  dialogMode.value === 'edit' && editingItem.value?.enableSecret
+    ? 'Leave blank to keep the current enable secret'
+    : 'Only for a login that lands at the ">" prompt. Not needed with a privilege-15 account.'
+))
 
 // Form data
 const formData = ref({
@@ -424,6 +454,7 @@ const formData = ref({
   password: '',
   apiKey: '',
   apiSecret: '',
+  enableSecret: '',
   notes: '',
 })
 
@@ -484,6 +515,7 @@ const openCreateDialog = () => {
     password: '',
     apiKey: '',
     apiSecret: '',
+    enableSecret: '',
     notes: '',
   }
   showDialog.value = true
@@ -499,6 +531,7 @@ const openEditDialog = (item) => {
     password: '', // Don't populate password for security
     apiKey: '', // Don't populate the key: the list only has its mask
     apiSecret: '', // Don't populate secret for security
+    enableSecret: '',
     notes: item.notes || '',
   }
   showDialog.value = true
@@ -513,11 +546,14 @@ const closeDialog = () => {
     password: '',
     apiKey: '',
     apiSecret: '',
+    enableSecret: '',
     notes: '',
   }
   editingItem.value = null
   showPassword.value = false
   showSecret.value = false
+  showEnable.value = false
+  clearEnableSecret.value = false
 }
 
 
@@ -546,6 +582,13 @@ const saveCredential = async () => {
     // Only include secret if provided
     if (formData.value.apiSecret) {
       data.apiSecret = formData.value.apiSecret
+    }
+
+    // The enable secret: a new value, or an empty one to remove the stored one
+    if (clearEnableSecret.value) {
+      data.enableSecret = ''
+    } else if (formData.value.enableSecret) {
+      data.enableSecret = formData.value.enableSecret
     }
 
     if (dialogMode.value === 'create') {

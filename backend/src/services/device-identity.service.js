@@ -5,7 +5,8 @@
  * placeholders ("STUDIO", cc:cc:cc:...). Two sources are authoritative:
  *   1. the cloud plane's inventory (it reports what the hardware told it), and
  *   2. the device itself, read directly (AOS-CX chassis product_info, Junos
- *      chassis inventory), which works for locally managed devices too.
+ *      chassis inventory, Cisco IOS `show version`), which works for locally
+ *      managed devices too.
  * Cloud is asked first; the device is the fallback. If neither answers, the
  * identity is unknown and a person has to say which row is right.
  */
@@ -14,6 +15,9 @@ const CloudProviderFactory = require('./cloud-providers/cloud-provider-factory')
 const DeviceAPIFactory = require('./device-api/device-api-factory');
 const CXSwitchAPI = require('./device-api/cx-switch-api');
 const settingsService = require('./settings.service');
+const sshDeviceService = require('./ssh-device.service');
+const { detectPlatform } = require('../utils/device-platform');
+const { parseShowVersion } = require('../utils/ios-cli');
 const { normalizeMac } = require('../utils/device-key');
 const { debugLog, Services } = require('../utils/debug-logger');
 
@@ -82,7 +86,11 @@ class DeviceIdentityService {
     try {
       api = DeviceAPIFactory.createDeviceAPI(device, credentials);
     } catch {
-      return null; // no direct API for this platform (e.g. SSH-only)
+      // No device API. Cisco IOS says who it is in `show version`; the other
+      // SSH-only platforms have no reader yet.
+      if (detectPlatform(device) !== 'ios-xe' || device.managementMode === 'cloud') return null;
+      const info = parseShowVersion(await sshDeviceService.getVersion(device, credentials));
+      return info.serial ? { serial: info.serial, macAddress: info.mac } : null;
     }
     if (api instanceof CXSwitchAPI) {
       try {
