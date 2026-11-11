@@ -161,6 +161,17 @@
               @update:model-value="onProviderChange"
             />
 
+            <v-alert
+              v-if="selectedProvider?.preview"
+              type="info"
+              variant="tonal"
+              density="compact"
+              class="mb-3"
+            >
+              Preview: this integration was built from the vendor's API documentation and has not
+              been proven on real equipment yet. It only reads. Please report anything that looks wrong.
+            </v-alert>
+
             <v-text-field
               v-model="form.name"
               label="Name"
@@ -299,7 +310,7 @@ const form = reactive({
 const providerItems = computed(() =>
   cloudProviders.value.map(p => ({
     value: p.id,
-    title: p.implemented ? p.label : `${p.label} (coming soon)`,
+    title: p.implemented ? (p.preview ? `${p.label} (preview)` : p.label) : `${p.label} (coming soon)`,
     props: { disabled: !p.implemented },
   }))
 )

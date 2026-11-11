@@ -312,6 +312,8 @@ class SettingsController {
             regions: provider.regions || null,
             regionHint: provider.regionHint || null,
             implemented: provider.implemented,
+            // Built from the vendor's API spec, not yet proven on real gear.
+            preview: Boolean(provider.preview),
           })),
         },
       });

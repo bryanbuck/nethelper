@@ -24,6 +24,7 @@ Hands-on checks that need real equipment, a real host, or a browser login, which
 - [ ] **VXLAN overlay on hardware** (item 3a below): the reads and analysis ran live against Lab-Edge0/Edge1 (static VXLAN, VNI 110) on 2026-11-04, but the map UI has not been viewed. Pick Overlay → VXLAN on `/map` and check the tunnel, its panel, and the VNI picker (desktop and phone width). Then remove the `vtep-peer` on one side, refresh, and check that the tunnel turns amber "one side only". When EVPN gear (CX 6300+ with BGP EVPN) is available, capture `tunnel_endpoints` with `origin: evpn` and an L3 VNI.
 - [x] **Live tab VLAN/description push on hardware** (item 3 below, done 2026-11-09): description, access VLAN, access → trunk, allowed-list-only and LAG VLAN changes made from Central all reached the Live tab within seconds (`docs/hardware/AOS_CX_NOTES.md`). Not tried: adding a port to a LAG (the automatic resubscribe).
 - [ ] **First. Application backup on a real Docker host** (item 16 below, added 2026-11-04): build the backend image (it now installs `postgresql-client-17` from the PGDG apt repo) and check `pg_dump --version` in it; Run now from Settings → App Backup against the Compose `postgres:15`; then restore that archive into a fresh stack with `docker compose run --rm backend node scripts/app-restore.js`. Bare metal was tested on the dev host (pg_dump 15) only.
+- [ ] **Meraki first contact** (`wip/meraki`, added 2026-11-10): walk the beta tester through `docs/MERAKI.md` (build from the branch, add the integration, run the probe) and collect the `.anon.json` captures privately. Nothing has touched a real Meraki organization yet.
 - [ ] **Junos SSH CLI fallback on hardware** (Phase 7 below): connection test, polls and a backup with NETCONF disabled.
 
 ---
@@ -372,8 +373,10 @@ Switch-side probe facts: `docs/hardware/AOS_CX_NOTES.md` ("Central management pr
 **Priority**: High
 **Status**: 🔨 Phases 0–2 complete (2026-07-12) — vendor abstraction + multi-cloud
 groundwork shipped (Aruba behavior unchanged), Juniper Mist live as the second cloud
-platform, and Junos devices reachable directly over NETCONF. Phases 3–4 (Meraki,
-Catalyst direct) not started.
+platform, and Junos devices reachable directly over NETCONF. Phase 3 (Meraki) is a
+preview on the `wip/meraki` branch (2026-11-10): built from Cisco's API spec, awaiting
+first contact with a real organization through a beta tester (`docs/MERAKI.md`). Phase 4
+(Catalyst direct) not started.
 
 Extend device support beyond Aruba to Juniper (Mist cloud + Junos direct SSH) and Cisco
 (Meraki Dashboard API + Catalyst direct SSH). MVP bar per vendor: inventory sync + status,

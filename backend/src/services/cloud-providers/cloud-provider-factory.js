@@ -6,6 +6,7 @@ const encryption = require('../../utils/encryption');
 const { CLOUD_PROVIDERS } = require('../../constants/vendors');
 const ArubaCentralProvider = require('./aruba-central.provider');
 const MistProvider = require('./mist.provider');
+const MerakiProvider = require('./meraki.provider');
 const logger = require('../../utils/logger');
 
 // Synthetic integration id used when falling back to ARUBA_CENTRAL_* env vars
@@ -16,7 +17,8 @@ const ENV_ARUBA_INTEGRATION_ID = 'env:aruba_central';
 const PROVIDER_CLASSES = {
   aruba_central: ArubaCentralProvider,
   juniper_mist: MistProvider,
-  // cisco_meraki: Phase 3 (docs/MULTI_VENDOR_ROADMAP.md)
+  // Preview: built from Cisco's spec, not yet run against a live org (docs/MERAKI.md).
+  cisco_meraki: MerakiProvider,
 };
 
 /**

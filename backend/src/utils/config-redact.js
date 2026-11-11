@@ -7,7 +7,8 @@
  * up in a diff, but the fingerprint can't be brute-forced without the key.
  *
  * Keys are matched on the leaf name, normalized across kebab, snake and camel
- * case (`shared-secret`, `plaintext-value`, `psk`, `password`, ...). Keys that
+ * case (`shared-secret`, `plaintext-value`, `psk`, `password`, Meraki's
+ * `communityString`, ...). Keys that
  * only describe a secret (`secret-type`) don't match.
  *
  * Presigned URLs are a secret too, whatever their key: Mist hands out each
@@ -17,7 +18,7 @@
  */
 const crypto = require('crypto');
 
-const SECRET_LEAF = /(password|passphrase|psk|secret|plaintextvalue|community|privatekey|apikey|token)$/;
+const SECRET_LEAF = /(password|passphrase|psk|secret|plaintextvalue|community(string)?|privatekey|apikey|token)$/;
 const MASK = '[REDACTED]';
 // AWS SigV4/SigV2, Azure SAS and GCS signed-URL query markers.
 const SIGNED_QUERY = /[?&](X-Amz-Signature|X-Amz-Security-Token|Signature|sig|X-Goog-Signature)=/i;

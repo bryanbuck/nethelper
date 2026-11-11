@@ -834,7 +834,8 @@ const FORMAT_LABELS = {
   'mist-config-json': 'Mist device config (JSON)',
   'mist-scope-json': 'Mist org/site config (JSON)',
   'central-scope-json': 'Central scope config (JSON)',
-  'meraki-settings-json': 'Meraki settings (JSON)'
+  'meraki-settings-json': 'Meraki device settings (JSON)',
+  'meraki-scope-json': 'Meraki organization/network settings (JSON)'
 }
 const KIND_ORDER = ['cli', 'structured']
 
@@ -867,6 +868,8 @@ function scopeTypeLabel(type) {
     org: 'Organization',
     'site-collection': 'Site collection',
     site: 'Site',
+    network: 'Network',
+    'config-template': 'Configuration template',
     'device-group': 'Device group',
     group: 'Group',
   }[type] || type
@@ -879,6 +882,7 @@ function scopeTypeLabel(type) {
 const SCOPE_APPLY_HINTS = {
   aruba_central: 'Configuration Central holds for this scope: the library profiles assigned here and the objects in effect. Changes are made in Central (profiles and their assignments), not on a device.',
   juniper_mist: 'Configuration Mist holds for this org or site: settings, WLANs and templates. Changes are made in Mist, not on a device.',
+  cisco_meraki: 'Settings the Meraki dashboard holds for this organization, network or template: SSIDs, switch and appliance settings, firewall rules. A snapshot of what the API returns, not a running-config. Changes are made in the Meraki dashboard.',
 }
 
 const CLOUD_CLI_HINTS = {
@@ -913,6 +917,9 @@ function applyHint(artifact, device, isScope, provider = null) {
   }
   if (artifact.format === 'mist-config-json') {
     return 'The Mist configuration object for this device (intent, not a running-config). Applied through Mist, not the device CLI.'
+  }
+  if (artifact.format === 'meraki-settings-json') {
+    return 'The settings the Meraki dashboard holds for this device (a snapshot of what the API returns, not a running-config). Its network\'s settings are in the cloud scope backups. Changes are made in the Meraki dashboard.'
   }
   return null
 }

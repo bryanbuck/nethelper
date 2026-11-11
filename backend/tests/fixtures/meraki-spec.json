@@ -1,0 +1,94 @@
+{
+  "_note": "SPEC-DERIVED, not a live capture: shapes follow the examples in Cisco's Meraki Dashboard API OpenAPI spec v1.76 (github.com/meraki/openapi, read 2026-11-10), with values made consistent across endpoints. Replace with tests/fixtures/meraki-live/ after first contact.",
+  "organizations": [
+    { "id": "2930418", "name": "Example Org", "url": "https://dashboard.meraki.com/o/VjjsAd/manage/organization/overview", "api": { "enabled": true }, "licensing": { "model": "co-term" }, "cloud": { "region": { "name": "North America", "host": { "name": "United States" } } } },
+    { "id": "111", "name": "Other Org", "api": { "enabled": true } }
+  ],
+  "identity": { "name": "Miles Meraki", "email": "miles@example.com", "authentication": { "mode": "email", "api": { "key": { "created": true } } } },
+  "networks": [
+    { "id": "N_1", "organizationId": "2930418", "name": "Main Office", "productTypes": ["appliance", "switch", "wireless"], "timeZone": "America/Los_Angeles", "tags": [], "isBoundToConfigTemplate": false },
+    { "id": "N_2", "organizationId": "2930418", "name": "Branch", "productTypes": ["wireless"], "timeZone": "America/Los_Angeles", "tags": [], "isBoundToConfigTemplate": false }
+  ],
+  "inventory": [
+    { "mac": "00:11:22:33:44:55", "serial": "Q234-ABCD-5678", "name": "My AP", "model": "MR34", "sku": "MR34-HW", "networkId": "N_1", "claimedAt": "2018-02-11T00:00:00.090210Z", "tags": ["tag1"], "productType": "wireless", "countryCode": "US" },
+    { "mac": "01:23:45:67:ab:cd", "serial": "Q555-5555-5555", "name": "Example Switch", "model": "MS120-8", "sku": "MS120-8-HW", "networkId": "N_1", "claimedAt": "2018-02-11T00:00:00.090210Z", "tags": [], "productType": "switch" },
+    { "mac": "00:11:22:33:44:66", "serial": "Q2MX-AAAA-0001", "name": "", "model": "MX67", "sku": "MX67-HW", "networkId": "N_1", "claimedAt": "2018-02-11T00:00:00.090210Z", "tags": [], "productType": "appliance" },
+    { "mac": "00:11:22:33:44:77", "serial": "Q2MV-AAAA-0002", "name": "Lobby camera", "model": "MV12", "sku": "MV12-HW", "networkId": "N_1", "claimedAt": "2018-02-11T00:00:00.090210Z", "tags": [], "productType": "camera" },
+    { "mac": "00:11:22:33:44:88", "serial": "Q2SP-AAAA-0003", "name": null, "model": "MR44", "sku": "MR44-HW", "networkId": null, "claimedAt": "2018-02-11T00:00:00.090210Z", "tags": [], "productType": "wireless" }
+  ],
+  "devices": [
+    { "name": "My AP", "lat": 37.4180951010362, "lng": -122.098531723022, "address": "1600 Pennsylvania Ave", "notes": "My AP's note", "tags": ["recently-added"], "networkId": "N_1", "serial": "Q234-ABCD-5678", "model": "MR34", "mac": "00:11:22:33:44:55", "lanIp": "10.0.0.20", "firmware": "wireless-25-14", "productType": "wireless", "details": [], "configurationUpdatedAt": "2026-09-15T01:19:07Z" },
+    { "name": "Example Switch", "tags": [], "networkId": "N_1", "serial": "Q555-5555-5555", "model": "MS120-8", "mac": "01:23:45:67:ab:cd", "lanIp": "10.0.0.2", "firmware": "switch-15-21-1", "productType": "switch", "configurationUpdatedAt": "2026-09-15T01:19:07Z" },
+    { "name": "Edge", "tags": [], "networkId": "N_1", "serial": "Q2MX-AAAA-0001", "model": "MX67", "mac": "00:11:22:33:44:66", "lanIp": "10.0.0.1", "firmware": "wired-18-2", "productType": "appliance" },
+    { "name": "Lobby camera", "tags": [], "networkId": "N_1", "serial": "Q2MV-AAAA-0002", "model": "MV12", "mac": "00:11:22:33:44:77", "lanIp": "10.0.0.30", "firmware": "camera-5-2", "productType": "camera" }
+  ],
+  "availabilities": [
+    { "mac": "00:11:22:33:44:55", "name": "My AP", "network": { "id": "N_1" }, "productType": "wireless", "serial": "Q234-ABCD-5678", "status": "online", "tags": [] },
+    { "mac": "01:23:45:67:ab:cd", "name": "Example Switch", "network": { "id": "N_1" }, "productType": "switch", "serial": "Q555-5555-5555", "status": "alerting", "tags": [] },
+    { "mac": "00:11:22:33:44:66", "name": "Edge", "network": { "id": "N_1" }, "productType": "appliance", "serial": "Q2MX-AAAA-0001", "status": "offline", "tags": [] },
+    { "mac": "00:11:22:33:44:77", "name": "Lobby camera", "network": { "id": "N_1" }, "productType": "camera", "serial": "Q2MV-AAAA-0002", "status": "dormant", "tags": [] }
+  ],
+  "discovery": {
+    "items": [
+      {
+        "name": "Example Switch", "serial": "Q555-5555-5555", "mac": "01:23:45:67:ab:cd", "network": { "name": "Main Office", "id": "N_1" }, "model": "MS120-8",
+        "ports": [
+          { "portId": "1", "lastUpdatedAt": "2026-11-10T00:00:00Z",
+            "cdp": [{ "name": "Device ID", "value": "001122334455" }, { "name": "Port ID", "value": "Port 0" }, { "name": "Address", "value": "10.0.0.20" }],
+            "lldp": [{ "name": "System name", "value": "My AP" }, { "name": "Chassis ID", "value": "00:11:22:33:44:55" }, { "name": "Port ID", "value": "0" }, { "name": "Management address", "value": "10.0.0.20" }, { "name": "System capabilities", "value": "WLAN Access Point" }] },
+          { "portId": "8", "lastUpdatedAt": "2026-11-10T00:00:00Z",
+            "cdp": [{ "name": "Device ID", "value": "core1.example.com" }, { "name": "Port ID", "value": "GigabitEthernet1/0/24" }, { "name": "Platform", "value": "cisco C9300-24P" }, { "name": "Capabilities", "value": "Router Switch IGMP" }, { "name": "Address", "value": "10.0.0.254" }],
+            "lldp": [] },
+          { "portId": "5", "lastUpdatedAt": "2026-11-10T00:00:00Z", "cdp": [], "lldp": [] }
+        ]
+      }
+    ],
+    "meta": { "counts": { "items": { "total": 1, "remaining": 0 } } }
+  },
+  "switchPorts": [
+    {
+      "name": "Example Switch", "serial": "Q555-5555-5555", "mac": "01:23:45:67:ab:cd", "network": { "name": "Main Office", "id": "N_1" }, "model": "MS120-8",
+      "ports": [
+        { "portId": "1", "name": "AP", "enabled": true, "type": "access", "vlan": 10, "voiceVlan": 20, "allowedVlans": "all" },
+        { "portId": "5", "name": "", "enabled": true, "type": "trunk", "vlan": 1, "allowedVlans": "1,3,5-7" },
+        { "portId": "8", "name": "Uplink", "enabled": true, "type": "trunk", "vlan": 1, "allowedVlans": "all" }
+      ]
+    }
+  ],
+  "linkLayer": {
+    "nodes": [
+      { "derivedId": "001122334466", "mac": "00:11:22:33:44:66", "type": "device", "root": true, "device": { "serial": "Q2MX-AAAA-0001", "name": "Edge", "model": "MX67", "productType": "appliance", "status": "online" } },
+      { "derivedId": "0123456789ab", "mac": "01:23:45:67:ab:cd", "type": "device", "device": { "serial": "Q555-5555-5555", "name": "Example Switch", "model": "MS120-8", "productType": "switch", "status": "online" } },
+      { "derivedId": "aabbccddeeff", "mac": "AA:BB:CC:DD:EE:FF", "type": "discovered", "discovered": { "lldp": { "chassisId": "aa:bb:cc:dd:ee:ff", "systemName": "Non-Meraki device", "systemDescription": "Router and Switch Device", "systemCapabilities": ["router", "switch"], "managementAddress": "10.130.105.154" } } }
+    ],
+    "links": [
+      { "ends": [
+          { "node": { "derivedId": "001122334466", "type": "device" }, "device": { "serial": "Q2MX-AAAA-0001", "name": "Edge" }, "discovered": { "lldp": { "portId": "Port 3", "portDescription": "LAN 3" } } },
+          { "node": { "derivedId": "0123456789ab", "type": "device" }, "device": { "serial": "Q555-5555-5555", "name": "Example Switch" }, "discovered": { "lldp": { "portId": "Port 8" }, "cdp": { "portId": "Port 8", "nativeVlan": 1 } } }
+        ], "lastReportedAt": "2021-06-25T14:56:27z" },
+      { "ends": [
+          { "node": { "derivedId": "001122334466", "type": "device" }, "device": { "serial": "Q2MX-AAAA-0001", "name": "Edge" }, "discovered": { "lldp": { "portId": "Port 4" } } },
+          { "node": { "derivedId": "aabbccddeeff", "type": "discovered" }, "discovered": { "lldp": { "portId": "ge-0/0/1" } } }
+        ], "lastReportedAt": "2021-06-25T14:56:27z" }
+    ],
+    "errors": []
+  },
+  "alerts": [
+    { "id": "1234", "categoryType": "connectivity", "network": { "name": "Main Office", "id": "N_1" }, "startedAt": "2026-11-01T15:48:57Z", "resolvedAt": null, "dismissedAt": null, "deviceType": "MS", "type": "crc_errors_error", "title": "CRC errors detected", "description": "Very high proportion of CRC errors on port id", "severity": "warning",
+      "scope": { "devices": [{ "name": "Example Switch", "productType": "switch", "serial": "Q555-5555-5555", "mac": "01:23:45:67:ab:cd", "lldp": { "port": "33" } }] } },
+    { "id": "1235", "categoryType": "connectivity", "network": { "name": "Main Office", "id": "N_1" }, "startedAt": "2026-11-01T15:00:00Z", "resolvedAt": null, "dismissedAt": null, "deviceType": "MX", "type": "unreachable", "title": "Unreachable device", "description": null, "severity": "critical",
+      "scope": { "devices": [{ "name": "Edge", "serial": "Q2MX-AAAA-0001", "mac": "00:11:22:33:44:66" }] } }
+  ],
+  "alertsResolved": [
+    { "id": "1200", "categoryType": "device_health", "network": { "name": "Branch", "id": "N_2" }, "startedAt": "2026-11-01T10:00:00Z", "resolvedAt": "2026-11-01T11:00:00Z", "dismissedAt": null, "deviceType": "MR", "type": "poe_low_power", "title": "Low power mode", "description": "AP is in low power mode", "severity": "informational",
+      "scope": { "devices": [] } }
+  ],
+  "clients": [
+    { "id": "k74272e", "mac": "22:33:44:55:66:77", "ip": "10.0.0.50", "description": "Miles's phone", "firstSeen": 1518365681, "lastSeen": 1526087474, "manufacturer": "Apple", "os": "iOS", "user": "milesmeraki", "vlan": "100", "ssid": "My SSID", "switchport": null, "recentDeviceMac": "00:11:22:33:44:55", "status": "Online", "recentDeviceSerial": "Q234-ABCD-5678", "recentDeviceName": "My AP", "recentDeviceConnection": "Wireless" },
+    { "id": "k74272f", "mac": "22:33:44:55:66:88", "ip": "10.0.0.505", "description": "Partial match", "lastSeen": 1526087474, "status": "Offline" }
+  ],
+  "ssids": [
+    { "number": 0, "name": "My SSID", "enabled": true, "authMode": "psk", "psk": "deadbeef", "encryptionMode": "wpa", "radiusServers": [{ "id": "797137134045134582", "host": "0.0.0.0", "port": 3000 }] },
+    { "number": 1, "name": "Unconfigured SSID 2", "enabled": false, "authMode": "open" }
+  ]
+}

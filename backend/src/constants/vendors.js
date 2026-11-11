@@ -63,6 +63,16 @@ const MIST_REGIONS = [
   { id: 'apac03', label: 'APAC 03 (api.gc7.mist.com)', baseUrl: 'https://api.gc7.mist.com' },
 ];
 
+// Cisco Meraki Dashboard API hosts (developer.cisco.com/meraki/api-v1/getting-started,
+// "Base URI", read 2026-11-10). Most organizations are on the first.
+const MERAKI_REGIONS = [
+  { id: 'global', label: 'Most regions (api.meraki.com)', baseUrl: 'https://api.meraki.com/api/v1' },
+  { id: 'canada', label: 'Canada (api.meraki.ca)', baseUrl: 'https://api.meraki.ca/api/v1' },
+  { id: 'china', label: 'China (api.meraki.cn)', baseUrl: 'https://api.meraki.cn/api/v1' },
+  { id: 'india', label: 'India (api.meraki.in)', baseUrl: 'https://api.meraki.in/api/v1' },
+  { id: 'us-gov', label: 'United States FedRAMP (api.gov-meraki.com)', baseUrl: 'https://api.gov-meraki.com/api/v1' },
+];
+
 // New Central (HPE GreenLake) API gateways, per cluster (developer.arubanetworks.com
 // "Getting Started with REST APIs"). Classic Central's apigw-* hosts are a
 // different API that GreenLake tokens do not work against.
@@ -130,14 +140,25 @@ const CLOUD_PROVIDERS = {
   },
   cisco_meraki: {
     id: 'cisco_meraki',
+    // Preview: built from Cisco's API spec and not yet run against a live
+    // organization (docs/MERAKI.md). `implemented` is the one switch that
+    // offers it in Settings; `preview` marks it there.
     label: 'Cisco Meraki',
     vendor: 'cisco',
     defaultBaseUrl: 'https://api.meraki.com/api/v1',
     credentialFields: [
-      { key: 'apiKey', label: 'API Key', secret: true },
-      { key: 'orgId', label: 'Organization ID', secret: false },
+      {
+        key: 'apiKey',
+        label: 'API Key',
+        secret: true,
+        hint: 'A key of an administrator with read-only access to the organization is enough: your profile → API access. NetHelper never writes to Meraki.',
+      },
+      { key: 'orgId', label: 'Organization ID', secret: false, hint: 'Organization → Settings shows it at the bottom of the page.' },
     ],
-    implemented: false, // Phase 3 of docs/MULTI_VENDOR_ROADMAP.md
+    regions: MERAKI_REGIONS,
+    regionHint: 'Most organizations use the first. Canada, China, India and US FedRAMP dashboards have their own API host.',
+    implemented: true,
+    preview: true,
   },
 };
 
@@ -183,7 +204,7 @@ const TRANSPORT_MATRIX = {
   // Cisco Catalyst — Phase 4. Direct SSH uses the ios-xe CLI profile; not yet
   // validated on hardware. Topology reads CDP and LLDP.
   'cisco/ios-xe': { config: ['ssh'], test: ['ssh'], poll: ['ssh'], live: [], topology: ['ssh'] },
-  // Meraki is cloud-only (Phase 3, not implemented). No direct transports, so a
+  // Meraki is cloud-only (preview provider). No direct transports, so a
   // Meraki row marked "direct" reports "no transport" instead of trying SSH.
   'cisco/meraki': { config: [], test: [], poll: [], live: [], topology: [] },
 };

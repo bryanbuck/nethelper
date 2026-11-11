@@ -112,3 +112,9 @@ the description and VLAN attributes.
 6300Fs (FL.10.16.1060, 2026-11-04) joined by a static VXLAN (VNI 110 ↔ VLAN 110,
 loopback0 sources 10.15.20.20 / 10.15.20.25): `{ interfaces, vnis,
 tunnelEndpoints: { vxlan1 } }`, the three reads of `getVxlanState()`.
+
+`meraki-spec.json` is **spec-derived, not a live capture**: reply shapes from
+the examples in Cisco's Meraki Dashboard API OpenAPI spec (v1.76, read
+2026-11-10), with values made consistent across endpoints. The Meraki provider
+is a preview that has not met a live organization (`docs/MERAKI.md`); when it
+does, `probe-cloud.js` captures go in `meraki-live/` and this file is replaced.
