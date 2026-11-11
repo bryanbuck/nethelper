@@ -1,7 +1,8 @@
 /**
  * deploy/install.sh and deploy/systemd/nethelper-admin, run for real in a temp
  * tree. Docker is a fake on PATH that logs its arguments, so the installer's
- * whole flow runs without a Docker host.
+ * whole flow runs without a Docker host. The upgrade commands get a fake curl
+ * serving a release tarball built here, and fake systemctl/npm/id.
  */
 const fs = require('fs');
 const os = require('os');
@@ -24,7 +25,14 @@ case "$1" in
       version) echo "\${FAKE_COMPOSE_VERSION:-2.29.1}" ;;
       pull) [ -z "\${FAKE_PULL_FAIL:-}" ] || exit 1 ;;
       ps) echo "id-$3" ;;
-      exec) case "$*" in *count-users*) echo "\${FAKE_USERS:-0}" ;; esac ;;
+      up) [ -z "\${FAKE_UP_FAIL:-}" ] || exit 1 ;;
+      exec)
+        case "$*" in
+          *count-users*) echo "\${FAKE_USERS:-0}" ;;
+          *app-backup.js*)
+            [ -z "\${FAKE_BACKUP_FAIL:-}" ] || { echo "Application backup failed: pg_dump is not installed" >&2; exit 1; }
+            echo "archive: nethelper-1.2.3-20261111T000000Z.tar.gz" ;;
+        esac ;;
     esac ;;
 esac
 exit 0
@@ -254,5 +262,318 @@ describe('deploy/systemd/nethelper-admin', () => {
     const r = run(['frobnicate'], path.join(tmp, 'backend.env'));
     expect(r.status).not.toBe(0);
     expect(r.stderr).toContain('unknown command');
+  });
+});
+
+// ---------------------------------------------------------------- upgrades
+
+// Serves files from $FAKE_RELEASES by the URL's last path segment.
+const FAKE_CURL = `#!/bin/sh
+dest=; url=
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o) dest=$2; shift ;;
+    --max-time) shift ;;
+    -*) ;;
+    *) url=$1 ;;
+  esac
+  shift
+done
+printf '%s\\n' "$url" >> "$FAKE_CURL_LOG"
+case "$url" in
+  */health/ready) [ -z "\${FAKE_HEALTH_FAIL:-}" ]; exit ;;
+  */releases/latest) src="$FAKE_RELEASES/latest.json" ;;
+  *) src="$FAKE_RELEASES/$(basename "$url")" ;;
+esac
+[ -f "$src" ] || exit 22
+cp "$src" "$dest"
+`;
+
+const LOGGING_TOOL = (name, body = '') => `#!/bin/sh
+printf '${name} %s\\n' "$*" >> "$FAKE_TOOL_LOG"
+${body}
+exit 0
+`;
+
+/** A NetHelper tree with the real deploy scripts and the given migrations. */
+function makeTree(dir, version, migrations, extra = {}) {
+  fs.mkdirSync(path.join(dir, 'deploy/systemd'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'deploy/nginx'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'frontend/nginx'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'frontend/dist'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'VERSION'), `${version}\n`);
+  for (const file of ['install.sh', 'upgrade-lib.sh', '.env.example', 'systemd/nethelper-admin']) {
+    fs.copyFileSync(path.join(REPO, 'deploy', file), path.join(dir, 'deploy', file));
+  }
+  fs.writeFileSync(path.join(dir, 'deploy/systemd/nethelper-backend.service'), extra.unit || '[Service]\n');
+  fs.writeFileSync(path.join(dir, 'deploy/nginx/nethelper.conf'), 'server {}\n');
+  fs.writeFileSync(path.join(dir, 'frontend/nginx/security-headers.conf'), '# headers\n');
+  fs.writeFileSync(path.join(dir, 'frontend/dist/index.html'), `<!-- ${version} -->\n`);
+  fs.mkdirSync(path.join(dir, 'backend'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'backend/package.json'), '{}\n');
+  for (const migration of migrations) {
+    fs.mkdirSync(path.join(dir, 'backend/prisma/migrations', migration), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'backend/prisma/migrations', migration, 'migration.sql'), '-- sql\n');
+  }
+}
+
+/** Publish nethelper-<version>.tar.gz + .sha256 into the fake release folder. */
+function publish(releases, version, migrations, extra = {}) {
+  const build = fs.mkdtempSync(path.join(releases, 'build-'));
+  makeTree(path.join(build, `nethelper-${version}`), version, migrations, extra);
+  const name = `nethelper-${version}.tar.gz`;
+  execFileSync('tar', ['czf', path.join(releases, name), '-C', build, `nethelper-${version}`]);
+  const sum = execFileSync('sha256sum', [name], { cwd: releases, encoding: 'utf8' });
+  fs.writeFileSync(path.join(releases, `${name}.sha256`), sum);
+  fs.rmSync(build, { recursive: true, force: true });
+}
+
+describe('upgrade commands', () => {
+  let site;
+  let tree;
+  let releases;
+  let dockerLog;
+  let toolLog;
+  let env;
+  const version = (dir) => fs.readFileSync(path.join(dir, 'VERSION'), 'utf8').trim();
+  const lines = (file) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n') : []);
+  const leftovers = () => fs.readdirSync(site).filter((entry) => entry.startsWith('.nethelper-upgrade'));
+
+  beforeEach(() => {
+    site = path.join(tmp, 'site');
+    tree = path.join(site, 'nethelper');
+    releases = path.join(tmp, 'releases');
+    fs.mkdirSync(releases);
+    fs.mkdirSync(path.join(tmp, 'bin'));
+    makeTree(tree, '1.2.3', ['001_init']);
+    fs.writeFileSync(path.join(tree, 'deploy/.env'), 'POSTGRES_PASSWORD=keepme\nHTTP_PORT=9000\n');
+    fs.writeFileSync(path.join(releases, 'latest.json'), '{\n  "url": "x",\n  "tag_name": "v1.3.0",\n  "name": "NetHelper 1.3.0"\n}\n');
+    publish(releases, '1.3.0', ['001_init', '002_more'], { unit: '[Service]\n# changed\n' });
+    fs.writeFileSync(path.join(tmp, 'bin/docker'), FAKE_DOCKER, { mode: 0o755 });
+    fs.writeFileSync(path.join(tmp, 'bin/curl'), FAKE_CURL, { mode: 0o755 });
+    dockerLog = path.join(tmp, 'docker.log');
+    toolLog = path.join(tmp, 'tools.log');
+    env = {
+      PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}`,
+      FAKE_DOCKER_LOG: dockerLog,
+      FAKE_CURL_LOG: path.join(tmp, 'curl.log'),
+      FAKE_TOOL_LOG: toolLog,
+      FAKE_RELEASES: releases,
+    };
+  });
+
+  describe('install.sh --upgrade', () => {
+    const upgrade = (args = [], extraEnv = {}) =>
+      spawnSync('sh', [path.join(tree, 'deploy/install.sh'), '--upgrade', ...args], {
+        input: '',
+        encoding: 'utf8',
+        env: { ...env, ...extraEnv },
+      });
+
+    test('backs up, swaps the trees, carries the settings over and runs the new installer', () => {
+      fs.writeFileSync(path.join(tree, 'deploy/docker-compose.override.yml'), 'services: {}\n');
+      const r = upgrade();
+      expect(r.stderr).toBe('');
+      expect(r.status).toBe(0);
+      expect(version(tree)).toBe('1.3.0');
+      expect(version(`${tree}.previous`)).toBe('1.2.3');
+      expect(fs.readFileSync(path.join(tree, 'deploy/.env'), 'utf8')).toContain('POSTGRES_PASSWORD=keepme\nHTTP_PORT=9000\n');
+      expect(fs.readFileSync(path.join(tree, 'deploy/docker-compose.override.yml'), 'utf8')).toBe('services: {}\n');
+      expect(leftovers()).toEqual([]);
+      expect(r.stdout).toContain('Backup written: nethelper-1.2.3-20261111T000000Z.tar.gz');
+
+      const calls = lines(dockerLog);
+      const backup = calls.indexOf('compose exec -T backend node scripts/app-backup.js');
+      const pull = calls.indexOf('compose pull backend frontend');
+      const up = calls.indexOf('compose up -d');
+      expect(backup).toBeGreaterThan(-1);
+      expect(pull).toBeGreaterThan(backup);
+      expect(up).toBeGreaterThan(pull);
+      // The new installer ran with users untouched
+      expect(calls.some((c) => c.includes('create-admin'))).toBe(false);
+    });
+
+    test('a download that fails its checksum changes nothing', () => {
+      fs.writeFileSync(path.join(releases, 'nethelper-1.3.0.tar.gz.sha256'), `${'0'.repeat(64)}  nethelper-1.3.0.tar.gz\n`);
+      const r = upgrade();
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toContain("doesn't match its checksum");
+      expect(version(tree)).toBe('1.2.3');
+      expect(fs.existsSync(`${tree}.previous`)).toBe(false);
+      expect(leftovers()).toEqual([]);
+      expect(lines(dockerLog).some((c) => c.includes('app-backup.js') || c === 'compose up -d')).toBe(false);
+    });
+
+    test('a failed backup stops before the swap; --no-backup goes ahead without one', () => {
+      let r = upgrade([], { FAKE_BACKUP_FAIL: '1' });
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toContain('the backup failed');
+      expect(version(tree)).toBe('1.2.3');
+      expect(fs.existsSync(`${tree}.previous`)).toBe(false);
+      expect(leftovers()).toEqual([]);
+
+      fs.rmSync(dockerLog);
+      r = upgrade(['--no-backup'], { FAKE_BACKUP_FAIL: '1' });
+      expect(r.status).toBe(0);
+      expect(version(tree)).toBe('1.3.0');
+      expect(lines(dockerLog).some((c) => c.includes('app-backup.js'))).toBe(false);
+    });
+
+    test('refuses a git checkout, and a pinned NETHELPER_VERSION', () => {
+      fs.mkdirSync(path.join(tree, '.git'));
+      let r = upgrade();
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toContain('git pull');
+      fs.rmSync(path.join(tree, '.git'), { recursive: true });
+
+      fs.appendFileSync(path.join(tree, 'deploy/.env'), 'NETHELPER_VERSION=1.2.3\n');
+      r = upgrade();
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toContain('pins NETHELPER_VERSION=1.2.3');
+      expect(version(tree)).toBe('1.2.3');
+      expect(fs.existsSync(path.join(tmp, 'curl.log'))).toBe(false);
+    });
+
+    test('already on the newest release: nothing to do', () => {
+      fs.writeFileSync(path.join(releases, 'latest.json'), '{ "tag_name": "v1.2.3" }\n');
+      const r = upgrade();
+      expect(r.status).toBe(0);
+      expect(r.stdout).toContain('already NetHelper 1.2.3');
+      expect(fs.existsSync(`${tree}.previous`)).toBe(false);
+      expect(leftovers()).toEqual([]);
+    });
+
+    test('--version picks a release; a version that is not one is refused', () => {
+      publish(releases, '1.4.0-beta.1', ['001_init']);
+      let r = upgrade(['--version', 'v1.4.0-beta.1']);
+      expect(r.status).toBe(0);
+      expect(version(tree)).toBe('1.4.0-beta.1');
+
+      r = upgrade(['--version', '../../etc']);
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toContain('not a version');
+    });
+
+    test('refuses a release older than the database', () => {
+      publish(releases, '1.1.0', []);
+      const r = upgrade(['--version', '1.1.0']);
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toContain("Downgrading isn't supported");
+      expect(version(tree)).toBe('1.2.3');
+    });
+
+    test('when the new version does not start, says how to go back and whether the database changed', () => {
+      let r = upgrade([], { FAKE_UP_FAIL: '1' });
+      expect(r.status).toBe(1);
+      expect(r.stdout).toContain('NetHelper 1.3.0 did not come up healthy');
+      expect(r.stdout).toContain(`The 1.2.3 tree is kept at: ${tree}.previous`);
+      expect(r.stdout).toContain('Backup taken before the upgrade: nethelper-1.2.3-20261111T000000Z.tar.gz');
+      expect(r.stdout).toContain('002_more');
+      expect(r.stdout).toContain('restore the backup before starting 1.2.3');
+
+      // Back to 1.2.3 by hand, then a release with no new migrations
+      fs.rmSync(tree, { recursive: true });
+      fs.renameSync(`${tree}.previous`, tree);
+      publish(releases, '1.2.4', ['001_init']);
+      r = upgrade(['--version', '1.2.4', '--no-backup'], { FAKE_UP_FAIL: '1' });
+      expect(r.status).toBe(1);
+      expect(r.stdout).toContain('1.2.4 changes nothing in the database');
+      expect(r.stdout).toContain('No backup was taken by this upgrade');
+    });
+
+    test('keeps one previous tree: the next upgrade replaces it', () => {
+      expect(upgrade().status).toBe(0);
+      publish(releases, '1.5.0', ['001_init', '002_more']);
+      const r = upgrade(['--version', '1.5.0']);
+      expect(r.status).toBe(0);
+      expect(version(tree)).toBe('1.5.0');
+      expect(version(`${tree}.previous`)).toBe('1.3.0');
+      expect(r.stdout).toContain('Removing the tree kept by the upgrade before this one');
+    });
+
+    test('never deletes a .previous folder that is not a NetHelper tree', () => {
+      fs.mkdirSync(`${tree}.previous`);
+      fs.writeFileSync(path.join(`${tree}.previous`, 'mine.txt'), 'keep\n');
+      const r = upgrade();
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toContain('move it away first');
+      expect(fs.readFileSync(path.join(`${tree}.previous`, 'mine.txt'), 'utf8')).toBe('keep\n');
+      expect(version(tree)).toBe('1.2.3');
+    });
+
+    test('--version and --no-backup need --upgrade', () => {
+      const r = spawnSync('sh', [path.join(tree, 'deploy/install.sh'), '--no-backup'], { input: '', encoding: 'utf8', env });
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toContain('only apply to --upgrade');
+    });
+  });
+
+  describe('nethelper-admin upgrade', () => {
+    beforeEach(() => {
+      // "root", and the host tools the upgrade drives
+      fs.writeFileSync(path.join(tmp, 'bin/id'), '#!/bin/sh\necho 0\n', { mode: 0o755 });
+      fs.writeFileSync(path.join(tmp, 'bin/npm'), LOGGING_TOOL('npm', '[ -z "${FAKE_NPM_FAIL:-}" ] || { echo "npm ERR! boom"; exit 1; }'), { mode: 0o755 });
+      fs.writeFileSync(path.join(tmp, 'bin/npx'), LOGGING_TOOL('npx'), { mode: 0o755 });
+      fs.writeFileSync(path.join(tmp, 'bin/systemctl'), LOGGING_TOOL('systemctl'), { mode: 0o755 });
+      fs.writeFileSync(path.join(tmp, 'backend.env'), 'PORT=3055\n');
+    });
+    const upgrade = (args = [], extraEnv = {}) =>
+      spawnSync('sh', [path.join(tree, 'deploy/systemd/nethelper-admin'), 'upgrade', '--no-backup', ...args], {
+        input: '',
+        encoding: 'utf8',
+        env: { ...env, NETHELPER_HOME: tree, NETHELPER_ENV: path.join(tmp, 'backend.env'), NETHELPER_HEALTH_TIMEOUT: '0', ...extraEnv },
+      });
+
+    test('prepares the new tree, stops, swaps, starts and waits for health', () => {
+      const r = upgrade();
+      expect(r.stderr).toBe('');
+      expect(r.status).toBe(0);
+      expect(version(tree)).toBe('1.3.0');
+      expect(version(`${tree}.previous`)).toBe('1.2.3');
+      expect(leftovers()).toEqual([]);
+      expect(lines(toolLog)).toEqual([
+        'npm ci --omit=dev --no-audit --no-fund',
+        'npx prisma generate',
+        'systemctl is-active --quiet nethelper-backend',
+        'systemctl stop nethelper-backend',
+        'systemctl start nethelper-backend',
+      ]);
+      expect(lines(path.join(tmp, 'curl.log')).pop()).toBe('http://127.0.0.1:3055/health/ready');
+      // The unit file differs between the two releases; the others don't
+      expect(r.stdout).toContain(`${tree}/deploy/systemd/nethelper-backend.service`);
+      expect(r.stdout).not.toContain(`${tree}/deploy/nginx/nethelper.conf`);
+    });
+
+    test('a dependency install that fails leaves the running tree alone', () => {
+      const r = upgrade([], { FAKE_NPM_FAIL: '1' });
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toContain('npm ERR! boom');
+      expect(r.stderr).toContain('nothing was changed');
+      expect(version(tree)).toBe('1.2.3');
+      expect(lines(toolLog).some((l) => l.startsWith('systemctl'))).toBe(false);
+      expect(leftovers()).toEqual([]);
+    });
+
+    test('a service that does not come up healthy gets the way back', () => {
+      const r = upgrade([], { FAKE_HEALTH_FAIL: '1' });
+      expect(r.status).toBe(1);
+      expect(r.stdout).toContain('NetHelper 1.3.0 did not come up healthy');
+      expect(r.stdout).toContain('systemctl stop nethelper-backend');
+      expect(r.stdout).toContain('002_more');
+      expect(r.stdout).toContain('journalctl -u nethelper-backend');
+    });
+
+    test('refuses a git checkout and needs root', () => {
+      fs.mkdirSync(path.join(tree, '.git'));
+      let r = upgrade();
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toContain('git checkout');
+      fs.rmSync(path.join(tree, '.git'), { recursive: true });
+
+      fs.writeFileSync(path.join(tmp, 'bin/id'), '#!/bin/sh\necho 1000\n', { mode: 0o755 });
+      r = upgrade();
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toContain('run as root');
+    });
   });
 });

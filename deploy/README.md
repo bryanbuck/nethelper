@@ -12,10 +12,10 @@ Both were installed from this runbook on clean Debian 13 (trixie) VMs on 2026-10
 **Getting the code.** Clone the repository (`git clone … /opt/nethelper`) or unpack a release tarball there. Every command below runs from that tree. Each release on GitHub has `nethelper-<version>.tar.gz` (the source plus a prebuilt UI, so bare metal skips the frontend build) and its checksum:
 
 ```sh
-base=https://github.com/bryanbuck/nethelper/releases/download/v0.9.0
-curl -fLO "$base/nethelper-0.9.0.tar.gz" -fLO "$base/nethelper-0.9.0.tar.gz.sha256"
-sha256sum -c nethelper-0.9.0.tar.gz.sha256
-tar xzf nethelper-0.9.0.tar.gz && mv nethelper-0.9.0 /opt/nethelper
+base=https://github.com/bryanbuck/nethelper/releases/download/v0.9.1-beta.1
+curl -fLO "$base/nethelper-0.9.1-beta.1.tar.gz" -fLO "$base/nethelper-0.9.1-beta.1.tar.gz.sha256"
+sha256sum -c nethelper-0.9.1-beta.1.tar.gz.sha256
+tar xzf nethelper-0.9.1-beta.1.tar.gz && mv nethelper-0.9.1-beta.1 /opt/nethelper
 ```
 
 Either way, the browser talks to one origin: nginx serves the SPA and proxies `/api` and `/socket.io` to the backend. You don't need `CORS_ORIGINS` unless the UI is served from somewhere else.
@@ -24,13 +24,14 @@ Files in this directory:
 
 | File | Purpose |
 |---|---|
-| `install.sh` | Compose installer and upgrader (see Quick start) |
+| `install.sh` | Compose installer and upgrader (see Quick start; `--upgrade` in [Upgrading](#upgrading)) |
+| `upgrade-lib.sh` | Shared by the two upgrade commands: fetch and check a release, swap the trees |
 | `docker-compose.yml` | Postgres 15, Redis 7, backend, frontend (nginx) |
 | `docker-compose.host-network.yml` | Optional override for L2 discovery (MAC addresses) |
 | `.env.example` | Compose settings and secrets → copy to `.env` |
 | `systemd/nethelper-backend.service` | Bare-metal backend unit (sandboxed) |
 | `systemd/backend.env.example` | Bare-metal settings template → `/etc/nethelper/backend.env` |
-| `systemd/nethelper-admin` | Bare-metal helper: writes that file, runs the user and key-rotation scripts as the service user |
+| `systemd/nethelper-admin` | Bare-metal helper: writes that file, runs the user, key-rotation and restore scripts as the service user, and upgrades the install |
 | `nginx/nethelper.conf` | Bare-metal nginx site with TLS |
 
 The images are built from `backend/Dockerfile` and `frontend/Dockerfile` (nginx config in `frontend/nginx/`). Each release also publishes them to GHCR.
@@ -416,7 +417,40 @@ record every event twice. Live-monitoring settings are in
 
 ## Upgrading
 
-Migrations run automatically on start in both setups. Take a backup first (Settings → App Backup → Run now): migrations are forward-only.
+Admins see when a newer release is out: on the System Status page and next to the version at the right of the status bar (a daily look at this project's public release list on GitHub; `UPDATE_CHECK_ENABLED=false` turns it off). NetHelper never updates itself: upgrading is a command on the server.
+
+Migrations run automatically on start in both setups, and they are forward-only, so every upgrade starts with a backup.
+
+### One command (an install from a release tarball)
+
+```sh
+# Docker Compose, from the tree's deploy folder
+./install.sh --upgrade
+
+# Bare metal, as root
+nethelper-admin upgrade
+```
+
+Both do the same things, in this order, and change nothing until the swap:
+
+1. Find the newest release (or `--version 0.9.2` for a particular one), download it next to the current tree and check it against its published checksum.
+2. Bare metal only: install the backend's dependencies in the new tree.
+3. Take an application backup with your Settings → App Backup settings (`--no-backup` skips it; a backup that fails stops the upgrade).
+4. Swap the trees. The path stays the same and the old tree is kept as `<tree>.previous` (one is kept; the next upgrade replaces it). Docker carries over `deploy/.env` and `deploy/docker-compose.override.yml`; anything else you added to the old tree stays in `<tree>.previous`.
+5. Start the new version and wait until it is healthy: Docker runs the new release's `install.sh` (pulls or builds, restarts), bare metal restarts `nethelper-backend`.
+
+Notes:
+
+- If the new version doesn't come up, nothing is rolled back for you. The command prints where the old tree and the backup are, and whether the new release has database migrations: without any, swapping the trees back is enough; with them, restore the backup first ([Backup and restore](#backup-and-restore)).
+- A release older than the installed one is refused.
+- Bare metal: the command lists the unit, nginx site and security-headers files when the release changed them, since your install has its own copies. It never overwrites those.
+- Docker: a `NETHELPER_VERSION` line in `deploy/.env` would keep the old images, so the command refuses to run until it is deleted.
+- A host without internet access can point the command at a mirror: `NETHELPER_RELEASE_BASE` (a URL holding `v<version>/nethelper-<version>.tar.gz` and its `.sha256`) together with `--version`.
+- The command first shipped after 0.9.0, so the upgrade *from* 0.9.0 (or a beta) is still by hand, below.
+
+### By hand (a git checkout, or an install older than the upgrade command)
+
+Take a backup first (Settings → App Backup → Run now).
 
 From a release tarball, unpack the new release next to the old tree and swap them. With Docker Compose, copy `deploy/.env` (and `deploy/docker-compose.override.yml`, if you have one) into the new tree first: they live in the tree.
 

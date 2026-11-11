@@ -25,6 +25,7 @@ const deviceEvents = require('./src/services/device-events.service');
 const liveViewService = require('./src/services/live/live-view.service');
 const alertService = require('./src/services/alert.service');
 const systemStatusService = require('./src/services/system-status.service');
+const updateCheckService = require('./src/services/update-check.service');
 const automationTriggers = require('./src/services/automation/trigger.service');
 const notificationChannels = require('./src/services/notification-channel.service');
 const automationSchedules = require('./src/services/automation/schedule.service');
@@ -86,6 +87,8 @@ async function startServer() {
     alertService.start();
     // In-memory samples for the System Status page
     systemStatusService.start();
+    // Daily look for a newer release (UPDATE_CHECK_ENABLED)
+    updateCheckService.start();
     automationTriggers.start();
     automationSchedules.start();
     // Email/webhook notifications for alerts opening and resolving
@@ -120,6 +123,7 @@ async function startServer() {
       notificationChannels.stop();
       alertService.stop();
       systemStatusService.stop();
+      updateCheckService.stop();
       // io.close() disconnects WebSocket clients and closes the HTTP server;
       // plain server.close() would wait on those long-lived connections.
       await new Promise((resolve) => io.close(() => resolve()));

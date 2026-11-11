@@ -185,3 +185,46 @@ describe('boot images are stored on the device row', () => {
     await expect(poller.firmwarePoller(device, credentials)).resolves.toMatchObject({ booted_image: 'primary' });
   });
 });
+
+describe('Cisco IOS over SSH (live 3560E show version)', () => {
+  const showVersion = require('fs').readFileSync(
+    require('path').join(__dirname, '../fixtures/ios-live/show-version.txt'), 'utf8');
+  const ios = { id: 'c1', name: 'Switch1', type: 'switch', vendor: 'cisco', platform: 'ios-xe', managementMode: 'direct', ipAddress: '10.0.0.9', model: 'Unknown' };
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockDeviceUpdate.mockImplementation(async () => ({}));
+    sshDeviceService.getVersion.mockResolvedValue(showVersion);
+  });
+
+  test('the version keeps its parentheses', () => {
+    expect(poller.parseVersionFromText(showVersion)).toBe('15.0(1)SE2');
+  });
+
+  test('a hand-added switch gets its firmware, model, serial and MAC from the first poll', async () => {
+    const result = await poller.systemPoller(ios, credentials);
+    expect(result).toMatchObject({ transport: 'ssh', hostname: 'Switch1', platform_name: 'WS-C3560E-24PD-S', software_version: '15.0(1)SE2' });
+    expect(mockDeviceUpdate.mock.calls.map((c) => c[0].data)).toEqual([
+      { firmwareVersion: '15.0(1)SE2' },
+      { model: 'WS-C3560E-24PD-S', macAddress: 'a8:b1:d4:00:11:00', serial: 'FDO0000X11' },
+    ]);
+  });
+
+  test('values already on the row are never overwritten', async () => {
+    await poller.firmwarePoller({ ...ios, model: 'C3560E', serial: 'TYPED', macAddress: 'aa:aa:aa:aa:aa:aa', firmwareVersion: '15.0(1)SE2' }, credentials);
+    expect(mockDeviceUpdate).not.toHaveBeenCalled();
+  });
+
+  test('a serial another row already has is left out; the rest is kept', async () => {
+    mockDeviceUpdate
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(new Error('Unique constraint failed on the fields: (`serial`)'));
+    await expect(poller.systemPoller(ios, credentials)).resolves.toMatchObject({ software_version: '15.0(1)SE2' });
+    expect(mockDeviceUpdate.mock.calls[2][0].data).toEqual({ model: 'WS-C3560E-24PD-S', macAddress: 'a8:b1:d4:00:11:00' });
+  });
+
+  test('other SSH platforms are not touched', async () => {
+    sshDeviceService.getVersion.mockResolvedValue('Software revision WC.16.11.0015');
+    await poller.systemPoller({ ...ios, vendor: 'aruba', platform: 'aos-s', firmwareVersion: 'WC.16.11.0015' }, credentials);
+    expect(mockDeviceUpdate).not.toHaveBeenCalled();
+  });
+});

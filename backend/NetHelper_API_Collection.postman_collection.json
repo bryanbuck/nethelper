@@ -3074,7 +3074,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"<string>\",\n  \"type\": \"switch\",\n  \"deviceId\": \"<uuid>\",\n  \"username\": \"<string>\",\n  \"password\": \"\",\n  \"apiKey\": \"\",\n  \"apiSecret\": \"\",\n  \"notes\": \"<string>\",\n  \"metadata\": {}\n}"
+              "raw": "{\n  \"name\": \"<string>\",\n  \"type\": \"switch\",\n  \"deviceId\": \"<uuid>\",\n  \"username\": \"<string>\",\n  \"password\": \"\",\n  \"apiKey\": \"\",\n  \"apiSecret\": \"\",\n  \"enableSecret\": \"\",\n  \"notes\": \"<string>\",\n  \"metadata\": {}\n}"
             },
             "description": "Required: name, type."
           },
@@ -3109,7 +3109,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"<string>\",\n  \"type\": \"switch\",\n  \"deviceId\": \"<uuid>\",\n  \"username\": \"<string>\",\n  \"password\": \"\",\n  \"apiKey\": \"\",\n  \"apiSecret\": \"\",\n  \"notes\": \"<string>\",\n  \"metadata\": {}\n}"
+              "raw": "{\n  \"name\": \"<string>\",\n  \"type\": \"switch\",\n  \"deviceId\": \"<uuid>\",\n  \"username\": \"<string>\",\n  \"password\": \"\",\n  \"apiKey\": \"\",\n  \"apiSecret\": \"\",\n  \"enableSecret\": \"\",\n  \"notes\": \"<string>\",\n  \"metadata\": {}\n}"
             }
           },
           "response": []
@@ -3678,6 +3678,52 @@
               "path": [
                 "system"
               ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /system/update",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/system/update",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "system",
+                "update"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /system/update/check",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/system/update/check",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "system",
+                "update",
+                "check"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
             }
           },
           "response": []

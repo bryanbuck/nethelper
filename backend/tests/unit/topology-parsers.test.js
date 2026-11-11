@@ -250,4 +250,54 @@ Management Addresses:
     expect(ios.parseCdpDetail('% CDP is not enabled')).toEqual([]);
     expect(ios.parseLldpDetail('% LLDP is not enabled')).toEqual([]);
   });
+  describe('on real hardware (3560E, IOS 15.0(1)SE2)', () => {
+    const live = (name) => fs.readFileSync(path.join(__dirname, '../fixtures/ios-live', name), 'utf8');
+
+    test('LLDP detail has no "Local Intf" line: the local port comes from the summary table', () => {
+      const detail = live('show-lldp-neighbors-detail.txt');
+      expect(detail).not.toMatch(/Local Intf/);
+      expect(ios.parseLldpDetail(detail)).toEqual([]);
+      expect(ios.parseLldpDetail(detail, live('show-lldp-neighbors.txt'))).toEqual([
+        expect.objectContaining({
+          localPort: 'Te0/1', portId: '1/1/25', portDesc: 'Trunk to Switch1', sysName: 'sw-core1',
+          sysDesc: 'HPE ANW JL666A  FL.10.16.1006', mac: 'e4:de:40:00:22:80', mgmtIp: '10.0.255.1',
+          capabilities: ['bridge', 'router'], protocol: 'lldp',
+        }),
+      ]);
+    });
+
+    test('the summary table is read by column, so a 20-character Device ID still splits', () => {
+      const table = [
+        'Device ID           Local Intf     Hold-time  Capability      Port ID',
+        'a-very-long-switch-nGi0/1          120        B,R             Gi1/0/24',
+        'ap-lobby            Gi0/2          120        W               0011.2233.4455',
+        '',
+        'Total entries displayed: 2',
+      ].join('\n');
+      expect(ios.parseLldpSummary(table)).toEqual([
+        { deviceId: 'a-very-long-switch-n', localPort: 'Gi0/1', portId: 'Gi1/0/24' },
+        { deviceId: 'ap-lobby', localPort: 'Gi0/2', portId: '0011.2233.4455' },
+      ]);
+      const detail = `------------------------------------------------
+Chassis id: 0011.2233.0001
+Port id: Gi1/0/24
+System Name: a-very-long-switch-name.example.com
+`;
+      expect(ios.parseLldpDetail(detail, table)[0]).toMatchObject({ localPort: 'Gi0/1' });
+    });
+
+    test('two neighbors the summary cannot tell apart get no local port', () => {
+      const table = [
+        'Device ID           Local Intf     Hold-time  Capability      Port ID',
+        'phone               Gi0/1          120        T               Port 1',
+        'phone               Gi0/2          120        T               Port 1',
+      ].join('\n');
+      const detail = '------------------------------------------------\nChassis id: 0011.2233.0001\nPort id: Port 1\nSystem Name: phone\n';
+      expect(ios.parseLldpDetail(detail, table)).toEqual([]);
+    });
+
+    test('CDP with no neighbors prints nothing', () => {
+      expect(ios.parseCdpDetail('')).toEqual([]);
+    });
+  });
 });

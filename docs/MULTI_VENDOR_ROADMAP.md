@@ -1,6 +1,6 @@
 # Multi-Vendor Support Roadmap — Juniper & Cisco
 
-**Status**: Phases 0–2 shipped (2026-07-12; first hardware contact 2026-10-19, released in the 0.9 betas): Aruba Central, Juniper Mist, AOS-CX REST, AOS-S SSH, Junos NETCONF/SSH. Phases 3–4 (Cisco Meraki, Catalyst) not started. Sections 8b–8f record the architecture built on top since. Updated 2026-11-09.
+**Status**: Phases 0–2 shipped (2026-07-12; first hardware contact 2026-10-19, released in the 0.9 betas): Aruba Central, Juniper Mist, AOS-CX REST, AOS-S SSH, Junos NETCONF/SSH. Phase 4 (Cisco IOS / IOS-XE direct over SSH) built and first run on hardware 2026-11-11. Phase 3 (Cisco Meraki) not started on master. Sections 8b–8f record the architecture built on top since. Updated 2026-11-11.
 **Scope**: Extend NetHelper beyond Aruba to Juniper (Mist cloud + Junos direct) and Cisco (Meraki Dashboard + Catalyst direct via SSH, RESTCONF optional).
 **MVP bar per new vendor**: inventory sync + status, config backup, connection testing. Polling and automation come later.
 
@@ -230,7 +230,7 @@ const TRANSPORT_MATRIX = {
 
 ~~**SSH is the MVP transport for both.**~~ **Superseded by what Phase 2 actually built.** The original call was: SSH-only, defer NETCONF because the npm libraries are stale. That was reconsidered and reversed — see Phase 2 below. In short: we don't need a library (NETCONF is an XML RPC over an ssh2 subsystem, and ssh2 is already a dependency), and CLI screen-scraping is fragile in a way NETCONF's explicit message framing simply isn't. **Junos now uses NETCONF as its primary transport, with the SSH CLI as an automatic fallback** for devices that haven't enabled it.
 
-Cisco Catalyst (Phase 4) is still planned as SSH-first: RESTCONF needs YANG handling and is commonly disabled in the field, and unlike NETCONF-on-Junos there is no equally clean structured alternative. Revisit if Catalyst devices in practice have it enabled.
+Cisco IOS / IOS-XE (Phase 4) is SSH-only, by choice: see Phase 4 below for the options that were weighed.
 
 ## 6. SSH profiles
 
@@ -249,7 +249,7 @@ junos: {
 },
 ```
 
-`resolveProfile()` already checks `metadata.sshProfile` override then `detectPlatform()` — once `detectPlatform` returns `junos`/`ios-xe` from the platform field, map `ios-xe → 'cisco-ios'` and this is done. Watch item: Catalyst `enable` handling if creds aren't priv-15 — defer until it bites, then add optional `enableSecret` to `ApiCredential.metadata`.
+`resolveProfile()` already checks `metadata.sshProfile` override then `detectPlatform()` — once `detectPlatform` returns `junos`/`ios-xe` from the platform field, map `ios-xe → 'cisco-ios'` and this is done. Catalyst `enable` handling shipped with Phase 4 as an encrypted `ApiCredential.enableSecret` column (not `metadata`, which isn't encrypted).
 
 ## 7. Frontend
 
@@ -329,10 +329,30 @@ The deciding argument was correctness, not elegance. Screen-scraping an interact
 - **Config backup = settings snapshot** — Meraki exposes no running-config. Serialize a defined set of API-readable settings (start minimal: device attributes, switch ports, wireless SSIDs, L3 firewall rules) to stable canonical JSON, stored through the same backup pipeline (`format: 'meraki-settings-json'`), labeled honestly in the UI ("settings snapshot, not running-config").
 - **Verify**: inventory/status sync; snapshot backups diff meaningfully when a dashboard setting changes; UI labels the backup type correctly.
 
-### Phase 4 — Cisco Catalyst direct (SSH; RESTCONF optional) — not started
+### Phase 4 — Cisco IOS / IOS-XE direct (SSH) — built 2026-11-11
 
-- `cisco-ios` SSH profile; `cisco/ios-xe` matrix row; manual add + test + backup. Optional: `catalyst-api.js` RESTCONF for structured status where enabled.
-- **Verify**: same as Phase 2 against a Catalyst; enable-mode edge case documented or handled.
+One platform id (`ios-xe`, labelled "IOS / IOS-XE") and one SSH profile serve classic IOS and IOS-XE: `terminal length 0`, `show running-config`, `show version`, `show cdp neighbors detail`, `show lldp neighbors detail` + `show lldp neighbors` behave the same from IOS 12.2 to IOS-XE 17, so there are no version switches. Matrix row `cisco/ios-xe`: config, test, poll and topology over `ssh`.
+
+**Why SSH only.** The goal was the widest reach with nothing to enable on the switch:
+
+| Option | Exists on | Needs | Decision |
+|---|---|---|---|
+| SSH CLI | IOS 12.2+ (crypto image), 15.x, every IOS-XE | SSH and a login | **Used.** Config as pasteable text, version/model/serial, CDP/LLDP, and later port/PoE state and MAC/ARP tables |
+| NETCONF-YANG | IOS-XE 16.3+ only (Catalyst 3650/3850/9000) | `netconf-yang`, privilege 15, port 830 | Not used. `netconf-client.js` could speak it, but the CLI text is what people restore from, and it would cover only part of the fleet. Revisit for structured state if testers have it enabled |
+| RESTCONF | IOS-XE 16.6+ only | `restconf` + `ip http secure-server` | Not used; same data as NETCONF |
+| gNMI / model-driven telemetry | IOS-XE 16.8+ | Service + certificates | Rejected for setup cost (see "Why not streaming telemetry" below) |
+| SNMP | Everything | A community or v3 user | Deferred. No config, but the cheapest way to counters and port state on classic IOS; it would be a new transport, credential type and dependency for every vendor |
+| Legacy `netconf ssh`, HTTP exec, Telnet | Some classic IOS | Extra config, weak or no encryption | No |
+
+**What IOS needed beyond the generic CLI path** (`utils/ios-cli.js`, `docs/hardware/IOS_NOTES.md`):
+- `cleanIosConfig()` drops the header and the lines that change by themselves (`Current configuration : N bytes`, `! Last configuration change at …`, `! NVRAM config last updated at …`, `ntp clock-period`), so an unchanged switch hashes the same on every backup.
+- Privilege: `driveShell` takes an optional `elevate` step (profile `elevate: 'enable'`, used only when the credential has an `enableSecret` and the first prompt ends in `>`); a refused secret is `ENABLE_REFUSED`. `assertIosConfigReadable` refuses the near-empty config a privilege 2–14 login gets without an error.
+- `parseShowVersion()`: version with its parentheses (`15.0(1)SE2`), and model, serial and base MAC, which the firmware/system poll writes to the row where they are empty (`recordIdentity`) and the merge flow reads as the device's own answer (`device-identity.service.js`).
+- LLDP: older IOS has no `Local Intf` line in the detail, so the summary table is read in the same session and joined by remote port and name.
+
+**Verified** on a 3560E, IOS 15.0(1)SE2, privilege-15 login: SSH negotiation, connection test, config read stable across reads, version and identity, LLDP neighbor on the right local port. **Not yet verified on hardware:** IOS-XE, the `enable` path, a restricted login, CDP neighbors.
+
+**Next, each its own decision:** live port/PoE state over the monitor's `poll` mode (`show interfaces status`, `show power inline`; needs a held-open shell so the switch isn't logged into every interval), MAC/ARP reads for Port Identity, SNMP, and tagging discovered hosts by their `SSH-…-Cisco-…` banner (there is no Cisco OUI list).
 
 ### Post-MVP (explicitly out of scope above)
 
@@ -445,7 +465,7 @@ Cisco) is on by default, and the reads use the access NetHelper already has.
 | AOS-CX | device REST (also under Central) | `GET system/interfaces/*/lldp_neighbors?depth=2`, identity from `GET system?attributes=hostname,system_mac` |
 | Junos | NETCONF, SSH fallback | `<get-lldp-neighbors-information/>` + `<get-lldp-local-info/>`; CLI `show lldp neighbors` |
 | AOS-S | SSH | `show lldp info remote-device detail`, `show lldp info local-device` |
-| IOS-XE | SSH | `show cdp neighbors detail` + `show lldp neighbors detail` |
+| IOS / IOS-XE | SSH | `show cdp neighbors detail` + `show lldp neighbors detail` with `show lldp neighbors` (older IOS names the local port only in the summary) |
 | Cloud (Mist) | provider `listNeighbors()`, once per run | `/orgs/:id/stats/devices?type=all&fields=…,lldp_stat,lldp_stats` (AP uplinks) + `/orgs/:id/stats/ports/search?neighbor_mac=*` (switch ports) |
 | Cloud (Central) | provider `listNeighbors()`, once per run | `/network-monitoring/v1/topology/{site-id}` per site (v1 only; v1alpha1 is 404) |
 

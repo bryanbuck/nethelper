@@ -10,6 +10,7 @@
 #   nethelper-admin users create-admin --email you@example.com --name "Your Name"
 #   OLD_ENCRYPTION_KEY='<old key>' nethelper-admin rotate-key [--dry-run]
 #   nethelper-admin restore /var/lib/nethelper/app-backups/<archive> [--dry-run]
+#   nethelper-admin upgrade [--version VERSION] [--no-backup] [--yes]
 #
 # Paths follow deploy/README.md; override with NETHELPER_HOME (code),
 # NETHELPER_ENV (settings file) and NETHELPER_USER (service user).
@@ -39,6 +40,13 @@ Usage: nethelper-admin <command> [args]
                         or --key-out) and starts it again. An encrypted archive's
                         passphrase comes from NETHELPER_BACKUP_PASSPHRASE, else
                         a prompt. The archive must be readable by $NETHELPER_USER.
+  upgrade [--version VERSION] [--no-backup] [--yes]
+                        Upgrade an install from a release tarball to the newest
+                        release (or VERSION): download and check it next to
+                        $NETHELPER_HOME, install its dependencies, take an
+                        application backup, stop nethelper-backend, swap the
+                        trees (the old one is kept as $NETHELPER_HOME.previous),
+                        start it (which migrates) and wait until it is healthy.
 EOF
 }
 
@@ -135,6 +143,134 @@ restore() {
   return "$status"
 }
 
+# Upgrade a release-tarball install. Run by the release being replaced, so it
+# only fetches, prepares, backs up and swaps; the new tree's unit start migrates.
+upgrade() {
+  version_opt=
+  no_backup=
+  assume_yes=
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --version) [ $# -ge 2 ] || die "--version needs a value"; version_opt=$2; shift ;;
+      --version=*) version_opt=${1#*=} ;;
+      --no-backup) no_backup=1 ;;
+      -y|--yes) assume_yes=1 ;;
+      *) die "usage: nethelper-admin upgrade [--version VERSION] [--no-backup] [--yes]" ;;
+    esac
+    shift
+  done
+
+  [ "$(id -u)" -eq 0 ] || die "run as root (it replaces $NETHELPER_HOME and restarts the service)"
+  lib="$NETHELPER_HOME/deploy/upgrade-lib.sh"
+  [ -f "$lib" ] || die "not found: $lib (set NETHELPER_HOME)"
+  # shellcheck disable=SC1090 # the tree is chosen at run time
+  . "$lib"
+  [ ! -e "$NETHELPER_HOME/.git" ] || die "$NETHELPER_HOME is a git checkout, not a release tarball: upgrade it with git pull and the steps in deploy/README.md, \"Upgrading\""
+  command -v npm >/dev/null 2>&1 || die "npm not found"
+  tree=$(cd "$NETHELPER_HOME" && pwd -P)
+  parent=$(dirname "$tree")
+  current=$(cat "$tree/VERSION" 2>/dev/null || true)
+  [ -n "$current" ] || die "$tree/VERSION is missing: can't tell which version this tree is"
+  up_check_previous "$tree"
+
+  work=$(mktemp -d "$parent/.nethelper-upgrade.XXXXXX")
+  trap 'rm -rf "$work"' EXIT
+  if [ -n "$version_opt" ]; then
+    target=${version_opt#v}
+    up_check_version "$target"
+  else
+    target=$(up_latest_version "$work")
+  fi
+  if [ "$target" = "$current" ]; then
+    echo "This install is already NetHelper $current; nothing to do."
+    exit 0
+  fi
+  echo "Installed: $current    New: $target"
+  up_fetch_release "$target" "$work"
+  new="$work/nethelper-$target"
+  up_refuse_downgrade "$tree" "$new"
+  migrations=$(up_added_migrations "$tree" "$new")
+  [ -f "$new/frontend/dist/index.html" ] || die "nethelper-$target.tar.gz has no prebuilt UI (frontend/dist)"
+
+  # Everything that can fail slowly happens in the new tree, before the running one is touched.
+  echo "Installing the backend's dependencies in the new tree (a minute or two)"
+  (cd "$new/backend" \
+    && NPM_CONFIG_UPDATE_NOTIFIER=false npm ci --omit=dev --no-audit --no-fund \
+    && CHECKPOINT_DISABLE=1 npx prisma generate) >"$work/npm.log" 2>&1 \
+    || { tail -n 30 "$work/npm.log" >&2; die "couldn't install the new release's dependencies (the end of the log is above); nothing was changed"; }
+  if [ -f "$tree/backend/.env" ]; then cp -p "$tree/backend/.env" "$new/backend/.env"; fi
+  chown -R "$(stat -c '%u:%g' "$tree")" "$new"
+
+  if [ -z "$assume_yes" ] && [ -t 0 ] && [ -t 1 ]; then
+    printf 'Upgrade NetHelper %s to %s now? It will be down for a minute or two. [Y/n] ' "$current" "$target"
+    read -r answer || answer=
+    case "${answer:-y}" in [Yy]*) ;; *) echo "Stopped; nothing was changed."; exit 0 ;; esac
+  fi
+
+  archive=
+  if [ -n "$no_backup" ]; then
+    echo "Backup skipped (--no-backup)."
+  else
+    echo "Taking an application backup first, with the settings from Settings -> App Backup."
+    if backup_output=$( (run_script app-backup.js) ); then
+      archive=$(printf '%s\n' "$backup_output" | sed -n 's/^archive: //p' | tail -n 1)
+      echo "Backup written: ${archive:-(name not reported)}"
+    else
+      die "the backup failed (its error is above), so nothing was changed. Fix it, or run again with --no-backup if you already have a backup."
+    fi
+  fi
+
+  was_active=
+  if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet nethelper-backend; then
+    echo "Stopping nethelper-backend"
+    systemctl stop nethelper-backend
+    was_active=1
+  fi
+  up_swap_trees "$tree" "$new"
+  echo "$tree is now $target; $current is kept at $tree.previous."
+
+  # Files the install copied out of the tree: say which ones this release changed.
+  changed=
+  for file in deploy/systemd/nethelper-backend.service deploy/nginx/nethelper.conf frontend/nginx/security-headers.conf; do
+    cmp -s "$tree.previous/$file" "$tree/$file" 2>/dev/null || changed="$changed $file"
+  done
+
+  healthy=1
+  if [ -n "$was_active" ]; then
+    echo "Starting nethelper-backend (it applies database migrations first)"
+    systemctl start nethelper-backend || healthy=
+    if [ -n "$healthy" ]; then
+      port=$(sed -n 's/^PORT=//p' "$NETHELPER_ENV" 2>/dev/null | tail -n 1)
+      bind=$(sed -n 's/^BIND_ADDRESS=//p' "$NETHELPER_ENV" 2>/dev/null | tail -n 1)
+      case "$bind" in ''|0.0.0.0) bind=127.0.0.1 ;; esac
+      url="http://$bind:${port:-3000}/health/ready"
+      echo "Waiting for $url (up to ${NETHELPER_HEALTH_TIMEOUT:-180} seconds)..."
+      deadline=$(( $(date +%s) + ${NETHELPER_HEALTH_TIMEOUT:-180} ))
+      until up_http_ok "$url"; do
+        if [ "$(date +%s)" -ge "$deadline" ]; then healthy=; break; fi
+        sleep 3
+      done
+    fi
+  fi
+  if [ -z "$healthy" ]; then
+    up_rollback_help "$tree" "$current" "$target" "$archive" "$migrations" \
+      "systemctl start nethelper-backend" "systemctl stop nethelper-backend"
+    echo "The service's log: journalctl -u nethelper-backend -n 50"
+    exit 1
+  fi
+
+  echo
+  echo "Upgraded to NetHelper $target."
+  [ -n "$was_active" ] || echo "- nethelper-backend wasn't running, so it wasn't started: systemctl start nethelper-backend"
+  echo "- The $current tree is kept at $tree.previous; delete it once you're happy with $target."
+  if [ -n "$changed" ]; then
+    echo "- This release changed files your install has copies of. Compare and copy what you need"
+    echo "  (deploy/README.md, \"Bare metal\"), then reload systemd or nginx:"
+    for file in $changed; do echo "    $tree/$file"; done
+  fi
+  exit 0
+}
+
 [ $# -gt 0 ] || { usage >&2; exit 2; }
 command=$1; shift
 case "$command" in
@@ -142,6 +278,7 @@ case "$command" in
   users) run_script user-manager.js "$@" ;;
   rotate-key) run_script rotate-encryption-key.js "$@" ;;
   restore) restore "$@" ;;
+  upgrade) upgrade "$@" ;;
   -h|--help|help) usage ;;
   *) usage >&2; die "unknown command: $command" ;;
 esac

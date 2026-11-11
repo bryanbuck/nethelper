@@ -2,7 +2,7 @@
 /**
  * Re-encrypt every stored secret from an old ENCRYPTION_KEY to the current one.
  *
- * Covers ApiCredential.password/apiKey/apiSecret, the secret fields inside
+ * Covers ApiCredential.password/apiKey/apiSecret/enableSecret, the secret fields inside
  * CloudIntegration.credentials (per constants/vendors.js), and the secret
  * fields inside GitBackupConfig.credentials (per git-backup.service.js).
  *
@@ -25,7 +25,7 @@ const { CLOUD_PROVIDERS } = require('../src/constants/vendors');
 
 // The fallback utils/encryption.js used before 2026-09 when ENCRYPTION_KEY was unset.
 const LEGACY_DEFAULT_KEY = 'default-key-change-this-in-production-for-security';
-const API_CREDENTIAL_FIELDS = ['password', 'apiKey', 'apiSecret'];
+const API_CREDENTIAL_FIELDS = ['password', 'apiKey', 'apiSecret', 'enableSecret'];
 // Mirrors GIT_CREDENTIAL_FIELDS in git-backup.service.js. Kept literal so this
 // script doesn't need the service (and its Prisma/Redis wiring) loaded.
 const GIT_SECRET_FIELDS = ['token'];

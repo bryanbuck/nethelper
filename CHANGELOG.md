@@ -4,8 +4,24 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ## [Unreleased]
 
+## [0.9.1-beta.1] — 2026-11-11
+
+The first beta of 0.9.1, for early testing: Cisco IOS switches, an update notice with a one-command upgrade for later releases, and fixes found after 0.9.0. Installs on 0.9.0 are not told about it (the update notice offers betas only to beta installs).
+
+### Added
+- **Update notice and a one-command upgrade.** Admins now see when a newer release is out: next to the version at the right of the status bar, and on the System Status page with a link to the release notes and the command to run. The server reads this project's public release list on GitHub once a day, anonymously and with nothing about your install in the request; `UPDATE_CHECK_ENABLED=false` turns it off. NetHelper never updates itself. On the server, `./install.sh --upgrade` (Docker Compose) and `nethelper-admin upgrade` (bare metal) move an install from a release tarball to the newest release: download and checksum the release, take an application backup, swap the trees (the old one is kept as `<tree>.previous`), restart and wait for healthy. If the new version doesn't start, the command says how to go back. The first upgrade from 0.9.0 is still by hand. See [`deploy/README.md`](deploy/README.md#upgrading).
+- `npm run app:backup` (`backend/scripts/app-backup.js`) takes an application backup from the command line with the saved App Backup settings; the upgrade commands use it.
+- **Cisco IOS and IOS-XE switches, managed directly over SSH**: connection test, config backups with diffs and schedules, firmware/model/serial/MAC from `show version`, and CDP/LLDP neighbors on the Network Map. One SSH path covers classic IOS and IOS-XE, with nothing to enable on the switch beyond SSH. The login must reach privilege 15; a device credential can carry an **Enable Secret** for a login that lands at `>`. First run on a Catalyst 3560E (IOS 15.0(1)SE2); IOS-XE and the enable path have not met hardware yet. See [`docs/hardware/IOS_NOTES.md`](docs/hardware/IOS_NOTES.md).
+- Add a device credential without leaving the device: **Add credential** is the first entry of the credential list in Add Device, Edit Device and the Devices page **Credential** bulk action (operators and admins), and the new credential is selected for you.
+
+### Changed
+- Devices table: the Cloud Status column shows a grey **N/A** for directly managed devices instead of a red Offline chip, since no cloud platform reports on them.
+
 ### Fixed
 - Application backup restore into the Docker Compose stack failed with `unrecognized configuration parameter "transaction_timeout"` and left the database as it was. The image's `pg_restore` 17 always writes that setting, which PostgreSQL 15 and 16 don't know. The restore now leaves out settings the server doesn't know, and its checks (also in `--dry-run`) print the server's version.
+
+### Upgrading from 0.9.0
+- One database migration (the credential Enable Secret), applied automatically when the backend starts. Take a backup first (Settings → App Backup → Run now). **Docker Compose**: run `deploy/install.sh` from the new tree (it keeps your `.env` values). **Bare metal**: follow "Upgrading" in [`deploy/README.md`](deploy/README.md). The new `./install.sh --upgrade` / `nethelper-admin upgrade` commands take over from the next release on.
 
 ## [0.9.0] — 2026-11-10
 
