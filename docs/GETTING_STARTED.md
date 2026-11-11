@@ -43,7 +43,7 @@ A cloud-managed AOS-CX or Mist-managed EX switch can be read directly too (confi
 
 ## 4. Add device credentials and test them
 
-1. **Settings → API Credentials → Add Credential**: the account from the table above. Credentials are encrypted at rest and never shown again.
+1. **Settings → API Credentials → Add Credential**: the account from the table above. Credentials are encrypted at rest and never shown again. You can also create one without leaving the device: **Add credential** is the first entry of the credential list in Add Device, Edit Device and the **Credential** bulk action, and the new credential is selected for you.
 2. On **Devices**, select the devices that use it and choose **Credential** in the bar above the table. The preview says which devices it skips (for example cloud-only APs, which NetHelper never reaches directly) and why.
 3. Run the connection test from the same dialog, or **Test Connection** on a device's page. A pass means NetHelper logged in to the device itself. A cloud-only device shows its cloud's view instead.
 

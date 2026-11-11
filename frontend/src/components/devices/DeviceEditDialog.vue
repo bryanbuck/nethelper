@@ -137,64 +137,17 @@
             </v-col>
 
             <v-col cols="12" sm="6">
-              <v-select
+              <DeviceCredentialSelect
                 v-model="form.apiCredentialId"
-                :items="availableCredentials"
-                item-title="name"
-                item-value="id"
+                :device-type="form.type"
                 label="API Credential"
-                variant="outlined"
-                prepend-inner-icon="mdi-key-variant"
                 clearable
                 :loading="loadingCredentials"
                 :hint="form.managementMode === 'cloud'
                   ? 'Optional: enables read-only local access (AOS-CX REST, Junos NETCONF: config backup, network map)'
                   : 'Select the API credentials to use for this device'"
                 persistent-hint
-              >
-                <template #item="{ props: itemProps, item }">
-                  <v-list-item
-                    v-bind="itemProps"
-                    :subtitle="`${item.raw.type} - ${item.raw.username || 'No username'}`"
-                  >
-                    <template v-if="item.raw.lastTestStatus" #append>
-                      <v-chip
-                        :color="item.raw.lastTestStatus === 'success' ? 'success' : 'error'"
-                        size="x-small"
-                        variant="flat"
-                      >
-                        {{ item.raw.lastTestStatus }}
-                      </v-chip>
-                    </template>
-                  </v-list-item>
-                </template>
-
-                <template #selection="{ item }">
-                  <div class="d-flex align-center">
-                    <span>{{ item.title }}</span>
-                    <v-chip
-                      v-if="item.raw.lastTestStatus === 'success'"
-                      color="success"
-                      size="x-small"
-                      variant="flat"
-                      class="ml-2"
-                    >
-                      Tested
-                    </v-chip>
-                  </div>
-                </template>
-
-                <template #prepend-item>
-                  <v-list-item
-                    title="Manage Credentials"
-                    prepend-icon="mdi-cog"
-                    :to="{ path: '/settings', query: { tab: 'credentials' } }"
-                    target="_blank"
-                  >
-                  </v-list-item>
-                  <v-divider class="mb-2"></v-divider>
-                </template>
-              </v-select>
+              />
 
               <v-alert
                 v-if="!form.apiCredentialId"
@@ -240,6 +193,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useNotificationsStore } from '@/stores/notifications'
 import { vendorOptions, platformOptions } from '@/models/vendors'
 import { useDeviceForm, deviceTypes, managementModeOptions, deviceFormRules } from '@/composables/useDeviceForm'
+import DeviceCredentialSelect from '@/components/devices/DeviceCredentialSelect.vue'
 
 // Edit Device dialog, used by the Devices table and the device page.
 const props = defineProps({
@@ -251,7 +205,7 @@ const emit = defineEmits(['update:modelValue', 'saved'])
 const devicesStore = useDevicesStore()
 const settingsStore = useSettingsStore()
 const notifications = useNotificationsStore()
-const { cloudIntegrationOptions, availableCredentials } = useDeviceForm()
+const { cloudIntegrationOptions } = useDeviceForm()
 
 const open = computed({
   get: () => props.modelValue,

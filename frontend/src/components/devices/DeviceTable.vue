@@ -502,7 +502,7 @@
           <v-tooltip location="bottom">
             <template #activator="{ props }">
               <v-chip
-                v-if="item.cloudStatus"
+                v-if="item.managementMode === 'cloud' && item.cloudStatus"
                 v-bind="props"
                 :color="getStatusColor(item.cloudStatus)"
                 size="small"
@@ -520,7 +520,10 @@
               </span>
             </template>
             <div class="text-caption">
-              <div v-if="item.cloudStatus">
+              <div v-if="item.managementMode !== 'cloud'">
+                Managed directly: no cloud platform reports on it
+              </div>
+              <div v-else-if="item.cloudStatus">
                 <strong>{{ cloudPlaneName(item) }} Status:</strong> {{ item.cloudStatus }}<br>
                 <span v-if="item.lastSeen">
                   <strong>Last Updated:</strong> {{ formatLastSeen(item.lastSeen) }}
