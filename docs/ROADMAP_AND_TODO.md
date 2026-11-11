@@ -19,6 +19,7 @@ Hands-on checks that need real equipment, a real host, or a browser login, which
   - Icons on the device page buttons have their gap back (#27).
   - After the Vite 8 / vue-router 5 upgrade: sign-in redirect back to the page you asked for, admin-only pages, `/schedule` and `/settings/device-api-testing` redirects, the dev server's live reload.
 - [ ] **Alert notifications, live** (item 2 below): a Test send to a real mailbox and to a Slack or Teams webhook; then unplug a ping-monitored device and check one message on open and one on resolve.
+- [ ] **Upgrade commands on real hosts** (item 18 below, added 2026-11-11; needs two published releases that both have the command, so the release after the one that ships it): `./install.sh --upgrade` on a Docker host and `nethelper-admin upgrade` on bare metal; check the backup is taken, the old tree is kept as `<tree>.previous`, and the System Status Updates card and status bar marker show the newer release beforehand and clear afterwards. Also run `shellcheck deploy/upgrade-lib.sh` once (CI does; the dev host has no shellcheck).
 - [ ] **First. `deploy/install.sh` on a real Docker host** ("Simpler install" below): a bridge install, a `--host-network` install, and a re-run as an upgrade; check that `docker compose exec -e NAME` passes the variable through. Optionally `nethelper-admin` on bare metal.
 - [ ] **VLAN overlay on hardware** (item 3a below): the CX REST reads were captured on a 6300F on 2026-11-04 (`aos-cx-live/interfaces-vlans.json`) and Central's per-switch VLANs on the 2930F and 6300F. Still open: view `/map` with the VLAN overlay and check a few ports against `show vlan` / `show interface brief`; check the Mist EX's ports, and whether a Mist trunk port lists every allowed VLAN; remove a VLAN from a CX trunk's allowed list, refresh, and check that the link turns dashed with the right port named. Note: the overlay flags Lab-Core 4 ↔ Lab-Edge1 1/1/2 (untagged 110 vs 1); check that it is intended.
 - [ ] **VXLAN overlay on hardware** (item 3a below): the reads and analysis ran live against Lab-Edge0/Edge1 (static VXLAN, VNI 110) on 2026-11-04, but the map UI has not been viewed. Pick Overlay → VXLAN on `/map` and check the tunnel, its panel, and the VNI picker (desktop and phone width). Then remove the `vtep-peer` on one side, refresh, and check that the tunnel turns amber "one side only". When EVPN gear (CX 6300+ with BGP EVPN) is available, capture `tunnel_endpoints` with `origin: evpn` and an L3 VNI.
@@ -261,7 +262,7 @@ Deferred:
 - ⏳ VLANs over Junos (`get-ethernet-switching-interface-information`, an operational RPC that may avoid the `vlans` ACCESS-DENIED config reads hit; would give a Mist EX its trunk native VLAN) and AOS-S over SSH (`show vlans ports … detail`; only for a direct AOS-S, since one under Central now reads Central). Deferred on 2026-11-04 because JNEX-01 was unreachable and the lab's only AOS-S is Central-managed: both need first contact before shipping a parser.
 - ⏳ VLAN overlay: the AP check (an SSID's VLAN not allowed on the AP's switch port), Central gateway VLANs, config-backup parsing as a fallback, a device-page Ports tab (port, mode/native/tagged, neighbor, mismatch notes), VLAN changes in the Activity feed.
 - ⏳ VXLAN overlay: Junos VTEPs over NETCONF (`get-ethernet-switching-vxlan-rvtep-info`, `get-evpn-instance-information`), Mist's `evpn_topologies` as fabric context (roles, pods; intended design, not tunnel state), Central NetConductor fabrics, EVPN BGP session state, an alert rule for a tunnel going down or one-sided, tunnel changes in the Activity feed.
-- ⏳ Run the Junos, AOS-S and IOS-XE parsers against real output and replace the spec-derived test strings with captures.
+- ⏳ Run the remaining spec-derived parsers against real output: Junos CLI, and IOS CDP detail (IOS LLDP was run on a 3560E on 2026-11-11, AOS-S on 2026-10-20).
 - ⏳ Endpoint attachment from switch MAC tables (AOS-CX `system/vlans/*/macs`), so Discovery hosts hang off their switch port, plus a "where is this MAC/IP?" search.
 - ⏳ Live link-state edges (color an edge from `device:event` port changes for live-monitored devices).
 - ⏳ Manual links and annotations for things LLDP can't see (ISP handoff, unmanaged switches).
@@ -372,8 +373,9 @@ Switch-side probe facts: `docs/hardware/AOS_CX_NOTES.md` ("Central management pr
 **Priority**: High
 **Status**: 🔨 Phases 0–2 complete (2026-07-12) — vendor abstraction + multi-cloud
 groundwork shipped (Aruba behavior unchanged), Juniper Mist live as the second cloud
-platform, and Junos devices reachable directly over NETCONF. Phases 3–4 (Meraki,
-Catalyst direct) not started.
+platform, and Junos devices reachable directly over NETCONF. Phase 4 (Cisco IOS /
+IOS-XE direct over SSH) built 2026-11-11 and first run on a 3560E; Phase 3 (Meraki)
+not started on master.
 
 Extend device support beyond Aruba to Juniper (Mist cloud + Junos direct SSH) and Cisco
 (Meraki Dashboard API + Catalyst direct SSH). MVP bar per vendor: inventory sync + status,
@@ -623,6 +625,24 @@ The primary/secondary partitions, the default image and the booted image used to
 - Partitions on other platforms: AOS-S `show flash` over SSH (only a direct AOS-S), Junos dual-root `show system snapshot` over NETCONF. Both need first contact before a parser ships.
 - Refreshing images on a schedule (e.g. with config backups, which already open a CX session); today they are as fresh as the last poll.
 - A Firmware page column or filter for "next reboot changes version" across the fleet.
+
+---
+
+### 18. Update notice and one-command upgrade
+
+**Status**: ✅ Built 2026-11-11 on `feat/upgrade-command`. Not yet run on a real host (see "Waiting on the maintainer").
+
+**Decision (2026-11-11)**: no in-app "Update" button. Replacing the running install needs root on the host (the Docker socket, or a root helper started from the web UI), and it would fail exactly when there is no UI left to report it. The app only says a release is out; the upgrade is one command on the host.
+
+**What exists**:
+- `update-check.service.js`: one anonymous GET of the public GitHub release list a minute after start and daily (`UPDATE_CHECK_ENABLED`), kept in memory; a pre-release is offered only to an install running one. Admin-only `GET /system/update` and `POST /system/update/check` (at most one request a minute).
+- UI: a marker on the status bar's version indicator and an Updates card on System Status (`stores/updateCheck.js`, `components/system/UpdateStatusCard.vue`) with the release link and the commands. Release notes are linked, never rendered.
+- `deploy/install.sh --upgrade` and `nethelper-admin upgrade`, sharing `deploy/upgrade-lib.sh`: fetch + checksum next to the tree, application backup (`backend/scripts/app-backup.js`, trigger `upgrade`), swap (old tree kept as `<tree>.previous`), start, wait for healthy; on failure, the way back, including whether the release added migrations. Run by the release being replaced, so the part before the swap is kept small and the new tree's scripts do the rest.
+
+**Deferred**:
+- Automatic rollback (needs a restore when migrations ran; today it is printed, not done).
+- Signed releases (the checksum guards the download's integrity; authenticity rests on HTTPS to GitHub).
+- A git checkout (`git pull` stays manual) and an in-place upgrade of the copied systemd unit / nginx files (listed, never overwritten).
 
 ---
 

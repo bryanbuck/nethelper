@@ -112,3 +112,15 @@ the description and VLAN attributes.
 6300Fs (FL.10.16.1060, 2026-11-04) joined by a static VXLAN (VNI 110 ↔ VLAN 110,
 loopback0 sources 10.15.20.20 / 10.15.20.25): `{ interfaces, vnis,
 tunnelEndpoints: { vxlan1 } }`, the three reads of `getVxlanState()`.
+
+`ios-live/` holds **live** captures from a Catalyst WS-C3560E-24PD-S on IOS
+15.0(1)SE2 (2026-11-11, privilege-15 login; serials, MACs, names and IPs
+anonymised, port descriptions replaced): `show version`, `show inventory`, the
+LLDP detail and summary (the detail has no `Local Intf` line on this release),
+an empty-table `show cdp neighbors`, `show interfaces status` and
+`show power inline` (for the live-state work, unused so far), and
+`ssh-session.json`, the start of a real session (command echo one character
+per chunk), replayed by `tests/unit/ssh-shell.test.js`.
+`show-running-config-skeleton.txt` is the real header and first lines of the
+config followed by a few made-up lines: the full config holds secrets and is
+not kept. See `docs/hardware/IOS_NOTES.md`.

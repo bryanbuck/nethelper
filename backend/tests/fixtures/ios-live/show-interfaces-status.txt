@@ -1,0 +1,29 @@
+Port      Name               Status       Vlan       Duplex  Speed Type
+Gi0/1     Port 1             disabled     1            auto   auto 10/100/1000BaseTX
+Gi0/2     Port 2             notconnect   routed       auto   auto 10/100/1000BaseTX
+Gi0/3     Port 3             disabled     1            auto   auto 10/100/1000BaseTX
+Gi0/4     Port 4             disabled     1            auto   auto 10/100/1000BaseTX
+Gi0/5                        notconnect   10           auto   auto 10/100/1000BaseTX
+Gi0/6                        notconnect   10           auto   auto 10/100/1000BaseTX
+Gi0/7                        notconnect   10           auto   auto 10/100/1000BaseTX
+Gi0/8     Port 8             notconnect   1            auto   auto 10/100/1000BaseTX
+Gi0/9                        notconnect   10           auto   auto 10/100/1000BaseTX
+Gi0/10    Port 10            notconnect   1            auto   auto 10/100/1000BaseTX
+Gi0/11    Port 11            notconnect   1            auto   auto 10/100/1000BaseTX
+Gi0/12    Port 12            notconnect   1            auto   auto 10/100/1000BaseTX
+Gi0/13    Port 13            notconnect   10           auto   auto 10/100/1000BaseTX
+Gi0/14    Port 14            notconnect   10           auto   auto 10/100/1000BaseTX
+Gi0/15                       notconnect   10           auto   auto 10/100/1000BaseTX
+Gi0/16    Port 16            notconnect   1            auto   auto 10/100/1000BaseTX
+Gi0/17    Port 17            notconnect   10           auto   auto 10/100/1000BaseTX
+Gi0/18                       notconnect   10           auto   auto 10/100/1000BaseTX
+Gi0/19    Port 19            notconnect   routed       auto   auto 10/100/1000BaseTX
+Gi0/20                       notconnect   10           auto   auto 10/100/1000BaseTX
+Gi0/21    Port 21            notconnect   11           auto   auto 10/100/1000BaseTX
+Gi0/22    Port 22            notconnect   50           auto   auto 10/100/1000BaseTX
+Gi0/23    Port 23            notconnect   1            auto   auto 10/100/1000BaseTX
+Gi0/24    Port 24            notconnect   1            auto   auto 10/100/1000BaseTX
+Te0/1     Port 25            connected    trunk        full    10G SFP-10GBase-CX1
+Te0/2                        notconnect   1            full    10G Not Present
+Po1       Port 27            notconnect   unassigned   auto   auto 
+Fa0                          notconnect   routed       auto   auto 10/100BaseTX

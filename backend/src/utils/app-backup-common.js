@@ -145,8 +145,42 @@ function restoreSql(schema, rewrites) {
   return { before, after: lines.length ? `${lines.join('\n')}\n` : '' };
 }
 
+/**
+ * Session settings a newer pg_restore writes into its script header, with the
+ * server major that first knows each. pg_restore -f - can't ask the server, so
+ * pg_restore 17 always writes `SET transaction_timeout = 0;`, which a 15 or 16
+ * server refuses ("unrecognized configuration parameter"), failing the whole
+ * single-transaction restore. On a server that knows the setting it stays.
+ */
+const SETTINGS_SINCE = { transaction_timeout: 17 };
+
+/** Transform for pg_restore's script: drops `SET <name> = ...;` lines for
+ * settings `serverMajor` doesn't know. Lines split across chunks are joined. */
+function restoreScriptFilter(serverMajor) {
+  const { Transform } = require('stream');
+  const { StringDecoder } = require('string_decoder');
+  const unknown = Object.keys(SETTINGS_SINCE).filter((name) => !(serverMajor >= SETTINGS_SINCE[name]));
+  const drop = unknown.length ? new RegExp(`^SET (${unknown.join('|')}) = [^;\\n]*;\\r?$`) : null;
+  const decoder = new StringDecoder('utf8'); // a character split across chunks stays whole
+  let rest = '';
+  const keep = (line) => !drop || !drop.test(line);
+  return new Transform({
+    transform(chunk, _enc, done) {
+      const lines = (rest + decoder.write(chunk)).split('\n');
+      rest = lines.pop();
+      done(null, lines.filter(keep).map((l) => `${l}\n`).join(''));
+    },
+    flush(done) {
+      const last = rest + decoder.end();
+      done(null, last && keep(last) ? last : '');
+    },
+  });
+}
+
 module.exports = {
   FORMAT_VERSION,
+  SETTINGS_SINCE,
+  restoreScriptFilter,
   backupDir,
   configBackupDir,
   defaultGitRepoDir,

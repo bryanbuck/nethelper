@@ -10,16 +10,17 @@ Have these ready:
   - **Aruba Central** (New Central only): an API client from HPE GreenLake (client ID and secret; a Workspace ID for a GreenLake-platform client), and your cluster (e.g. US-West-4; pick **Custom…** and type the API base URL for an unlisted private instance).
   - **Juniper Mist**: an org API token with read access, and the org's region.
 - **A device account for NetHelper** on each directly reached device, with the rights in the table below. Give NetHelper its own account rather than reusing a person's.
-- **Network reach** from the NetHelper host to the devices' management addresses: ICMP for status; HTTPS (AOS-CX REST) or SSH port 22 (AOS-S, Junos NETCONF/CLI) for backups and tests.
+- **Network reach** from the NetHelper host to the devices' management addresses: ICMP for status; HTTPS (AOS-CX REST) or SSH port 22 (AOS-S, Cisco IOS/IOS-XE, Junos NETCONF/CLI) for backups and tests.
 
 | Platform | Account needs | Also on the device |
 |---|---|---|
 | AOS-CX | A dedicated local user. Read-only has not been confirmed for every feature yet; an administrator account is known to work | `https-server rest access-mode read-write`, `https-server vrf <vrf>` on the VRF NetHelper reaches |
 | AOS-S | **Manager** level. An operator login can't read `running-config` | SSH enabled |
 | Junos | A login class with `view` and `view-configuration`, e.g. `set system login class nethelper-ro permissions [ view view-configuration ]` | `set system services netconf ssh` (otherwise NetHelper falls back to the SSH CLI). On a Mist-managed switch, add the class through Mist's Additional CLI Commands |
+| Cisco IOS / IOS-XE | **Privilege 15**, e.g. `username nethelper privilege 15 secret …`. Or any login plus the switch's enable secret, entered as **Enable Secret** on the device credential | SSH enabled (a crypto image, an RSA key, `login local` or AAA on the vty lines) |
 | Central / Mist | Nothing on the device: NetHelper asks the cloud | |
 
-Switch-side details found on real hardware: [`hardware/AOS_CX_NOTES.md`](hardware/AOS_CX_NOTES.md), [`hardware/AOS_S_NOTES.md`](hardware/AOS_S_NOTES.md).
+Switch-side details found on real hardware: [`hardware/AOS_CX_NOTES.md`](hardware/AOS_CX_NOTES.md), [`hardware/AOS_S_NOTES.md`](hardware/AOS_S_NOTES.md), [`hardware/IOS_NOTES.md`](hardware/IOS_NOTES.md).
 
 ## 1. Sign in and secure your account
 
@@ -42,7 +43,7 @@ A cloud-managed AOS-CX or Mist-managed EX switch can be read directly too (confi
 
 ## 4. Add device credentials and test them
 
-1. **Settings → API Credentials → Add Credential**: the account from the table above. Credentials are encrypted at rest and never shown again.
+1. **Settings → API Credentials → Add Credential**: the account from the table above. Credentials are encrypted at rest and never shown again. You can also create one without leaving the device: **Add credential** is the first entry of the credential list in Add Device, Edit Device and the **Credential** bulk action, and the new credential is selected for you.
 2. On **Devices**, select the devices that use it and choose **Credential** in the bar above the table. The preview says which devices it skips (for example cloud-only APs, which NetHelper never reaches directly) and why.
 3. Run the connection test from the same dialog, or **Test Connection** on a device's page. A pass means NetHelper logged in to the device itself. A cloud-only device shows its cloud's view instead.
 

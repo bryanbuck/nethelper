@@ -143,108 +143,7 @@
     </v-card>
 
     <!-- Create/Edit Dialog -->
-    <v-dialog v-model="showDialog" max-width="600px" :fullscreen="$vuetify.display.xs" persistent>
-      <v-card>
-        <v-card-title>
-          <span class="text-h5">{{ dialogMode === 'create' ? 'Add' : 'Edit' }} API Credential</span>
-        </v-card-title>
-
-        <v-card-text>
-          <v-form ref="formRef" v-model="formValid">
-            <v-text-field
-              v-model="formData.name"
-              label="Credential Name"
-              :rules="[rules.required]"
-              variant="outlined"
-              prepend-inner-icon="mdi-text"
-              class="mb-2"
-            ></v-text-field>
-
-            <v-select
-              v-model="formData.type"
-              :items="credentialTypes"
-              label="Credential Type"
-              :rules="[rules.required]"
-              variant="outlined"
-              prepend-inner-icon="mdi-shape"
-              class="mb-2"
-            ></v-select>
-
-            <v-text-field
-              v-model="formData.username"
-              label="Username"
-              variant="outlined"
-              prepend-inner-icon="mdi-account"
-              class="mb-2"
-            ></v-text-field>
-
-            <v-text-field
-              v-model="formData.password"
-              label="Password"
-              :type="showPassword ? 'text' : 'password'"
-              variant="outlined"
-              prepend-inner-icon="mdi-lock"
-              :append-inner-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'"
-              class="mb-2"
-              @click:append-inner="showPassword = !showPassword"
-            ></v-text-field>
-
-            <v-text-field
-              v-model="formData.apiKey"
-              label="API Key (Optional)"
-              :type="showApiKey ? 'text' : 'password'"
-              variant="outlined"
-              prepend-inner-icon="mdi-key"
-              :append-inner-icon="showApiKey ? 'mdi-eye' : 'mdi-eye-off'"
-              :hint="dialogMode === 'edit' && editingItem?.apiKey ? 'Leave blank to keep the current key' : ''"
-              persistent-hint
-              autocomplete="new-password"
-              class="mb-2"
-              @click:append-inner="showApiKey = !showApiKey"
-            ></v-text-field>
-
-            <v-text-field
-              v-model="formData.apiSecret"
-              label="API Secret (Optional)"
-              :type="showSecret ? 'text' : 'password'"
-              variant="outlined"
-              prepend-inner-icon="mdi-key-variant"
-              :append-inner-icon="showSecret ? 'mdi-eye' : 'mdi-eye-off'"
-              class="mb-2"
-              @click:append-inner="showSecret = !showSecret"
-            ></v-text-field>
-
-            <v-textarea
-              v-model="formData.notes"
-              label="Notes (Optional)"
-              variant="outlined"
-              prepend-inner-icon="mdi-note-text"
-              rows="3"
-            ></v-textarea>
-          </v-form>
-        </v-card-text>
-
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn
-            color="grey"
-            variant="text"
-            @click="closeDialog"
-          >
-            Cancel
-          </v-btn>
-          <v-btn
-            color="primary"
-            variant="flat"
-            :disabled="!formValid"
-            :loading="settingsStore.credentialsLoading"
-            @click="saveCredential"
-          >
-            {{ dialogMode === 'create' ? 'Add' : 'Save' }}
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <ApiCredentialFormDialog v-model="showDialog" :credential="editingItem" />
 
     <!-- Delete Confirmation Dialog -->
     <v-dialog v-model="showDeleteDialog" max-width="400px">
@@ -380,6 +279,7 @@ import { useNotificationsStore } from '@/stores/notifications'
 import { format } from 'date-fns'
 import debugLog, { DebugCategory } from '@/utils/debug'
 import deviceApiService from '@/services/deviceApi.service'
+import ApiCredentialFormDialog from '@/components/settings/ApiCredentialFormDialog.vue'
 
 const settingsStore = useSettingsStore()
 const authStore = useAuthStore()
@@ -396,40 +296,14 @@ const headers = [
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' },
 ]
 
-// Credential types
-const credentialTypes = [
-  { title: 'Switch', value: 'switch' },
-  { title: 'Access Point', value: 'ap' },
-  { title: 'Gateway', value: 'gateway' },
-  { title: 'Controller', value: 'controller' },
-  { title: 'Other', value: 'other' },
-]
-
 // Dialog state
 const showDialog = ref(false)
 const showDeleteDialog = ref(false)
 const showTestDialog = ref(false)
-const dialogMode = ref('create') // 'create' or 'edit'
-const formRef = ref(null)
-const formValid = ref(false)
-const showPassword = ref(false)
-const showSecret = ref(false)
-const showApiKey = ref(false)
-
-// Form data
-const formData = ref({
-  name: '',
-  type: '',
-  username: '',
-  password: '',
-  apiKey: '',
-  apiSecret: '',
-  notes: '',
-})
 
 const itemToDelete = ref(null)
 const itemToTest = ref(null)
-const editingItem = ref(null)
+const editingItem = ref(null) // null = the form adds a new credential
 
 // Test dialog state
 const selectedTestDevice = ref(null)
@@ -437,11 +311,6 @@ const testingCredential = ref(false)
 const loadingDevicesForTest = ref(false)
 const testResult = ref(null)
 const devicesUsingCredential = ref([])
-
-// Validation rules
-const rules = {
-  required: (value) => !!value || 'This field is required',
-}
 
 // Computed
 // Methods
@@ -476,91 +345,13 @@ const formatDate = (date) => {
 }
 
 const openCreateDialog = () => {
-  dialogMode.value = 'create'
-  formData.value = {
-    name: '',
-    type: '',
-    username: '',
-    password: '',
-    apiKey: '',
-    apiSecret: '',
-    notes: '',
-  }
+  editingItem.value = null
   showDialog.value = true
 }
 
 const openEditDialog = (item) => {
-  dialogMode.value = 'edit'
   editingItem.value = item
-  formData.value = {
-    name: item.name,
-    type: item.type,
-    username: item.username || '',
-    password: '', // Don't populate password for security
-    apiKey: '', // Don't populate the key: the list only has its mask
-    apiSecret: '', // Don't populate secret for security
-    notes: item.notes || '',
-  }
   showDialog.value = true
-}
-
-const closeDialog = () => {
-  showDialog.value = false
-  formData.value = {
-    name: '',
-    type: '',
-    username: '',
-    password: '',
-    apiKey: '',
-    apiSecret: '',
-    notes: '',
-  }
-  editingItem.value = null
-  showPassword.value = false
-  showSecret.value = false
-}
-
-
-const saveCredential = async () => {
-  if (!formValid.value) return
-
-  try {
-    // Prepare data - only include password/key/secret if they were provided
-    const data = {
-      name: formData.value.name,
-      type: formData.value.type,
-      username: formData.value.username,
-      notes: formData.value.notes,
-    }
-
-    // Only include the API key if provided
-    if (formData.value.apiKey) {
-      data.apiKey = formData.value.apiKey
-    }
-
-    // Only include password if provided
-    if (formData.value.password) {
-      data.password = formData.value.password
-    }
-
-    // Only include secret if provided
-    if (formData.value.apiSecret) {
-      data.apiSecret = formData.value.apiSecret
-    }
-
-    if (dialogMode.value === 'create') {
-      await settingsStore.createApiCredential(data)
-      notificationStore.showSuccess('API credential created successfully')
-    } else {
-      await settingsStore.updateApiCredential(editingItem.value.id, data)
-      notificationStore.showSuccess('API credential updated successfully')
-    }
-
-    closeDialog()
-  } catch (error) {
-    debugLog.error(DebugCategory.SETTINGS, 'Failed to save credential:', error)
-    notificationStore.showError(error.response?.data?.message || 'Failed to save credential')
-  }
 }
 
 const openDeleteDialog = (item) => {

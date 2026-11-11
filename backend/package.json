@@ -1,6 +1,6 @@
 {
   "name": "nethelper-backend",
-  "version": "0.9.0",
+  "version": "0.9.1-beta.1",
   "description": "NetHelper API: multi-vendor network inventory, monitoring, and config backup",
   "main": "server.js",
   "scripts": {
@@ -17,7 +17,8 @@
     "key:rotate": "node scripts/rotate-encryption-key.js",
     "ci": "npm run lint && npm test",
     "postman:generate": "node scripts/generate-postman.js",
-    "app:restore": "node scripts/app-restore.js"
+    "app:restore": "node scripts/app-restore.js",
+    "app:backup": "node scripts/app-backup.js"
   },
   "dependencies": {
     "@prisma/client": "^5.7.0",

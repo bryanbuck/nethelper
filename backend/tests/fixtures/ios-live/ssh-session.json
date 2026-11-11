@@ -1,0 +1,58 @@
+{
+ "_comment": "Real IOS SSH session: Catalyst WS-C3560E-24PD-S, IOS 15.0(1)SE2, privilege-15 login, 2026-11-11. Chunks as received, with {tx} marking what was typed: the first prompt, `terminal length 0`, `show lldp neighbors`. The command echo arrives one character per chunk. Names, MACs and IPs anonymised.",
+ "handshake": {
+  "kex": "diffie-hellman-group14-sha1",
+  "serverHostKey": "ssh-rsa",
+  "cipher": "aes128-cbc",
+  "mac": "hmac-sha1"
+ },
+ "chunks": [
+  "\r\nSwitch1#",
+  {
+   "tx": "terminal length 0\n"
+  },
+  "t",
+  "e",
+  "r",
+  "m",
+  "i",
+  "n",
+  "a",
+  "l",
+  " ",
+  "l",
+  "e",
+  "n",
+  "g",
+  "t",
+  "h",
+  " ",
+  "0",
+  "\r\n",
+  "Switch1#",
+  {
+   "tx": "show lldp neighbors\n"
+  },
+  "s",
+  "h",
+  "o",
+  "w",
+  " ",
+  "l",
+  "l",
+  "d",
+  "p",
+  " ",
+  "n",
+  "e",
+  "i",
+  "g",
+  "h",
+  "b",
+  "o",
+  "r",
+  "s",
+  "\r\n",
+  "Capability codes:\r\n    (R) Router, (B) Bridge, (T) Telephone, (C) DOCSIS Cable Device\r\n    (W) WLAN Access Point, (P) Repeater, (S) Station, (O) Other\r\n\r\nDevice ID           Local Intf     Hold-time  Capability      Port ID\r\nsw-core1            Te0/1          120        B,R             1/1/25\r\n\r\nTotal entries displayed: 1\r\n\r\nSwitch1#"
+ ]
+}

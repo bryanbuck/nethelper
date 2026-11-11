@@ -1,6 +1,6 @@
 // The status bar renders the activity log: current message on the left,
 // version on the right, idle text when nothing is current.
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/components'
@@ -15,6 +15,8 @@ const push = vi.fn()
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
 const auth = reactive({ isAdmin: false })
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => auth }))
+const { getUpdateStatus } = vi.hoisted(() => ({ getUpdateStatus: vi.fn() }))
+vi.mock('@/services/system.service', () => ({ default: { getUpdateStatus } }))
 
 globalThis.ResizeObserver ??= class { observe () {} unobserve () {} disconnect () {} }
 
@@ -27,6 +29,7 @@ describe('StatusBar', () => {
   beforeEach(() => {
     sessionStorage.clear()
     auth.isAdmin = false
+    getUpdateStatus.mockReset().mockResolvedValue({ enabled: true, current: '1.2.3', latest: null, updateAvailable: false })
     setActivePinia(createPinia())
   })
 
@@ -63,6 +66,37 @@ describe('StatusBar', () => {
     expect(button.exists()).toBe(true)
     await button.trigger('click')
     expect(push).toHaveBeenCalledWith('/system')
+    wrapper.unmount()
+  })
+
+  test('admins see when a newer release is out; nobody else asks', async () => {
+    let wrapper = mountBar()
+    await flushPromises()
+    expect(getUpdateStatus).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="update-marker"]').exists()).toBe(false)
+    wrapper.unmount()
+
+    auth.isAdmin = true
+    wrapper = mountBar()
+    await flushPromises()
+    expect(getUpdateStatus).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[data-testid="update-marker"]').exists()).toBe(false) // up to date
+    wrapper.unmount()
+
+    getUpdateStatus.mockResolvedValue({
+      enabled: true, current: '1.2.3', updateAvailable: true,
+      latest: { version: '1.3.0', url: 'https://github.com/bryanbuck/nethelper/releases/tag/v1.3.0' }
+    })
+    wrapper = mountBar()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="update-marker"]').text()).toBe('1.3.0 available')
+    const button = wrapper.find('button[aria-label="System status"]')
+    expect(button.attributes('title')).toContain('NetHelper 1.3.0 is available')
+
+    // Signing out as admin drops the marker
+    auth.isAdmin = false
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="update-marker"]').exists()).toBe(false)
     wrapper.unmount()
   })
 

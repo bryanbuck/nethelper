@@ -235,14 +235,12 @@
               </v-col>
 
               <v-col cols="12" sm="6">
-                <v-select
+                <DeviceCredentialSelect
                   v-model="newDevice.apiCredentialId"
-                  :items="availableCredentials"
-                  item-title="name"
-                  item-value="id"
+                  :device-type="newDevice.type"
                   label="Device Credential"
-                  variant="outlined"
                   clearable
+                  :loading="loadingCredentials"
                   :hint="newDevice.managementMode === 'cloud'
                     ? 'Optional: enables read-only local access (AOS-CX REST, Junos NETCONF: config backup, network map)'
                     : 'Required for direct (REST/SSH) access'"
@@ -311,6 +309,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useWebSocket } from '@/composables/useWebSocket'
 import DeviceTable from '@/components/devices/DeviceTable.vue'
 import DeviceEditDialog from '@/components/devices/DeviceEditDialog.vue'
+import DeviceCredentialSelect from '@/components/devices/DeviceCredentialSelect.vue'
 import DeviceGroupsDialog from '@/components/devices/DeviceGroupsDialog.vue'
 import PortSearchDialog from '@/components/devices/PortSearchDialog.vue'
 import ActionButton from '@/components/common/ActionButton.vue'
@@ -369,7 +368,7 @@ const loadingCredentials = ref(false)
 const showAddDialog = ref(false)
 const showEditDialog = ref(false)
 const saving = ref(false)
-const { cloudIntegrationOptions, availableCredentials } = useDeviceForm()
+const { cloudIntegrationOptions } = useDeviceForm()
 const newDevice = ref({
   name: '',
   type: '',
