@@ -49,7 +49,5 @@ export function useDeviceForm () {
       }))
   )
 
-  const availableCredentials = computed(() => settingsStore.apiCredentials || [])
-
-  return { cloudIntegrationOptions, availableCredentials }
+  return { cloudIntegrationOptions }
 }

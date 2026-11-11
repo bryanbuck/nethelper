@@ -21,26 +21,16 @@
             <v-btn value="unlink" prepend-icon="mdi-link-variant-off">Remove</v-btn>
           </v-btn-toggle>
 
-          <v-select
-            v-if="mode === 'link'"
-            v-model="credentialId"
-            :items="credentials"
-            item-title="name"
-            item-value="id"
-            label="Credential"
-            variant="outlined"
-            density="compact"
-            prepend-inner-icon="mdi-key-variant"
-            hide-details
-            :loading="loadingCredentials"
-            :disabled="applied"
-            :no-data-text="loadingCredentials ? 'Loading…' : 'No credentials yet. Add one under Settings → API Credentials.'"
-            style="max-width: 360px; min-width: 260px;"
-          >
-            <template #item="{ props, item }">
-              <v-list-item v-bind="props" :subtitle="`${item.raw.type} · ${item.raw.username || 'no username'}`" />
-            </template>
-          </v-select>
+          <div v-if="mode === 'link'" class="credential-select">
+            <DeviceCredentialSelect
+              v-model="credentialId"
+              label="Credential"
+              density="compact"
+              hide-details
+              :loading="loadingCredentials"
+              :disabled="applied"
+            />
+          </div>
 
           <v-checkbox
             v-if="mode === 'link'"
@@ -137,6 +127,7 @@ import deviceService from '@/services/device.service'
 import deviceApiService from '@/services/deviceApi.service'
 import { useSettingsStore } from '@/stores/settings'
 import { useNotificationsStore } from '@/stores/notifications'
+import DeviceCredentialSelect from '@/components/devices/DeviceCredentialSelect.vue'
 
 const dialogProps = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -331,7 +322,18 @@ const close = (value = false) => {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+.credential-select {
+  width: 360px;
+  max-width: 100%;
+}
+
+@media (max-width: $phone-max) {
+  .credential-select {
+    width: 100%;
+  }
+}
+
 .credential-table td {
   vertical-align: top;
   padding-top: 6px !important;
