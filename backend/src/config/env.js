@@ -75,6 +75,8 @@ const schema = Joi.object({
   LIVE_SESSION_MAX_AGE: Joi.number().integer().min(600000).default(21600000),
   LIVE_VIEW_POLL_INTERVAL: Joi.number().integer().min(5000).default(15000),
   LIVE_MAX_CONNECTIONS: Joi.number().integer().min(1).default(200),
+  // Milliseconds an AOS-CX REST request may take before it fails.
+  CX_REST_TIMEOUT: Joi.number().integer().min(1000).default(30000),
   DEVICE_EVENT_RETENTION_DAYS: Joi.number().integer().min(1).default(30),
   ALERT_RETENTION_DAYS: Joi.number().integer().min(1).default(90),
   EXECUTION_RETENTION_DAYS: Joi.number().integer().min(1).default(90),

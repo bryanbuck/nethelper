@@ -90,6 +90,8 @@ class DeviceMonitor {
     // Bumped on every connect/disconnect; callbacks from an older stream or
     // timer compare against it and drop out, so one failure schedules one retry.
     this.generation = 0;
+    // A backoff retry is waiting (retryNow() may bring it forward).
+    this.retryPending = false;
   }
 
   timer(fn, ms, repeat = false) {
@@ -190,7 +192,20 @@ class DeviceMonitor {
     // Jittered exponential backoff so a NetHelper restart doesn't hit every switch at once.
     const delay = Math.min(cfg.backoffMaxMs, cfg.backoffBaseMs * 2 ** this.attempt) * (0.5 + Math.random() / 2);
     this.attempt += 1;
-    this.timer(() => this.connect(), delay);
+    this.retryPending = true;
+    this.timer(() => {
+      this.retryPending = false;
+      this.connect();
+    }, delay);
+  }
+
+  /** Reconnect now instead of at the end of the backoff wait (the device answers ping again). */
+  async retryNow() {
+    if (this.stopped || this.connected || !this.retryPending) return;
+    this.retryPending = false;
+    this.clearTimers();
+    this.attempt = 0;
+    await this.connect();
   }
 
   async safeResync(reason, gen = this.generation) {
@@ -408,6 +423,20 @@ class StateMonitorService {
     const monitor = new DeviceMonitor(this, device);
     this.monitors.set(device.id, monitor);
     await monitor.start();
+  }
+
+  /**
+   * The ping monitor saw a device stop or start answering. A watched device
+   * that stopped is read now, so a dead session is noticed within the request
+   * timeout rather than at the next periodic resync; one that came back is
+   * reconnected now rather than at the end of its backoff wait. A device that
+   * only filters ICMP still answers the read, and nothing changes.
+   */
+  async reachabilityChanged(deviceId, online) {
+    const monitor = this.monitors.get(deviceId);
+    if (!monitor) return;
+    if (online) await monitor.retryNow();
+    else if (monitor.connected) await monitor.safeResync('ping');
   }
 
   getMonitor(deviceId) {

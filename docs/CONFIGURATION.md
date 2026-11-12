@@ -80,14 +80,15 @@ Production writes JSON logs to stdout. Values under secret-looking keys (passwor
 |---|---|---|
 | `PING_MONITOR_ENABLED` | `true` | ICMP status checks for directly managed devices. |
 | `PING_MONITOR_INTERVAL` | `60000` | Milliseconds between sweeps. |
-| `PING_MONITOR_TIMEOUT` | `5` | Seconds per ping. |
-| `PING_MONITOR_BATCH_SIZE` | `20` | Devices pinged concurrently. |
+| `PING_MONITOR_TIMEOUT` | `2` | Seconds to wait for each ping reply. A device that misses one is pinged up to twice more in the same sweep; a device already offline is pinged once. |
+| `PING_MONITOR_BATCH_SIZE` | `20` | Devices pinged at the same time. |
 | `PING_MONITOR_FAILURE_THRESHOLD` | `3` | Consecutive failures before a device is marked offline. |
 | `DISCOVERY_SCAN_TIMEOUT` | `300000` | Milliseconds allowed per nmap run. |
 | `SSH_PORT` | `22` | SSH CLI transport (AOS-S, Junos fallback, Cisco IOS/IOS-XE). |
 | `NETCONF_PORT` | `830` | Junos NETCONF. |
 | `SSH_CONNECT_TIMEOUT` | `15000` | Milliseconds; SSH and NETCONF. |
 | `SSH_COMMAND_TIMEOUT` | `45000` | Milliseconds; SSH and NETCONF. |
+| `CX_REST_TIMEOUT` | `30000` | Milliseconds an AOS-CX REST request may take before it fails (login and logout at most 15000). |
 
 ### Live port/PoE state
 

@@ -129,6 +129,56 @@ describe('StateMonitorService', () => {
     expect(mockEvents.map((e) => [e.type, e.source])).toEqual([['port.poe.down', 'resync']]);
   });
 
+  test('ping says offline: the session is read at once, and a dead one is a disconnect', async () => {
+    jest.useFakeTimers();
+    try {
+      await service.hold(cx(), 'always');
+      api.getPortState.mockRejectedValueOnce(new Error('timeout of 30000ms exceeded'));
+
+      await service.reachabilityChanged('d1', false);
+
+      expect(api.getPortState).toHaveBeenCalledTimes(2);
+      expect(service.getMonitor('d1').connected).toBe(false);
+      expect(mockEvents.map((e) => e.type)).toEqual(['monitor.disconnected']);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('ping says offline but the switch still answers (ICMP filtered): nothing changes', async () => {
+    await service.hold(cx(), 'always');
+    await service.reachabilityChanged('d1', false);
+    expect(service.getMonitor('d1').connected).toBe(true);
+    expect(mockEvents).toHaveLength(0);
+  });
+
+  test('ping says online again: the reconnect does not wait out the backoff', async () => {
+    jest.useFakeTimers();
+    try {
+      await service.hold(cx(), 'always');
+      await api.handlers.onClose(1006);
+      expect(service.getMonitor('d1').connected).toBe(false);
+
+      await service.reachabilityChanged('d1', true); // no timers advanced
+      expect(service.getMonitor('d1').connected).toBe(true);
+      expect(api.openNotificationStream).toHaveBeenCalledTimes(2);
+
+      // The backoff retry it replaced is gone
+      await jest.advanceTimersByTimeAsync(6000);
+      expect(api.openNotificationStream).toHaveBeenCalledTimes(2);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('a ping change for a device nobody watches, or one already connected, does nothing', async () => {
+    await service.reachabilityChanged('nobody', false);
+    await service.hold(cx(), 'always');
+    await service.reachabilityChanged('d1', true);
+    expect(api.getPortState).toHaveBeenCalledTimes(1);
+    expect(api.openNotificationStream).toHaveBeenCalledTimes(1);
+  });
+
   test('stream close: one disconnected event, reconnect, then missed changes and connected', async () => {
     jest.useFakeTimers();
     try {

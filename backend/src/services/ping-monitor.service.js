@@ -42,10 +42,15 @@ function splitSharedAddresses(devices) {
 class PingMonitorService {
   constructor() {
     this.config = {
-      timeout: parseInt(process.env.PING_MONITOR_TIMEOUT) || 5, // seconds
+      // Seconds to wait for one reply. A device on the LAN answers in
+      // milliseconds and one across a WAN well under a second.
+      timeout: parseInt(process.env.PING_MONITOR_TIMEOUT) || 2,
+      // Extra attempts within a sweep before a check counts as missed. A device
+      // already offline gets none: it only has to answer once to come back.
       retries: 2,
       interval: parseInt(process.env.PING_MONITOR_INTERVAL) || 60000, // 60 seconds
-      batchSize: parseInt(process.env.PING_MONITOR_BATCH_SIZE) || 20, // devices to check concurrently
+      // Devices pinged at once (the name is from when sweeps ran in batches).
+      concurrency: parseInt(process.env.PING_MONITOR_BATCH_SIZE) || 20,
       failureThreshold: parseInt(process.env.PING_MONITOR_FAILURE_THRESHOLD) || 3, // consecutive failures before marking offline
     };
     // Sweeps are scheduled only by the Bull repeatable job (jobs/ping-monitor.job.js).
@@ -89,12 +94,14 @@ class PingMonitorService {
   /**
    * Ping device with retries
    * @param {string} ipAddress - Device IP address
+   * @param {Object} [options]
+   * @param {number} [options.attempts] - pings to send before giving up (default: 1 + retries)
    * @returns {Promise<{alive: boolean, time: number|null}>}
    */
-  async pingDeviceWithRetries(ipAddress) {
+  async pingDeviceWithRetries(ipAddress, { attempts = this.config.retries + 1 } = {}) {
     let lastResult = { alive: false, time: null };
 
-    for (let attempt = 0; attempt <= this.config.retries; attempt++) {
+    for (let attempt = 1; attempt <= attempts; attempt++) {
       lastResult = await this.pingDevice(ipAddress);
 
       if (lastResult.alive) {
@@ -102,7 +109,7 @@ class PingMonitorService {
       }
 
       // Wait 1 second between retries
-      if (attempt < this.config.retries) {
+      if (attempt < attempts) {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
@@ -161,35 +168,34 @@ class PingMonitorService {
         timestamp: new Date(),
       };
 
-      // Process devices in batches
-      for (let i = 0; i < toPing.length; i += this.config.batchSize) {
-        const batch = toPing.slice(i, i + this.config.batchSize);
+      // A pool, not batches: each worker takes the next device as soon as its
+      // own finishes, so one that doesn't answer holds up one slot, not 20.
+      let next = 0;
+      const worker = async () => {
+        while (next < toPing.length) {
+          const device = toPing[next];
+          next += 1;
+          try {
+            const result = await this.pingDeviceWithRetries(device.ipAddress, {
+              attempts: device.pingStatus === 'offline' ? 1 : this.config.retries + 1,
+            });
+            await this.updateDeviceStatus(device.id, device.name, result.alive, result.time, device.consecutiveFailures, device.pingStatus, device);
 
-        await Promise.all(
-          batch.map(async (device) => {
-            try {
-              const result = await this.pingDeviceWithRetries(device.ipAddress);
-              await this.updateDeviceStatus(device.id, device.name, result.alive, result.time, device.consecutiveFailures, device.pingStatus, device);
-
-              if (result.alive) {
-                this.lastCheckStats.successful++;
-              } else {
-                this.lastCheckStats.failed++;
-              }
-            } catch (error) {
-              logger.error(`Error checking device ${device.name} (${device.ipAddress}):`, error);
+            if (result.alive) {
+              this.lastCheckStats.successful++;
+            } else {
               this.lastCheckStats.failed++;
             }
-          })
-        );
-
-        // Small delay between batches to avoid overwhelming the network
-        if (i + this.config.batchSize < toPing.length) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          } catch (error) {
+            logger.error(`Error checking device ${device.name} (${device.ipAddress}):`, error);
+            this.lastCheckStats.failed++;
+          }
         }
-      }
+      };
+      await Promise.all(Array.from({ length: Math.min(this.config.concurrency, toPing.length) }, worker));
+      this.lastCheckStats.durationMs = Date.now() - this.lastCheckStats.timestamp.getTime();
 
-      logger.info(`Ping check completed: ${this.lastCheckStats.successful} successful, ${this.lastCheckStats.failed} failed out of ${this.lastCheckStats.total} devices`);
+      logger.info(`Ping check completed: ${this.lastCheckStats.successful} successful, ${this.lastCheckStats.failed} failed out of ${this.lastCheckStats.total} devices in ${(this.lastCheckStats.durationMs / 1000).toFixed(1)}s`);
     } catch (error) {
       logger.error('Error in checkAllDevices:', error);
       throw error;
@@ -256,6 +262,7 @@ class PingMonitorService {
         this.emitStatusUpdate(deviceId, deviceName, newStatus, responseTime, cloud, updateData.pingLastSeen);
 
         if (newStatus === 'online') alertService.clear('device.offline', { subjectKey: deviceId, deviceId });
+        if (newStatus !== 'warning') this.tellLiveMonitor(deviceId, newStatus === 'online');
       }
       await this.recordPingState(deviceId, deviceName, newStatus, currentStatus !== newStatus, device.pingLastSeen);
 
@@ -280,6 +287,20 @@ class PingMonitorService {
     } catch (error) {
       logger.error(`Error updating device status for ${deviceName}:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * A watched device stopped or started answering ping: the live monitor
+   * checks its session now (or reconnects now) instead of at its next resync
+   * or backoff retry. Best effort; the monitor's own timers are the backstop.
+   */
+  tellLiveMonitor(deviceId, online) {
+    try {
+      const stateMonitor = require('./live/state-monitor.service');
+      Promise.resolve(stateMonitor.reachabilityChanged(deviceId, online)).catch(() => {});
+    } catch (error) {
+      logger.debug(`Live monitor not told about ${deviceId}: ${error.message}`);
     }
   }
 
