@@ -39,6 +39,7 @@ The docs have drifted before: new work replaced old behavior, and the docs went 
 | A roadmap item's status (started, shipped, deferred) | its status line in `docs/ROADMAP_AND_TODO.md`, with an absolute date |
 | Installing: the installer, Dockerfiles, Compose, systemd, nginx | `docs/INSTALL.md`, and the short version in `README.md` "Install". Keep the proxy blocks of the two nginx configs in sync |
 | Backup and restore, upgrading, key rotation, server-side user management | `docs/OPERATIONS.md` |
+| The look of the Devices page, a device's Live tab, the Network Map or the automation builder | the README screenshots in `docs/images/`, taken from a throwaway install with made-up devices, never a real network |
 | The rights NetHelper needs on a device, or the first-run steps | `docs/GETTING_STARTED.md` (the only copy of the device-account table) |
 | What NetHelper supports, what was tested on real equipment, or a known limitation | `docs/SUPPORT.md` |
 | Something you learned on real hardware | `docs/hardware/` |

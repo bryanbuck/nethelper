@@ -4,6 +4,15 @@ Multi-vendor network inventory, monitoring, and configuration backup. NetHelper 
 
 **Status: 0.9** (`VERSION`), open to anyone who wants to try it. Pre-1.0: behavior may still change between minor versions, and automations are experimental. What works, what has been tested on real equipment, what doesn't work yet, and how to report problems: [`docs/SUPPORT.md`](docs/SUPPORT.md).
 
+| | |
+|---|---|
+| [![The Devices page: cloud-managed and directly managed devices from three vendors in one table](docs/images/devices.png)](docs/images/devices.png) | [![A switch's Live tab: per-port link, PoE, VLAN and throughput](docs/images/live.png)](docs/images/live.png) |
+| **Devices**: every vendor and management plane in one inventory | **Live**: port link, PoE, VLANs and throughput as they change (AOS-CX) |
+| [![The Network Map of one site, drawn from LLDP and CDP neighbors](docs/images/map.png)](docs/images/map.png) | [![The automation builder with a workflow that reacts to a configuration change](docs/images/automation.png)](docs/images/automation.png) |
+| **Network Map**: drawn from LLDP/CDP neighbors | **Automations** (experimental): react to alerts, schedules and config changes |
+
+The screenshots show a made-up inventory.
+
 ## Install
 
 You need a Linux host with Docker Engine and the Compose plugin ([installing Docker](docs/INSTALL.md#install-docker); Debian 13 is tested), and network reach from it to your devices' management addresses (ICMP, plus HTTPS or SSH).
