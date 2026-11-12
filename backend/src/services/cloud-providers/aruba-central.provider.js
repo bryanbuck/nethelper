@@ -475,6 +475,10 @@ class ArubaCentralProvider extends BaseCloudProvider {
       // Central leaves lastSeenAt empty while a device is up: seen now.
       lastSeen: this.parseTimestamp(item.lastSeenAt ?? item.lastSeen) || (status === 'online' ? new Date() : null),
       configInSync: centralConfigInSync(item.configStatus),
+      // Central lists the device, so Central manages it. A CX switch's own
+      // probe (source switch-rest) still outranks this at sync time.
+      cloudManaged: true,
+      cloudManagedSource: 'cloud-inventory',
       metadata: {
         siteId: item.siteId,
         siteName: item.siteName,

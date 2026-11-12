@@ -176,6 +176,13 @@ describe('ArubaCentralProvider', () => {
     expect(aoss.platform).toBe('aos-s');
   });
 
+  test('every device Central lists is reported as cloud-managed from its inventory', () => {
+    for (const deviceType of ['SWITCH', 'ACCESS_POINT', 'GATEWAY']) {
+      expect(provider.normalizeDevice({ serialNumber: 'X1', deviceType, status: 'OFFLINE' }))
+        .toMatchObject({ cloudManaged: true, cloudManagedSource: 'cloud-inventory' });
+    }
+  });
+
   test('status mapping covers the live ONLINE/OFFLINE values and older spellings', () => {
     expect(provider.mapDeviceStatus('ONLINE')).toBe('online');
     expect(provider.mapDeviceStatus('OFFLINE')).toBe('offline');
