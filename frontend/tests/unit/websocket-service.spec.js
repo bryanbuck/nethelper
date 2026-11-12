@@ -32,10 +32,18 @@ vi.mock('socket.io-client', () => ({
 }))
 
 const { default: service } = await import('@/services/websocket.service')
+const { useBackupsStore } = await import('@/stores/backups')
 
 describe('websocket service', () => {
+  let backupsRefresh
+
   beforeEach(() => {
     setActivePinia(createPinia())
+    service.stores = {} // the service keeps its stores: take this test's
+    // A finished backup run makes the backups store refetch over HTTP; the
+    // refetch itself is the store's business (backups-store.spec.js).
+    backupsRefresh = vi.fn(async () => {})
+    useBackupsStore().handleRunCompleted = backupsRefresh
     service.closeSocket()
     sockets.length = 0
   })
@@ -157,6 +165,7 @@ describe('websocket service', () => {
     service.handleBackupCompleted({ backupId: 'b3', deviceId: 'd3', deviceName: 'sw-3', trigger: 'automation' })
     service.handleBackupRunCompleted({ trigger: 'scheduled', total: 2, succeeded: 2, failed: 0 })
     expect(log.entries).toHaveLength(0)
+    expect(backupsRefresh).toHaveBeenCalledTimes(1) // the Config Backups page still refreshes
     service.handleBackupRunCompleted({ trigger: 'scheduled', total: 2, succeeded: 1, failed: 1 })
     expect(log.entries).toHaveLength(1)
     expect(log.entries[0].type).toBe('warning')
