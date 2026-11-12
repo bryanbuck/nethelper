@@ -1,6 +1,6 @@
 # NetHelper backend: bare-metal systemd unit.
 #
-# Assumes (see deploy/README.md):
+# Assumes (see docs/INSTALL.md):
 #   code         /opt/nethelper            (git checkout or release tarball)
 #   config       /etc/nethelper/backend.env (mode 0640, root:nethelper), from
 #                deploy/systemd/backend.env.example. Never copy backend/.env.example:
@@ -16,7 +16,7 @@
 
 [Unit]
 Description=NetHelper backend (API, jobs, WebSocket)
-Documentation=file:///opt/nethelper/deploy/README.md
+Documentation=file:///opt/nethelper/docs/INSTALL.md
 After=network-online.target postgresql.service redis-server.service
 Wants=network-online.target
 

@@ -4,7 +4,7 @@ Thanks for helping. This page covers the workflow; the architecture and the proj
 
 ## Setup
 
-Node 22 (see `.nvmrc`), PostgreSQL 15+, Redis 7+. The quick start in [`README.md`](README.md) gets both tiers running. Tests need neither the database nor Redis: Prisma, Redis, and every device transport are mocked.
+Node 22 (see `.nvmrc`), PostgreSQL 15+, Redis 7+. "Developing" in [`README.md`](README.md#developing) gets both tiers running. Tests need neither the database nor Redis: Prisma, Redis, and every device transport are mocked.
 
 ## Workflow
 
@@ -37,8 +37,10 @@ The docs have drifted before: new work replaced old behavior, and the docs went 
 | An environment variable | its Joi schema in `backend/src/config/env.js`, `backend/.env.example` (and `deploy/.env.example` if Compose passes it), and `docs/CONFIGURATION.md` |
 | A service, cloud provider, or transport | its entry in `docs/ROADMAP_AND_TODO.md`, plus `docs/MULTI_VENDOR_ROADMAP.md` if the architecture changes |
 | A roadmap item's status (started, shipped, deferred) | its status line in `docs/ROADMAP_AND_TODO.md`, with an absolute date |
-| Deployment: Dockerfiles, Compose, systemd, nginx | `deploy/README.md`. Keep the proxy blocks of the two nginx configs in sync |
-| The rights NetHelper needs on a device, or the first-run steps | `docs/GETTING_STARTED.md` |
+| Installing: the installer, Dockerfiles, Compose, systemd, nginx | `docs/INSTALL.md`, and the short version in `README.md` "Install". Keep the proxy blocks of the two nginx configs in sync |
+| Backup and restore, upgrading, key rotation, server-side user management | `docs/OPERATIONS.md` |
+| The look of the Devices page, a device's Live tab, the Network Map or the automation builder | the README screenshots in `docs/images/`, taken from a throwaway install with made-up devices, never a real network |
+| The rights NetHelper needs on a device, or the first-run steps | `docs/GETTING_STARTED.md` (the only copy of the device-account table) |
 | What NetHelper supports, what was tested on real equipment, or a known limitation | `docs/SUPPORT.md` |
 | Something you learned on real hardware | `docs/hardware/` |
 
@@ -50,7 +52,7 @@ And three rules:
 
 ## Releasing
 
-1. Set the new version everywhere it appears: `VERSION`, `version` in both `package.json` files (and their lockfiles, with `npm version <v> --no-git-tag-version` in each tier), the `NETHELPER_VERSION` defaults in `deploy/docker-compose.yml`, `ARG VITE_APP_VERSION` in `frontend/Dockerfile`, and the release download example in `deploy/README.md`. `backend/tests/unit/release-version.test.js` fails if one is missed.
+1. Set the new version everywhere it appears: `VERSION`, `version` in both `package.json` files (and their lockfiles, with `npm version <v> --no-git-tag-version` in each tier), the `NETHELPER_VERSION` defaults in `deploy/docker-compose.yml`, `ARG VITE_APP_VERSION` in `frontend/Dockerfile`, and the release download blocks in `README.md` and `docs/INSTALL.md`. `backend/tests/unit/release-version.test.js` fails if one is missed.
 2. Move the `[Unreleased]` entries in `CHANGELOG.md` under a dated heading for the version: `## [<version>] — <YYYY-MM-DD>`.
 3. Merge to `master`, then tag and push the tag: `git tag v<version> && git push origin v<version>`.
 

@@ -22,7 +22,7 @@ What NetHelper protects, so you can judge a report or a deployment:
 - **Application backups** (Settings → App Backup, admins only) hold the whole database (password hashes, credentials encrypted with `ENCRYPTION_KEY`) and every config backup. Archives are written mode 0600 and can be encrypted with a passphrase (AES-256-GCM, key from scrypt). Only an encrypted archive can contain `ENCRYPTION_KEY`, and only when an admin turns that on.
 - **Accounts**: no self-signup; admins create users. Passwords are bcrypt-hashed, at least 12 characters, and login, refresh and password-change attempts are rate-limited. Logging out revokes the refresh token; an access token already issued stays valid until it expires (`JWT_EXPIRES_IN`, default 1 hour). Changing a password or an admin reset ends every session at once: the refresh token is revoked, and access tokens already issued and open real-time connections are refused, because each token carries the user's session version.
 - **Read-only toward devices and clouds**: NetHelper never writes configuration to a device or a cloud. Use device accounts with only the rights listed in [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md).
-- **Transport**: the Docker install serves plain HTTP; put TLS in front of it anywhere but a trusted management network ([`deploy/README.md`](deploy/README.md) → TLS). The bare-metal nginx site is TLS-only.
+- **Transport**: the Docker install serves plain HTTP; put TLS in front of it anywhere but a trusted management network ([`docs/INSTALL.md`](docs/INSTALL.md#tls)). The bare-metal nginx site is TLS-only.
 - **Logs** mask values under secret-looking keys. Still review logs before sharing them.
 - **One instance per database**: the live monitor and alert settle timers are in memory.
 

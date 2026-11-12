@@ -32,7 +32,7 @@ Node.js backend for NetHelper, a **multi-vendor** network automation and monitor
 5. Create the first admin: `npm run user:manage`
 6. Start development server: `npm run dev`
 
-For production deployment (Docker Compose or systemd + nginx), see [`../deploy/README.md`](../deploy/README.md).
+For production deployment (Docker Compose or systemd + nginx), see [`../docs/INSTALL.md`](../docs/INSTALL.md).
 
 ## API
 
@@ -65,4 +65,4 @@ Account problems (locked out, forgotten password, wrong role): `npm run user:man
 
 ## Deployment
 
-Docker Compose or systemd + nginx: see [`../deploy/README.md`](../deploy/README.md). In short, production runs `npm run db:deploy` (apply migrations) then `npm start` with `NODE_ENV=production`; `npm run user:manage` administers users from the server.
+Docker Compose or systemd + nginx: see [`../docs/INSTALL.md`](../docs/INSTALL.md). In short, production runs `npm run db:deploy` (apply migrations) then `npm start` with `NODE_ENV=production`; `npm run user:manage` administers users from the server.
