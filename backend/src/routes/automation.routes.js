@@ -8,6 +8,7 @@ const automationTriggers = require('../services/automation/trigger.service');
 const automationSchedules = require('../services/automation/schedule.service');
 const { resolveTargets } = require('../services/automation/targets');
 const { queueRuns } = require('../services/automation/runs');
+const { protectElements, maskAutomation } = require('../services/automation/secrets');
 
 /** After an automation changes: alert triggers re-read, its cron schedule re-derived. */
 async function automationChanged(id) {
@@ -55,7 +56,7 @@ router.get('/', async (req, res) => {
 
     // Format response to match frontend expectations
     res.json({
-      data: automations,
+      data: automations.map(maskAutomation),
     });
   } catch (error) {
     logger.error('Get automations error:', error);
@@ -63,6 +64,18 @@ router.get('/', async (req, res) => {
       error: 'Failed to fetch automations',
       message: error.message,
     });
+  }
+});
+
+// Notification channels a Notification Channel step can pick (id, name, type
+// only: the channels themselves are admin-only in Settings).
+router.get('/notification-channels', authorize('admin', 'operator'), async (req, res) => {
+  try {
+    const channels = await require('../services/notification-channel.service').names();
+    res.json({ data: channels, emailConfigured: Boolean(process.env.SMTP_HOST) });
+  } catch (error) {
+    logger.error('Get automation notification channels error:', error);
+    res.status(500).json({ error: 'Failed to fetch notification channels', message: error.message });
   }
 });
 
@@ -99,7 +112,7 @@ router.get('/:id', async (req, res) => {
     }
 
     res.json({
-      data: automation,
+      data: maskAutomation(automation),
     });
   } catch (error) {
     logger.error('Get automation error:', error);
@@ -135,13 +148,14 @@ router.post('/', authorize('admin', 'operator'), [
       description, 
       category, 
       priority, 
-      elements, 
       active = false, 
       enabled = true, 
       metadata,
       deviceGroupIds = [] 
     } = req.body;
     const prisma = getPrisma();
+    // Secrets in the graph (HTTP Request headers) are encrypted before anything else sees it.
+    const elements = protectElements(req.body.elements);
 
     if (active) {
       const { errors: graphErrors } = engine.validate(elements);
@@ -175,7 +189,7 @@ router.post('/', authorize('admin', 'operator'), [
     logger.info('Automation created', { automationId: automation.id, userId: req.user.id });
 
     res.status(201).json({
-      data: automation,
+      data: maskAutomation(automation),
     });
   } catch (error) {
     logger.error('Create automation error:', error);
@@ -212,7 +226,6 @@ router.put('/:id', authorize('admin', 'operator'), [
       description, 
       category, 
       priority, 
-      elements, 
       active, 
       enabled, 
       metadata, 
@@ -230,6 +243,11 @@ router.put('/:id', authorize('admin', 'operator'), [
         error: 'Automation not found',
       });
     }
+
+    // Secrets in the graph are encrypted; a masked one keeps what is stored.
+    const elements = req.body.elements === undefined
+      ? undefined
+      : protectElements(req.body.elements, existingAutomation.elements);
 
     // An active automation must be able to run (alert triggers start it unattended).
     if (active ?? existingAutomation.active) {
@@ -269,7 +287,7 @@ router.put('/:id', authorize('admin', 'operator'), [
     logger.info('Automation updated', { automationId: id, userId: req.user.id });
 
     res.json({
-      data: automation,
+      data: maskAutomation(automation),
     });
   } catch (error) {
     logger.error('Update automation error:', error);
@@ -425,7 +443,7 @@ router.patch('/:id/toggle', authorize('admin', 'operator'), async (req, res) => 
     });
 
     res.json({
-      data: automation,
+      data: maskAutomation(automation),
     });
   } catch (error) {
     logger.error('Toggle automation error:', error);

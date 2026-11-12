@@ -40,14 +40,14 @@ test('validate reports nodes that cannot run yet and bad configs', () => {
     node('Reboot', 'action', 'device-reboot'),
     node('Raise', 'action', 'raise-alert', { title: 'x' }),
     node('Ack', 'action', 'acknowledge-alert'),
-    node('Email', 'notification', 'email'),
-    edge('t', 'Reboot'), edge('t', 'Raise'), edge('t', 'Ack'), edge('t', 'Email'),
+    node('Sms', 'notification', 'sms'),
+    edge('t', 'Reboot'), edge('t', 'Raise'), edge('t', 'Ack'), edge('t', 'Sms'),
   ]);
   expect(errors).toEqual([
     '"Reboot" (action device-reboot) can\'t run yet',
     '"Raise": key is required',
     '"Ack" needs an Alert trigger',
-    '"Email" (notification email) can\'t run yet',
+    '"Sms" (notification sms) can\'t run yet',
   ]);
 });
 

@@ -40,6 +40,7 @@ const nodeLabel = computed(() => {
   if (!props.data?.notificationType) return 'Notification'
   
   const notificationTypes = {
+    'channel': 'Notification Channel',
     'email': 'Send Email',
     'slack': 'Slack Message',
     'teams': 'Teams Message',
@@ -56,6 +57,8 @@ const nodeSubtitle = computed(() => {
   if (!props.data?.config) return 'Configure notification'
   
   switch (props.data.notificationType) {
+    case 'channel':
+      return props.data.config.channelName || (props.data.config.channelId ? 'Channel' : 'Pick a channel')
     case 'email':
       return props.data.config.recipients?.length > 0 
         ? `${props.data.config.recipients.length} recipients` 
@@ -83,6 +86,8 @@ const nodeDescription = computed(() => {
   if (!props.data?.config) return ''
   
   switch (props.data.notificationType) {
+    case 'channel':
+      return props.data.config.message || 'Says what happened, with a link'
     case 'email':
       return `Send email to ${props.data.config.recipients?.join(', ') || 'recipients'}`
     case 'slack':
@@ -106,6 +111,7 @@ const nodeIcon = computed(() => {
   if (!props.data?.notificationType) return 'mdi-bell'
   
   const notificationIcons = {
+    'channel': 'mdi-bullhorn',
     'email': 'mdi-email',
     'slack': 'mdi-slack',
     'teams': 'mdi-microsoft-teams',
@@ -133,9 +139,10 @@ const validationErrors = computed(() => {
     if (!props.data.config?.recipients || props.data.config.recipients.length === 0) {
       errors.push('Email recipients are required')
     }
-    if (!props.data.config?.subject) {
-      errors.push('Email subject is required')
-    }
+  }
+
+  if (props.data?.notificationType === 'channel' && !props.data.config?.channelId) {
+    errors.push('Pick a notification channel')
   }
   
   if (props.data?.notificationType === 'slack' || props.data?.notificationType === 'teams') {

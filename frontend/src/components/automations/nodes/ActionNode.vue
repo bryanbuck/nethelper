@@ -51,7 +51,8 @@ const nodeLabel = computed(() => {
     'create-backup': 'Create Backup',
     'generate-report': 'Generate Report',
     'run-script': 'Run Script',
-    'http-request': 'HTTP Request'
+    'http-request': 'HTTP Request',
+    'run-discovery': 'Run Discovery'
   }
   
   return actionTypes[props.data.actionType] || 'Action'
@@ -85,6 +86,8 @@ const nodeSubtitle = computed(() => {
       return props.data.config.scriptName || 'Select script'
     case 'http-request':
       return props.data.config.url || 'Enter URL'
+    case 'run-discovery':
+      return props.data.config.subnets?.length ? props.data.config.subnets.join(', ') : 'Local subnets'
     default:
       return 'Configure action'
   }
@@ -115,7 +118,9 @@ const nodeDescription = computed(() => {
     case 'run-script':
       return `Execute ${props.data.config.scriptName}`
     case 'http-request':
-      return `${props.data.config.method} ${props.data.config.url}`
+      return `${props.data.config.method || 'POST'} ${props.data.config.url || ''}`
+    case 'run-discovery':
+      return 'Start a discovery scan'
     default:
       return ''
   }
@@ -135,7 +140,8 @@ const nodeIcon = computed(() => {
     'create-backup': 'mdi-backup-restore',
     'generate-report': 'mdi-file-document',
     'run-script': 'mdi-script-text',
-    'http-request': 'mdi-web'
+    'http-request': 'mdi-web',
+    'run-discovery': 'mdi-radar'
   }
   
   return actionIcons[props.data.actionType] || 'mdi-cog'
@@ -177,9 +183,6 @@ const validationErrors = computed(() => {
   if (props.data?.actionType === 'http-request') {
     if (!props.data.config?.url) {
       errors.push('URL is required')
-    }
-    if (!props.data.config?.method) {
-      errors.push('HTTP method is required')
     }
   }
   

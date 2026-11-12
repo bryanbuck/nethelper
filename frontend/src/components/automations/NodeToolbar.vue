@@ -188,8 +188,8 @@
               <ul>
                 <li><strong>Triggers:</strong> Start your workflow with events</li>
                 <li><strong>Conditions:</strong> Add logic and decision points</li>
-                <li><strong>Actions:</strong> Perform network operations</li>
-                <li><strong>Notifications:</strong> Send alerts and messages</li>
+                <li><strong>Actions:</strong> Take a backup, raise an alert, call another system</li>
+                <li><strong>Notifications:</strong> Send a message through a channel or by email</li>
               </ul>
               <li><strong>Connections:</strong> Drag from output handles to input handles to connect nodes</li>
             </ul>
@@ -292,7 +292,7 @@ const conditionNodes = [
   {
     type: 'time-window',
     label: 'Time Window',
-    description: 'Restrict to time periods',
+    description: 'Only at certain hours and days',
     icon: 'mdi-clock-outline',
     color: 'warning'
   },
@@ -393,39 +393,34 @@ const actionNodes = [
   {
     type: 'http-request',
     label: 'HTTP Request',
-    description: 'Make HTTP API calls',
+    description: 'Call another system\'s API',
     icon: 'mdi-web',
+    color: 'primary'
+  },
+  {
+    type: 'run-discovery',
+    label: 'Run Discovery',
+    description: 'Start a network discovery scan',
+    icon: 'mdi-radar',
     color: 'primary'
   }
 ]
 
+// Slack, Teams and other webhooks are notification channels (Settings →
+// Notifications), which keep the webhook address out of the workflow.
 const notificationNodes = [
+  {
+    type: 'channel',
+    label: 'Notification Channel',
+    description: 'Slack, Teams, webhook or email channel',
+    icon: 'mdi-bullhorn',
+    color: 'purple'
+  },
   {
     type: 'email',
     label: 'Email',
-    description: 'Send email notifications',
+    description: 'Email the addresses you name',
     icon: 'mdi-email',
-    color: 'purple'
-  },
-  {
-    type: 'slack',
-    label: 'Slack',
-    description: 'Send Slack messages',
-    icon: 'mdi-slack',
-    color: 'purple'
-  },
-  {
-    type: 'teams',
-    label: 'Teams',
-    description: 'Send Teams messages',
-    icon: 'mdi-microsoft-teams',
-    color: 'purple'
-  },
-  {
-    type: 'webhook',
-    label: 'Webhook',
-    description: 'Send webhook notifications',
-    icon: 'mdi-webhook',
     color: 'purple'
   },
   {
@@ -433,20 +428,6 @@ const notificationNodes = [
     label: 'SMS',
     description: 'Send SMS alerts',
     icon: 'mdi-message-text',
-    color: 'purple'
-  },
-  {
-    type: 'dashboard',
-    label: 'Dashboard Alert',
-    description: 'Show dashboard alerts',
-    icon: 'mdi-view-dashboard',
-    color: 'purple'
-  },
-  {
-    type: 'log',
-    label: 'Log Entry',
-    description: 'Write to system logs',
-    icon: 'mdi-file-document-outline',
     color: 'purple'
   }
 ]

@@ -317,11 +317,25 @@
               <v-select
                 v-model="nodeConfig.config.days"
                 label="Days of Week"
-                :items="daysOfWeek"
+                :items="WEEKDAYS"
                 variant="outlined"
                 multiple
                 chips
+                closable-chips
+                hint="Leave empty for every day. A window past midnight (22:00–06:00) belongs to the day it starts on."
+                persistent-hint
+                class="mb-4"
               />
+              <v-autocomplete
+                v-model="nodeConfig.config.timezone"
+                label="Timezone"
+                :items="timezones"
+                variant="outlined"
+                :rules="[rules.required]"
+              />
+              <p class="text-caption text-medium-emphasis">
+                Connect the green output for runs inside the window and the red one for runs outside it.
+              </p>
             </div>
             
             <!-- User Approval Condition -->
@@ -473,37 +487,109 @@
             
             <!-- HTTP Request Action -->
             <div v-if="nodeConfig.actionType === 'http-request'">
-              <v-select
-                v-model="nodeConfig.config.method"
-                label="HTTP Method"
-                :items="httpMethods"
-                variant="outlined"
-                required
-                :rules="[rules.required]"
-              />
-              <v-text-field
-                v-model="nodeConfig.config.url"
-                label="URL"
-                variant="outlined"
-                required
-                :rules="[rules.required, rules.url]"
-                placeholder="https://api.example.com/webhook"
-              />
+              <v-alert type="info" variant="tonal" density="compact" class="mb-4">
+                For Slack, Teams or another webhook, a Notification Channel step is simpler: the channel
+                keeps the address. Use this to call an API (a ticketing system, home automation).
+                Any answer but 2xx fails the step.
+              </v-alert>
+              <div class="d-flex flex-wrap ga-2">
+                <v-select
+                  v-model="nodeConfig.config.method"
+                  label="Method"
+                  :items="HTTP_METHODS"
+                  variant="outlined"
+                  class="http-method"
+                  :rules="[rules.required]"
+                />
+                <v-text-field
+                  v-model="nodeConfig.config.url"
+                  label="URL"
+                  variant="outlined"
+                  class="flex-grow-1"
+                  :rules="[rules.required, rules.templatedUrl]"
+                  placeholder="https://api.example.com/hooks/network"
+                  hint="Placeholders are URL-encoded. Addresses on the NetHelper host itself are refused."
+                  persistent-hint
+                />
+              </div>
+              <div class="text-subtitle-2 mt-4 mb-2">Headers</div>
+              <div
+                v-for="(header, index) in nodeConfig.config.headers"
+                :key="index"
+                class="d-flex flex-wrap align-center ga-2"
+              >
+                <v-text-field
+                  v-model="header.name"
+                  label="Name"
+                  variant="outlined"
+                  density="compact"
+                  class="http-header-name"
+                  :rules="[rules.required, rules.headerName]"
+                  placeholder="Authorization"
+                />
+                <v-text-field
+                  v-model="header.value"
+                  label="Value"
+                  variant="outlined"
+                  density="compact"
+                  class="flex-grow-1"
+                  :type="header.value === '***' ? 'password' : 'text'"
+                  :rules="[rules.required]"
+                  :hint="header.value === '***' ? 'Stored; type a new value to replace it' : 'Stored encrypted, never shown again'"
+                  persistent-hint
+                />
+                <v-btn
+                  icon="mdi-close"
+                  variant="text"
+                  size="small"
+                  aria-label="Remove header"
+                  @click="nodeConfig.config.headers.splice(index, 1)"
+                />
+              </div>
+              <v-btn
+                v-if="nodeConfig.config.headers.length < HTTP_MAX_HEADERS"
+                variant="text"
+                size="small"
+                prepend-icon="mdi-plus"
+                class="mb-4"
+                @click="nodeConfig.config.headers.push({ name: '', value: '' })"
+              >
+                Add header
+              </v-btn>
               <v-textarea
-                v-if="['POST', 'PUT', 'PATCH'].includes(nodeConfig.config.method)"
+                v-if="nodeConfig.config.method !== 'GET'"
                 v-model="nodeConfig.config.body"
-                label="Request Body (JSON)"
+                label="Body"
                 variant="outlined"
                 rows="4"
-                placeholder="{&quot;message&quot;: &quot;Hello World&quot;}"
+                :rules="[rules.jsonBody]"
+                placeholder="{&quot;text&quot;: &quot;{{device.name}} changed&quot;}"
+                :hint="`A body starting with { or [ is sent as JSON, and placeholders inside it are escaped for JSON. ${TEMPLATE_HINT}`"
+                persistent-hint
               />
-              <v-textarea
-                v-model="nodeConfig.config.headers"
-                label="Headers (JSON)"
+            </div>
+
+            <!-- Run Discovery Action -->
+            <div v-if="nodeConfig.actionType === 'run-discovery'">
+              <v-combobox
+                v-model="nodeConfig.config.subnets"
+                label="Subnets"
+                :items="localSubnets"
                 variant="outlined"
-                rows="3"
-                placeholder="{&quot;Content-Type&quot;: &quot;application/json&quot;}"
+                multiple
+                chips
+                closable-chips
+                :rules="[rules.subnets]"
+                placeholder="192.168.0.0/24"
+                hint="CIDR, /16 to /32. Leave empty for the NetHelper host's own subnets."
+                persistent-hint
+                class="mb-2"
               />
+              <p class="text-body-2 text-medium-emphasis">
+                Starts a scan and moves on; results appear on the Discovery page. One scan runs at a time:
+                while one is running the step reports that and starts nothing. Put it after the trigger, not
+                after a per-device step, or each device's run tries to start one.
+              </p>
             </div>
           </div>
           
@@ -519,75 +605,65 @@
               @update:model-value="onNotificationTypeChange"
             />
             
+            <!-- Notification Channel -->
+            <div v-if="nodeConfig.notificationType === 'channel'">
+              <v-select
+                v-model="nodeConfig.config.channelId"
+                label="Channel"
+                :items="notificationChannels"
+                item-title="name"
+                item-value="id"
+                variant="outlined"
+                :rules="[rules.required]"
+                :hint="channelHint"
+                persistent-hint
+                class="mb-4"
+              >
+                <template #item="{ props: itemProps, item }">
+                  <v-list-item
+                    v-bind="itemProps"
+                    :subtitle="`${NOTIFICATION_CHANNEL_TYPES[item.raw.type] || item.raw.type}${item.raw.enabled ? '' : ' · switched off'}`"
+                  />
+                </template>
+              </v-select>
+            </div>
+
             <!-- Email Notification -->
             <div v-if="nodeConfig.notificationType === 'email'">
+              <v-alert v-if="emailConfigured === false" type="warning" variant="tonal" density="compact" class="mb-4">
+                Email isn't configured on the server (SMTP_HOST), so this step will fail until it is.
+              </v-alert>
               <v-combobox
                 v-model="nodeConfig.config.recipients"
                 label="Recipients"
                 variant="outlined"
                 multiple
                 chips
-                required
-                :rules="[rules.required]"
-                placeholder="user@example.com"
+                closable-chips
+                :rules="[rules.recipients]"
+                placeholder="noc@example.com"
+                class="mb-2"
               />
+            </div>
+
+            <!-- Message (both runnable notification steps) -->
+            <div v-if="['channel', 'email'].includes(nodeConfig.notificationType)">
               <v-text-field
                 v-model="nodeConfig.config.subject"
                 label="Subject"
                 variant="outlined"
-                required
-                :rules="[rules.required]"
+                placeholder="{{automation.name}}: {{device.name}}"
+                hint="Empty: the automation's name and the device"
+                persistent-hint
+                class="mb-4"
               />
               <v-textarea
                 v-model="nodeConfig.config.message"
                 label="Message"
                 variant="outlined"
-                required
-                :rules="[rules.required]"
-                rows="4"
-              />
-            </div>
-            
-            <!-- Slack Notification -->
-            <div v-if="nodeConfig.notificationType === 'slack'">
-              <v-text-field
-                v-model="nodeConfig.config.channel"
-                label="Channel"
-                variant="outlined"
-                required
-                :rules="[rules.required]"
-                placeholder="#general"
-              />
-              <v-textarea
-                v-model="nodeConfig.config.message"
-                label="Message"
-                variant="outlined"
-                required
-                :rules="[rules.required]"
-                rows="4"
-              />
-              <v-checkbox
-                v-model="nodeConfig.config.mentionChannel"
-                label="Mention @channel"
-              />
-            </div>
-            
-            <!-- Webhook Notification -->
-            <div v-if="nodeConfig.notificationType === 'webhook'">
-              <v-text-field
-                v-model="nodeConfig.config.url"
-                label="Webhook URL"
-                variant="outlined"
-                required
-                :rules="[rules.required, rules.url]"
-                placeholder="https://hooks.slack.com/services/..."
-              />
-              <v-textarea
-                v-model="nodeConfig.config.payload"
-                label="Payload (JSON)"
-                variant="outlined"
-                rows="4"
-                placeholder="{&quot;text&quot;: &quot;Automation completed&quot;}"
+                rows="3"
+                :hint="`Empty: what happened (alert, config change or run) and a link to it. Placeholders: ${TEMPLATE_HINT}`"
+                persistent-hint
               />
             </div>
           </div>
@@ -618,7 +694,7 @@
           />
           
           <v-checkbox
-            v-if="node?.type === 'action'"
+            v-if="['action', 'notification'].includes(node?.type)"
             v-model="nodeConfig.config.continueOnError"
             label="Continue to the next steps if this one fails"
             hide-details
@@ -667,7 +743,11 @@ import {
   ALERT_SEVERITY_OPERATORS,
   ALERT_TRIGGER_EVENTS,
   CONFIG_CHANGE_KINDS,
-  TEMPLATE_HINT
+  TEMPLATE_HINT,
+  HTTP_METHODS,
+  HTTP_MAX_HEADERS,
+  WEEKDAYS,
+  NOTIFICATION_CHANNEL_TYPES
 } from '@/models/automation-nodes'
 
 const props = defineProps({
@@ -769,15 +849,21 @@ const actionTypes = markRunnable('action', [
   { title: 'HTTP Request', value: 'http-request' }
 ])
 
-const notificationTypes = markRunnable('notification', [
-  { title: 'Email', value: 'email' },
+// Slack, Teams and webhooks go through a Notification Channel. The old
+// subtypes stay listed only so a workflow saved with one still shows it.
+const LEGACY_NOTIFICATIONS = [
   { title: 'Slack', value: 'slack' },
   { title: 'Teams', value: 'teams' },
   { title: 'Webhook', value: 'webhook' },
-  { title: 'SMS', value: 'sms' },
   { title: 'Dashboard Alert', value: 'dashboard' },
   { title: 'Log Entry', value: 'log' }
-])
+]
+const notificationTypes = computed(() => markRunnable('notification', [
+  { title: 'Notification Channel (Slack, Teams, webhook, email)', value: 'channel' },
+  { title: 'Email', value: 'email' },
+  { title: 'SMS', value: 'sms' },
+  ...LEGACY_NOTIFICATIONS.filter((item) => item.value === props.node?.data?.notificationType)
+]))
 
 // Automations never trigger on their own alerts (no loops).
 const alertRuleItems = Object.entries(ALERT_RULE_LABELS)
@@ -806,7 +892,39 @@ onMounted(() => {
   devicesStore.ensureAllDevices().catch(() => {}) // store records the error
   loadDeviceGroups()
   loadTargetDevices()
+  loadNotificationChannels()
+  loadLocalSubnets()
 })
+
+// Channels from Settings → Notifications (names only; admins manage them there)
+const notificationChannels = ref([])
+const emailConfigured = ref(null)
+async function loadNotificationChannels() {
+  try {
+    const response = await api.get('/automations/notification-channels')
+    notificationChannels.value = response.data?.data || []
+    emailConfigured.value = response.data?.emailConfigured ?? null
+  } catch {
+    notificationChannels.value = []
+  }
+}
+const channelHint = computed(() => {
+  if (!notificationChannels.value.length) return 'No channels yet: an admin adds them in Settings → Notifications'
+  const picked = notificationChannels.value.find((c) => c.id === nodeConfig.value.config?.channelId)
+  if (picked && !picked.enabled) return 'This channel is switched off; the step fails until it is on again'
+  return 'Channels are managed in Settings → Notifications (admin)'
+})
+
+// The host's own subnets, offered by the Run Discovery step
+const localSubnets = ref([])
+async function loadLocalSubnets() {
+  try {
+    const response = await api.get('/discovery/subnets')
+    localSubnets.value = (response.data?.data || []).map((s) => s.subnet || s).filter((s) => typeof s === 'string')
+  } catch {
+    localSubnets.value = []
+  }
+}
 
 const statusConditions = [
   { title: 'Goes Online', value: 'online' },
@@ -830,14 +948,6 @@ const operators = [
   { title: 'Greater or Equal', value: '>=' },
   { title: 'Less or Equal', value: '<=' },
   { title: 'Not Equal', value: '!=' }
-]
-
-const httpMethods = [
-  { title: 'GET', value: 'GET' },
-  { title: 'POST', value: 'POST' },
-  { title: 'PUT', value: 'PUT' },
-  { title: 'PATCH', value: 'PATCH' },
-  { title: 'DELETE', value: 'DELETE' }
 ]
 
 const timezones = ['UTC', ...(Intl.supportedValuesOf?.('timeZone') || []).filter((tz) => tz !== 'UTC')]
@@ -878,16 +988,6 @@ async function loadTargetDevices() {
   }
 }
 
-const daysOfWeek = [
-  { title: 'Monday', value: 'monday' },
-  { title: 'Tuesday', value: 'tuesday' },
-  { title: 'Wednesday', value: 'wednesday' },
-  { title: 'Thursday', value: 'thursday' },
-  { title: 'Friday', value: 'friday' },
-  { title: 'Saturday', value: 'saturday' },
-  { title: 'Sunday', value: 'sunday' }
-]
-
 const availableUsers = [
   { title: 'Admin User', value: 'admin' },
   { title: 'Network Manager', value: 'netmgr' },
@@ -905,6 +1005,36 @@ const rules = {
     } catch {
       return 'Must be a valid URL'
     }
+  },
+  // Placeholders are filled at run time; check the URL around them.
+  templatedUrl: value => {
+    try {
+      const url = new URL(String(value || '').replace(/\{\{[^}]*\}\}/g, 'x'))
+      return ['http:', 'https:'].includes(url.protocol) || 'Must start with https:// or http://'
+    } catch {
+      return 'Must be a valid URL'
+    }
+  },
+  headerName: value => /^[A-Za-z0-9-]{1,64}$/.test(value || '') || 'Letters, digits and dashes',
+  jsonBody: value => {
+    const body = String(value || '').trim()
+    if (!/^[[{]/.test(body)) return true
+    try {
+      JSON.parse(body.replace(/\{\{[^}]*\}\}/g, 'x'))
+      return true
+    } catch {
+      return 'Looks like JSON but is not valid JSON'
+    }
+  },
+  recipients: value => {
+    const list = (value || []).map((r) => String(r).trim()).filter(Boolean)
+    if (!list.length) return 'Add at least one recipient'
+    const bad = list.find((r) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r))
+    return bad ? `"${bad}" is not an email address` : true
+  },
+  subnets: value => {
+    const bad = (value || []).find((s) => !/^(\d{1,3}\.){3}\d{1,3}\/(1[6-9]|2\d|3[0-2])$/.test(String(s).trim()))
+    return bad ? `"${bad}" is not a CIDR between /16 and /32` : true
   }
 }
 
@@ -922,11 +1052,28 @@ const initializeConfig = () => {
     ...nodeData
   }
   
-  // Ensure config object exists
-  if (!nodeConfig.value.config) {
-    nodeConfig.value.config = {}
+  // Ensure config object exists (a copy: Cancel must leave the node as it was)
+  nodeConfig.value.config = JSON.parse(JSON.stringify(nodeConfig.value.config || {}))
+  applyDefaults()
+}
+
+// Fields a step's form edits in place need a value before it renders.
+function applyDefaults() {
+  const config = nodeConfig.value.config
+  if (nodeConfig.value.actionType === 'http-request') {
+    config.method ||= 'POST'
+    if (!Array.isArray(config.headers)) config.headers = [] // older drafts kept a JSON string
+  }
+  if (nodeConfig.value.conditionType === 'time-window') {
+    config.timezone ||= Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
   }
 }
+
+// The channel's name, kept on the node so the canvas can show it.
+watch(() => nodeConfig.value.config?.channelId, (id) => {
+  const channel = notificationChannels.value.find((c) => c.id === id)
+  if (channel && nodeConfig.value.config) nodeConfig.value.config.channelName = channel.name
+})
 
 const onTriggerTypeChange = () => {
   nodeConfig.value.config = nodeConfig.value.triggerType === 'schedule'
@@ -936,10 +1083,12 @@ const onTriggerTypeChange = () => {
 
 const onConditionTypeChange = () => {
   nodeConfig.value.config = {}
+  applyDefaults()
 }
 
 const onActionTypeChange = () => {
   nodeConfig.value.config = {}
+  applyDefaults()
 }
 
 const onNotificationTypeChange = () => {
@@ -993,5 +1142,21 @@ watch(() => props.modelValue, async (newValue) => {
 <style scoped>
 .v-dialog > .v-card {
   overflow-y: auto;
+}
+
+.http-method {
+  max-width: 140px;
+}
+
+.http-header-name {
+  max-width: 220px;
+}
+
+@media (max-width: 599.98px) {
+  .http-method,
+  .http-header-name {
+    max-width: none;
+    flex-basis: 100%;
+  }
 }
 </style>

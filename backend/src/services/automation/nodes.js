@@ -10,6 +10,10 @@
  * ctx: { automation: {id, name}, device?, alert?, configChange?, executionId }
  * (configChange: { backupId, previousBackupId, changedKinds } on a
  * Configuration Change run)
+ *
+ * Nothing here writes to a device or a cloud. Services a step calls are
+ * required inside run(), so loading this registry stays cheap (the frontend
+ * parity spec loads it).
  */
 
 const { CronExpressionParser } = require('cron-parser');
@@ -17,6 +21,7 @@ const { getPrisma } = require('../../config/database');
 const alertService = require('../alert.service');
 const { effectiveStatus } = require('../../utils/device-status');
 const { ALERT_RULES, SEVERITIES } = require('../../constants/alert-rules');
+const { isStored } = require('./secrets');
 
 const AUTOMATION_RULE = 'automation.raised';
 const ALERT_EVENTS = ['opened', 'resolved'];
@@ -47,12 +52,101 @@ function automationSubject(key, deviceId) {
   return `${key}:${deviceId || 'global'}`;
 }
 
-/** Fill {{device.name}}, {{alert.title}}, {{alert.severity}}, {{automation.name}}. */
-function render(text, ctx) {
-  return String(text || '').replace(/\{\{\s*(device|alert|automation)\.(\w+)\s*\}\}/g, (_, scope, field) => {
-    const value = ctx[scope]?.[field];
-    return value == null ? '' : String(value);
+/** Where in the web UI this run's subject is ('' when the app's address is unknown). */
+function runLink(ctx) {
+  const { appBaseUrl } = require('../notification.service');
+  const base = appBaseUrl();
+  if (!base) return '';
+  if (ctx.configChange && ctx.device) return `${base}/devices/${ctx.device.id}?tab=history`;
+  if (ctx.alert) return `${base}/alerts`;
+  if (ctx.device) return `${base}/devices/${ctx.device.id}`;
+  return `${base}/automations/executions`;
+}
+
+/**
+ * Fill {{device.name}} (any stored device field), {{alert.title}},
+ * {{alert.severity}}, {{automation.name}}, {{change.kinds}} and {{link}}.
+ * A value that isn't there renders empty. `escape` fits the value to where
+ * it lands (a JSON string, a URL).
+ */
+function render(text, ctx, escape = (value) => value) {
+  const scopes = {
+    device: ctx.device,
+    alert: ctx.alert,
+    automation: ctx.automation,
+    change: ctx.configChange && { kinds: (ctx.configChange.changedKinds || []).join(', ') },
+  };
+  return String(text || '').replace(/\{\{\s*(?:(device|alert|automation|change)\.(\w+)|(link))\s*\}\}/g, (_, scope, field, link) => {
+    const value = link ? runLink(ctx) : scopes[scope]?.[field];
+    return value == null || typeof value === 'object' ? '' : escape(String(value));
   });
+}
+
+/** The inside of a JSON string literal (a template value placed between quotes in a JSON body). */
+const jsonEscape = (value) => JSON.stringify(value).slice(1, -1);
+
+/** Subject and text a notification step sends when its own are left empty. */
+function defaultMessage(ctx) {
+  const subject = `${ctx.automation.name}${ctx.device ? `: ${ctx.device.name}` : ''}`;
+  const link = runLink(ctx);
+  const lines = [
+    ...(ctx.alert ? [`Alert (${ctx.alert.severity}): ${ctx.alert.title}`] : []),
+    ...(ctx.configChange ? [`Configuration changed${ctx.device ? ` on ${ctx.device.name}` : ''}${ctx.configChange.changedKinds?.length ? ` (${ctx.configChange.changedKinds.join(', ')})` : ''}`] : []),
+    ...(!ctx.alert && !ctx.configChange ? [`Automation "${ctx.automation.name}" ran${ctx.device ? ` on ${ctx.device.name}` : ''}.`] : []),
+    ...(link ? [link] : []),
+  ];
+  return { subject, text: lines.join('\n') };
+}
+
+/** What a notification step says: its own subject/message (templated), else the default. */
+function composeMessage(ctx, config) {
+  const fallback = defaultMessage(ctx);
+  return {
+    subject: render(config.subject, ctx).trim() || fallback.subject,
+    text: render(config.message, ctx).trim() || fallback.text,
+  };
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_RECIPIENTS = 20;
+const MAX_HEADERS = 10;
+const HEADER_NAME_RE = /^[A-Za-z0-9-]{1,64}$/;
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const minutesOf = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+
+function validTimezone(timezone) {
+  try {
+    Intl.DateTimeFormat('en-US', { timeZone: timezone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** { day: 0-6 (Sunday = 0), minutes since midnight } of `date` in a timezone. */
+function localTime(date, timezone) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone, weekday: 'long', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(date).map((p) => [p.type, p.value]));
+  return { day: DAYS.indexOf(parts.weekday.toLowerCase()), minutes: Number(parts.hour) * 60 + Number(parts.minute) };
+}
+
+/**
+ * Is `date` inside the window? The end is exclusive. A window whose end is
+ * not after its start runs past midnight (22:00–06:00), and its days are the
+ * days it starts on: Friday 22:00–06:00 covers Saturday 03:00.
+ */
+function inTimeWindow(config, date = new Date()) {
+  const { day, minutes } = localTime(date, config.timezone || 'UTC');
+  const start = minutesOf(config.startTime);
+  const end = minutesOf(config.endTime);
+  const days = config.days?.length ? config.days.map((d) => DAYS.indexOf(d)) : null;
+  const onDay = (d) => !days || days.includes(d);
+  if (start < end) return minutes >= start && minutes < end && onDay(day);
+  if (minutes >= start) return onDay(day);
+  if (minutes < end) return onDay((day + 6) % 7);
+  return false;
 }
 
 /** Device ids and group ids a Manual or Schedule trigger runs on (both optional). */
@@ -234,6 +328,147 @@ const NODES = {
       return { alertId: ctx.alert.id, status: alert?.status };
     },
   },
+
+  // Starts a scan and moves on: results land on the Discovery page. One scan
+  // runs at a time, so a run per device starts one and the rest report that.
+  'action:run-discovery': {
+    validate(config) {
+      if (config.subnets == null) return [];
+      if (!Array.isArray(config.subnets)) return ['subnets must be a list'];
+      const discoveryService = require('../discovery.service');
+      const invalid = config.subnets.filter((s) => !discoveryService.isValidCidr(String(s)));
+      return invalid.length ? [`invalid subnet(s) ${invalid.join(', ')} (a CIDR between /16 and /32)`] : [];
+    },
+    async run(ctx, config) {
+      const discoveryService = require('../discovery.service');
+      let scan;
+      try {
+        scan = await discoveryService.createScan(config.subnets || [], null);
+      } catch (error) {
+        if (error.statusCode === 409) return { started: false, reason: 'a discovery scan is already in progress' };
+        throw error;
+      }
+      const { getQueue } = require('../../config/bull');
+      await getQueue('discovery').add('runScan', { scanId: scan.id, triggeredBy: `automation ${ctx.automation.id}` }, { attempts: 1 });
+      return { started: true, scanId: scan.id, subnets: scan.subnets };
+    },
+  },
+
+  // An outbound call to another system. Header values are secrets (secrets.js);
+  // the URL and body are templated. Anything but a 2xx answer fails the step.
+  'action:http-request': {
+    validate(config) {
+      const { METHODS, checkUrl } = require('./http-request');
+      const errors = [];
+      if (!METHODS.includes(config.method || 'POST')) errors.push(`method must be one of ${METHODS.join(', ')}`);
+      if (!String(config.url ?? '').trim()) errors.push('url is required');
+      else {
+        try {
+          checkUrl(render(config.url, { automation: {} }));
+        } catch (error) {
+          errors.push(error.message);
+        }
+      }
+      const headers = config.headers ?? [];
+      if (!Array.isArray(headers)) errors.push('headers must be a list');
+      else {
+        if (headers.length > MAX_HEADERS) errors.push(`at most ${MAX_HEADERS} headers`);
+        for (const h of headers) {
+          if (!HEADER_NAME_RE.test(h?.name || '')) errors.push(`"${h?.name}" is not a valid header name`);
+          else if (!isStored(h.value)) errors.push(`header "${h.name}" needs its value entered again`);
+        }
+      }
+      const body = String(config.body ?? '').trim();
+      if (body && /^[[{]/.test(body)) {
+        try {
+          JSON.parse(render(body, { automation: {} }));
+        } catch {
+          errors.push('the body looks like JSON but is not valid JSON');
+        }
+      }
+      return errors;
+    },
+    async run(ctx, config) {
+      const { request } = require('./http-request');
+      const { revealHeaders } = require('./secrets');
+      const method = config.method || 'POST';
+      const headers = revealHeaders(config.headers);
+      const template = String(config.body ?? '').trim();
+      const isJson = /^[[{]/.test(template);
+      let body;
+      if (template && method !== 'GET') {
+        body = render(template, ctx, isJson ? jsonEscape : undefined);
+        if (!Object.keys(headers).some((name) => name.toLowerCase() === 'content-type')) {
+          headers['Content-Type'] = isJson ? 'application/json' : 'text/plain; charset=utf-8';
+        }
+      }
+      const answer = await request({ method, url: render(config.url, ctx, encodeURIComponent), headers, body });
+      if (!answer.ok) throw new Error(`${method} answered HTTP ${answer.status}${answer.body ? `: ${answer.body.slice(0, 200)}` : ''}`);
+      return { status: answer.status, durationMs: answer.durationMs, body: answer.body };
+    },
+  },
+
+  // Sends through a channel from Settings → Notifications (a Slack or Teams
+  // webhook, any webhook, or an email list). The channel keeps the address
+  // and its secrets; the graph holds only its id.
+  'notification:channel': {
+    validate: (config) => required(config, ['channelId']),
+    async run(ctx, config) {
+      const channels = require('../notification-channel.service');
+      const { subject, text } = composeMessage(ctx, config);
+      const link = runLink(ctx);
+      const channel = await channels.sendMessage(config.channelId, {
+        subject,
+        text,
+        payload: {
+          event: 'automation.notification',
+          // Slack and Teams incoming webhooks show `text` as the message.
+          text: `${subject}\n${text}`,
+          automation: ctx.automation,
+          device: ctx.device ? { id: ctx.device.id, name: ctx.device.name } : null,
+          alert: ctx.alert ? { id: ctx.alert.id, rule: ctx.alert.rule, severity: ctx.alert.severity, title: ctx.alert.title } : null,
+          configChange: ctx.configChange || null,
+          url: link || null,
+          sentAt: new Date().toISOString(),
+        },
+      });
+      return { sentTo: channel.name, type: channel.type };
+    },
+  },
+
+  // Email to addresses named on the step, over the server's SMTP settings.
+  'notification:email': {
+    validate(config) {
+      const recipients = Array.isArray(config.recipients) ? config.recipients.map((r) => String(r).trim()).filter(Boolean) : [];
+      if (!recipients.length) return ['add at least one recipient'];
+      if (recipients.length > MAX_RECIPIENTS) return [`at most ${MAX_RECIPIENTS} recipients`];
+      const invalid = recipients.find((r) => !EMAIL_RE.test(r));
+      return invalid ? [`"${invalid}" is not an email address`] : [];
+    },
+    async run(ctx, config) {
+      const notifier = require('../notification.service');
+      const recipients = config.recipients.map((r) => String(r).trim()).filter(Boolean);
+      const { subject, text } = composeMessage(ctx, config);
+      await notifier.sendEmail(recipients, subject, text);
+      return { sentTo: recipients.length, subject };
+    },
+  },
+
+  'condition:time-window': {
+    validate(config) {
+      const errors = [];
+      for (const field of ['startTime', 'endTime']) {
+        if (!TIME_RE.test(config[field] || '')) errors.push(`${field} must be a time like 08:00`);
+      }
+      if (!errors.length && config.startTime === config.endTime) errors.push('startTime and endTime are the same');
+      if (config.days != null && !(Array.isArray(config.days) && config.days.every((d) => DAYS.includes(d)))) {
+        errors.push('days must be a list of weekdays');
+      }
+      if (config.timezone && !validTimezone(config.timezone)) errors.push(`unknown timezone ${config.timezone}`);
+      return errors;
+    },
+    run: (ctx, config) => inTimeWindow(config),
+  },
 };
 
 /** Is deviceId a member of the device group (alert and config change triggers can be scoped to a group)? */
@@ -253,4 +488,6 @@ module.exports = {
   deviceInGroup,
   render,
   parseSchedule,
+  inTimeWindow,
+  defaultMessage,
 };

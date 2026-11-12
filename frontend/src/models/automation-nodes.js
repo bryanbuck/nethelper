@@ -11,10 +11,15 @@ export const RUNNABLE_NODES = new Set([
   'trigger:schedule',
   'condition:device-property',
   'condition:alert-severity',
+  'condition:time-window',
   'action:create-backup',
   'action:raise-alert',
   'action:clear-alert',
-  'action:acknowledge-alert'
+  'action:acknowledge-alert',
+  'action:run-discovery',
+  'action:http-request',
+  'notification:channel',
+  'notification:email'
 ])
 
 export const isRunnable = (kind, subtype) => RUNNABLE_NODES.has(`${kind}:${subtype}`)
@@ -54,5 +59,22 @@ export const CONFIG_CHANGE_KINDS = [
   { title: 'Structured (JSON)', value: 'structured' }
 ]
 
-// Placeholders the Raise alert title/message accept
-export const TEMPLATE_HINT = '{{device.name}}, {{alert.title}}, {{alert.severity}}, {{automation.name}}'
+// Placeholders the templated fields accept (backend render()): any stored
+// device field, the triggering alert, what changed, and a link to it in NetHelper
+export const TEMPLATE_HINT = '{{device.name}}, {{device.ipAddress}}, {{alert.title}}, {{alert.severity}}, {{change.kinds}}, {{automation.name}}, {{link}}'
+
+export const HTTP_METHODS = ['POST', 'GET', 'PUT', 'PATCH', 'DELETE']
+export const HTTP_MAX_HEADERS = 10
+
+// Time Window days (backend DAYS)
+export const WEEKDAYS = [
+  { title: 'Monday', value: 'monday' },
+  { title: 'Tuesday', value: 'tuesday' },
+  { title: 'Wednesday', value: 'wednesday' },
+  { title: 'Thursday', value: 'thursday' },
+  { title: 'Friday', value: 'friday' },
+  { title: 'Saturday', value: 'saturday' },
+  { title: 'Sunday', value: 'sunday' }
+]
+
+export const NOTIFICATION_CHANNEL_TYPES = { email: 'Email', webhook: 'Webhook' }

@@ -203,6 +203,40 @@ class NotificationChannelService {
     return { delivered: true };
   }
 
+  /**
+   * An automation's notification step: send its own message through a
+   * channel now (no queue, no retry: the step's result is the delivery) and
+   * record the outcome on the channel. Throws when the channel is gone,
+   * switched off, or the delivery fails. @returns the channel row
+   */
+  async sendMessage(channelId, { subject, text, payload }) {
+    const channel = await getPrisma().notificationChannel.findUnique({ where: { id: channelId } });
+    if (!channel) throw new Error('The notification channel no longer exists (Settings → Notifications)');
+    if (!channel.enabled) throw new Error(`The notification channel "${channel.name}" is switched off`);
+    try {
+      if (channel.type === 'email') {
+        await notifier.sendEmail(channel.config.recipients || [], subject, text);
+      } else {
+        const headers = Object.fromEntries(Object.entries(channel.config.headers || {})
+          .map(([name, value]) => [name, encryption.decrypt(value)]));
+        await notifier.postWebhook(encryption.decrypt(channel.config.url), headers, payload);
+      }
+    } catch (error) {
+      await this.recordDelivery(channelId, 'failed', error.message);
+      throw error;
+    }
+    await this.recordDelivery(channelId, 'success', null);
+    return channel;
+  }
+
+  /** Channels an automation step can pick: no config, so operators may read it. */
+  async names() {
+    return getPrisma().notificationChannel.findMany({
+      select: { id: true, name: true, type: true, enabled: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
   async recordDelivery(channelId, status, error) {
     await getPrisma().notificationChannel.update({
       where: { id: channelId },
