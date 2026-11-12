@@ -795,35 +795,49 @@ model GitBackupConfig {
 // archives on disk (APP_BACKUP_PATH, each with a .json sidecar) are
 // authoritative; AppBackupRun only records runs for the UI.
 model AppBackupConfig {
-  id             String   @id @default(uuid())
-  enabled        Boolean  @default(false) // Scheduled runs; Run now works either way
-  cronExpression String   @default("0 2 * * *")
-  timezone       String   @default("UTC")
-  retainCount    Int      @default(14) // Newest archives kept
-  retainDays     Int? // Also drop archives older than this (newest always kept)
-  includeHistory Boolean  @default(true) // Row data of event/alarm/audit/run history
-  includeGitRepo Boolean  @default(false) // The config-backup Git mirror's repo
-  encrypt        Boolean  @default(false)
-  passphrase     String? // Field-encrypted (utils/encryption.js)
-  includeKey     Boolean  @default(false) // ENCRYPTION_KEY inside encrypted archives
-  updatedById    String? // Plain column: who last saved the settings
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                String    @id @default(uuid())
+  enabled           Boolean   @default(false) // Scheduled runs; Run now works either way
+  cronExpression    String    @default("0 2 * * *")
+  timezone          String    @default("UTC")
+  retainCount       Int       @default(14) // Newest archives kept
+  retainDays        Int? // Also drop archives older than this (newest always kept)
+  includeHistory    Boolean   @default(true) // Row data of event/alarm/audit/run history
+  includeGitRepo    Boolean   @default(false) // The config-backup Git mirror's repo
+  encrypt           Boolean   @default(false)
+  passphrase        String? // Field-encrypted (utils/encryption.js)
+  includeKey        Boolean   @default(false) // ENCRYPTION_KEY inside encrypted archives
+  scheduleChangedAt DateTime? // Schedule turned on or changed: the overdue check counts from here
+  // Off-host copy of each archive (services/app-backup-remote.js). Encrypted
+  // archives only. The secrets are field-encrypted (utils/encryption.js).
+  remoteType        String    @default("none") // none | sftp
+  sftpHost          String?
+  sftpPort          Int       @default(22)
+  sftpUsername      String?
+  sftpPassword      String?
+  sftpPrivateKey    String?
+  sftpKeyPassphrase String?
+  sftpPath          String? // Remote folder; relative paths start at the login's home
+  sftpHostKey       String? // Pinned "SHA256:..." fingerprint, learned on first connect
+  updatedById       String? // Plain column: who last saved the settings
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }
 
 model AppBackupRun {
-  id          String    @id @default(uuid())
-  status      String // running | success | failed
-  trigger     String // manual | scheduled
-  fileName    String?
-  sizeBytes   BigInt?
-  sha256      String?
-  encrypted   Boolean   @default(false)
-  durationMs  Int?
-  error       String?
-  startedAt   DateTime  @default(now())
-  finishedAt  DateTime?
-  triggeredBy String? // User id for manual runs (plain column)
+  id           String    @id @default(uuid())
+  status       String // running | success | failed
+  trigger      String // manual | scheduled
+  fileName     String?
+  sizeBytes    BigInt?
+  sha256       String?
+  encrypted    Boolean   @default(false)
+  durationMs   Int?
+  error        String?
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  triggeredBy  String? // User id for manual runs (plain column)
+  remoteStatus String? // uploaded | failed; null when no remote is set
+  remoteError  String?
 
   @@index([startedAt])
 }

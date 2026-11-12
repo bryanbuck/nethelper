@@ -39,7 +39,8 @@
               :label="form.enabled ? 'Scheduled backups on' : 'Scheduled backups off'"
             />
             <div class="text-caption text-medium-emphasis">
-              Run now works either way. A failed run raises the "Application backup failed" alert.
+              Run now works either way. A failed run raises the "Application backup failed" alert, and
+              a schedule with no success for two scheduled runs raises "Application backup overdue".
             </div>
           </v-col>
           <v-col cols="12" md="6" class="text-body-2">
@@ -47,6 +48,20 @@
             <div v-if="tools?.pgDump" class="text-medium-emphasis">
               pg_dump {{ tools.pgDump.version }}<template v-if="tools.serverVersion">, PostgreSQL {{ tools.serverVersion.major }} server</template>
             </div>
+            <div v-if="schedule">
+              <span class="text-medium-emphasis">Last success</span>
+              {{ schedule.lastSuccessAt ? timeAgo(schedule.lastSuccessAt) : 'never' }}
+            </div>
+            <div v-if="schedule?.nextRunAt">
+              <span class="text-medium-emphasis">Next scheduled run</span>
+              <span :title="new Date(schedule.nextRunAt).toLocaleString()">{{ formatWhen(schedule.nextRunAt) }}</span>
+            </div>
+          </v-col>
+          <v-col v-if="schedule?.overdueSince" cols="12" class="pt-0">
+            <v-alert type="warning" variant="tonal" density="compact">
+              Overdue: the schedule expected a backup by {{ new Date(schedule.overdueSince).toLocaleString() }}
+              and none has succeeded since. Check the recent runs below and the backend log.
+            </v-alert>
           </v-col>
 
           <v-col cols="12" sm="6" md="3">
@@ -136,10 +151,141 @@
               unencrypted archive: keep a copy of it apart from the backups.
             </div>
           </v-col>
+
+          <v-col cols="12">
+            <v-divider class="mb-4" />
+            <div class="text-subtitle-2 mb-1">Off-host copy</div>
+            <div class="text-caption text-medium-emphasis mb-3">
+              After each run, every archive kept here that the other server lacks is copied there
+              over SFTP, and the same retention applies there. Archives must be encrypted. A failed
+              copy raises "Application backup not copied off-host"; the next run tries again.
+            </div>
+            <v-btn-toggle
+              v-model="form.remoteType"
+              mandatory
+              density="comfortable"
+              variant="outlined"
+              divided
+              class="mb-4"
+            >
+              <v-btn value="none">None</v-btn>
+              <v-btn value="sftp">SFTP server</v-btn>
+            </v-btn-toggle>
+          </v-col>
+          <template v-if="form.remoteType === 'sftp'">
+            <v-col cols="12" sm="8" md="4">
+              <v-text-field v-model="form.sftpHost" label="Host" placeholder="nas.example.lan" density="comfortable" />
+            </v-col>
+            <v-col cols="4" md="2">
+              <v-text-field v-model.number="form.sftpPort" type="number" min="1" max="65535" label="Port" density="comfortable" />
+            </v-col>
+            <v-col cols="8" md="3">
+              <v-text-field v-model="form.sftpUsername" label="User" autocomplete="off" density="comfortable" />
+            </v-col>
+            <v-col cols="12" md="3">
+              <v-text-field
+                v-model="form.sftpPath"
+                label="Folder"
+                placeholder="nethelper-backups"
+                hint="Must exist. Relative: from the user's home"
+                persistent-hint
+                density="comfortable"
+              />
+            </v-col>
+            <v-col cols="12" md="4">
+              <v-radio-group v-model="form.sftpAuth" inline hide-details density="compact" label="Sign in with">
+                <v-radio value="password" label="Password" />
+                <v-radio value="key" label="Private key" />
+              </v-radio-group>
+            </v-col>
+            <v-col v-if="form.sftpAuth === 'password'" cols="12" md="8">
+              <v-text-field
+                v-model="form.sftpPassword"
+                label="SFTP password"
+                type="password"
+                :hint="config?.sftpAuth === 'password' ? 'Stored. Leave blank to keep it.' : ''"
+                persistent-hint
+                autocomplete="new-password"
+                density="comfortable"
+              />
+            </v-col>
+            <template v-else>
+              <v-col cols="12" md="8">
+                <v-textarea
+                  v-model="form.sftpPrivateKey"
+                  label="Private key (OpenSSH or PEM)"
+                  :placeholder="config?.sftpAuth === 'key' ? 'Stored. Leave blank to keep it.' : '-----BEGIN OPENSSH PRIVATE KEY-----'"
+                  rows="3"
+                  auto-grow
+                  class="key-input"
+                  autocomplete="off"
+                  spellcheck="false"
+                  density="comfortable"
+                />
+              </v-col>
+              <v-col cols="12" md="4" offset-md="4">
+                <v-text-field
+                  v-model="form.sftpKeyPassphrase"
+                  label="Key passphrase"
+                  type="password"
+                  :hint="config?.sftpKeyPassphrase ? 'Stored. Leave blank to keep it.' : 'Only for a protected key'"
+                  persistent-hint
+                  autocomplete="new-password"
+                  density="comfortable"
+                />
+              </v-col>
+            </template>
+            <v-col cols="12" class="text-body-2">
+              <div v-if="config?.sftpHostKey && sameHost">
+                <span class="text-medium-emphasis">Pinned host key</span> <code>{{ config.sftpHostKey }}</code>
+                <v-btn variant="text" size="small" class="ml-1" :loading="forgetting" @click="forgetHostKey">Forget</v-btn>
+              </div>
+              <div v-else class="text-medium-emphasis">
+                The server's host key is pinned on the first connection; a later change is refused.
+              </div>
+              <div v-if="overview?.remote" class="mt-1">
+                <span class="text-medium-emphasis">Last copy</span>
+                {{ timeAgo(overview.remote.startedAt) }}:
+                <v-chip size="x-small" :color="overview.remote.remoteStatus === 'uploaded' ? 'success' : 'error'" variant="tonal">
+                  {{ overview.remote.remoteStatus }}
+                </v-chip>
+                <span v-if="overview.remote.remoteError" class="text-caption ml-1">{{ overview.remote.remoteError }}</span>
+              </div>
+              <v-alert
+                v-if="testResult"
+                :type="testResult.ok ? 'success' : 'error'"
+                variant="tonal"
+                density="compact"
+                class="mt-2"
+                closable
+                @click:close="testResult = null"
+              >
+                <template v-if="testResult.ok">
+                  Connected and wrote a test file. {{ testResult.archives }} archive(s) there now.
+                  <template v-if="testResult.newlyPinned">Host key pinned: <code>{{ testResult.hostKey }}</code></template>
+                </template>
+                <template v-else>
+                  {{ testResult.error }}
+                  <div v-if="testResult.hostKey && !testResult.hostKeyMismatch" class="text-caption">
+                    Server host key: <code>{{ testResult.hostKey }}</code>
+                  </div>
+                </template>
+              </v-alert>
+            </v-col>
+          </template>
         </v-row>
       </v-card-text>
-      <v-card-actions>
+      <v-card-actions class="flex-wrap">
         <v-spacer />
+        <v-btn
+          v-if="form.remoteType === 'sftp'"
+          variant="text"
+          :loading="testing"
+          :disabled="saving"
+          @click="saveAndTest"
+        >
+          Save and test connection
+        </v-btn>
         <v-btn color="primary" variant="flat" :loading="saving" @click="save">Save</v-btn>
       </v-card-actions>
     </v-card>
@@ -199,7 +345,7 @@
     <h3 class="text-subtitle-1 font-weight-medium mb-2">Recent runs</h3>
     <v-table v-if="overview?.runs?.length" density="compact" class="table-stack mb-4">
       <thead>
-        <tr><th>Started</th><th>Trigger</th><th>Result</th><th>Duration</th></tr>
+        <tr><th>Started</th><th>Trigger</th><th>Result</th><th>Off-host</th><th>Duration</th></tr>
       </thead>
       <tbody>
         <tr v-for="run in overview.runs" :key="run.id">
@@ -208,6 +354,13 @@
           <td data-label="Result">
             <v-chip size="x-small" :color="runColor(run.status)" variant="tonal">{{ run.status }}</v-chip>
             <span v-if="run.error" class="text-caption ml-2">{{ run.error }}</span>
+          </td>
+          <td data-label="Off-host">
+            <template v-if="run.remoteStatus">
+              <v-chip size="x-small" :color="run.remoteStatus === 'uploaded' ? 'success' : 'error'" variant="tonal">{{ run.remoteStatus }}</v-chip>
+              <span v-if="run.remoteError" class="text-caption ml-2">{{ run.remoteError }}</span>
+            </template>
+            <span v-else class="text-medium-emphasis">—</span>
           </td>
           <td data-label="Duration" class="text-no-wrap">{{ run.durationMs != null ? `${(run.durationMs / 1000).toFixed(1)} s` : '—' }}</td>
         </tr>
@@ -268,9 +421,17 @@ const downloading = ref(null)
 const deleting = ref(false)
 const toDelete = ref(null)
 const reveal = ref(false)
+const testing = ref(false)
+const testResult = ref(null)
+const forgetting = ref(false)
 
 const config = computed(() => overview.value?.config || null)
 const tools = computed(() => overview.value?.tools || null)
+const schedule = computed(() => overview.value?.schedule || null)
+// The pinned key belongs to the saved host and port, not to what's being typed.
+const sameHost = computed(() => config.value
+  && form.sftpHost === (config.value.sftpHost || '')
+  && Number(form.sftpPort) === config.value.sftpPort)
 
 const form = reactive({
   enabled: false,
@@ -282,7 +443,16 @@ const form = reactive({
   includeGitRepo: false,
   encrypt: false,
   passphrase: '',
-  includeKey: false
+  includeKey: false,
+  remoteType: 'none',
+  sftpHost: '',
+  sftpPort: 22,
+  sftpUsername: '',
+  sftpPath: '',
+  sftpAuth: 'password',
+  sftpPassword: '',
+  sftpPrivateKey: '',
+  sftpKeyPassphrase: ''
 })
 
 const allHeaders = [
@@ -305,8 +475,23 @@ function fillForm(c) {
     includeGitRepo: c.includeGitRepo,
     encrypt: c.encrypt,
     passphrase: '',
-    includeKey: c.includeKey
+    includeKey: c.includeKey,
+    remoteType: c.remoteType || 'none',
+    sftpHost: c.sftpHost || '',
+    sftpPort: c.sftpPort || 22,
+    sftpUsername: c.sftpUsername || '',
+    sftpPath: c.sftpPath || '',
+    sftpAuth: c.sftpAuth || 'password',
+    sftpPassword: '',
+    sftpPrivateKey: '',
+    sftpKeyPassphrase: ''
   })
+}
+
+function formatWhen(iso) {
+  const d = new Date(iso)
+  const sameDay = d.toDateString() === new Date().toDateString()
+  return sameDay ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 async function load({ keepForm = false } = {}) {
@@ -323,21 +508,57 @@ async function load({ keepForm = false } = {}) {
   }
 }
 
-async function save() {
+function payload() {
+  return {
+    ...form,
+    retainDays: form.retainDays === '' || form.retainDays == null ? null : Number(form.retainDays),
+    // Blank secrets keep the stored ones.
+    passphrase: form.passphrase || undefined,
+    sftpPassword: form.sftpPassword || undefined,
+    sftpPrivateKey: form.sftpPrivateKey || undefined,
+    sftpKeyPassphrase: form.sftpKeyPassphrase || undefined
+  }
+}
+
+async function save({ quiet = false, extra = {} } = {}) {
   saving.value = true
   try {
-    const saved = await appBackupService.saveConfig({
-      ...form,
-      retainDays: form.retainDays === '' || form.retainDays == null ? null : Number(form.retainDays),
-      passphrase: form.passphrase || undefined
-    })
+    const saved = await appBackupService.saveConfig({ ...payload(), ...extra })
     overview.value = { ...overview.value, config: saved }
     fillForm(saved)
-    notifications.showSuccess('Application backup settings saved')
+    if (!quiet) notifications.showSuccess('Application backup settings saved')
+    // Next run and overdue state follow the schedule just saved.
+    load({ keepForm: true })
+    return true
   } catch (error) {
     notifications.showError(error.userMessage || error.message)
+    return false
   } finally {
     saving.value = false
+  }
+}
+
+async function saveAndTest() {
+  testResult.value = null
+  if (!(await save({ quiet: true }))) return
+  testing.value = true
+  try {
+    testResult.value = await appBackupService.testRemote()
+    if (testResult.value.newlyPinned) await load({ keepForm: true })
+  } catch (error) {
+    testResult.value = { ok: false, error: error.userMessage || error.message }
+  } finally {
+    testing.value = false
+  }
+}
+
+async function forgetHostKey() {
+  forgetting.value = true
+  try {
+    await save({ quiet: true, extra: { forgetHostKey: true } })
+    notifications.showSuccess('Pinned host key forgotten: the next connection pins a new one')
+  } finally {
+    forgetting.value = false
   }
 }
 
@@ -412,6 +633,10 @@ onMounted(() => load())
 </script>
 
 <style scoped>
+.key-input :deep(textarea) {
+  font-family: monospace;
+  font-size: 0.75rem;
+}
 .restore-cmd {
   white-space: pre-wrap;
   word-break: break-all;

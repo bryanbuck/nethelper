@@ -10,6 +10,7 @@ router.use(authenticate);
 router.get('/', authorize('admin'), appBackupController.overview);
 router.put('/config', authorize('admin'), appBackupController.saveConfig);
 router.post('/run', authorize('admin'), appBackupController.run);
+router.post('/remote/test', authorize('admin'), appBackupController.testRemote);
 router.get('/:name/download', authorize('admin'), appBackupController.download);
 router.delete('/:name', authorize('admin'), appBackupController.remove);
 

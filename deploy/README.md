@@ -317,7 +317,7 @@ Redis only holds queues and caches; it doesn't need backing up.
 
 ### Application backups (built in)
 
-**Settings → App Backup** (admins) takes items 2–4 in one archive, on a schedule (default daily at 02:00, newest 14 kept) or with **Run now**. Each archive holds a `pg_dump` of the database, the config-backup files, optionally the Git mirror repository, the mirror's SSH host keys, and a manifest with checksums and versions. A failed run raises the **Application backup failed** alert, which notification channels can send on.
+**Settings → App Backup** (admins) takes items 2–4 in one archive, on a schedule (default daily at 02:00, newest 14 kept) or with **Run now**. Each archive holds a `pg_dump` of the database, the config-backup files, optionally the Git mirror repository, the mirror's SSH host keys, and a manifest with checksums and versions. A failed run raises the **Application backup failed** alert, and a schedule with no success since the time two scheduled runs back raises **Application backup overdue** (the schedule stopped firing, or every run since failed); notification channels can send on both.
 
 - **Where**: `APP_BACKUP_PATH`, `/data/app-backups` in Docker and `/var/lib/nethelper/app-backups` on bare metal. Archives are mode 0600, with a `.json` summary next to each. That location is on the same disk as what it backs up: copy the archives off the host (download them from the page, or sync the directory), or point `APP_BACKUP_PATH` at another disk or a mounted network share. In Docker, mount it in `deploy/docker-compose.override.yml`:
 
@@ -331,6 +331,7 @@ Redis only holds queues and caches; it doesn't need backing up.
   ```
 
   The directory must be writable by uid 1000 (Docker) or the `nethelper` user.
+- **Off-host copy over SFTP**: set a destination on the same page (host, port, user, password or private key, and a folder that already exists). After each run, every archive kept locally that the server lacks is copied there (through a `.partial` file, size-checked, then renamed), and the same retention applies there; other files in the folder are left alone. Archives must be encrypted to be copied. The server's host key is pinned on the first connection (**Save and test connection** shows it) and a changed key is refused until you **Forget** it. A failed copy leaves the local archive in place, raises **Application backup not copied off-host**, and is retried by the next run. To restore from the copy, fetch the archive back to `APP_BACKUP_PATH` first.
 - **Encryption**: optional, with a passphrase (AES-256-GCM). Only an encrypted archive can carry `ENCRYPTION_KEY` (a setting, off by default), so a restore on a new host can read the stored credentials. Keep the passphrase somewhere other than this server: the copy NetHelper stores is lost with it. An unencrypted archive never contains the key, but it does hold device configs with their secrets.
 - **Needs** `pg_dump` and `tar`. The Docker image ships `pg_dump` 17, which dumps PostgreSQL 15–17. On bare metal, install `postgresql-client` of the server's major version or newer. The page says when the tool is missing or too old.
 

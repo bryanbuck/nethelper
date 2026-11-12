@@ -4,6 +4,11 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ## [Unreleased]
 
+### Added
+- **Off-host copies of application backups over SFTP.** Settings → App Backup can copy every archive to another server (a NAS, a backup host) after each run, with a password or private-key login. The server's host key is pinned on first use, uploads are size-checked before they get their real name, and the archive retention applies there too. Encrypted archives only. A failed copy raises the new **Application backup not copied off-host** alert and is retried on the next run.
+- **Application backup overdue** alert: scheduled backups are on, but none has succeeded since the time two scheduled runs back. It runs on its own timer, so it also notices a schedule that stopped firing. Settings → App Backup shows the last success and the next scheduled run.
+- A browser smoke test (`e2e/`, run in CI by `.github/workflows/e2e.yml`): installs NetHelper with `deploy/install.sh`, signs in, adds a device, backs it up twice with a change between, checks the diff, and takes an application backup.
+
 ## [0.9.1-beta.1] — 2026-11-11
 
 The first beta of 0.9.1, for early testing: Cisco IOS switches, an update notice with a one-command upgrade for later releases, and fixes found after 0.9.0. Installs on 0.9.0 are not told about it (the update notice offers betas only to beta installs).

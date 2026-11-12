@@ -90,6 +90,8 @@ export default defineConfig(({ mode }) => {
       globals: true,
       environment: 'jsdom',
       include: ['tests/unit/**/*.spec.js'],
+      // Fails a spec file that makes a real HTTP request (tests/setup/no-network.js).
+      setupFiles: ['./tests/setup/no-network.js'],
       // Component specs mount Vuetify, whose modules import their own CSS.
       server: { deps: { inline: ['vuetify'] } }
     }

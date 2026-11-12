@@ -68,6 +68,18 @@ const ALERT_RULES = {
     severity: 'warning',
     settleSeconds: 0,
   },
+  'app-backup.overdue': {
+    label: 'Application backup overdue',
+    description: 'Scheduled application backups are on, but none has succeeded since the time two scheduled runs back (the schedule stopped firing, or every run since failed). Clears on the next successful one.',
+    severity: 'warning',
+    settleSeconds: 0,
+  },
+  'app-backup.upload-failed': {
+    label: 'Application backup not copied off-host',
+    description: 'An application backup was written, but copying it to the SFTP destination failed. The next run retries every archive still kept locally; clears once a copy succeeds.',
+    severity: 'warning',
+    settleSeconds: 0,
+  },
   'automation.raised': {
     label: 'Raised by automation',
     description: 'An automation\'s Raise alert step. The step may set its own severity; this one is the default.',
