@@ -81,6 +81,7 @@ const ADMIN_ONLY = [
   'GET /app-backups/',
   'PUT /app-backups/config',
   'POST /app-backups/run',
+  'POST /app-backups/remote/test',
   'GET /app-backups/:name/download',
   'DELETE /app-backups/:name',
 ];

@@ -6,7 +6,7 @@ import { handleApiError } from '@/utils/apiError'
  * The backend's app-backup.service.js; restore is a CLI, not an API.
  */
 const appBackupService = {
-  /** { config, tools, path, running, archives, runs, keyFingerprint } */
+  /** { config, schedule, remote, tools, path, running, archives, runs, keyFingerprint } */
   async overview() {
     try {
       const response = await api.get('/app-backups')
@@ -31,6 +31,16 @@ const appBackupService = {
       return response.data.data
     } catch (error) {
       throw handleApiError(error, 'starting an application backup')
+    }
+  },
+
+  /** Connect to the saved SFTP destination: { ok, hostKey, newlyPinned, archives } or { ok: false, error, hostKey, hostKeyMismatch } */
+  async testRemote() {
+    try {
+      const response = await api.post('/app-backups/remote/test')
+      return response.data.data
+    } catch (error) {
+      throw handleApiError(error, 'testing the backup destination')
     }
   },
 

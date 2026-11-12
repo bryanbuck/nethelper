@@ -13,6 +13,8 @@ Node 22 (see `.nvmrc`), PostgreSQL 15+, Redis 7+. The quick start in [`README.md
 3. Before pushing, run `npm run ci` in `backend/` (lint + Jest) and in `frontend/` (lint + Vitest + production build).
 4. Open a pull request against `master` and fill in the checklist. CI runs the same `npm run ci` in both tiers, and a PR merges only when it is green and has been reviewed.
 
+A separate **E2E** workflow (not a required check) installs NetHelper with `deploy/install.sh` and runs the browser smoke test in [`e2e/`](e2e/README.md) against it. A change to the sign-in page, the Add Device dialog, the device page's Back Up Now or History tab, or App Backup's Run now may need the test updated; it can run against a local stack too.
+
 ## Things CI enforces
 
 - Every mutating route has an `authorize(...)` guard, and no static path is shadowed by a `/:param` route (`backend/tests/api/role-gates.test.js`).

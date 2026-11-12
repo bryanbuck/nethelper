@@ -23,6 +23,8 @@ export const ALERT_RULE_LABELS = {
   'backup.failed': 'Backup failed',
   'sync.failed': 'Cloud sync failed',
   'app-backup.failed': 'App backup failed',
+  'app-backup.overdue': 'App backup overdue',
+  'app-backup.upload-failed': 'App backup not copied',
   'automation.raised': 'Raised by automation'
 }
 

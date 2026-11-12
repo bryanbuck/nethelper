@@ -36,6 +36,7 @@ const encryption = require('../utils/encryption');
 const { encryptStream, decryptStream } = require('../utils/archive-crypto');
 const { pgEnvFromUrl, parseToolMajor } = require('../utils/pg-env');
 const alertService = require('./alert.service');
+const { withSftp, checkPrivateKey } = require('./app-backup-remote');
 const logger = require('../utils/logger');
 const {
   FORMAT_VERSION, backupDir, configBackupDir, knownHostsPath, keyFingerprint,
@@ -57,6 +58,16 @@ const HISTORY_TABLES = ['DeviceEvent', 'CloudAlarm', 'AuditLog', 'Execution', 'T
 // Members written into the staging dir; a data folder may not use these names.
 const RESERVED_MEMBERS = ['manifest.json', 'db.dump', 'encryption-key', 'git-known_hosts'];
 
+const UPLOAD_ALERT_SUBJECT = 'app-backup:sftp';
+const OVERDUE_ALERT_SUBJECT = 'app-backup:schedule';
+const OVERDUE_CHECK_MS = 10 * 60 * 1000;
+const OVERDUE_FIRST_CHECK_MS = 2 * 60 * 1000;
+// A scheduled run starts when Bull fires it, a little after the cron time.
+const SCHEDULE_SLACK_MS = 5 * 60 * 1000;
+const REMOTE_TYPES = ['none', 'sftp'];
+// Secrets of the SFTP destination: field-encrypted, returned masked.
+const REMOTE_SECRETS = ['sftpPassword', 'sftpPrivateKey', 'sftpKeyPassphrase'];
+
 const DEFAULTS = {
   enabled: false,
   cronExpression: '0 2 * * *',
@@ -67,7 +78,48 @@ const DEFAULTS = {
   includeGitRepo: false,
   encrypt: false,
   includeKey: false,
+  scheduleChangedAt: null,
+  remoteType: 'none',
+  sftpHost: null,
+  sftpPort: 22,
+  sftpUsername: null,
+  sftpPath: null,
+  sftpHostKey: null,
 };
+
+/**
+ * When the schedule should have produced a backup that it hasn't: the cron
+ * time two firings back, when there's no success since then. Two, not one,
+ * so a run still in progress (or a single failure, which has its own alert)
+ * isn't also "overdue". Null when on time, off, or scheduled too recently.
+ */
+function overdueSince({ enabled, cronExpression, timezone, scheduleChangedAt, lastSuccessAt, now = new Date() }) {
+  if (!enabled) return null;
+  let expected;
+  try {
+    const it = CronExpressionParser.parse(cronExpression, { tz: timezone || 'UTC', currentDate: now });
+    it.prev();
+    expected = it.prev().toDate();
+  } catch {
+    return null;
+  }
+  if (scheduleChangedAt && new Date(scheduleChangedAt) > expected) return null;
+  if (lastSuccessAt && new Date(lastSuccessAt).getTime() >= expected.getTime() - SCHEDULE_SLACK_MS) return null;
+  return expected;
+}
+
+/** Archives to drop by retention from a newest-first list of names; never the newest, never `keep`. */
+function retentionVictims(entries, { retainCount, retainDays }, keep = null, now = Date.now()) {
+  const cutoff = retainDays ? now - retainDays * 86400000 : null;
+  const removed = [];
+  entries.forEach((entry, index) => {
+    if (index === 0 || entry.name === keep) return;
+    const tooMany = index >= (retainCount || DEFAULTS.retainCount);
+    const tooOld = cutoff && new Date(entry.createdAt).getTime() < cutoff;
+    if (tooMany || tooOld) removed.push(entry.name);
+  });
+  return removed;
+}
 
 function timestampName(date = new Date()) {
   return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
@@ -164,20 +216,93 @@ class AppBackupService {
     return getPrisma().appBackupConfig.findFirst({ orderBy: { createdAt: 'asc' } });
   }
 
-  /** Settings with defaults, passphrase decrypted (internal use only). */
+  /** Settings with defaults, secrets decrypted (internal use only). */
   async getConfig() {
     const row = await this.getConfigRow();
     const config = { ...DEFAULTS, ...(row || {}) };
     config.passphrase = row?.passphrase ? encryption.decrypt(row.passphrase) : null;
+    for (const key of REMOTE_SECRETS) config[key] = row?.[key] ? encryption.decrypt(row[key]) : null;
     return config;
   }
 
-  /** Settings for the API: the passphrase is never returned. */
+  /** Settings for the API: secrets are never returned, only whether they are set. */
   publicConfig(row) {
     const config = { ...DEFAULTS, ...(row || {}) };
     const hasPassphrase = Boolean(row?.passphrase);
     delete config.passphrase;
-    return { ...config, hasPassphrase, passphrase: hasPassphrase ? MASK : null };
+    const secrets = {};
+    for (const key of REMOTE_SECRETS) {
+      secrets[key] = row?.[key] ? MASK : null;
+      delete config[key];
+    }
+    return {
+      ...config,
+      ...secrets,
+      hasPassphrase,
+      passphrase: hasPassphrase ? MASK : null,
+      sftpAuth: row?.sftpPrivateKey ? 'key' : row?.sftpPassword ? 'password' : null,
+    };
+  }
+
+  /** The SFTP fields of `input`, validated against the stored row. */
+  validateRemote(input, existing, out) {
+    if (input.remoteType !== undefined) {
+      if (!REMOTE_TYPES.includes(input.remoteType)) throw httpError('Unknown backup destination');
+      out.remoteType = input.remoteType;
+    }
+    if (input.sftpHost !== undefined) {
+      const host = String(input.sftpHost ?? '').trim();
+      if (host && !/^[A-Za-z0-9.:[\]_-]+$/.test(host)) throw httpError('The SFTP host must be a host name or an IP address');
+      out.sftpHost = host || null;
+    }
+    if (input.sftpPort !== undefined && input.sftpPort !== null && input.sftpPort !== '') {
+      const port = Number(input.sftpPort);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) throw httpError('The SFTP port must be between 1 and 65535');
+      out.sftpPort = port;
+    }
+    if (input.sftpUsername !== undefined) {
+      const user = String(input.sftpUsername ?? '').trim();
+      if (user.length > 255 || /[\0\r\n]/.test(user)) throw httpError('Invalid SFTP user name');
+      out.sftpUsername = user || null;
+    }
+    if (input.sftpPath !== undefined) {
+      const dir = String(input.sftpPath ?? '').trim();
+      if (dir.length > 1024 || /[\0\r\n]/.test(dir)) throw httpError('Invalid SFTP folder');
+      out.sftpPath = dir || null;
+    }
+    // A blank or masked secret keeps the stored one; a null clears it.
+    for (const key of REMOTE_SECRETS) {
+      const value = input[key];
+      if (value === null) out[key] = null;
+      else if (value !== undefined && value !== '' && value !== MASK) out[key] = String(value);
+    }
+    if (input.sftpAuth === 'password') out.sftpPrivateKey = null;
+    if (input.sftpAuth === 'key') out.sftpPassword = null;
+
+    const merged = { ...DEFAULTS, ...(existing || {}), ...out };
+    const plain = (key) => (key in out ? out[key] : (existing?.[key] ? encryption.decrypt(existing[key]) : null));
+    if (out.sftpPrivateKey !== undefined || out.sftpKeyPassphrase !== undefined) {
+      const key = plain('sftpPrivateKey');
+      if (key) {
+        const problem = checkPrivateKey(key, plain('sftpKeyPassphrase'));
+        if (problem) throw httpError(problem);
+      }
+    }
+    if (merged.remoteType === 'sftp') {
+      if (!merged.sftpHost) throw httpError('Enter the SFTP host');
+      if (!merged.sftpUsername) throw httpError('Enter the SFTP user name');
+      if (!merged.sftpPassword && !merged.sftpPrivateKey) throw httpError('Enter the SFTP password or a private key');
+      if (!merged.encrypt) throw httpError('Turn on encryption to copy backups to another server: the archive holds every device config and the whole database');
+    }
+    // A new host or port gets its key learned again; so does an explicit forget.
+    const moved = (out.sftpHost !== undefined && out.sftpHost !== (existing?.sftpHost ?? null))
+      || (out.sftpPort !== undefined && out.sftpPort !== (existing?.sftpPort ?? DEFAULTS.sftpPort));
+    if (moved || input.forgetHostKey) out.sftpHostKey = null;
+
+    // Secrets are stored encrypted.
+    for (const key of REMOTE_SECRETS) {
+      if (out[key]) out[key] = encryption.encrypt(out[key]);
+    }
   }
 
   validateSettings(input, existing) {
@@ -197,6 +322,11 @@ class AppBackupService {
       out.cronExpression = cronExpression;
       out.timezone = timezone;
     }
+    // The overdue check counts from when the schedule was turned on or changed.
+    const turnedOn = out.enabled === true && !merged.enabled;
+    const changed = (out.cronExpression !== undefined && out.cronExpression !== merged.cronExpression)
+      || (out.timezone !== undefined && out.timezone !== merged.timezone);
+    if (turnedOn || (changed && (out.enabled ?? merged.enabled))) out.scheduleChangedAt = new Date();
     if (input.retainCount !== undefined) {
       const n = Number(input.retainCount);
       if (!Number.isInteger(n) || n < 1 || n > 1000) throw httpError('Keep between 1 and 1000 archives');
@@ -223,6 +353,7 @@ class AppBackupService {
     const hasPassphrase = Boolean(out.passphrase || existing?.passphrase);
     if (encrypt && !hasPassphrase) throw httpError('Set a passphrase to encrypt backups');
     if (!encrypt) out.includeKey = false; // the key only ever goes into an encrypted archive
+    this.validateRemote(input, existing, out);
     return out;
   }
 
@@ -236,7 +367,152 @@ class AppBackupService {
     await this.syncSchedule(row).catch((error) => {
       logger.error(`App backup schedule sync failed: ${error.message}`);
     });
+    // Turning the schedule (or the destination) off ends its alerts now.
+    this.checkOverdue().catch(() => {});
+    if (row.remoteType !== 'sftp') alertService.clear('app-backup.upload-failed', { subjectKey: UPLOAD_ALERT_SUBJECT });
     return this.publicConfig(row);
+  }
+
+  // ------------------------------------------------------------------ remote
+
+  /** The SFTP settings with secrets decrypted, or null when no remote is set. */
+  remoteSettings(config) {
+    if (config.remoteType !== 'sftp' || !config.sftpHost) return null;
+    return {
+      host: config.sftpHost,
+      port: config.sftpPort || 22,
+      username: config.sftpUsername,
+      password: config.sftpPassword,
+      privateKey: config.sftpPrivateKey,
+      keyPassphrase: config.sftpKeyPassphrase,
+      path: config.sftpPath,
+      hostKey: config.sftpHostKey,
+    };
+  }
+
+  /** Store the key a first connection presented, unless the settings moved on meanwhile. */
+  async pinHostKey(config, hostKey) {
+    if (config.sftpHostKey || !hostKey || !config.id) return false;
+    const { count } = await getPrisma().appBackupConfig.updateMany({
+      where: { id: config.id, sftpHost: config.sftpHost, sftpPort: config.sftpPort, sftpHostKey: null },
+      data: { sftpHostKey: hostKey },
+    });
+    if (count) logger.info(`App backup: pinned the SFTP host key of ${config.sftpHost} (${hostKey})`);
+    return count > 0;
+  }
+
+  /**
+   * Copy every local archive the remote lacks (newest first), then apply the
+   * retention settings to the remote. An upload that failed on an earlier run
+   * is retried here, as long as the archive is still kept locally.
+   */
+  async syncRemote(config) {
+    const settings = this.remoteSettings(config);
+    if (!settings) return null;
+    const local = await this.list();
+    return withSftp(settings, async (dest) => {
+      await this.pinHostKey(config, dest.hostKey);
+      await dest.checkFolder();
+      const present = new Set((await dest.listArchives(isArchiveName)).map((e) => e.name));
+      const uploaded = [];
+      for (const archive of local) {
+        if (present.has(archive.name)) continue;
+        const file = path.join(backupDir(), archive.name);
+        await dest.upload(file, archive.name);
+        if (await isFile(`${file}.json`)) await dest.upload(`${file}.json`, `${archive.name}.json`);
+        uploaded.push(archive.name);
+        present.add(archive.name);
+      }
+      const remote = [...present]
+        .map((name) => ({ name, createdAt: stampToDate(name)?.toISOString() }))
+        .sort((a, b) => (stampToDate(b.name) - stampToDate(a.name)) || b.name.localeCompare(a.name));
+      const pruned = retentionVictims(remote, config, local[0]?.name);
+      for (const name of pruned) {
+        await dest.remove(name).catch(() => {});
+        await dest.remove(`${name}.json`).catch(() => {});
+      }
+      return { uploaded, pruned, remoteCount: remote.length - pruned.length };
+    });
+  }
+
+  /** Settings → App Backup "Test": connect with the saved settings, check the folder takes a file. */
+  async testRemote() {
+    const config = await this.getConfig();
+    const settings = this.remoteSettings(config);
+    if (!settings) throw httpError('Save an SFTP destination first');
+    try {
+      return await withSftp(settings, async (dest) => {
+        const pinned = await this.pinHostKey(config, dest.hostKey);
+        await dest.test();
+        const archives = await dest.listArchives(isArchiveName);
+        return { ok: true, hostKey: dest.hostKey, newlyPinned: pinned, archives: archives.length };
+      });
+    } catch (error) {
+      return { ok: false, error: error.message, hostKey: error.hostKey || null, hostKeyMismatch: error.code === 'HOST_KEY_MISMATCH' };
+    }
+  }
+
+  // ----------------------------------------------------------------- overdue
+
+  async lastSuccessAt() {
+    const row = await getPrisma().appBackupRun.findFirst({
+      where: { status: 'success' }, orderBy: { startedAt: 'desc' }, select: { startedAt: true },
+    });
+    return row?.startedAt || null;
+  }
+
+  /** Next run and whether the schedule has fallen behind, for the settings page and the alert. */
+  async scheduleStatus(config) {
+    const lastSuccessAt = await this.lastSuccessAt();
+    const since = overdueSince({ ...config, lastSuccessAt });
+    let nextRunAt = null;
+    if (config.enabled) {
+      try {
+        nextRunAt = CronExpressionParser.parse(config.cronExpression, { tz: config.timezone || 'UTC' }).next().toDate();
+      } catch {
+        nextRunAt = null;
+      }
+    }
+    return { lastSuccessAt, nextRunAt, overdueSince: since };
+  }
+
+  /**
+   * Raise or clear "app backup overdue". Runs on a timer in this process, not
+   * as a Bull job: it is the check for the case where the scheduled jobs
+   * stopped firing.
+   */
+  async checkOverdue() {
+    const config = { ...DEFAULTS, ...((await this.getConfigRow()) || {}) };
+    const { lastSuccessAt, overdueSince: since } = await this.scheduleStatus(config);
+    if (!since) {
+      alertService.clear('app-backup.overdue', { subjectKey: OVERDUE_ALERT_SUBJECT });
+      return false;
+    }
+    alertService.raise('app-backup.overdue', {
+      subjectKey: OVERDUE_ALERT_SUBJECT,
+      title: 'Application backup overdue',
+      message: lastSuccessAt
+        ? `No successful application backup since ${new Date(lastSuccessAt).toISOString()}; the schedule (${config.cronExpression} ${config.timezone}) expected one by ${since.toISOString()}.`
+        : `No successful application backup yet; the schedule (${config.cronExpression} ${config.timezone}) expected one by ${since.toISOString()}.`,
+      data: { lastSuccessAt, expectedBy: since },
+    }, { bump: false });
+    return true;
+  }
+
+  startOverdueCheck() {
+    if (this.overdueTimer) return;
+    const tick = () => this.checkOverdue().catch((error) => logger.warn(`App backup overdue check failed: ${error.message}`));
+    this.overdueFirst = setTimeout(tick, OVERDUE_FIRST_CHECK_MS);
+    this.overdueFirst.unref?.();
+    this.overdueTimer = setInterval(tick, OVERDUE_CHECK_MS);
+    this.overdueTimer.unref?.();
+  }
+
+  stopOverdueCheck() {
+    clearTimeout(this.overdueFirst);
+    clearInterval(this.overdueTimer);
+    this.overdueFirst = null;
+    this.overdueTimer = null;
   }
 
   // ---------------------------------------------------------------- schedule
@@ -260,7 +536,7 @@ class AppBackupService {
     }
   }
 
-  /** Startup: forget runs a restart interrupted, remove their leftovers, register the schedule. */
+  /** Startup: forget runs a restart interrupted, remove their leftovers, start the overdue check, register the schedule. */
   async startup() {
     const prisma = getPrisma();
     await prisma.appBackupRun.updateMany({
@@ -268,6 +544,9 @@ class AppBackupService {
       data: { status: 'failed', error: 'Interrupted by a restart', finishedAt: new Date() },
     }).catch(() => {});
     await this.removeLeftovers().catch(() => {});
+    // Before the schedule: the overdue check is what notices a schedule that
+    // failed to register.
+    this.startOverdueCheck();
     await this.syncSchedule();
   }
 
@@ -446,17 +725,23 @@ class AppBackupService {
         return [];
       });
 
+      // 5. Off-host copy. The local archive is the backup: a failed upload is
+      // its own alert and the next run tries again.
+      const remote = await this.copyOffHost(config);
+
       const finished = await prisma.appBackupRun.update({
         where: { id: runRow.id },
         data: {
           status: 'success', fileName: name, sizeBytes: BigInt(sizeBytes), sha256,
           encrypted: Boolean(config.encrypt), durationMs: Date.now() - started, finishedAt: new Date(),
+          remoteStatus: remote?.status ?? null, remoteError: remote?.error ?? null,
         },
       });
       await this.pruneRuns();
       alertService.clear('app-backup.failed', { subjectKey: ALERT_SUBJECT });
+      alertService.clear('app-backup.overdue', { subjectKey: OVERDUE_ALERT_SUBJECT });
       logger.info(`App backup written: ${name} (${sizeBytes} bytes${pruned.length ? `, pruned ${pruned.length}` : ''})`);
-      const result = { run: this.formatRun(finished), archive: sidecar, pruned };
+      const result = { run: this.formatRun(finished), archive: sidecar, pruned, remote };
       this.emit('app-backup:completed', result);
       return result;
     } catch (error) {
@@ -478,6 +763,26 @@ class AppBackupService {
     } finally {
       await fsp.rm(staging, { recursive: true, force: true }).catch(() => {});
       this.running = null;
+    }
+  }
+
+  /** syncRemote with its outcome recorded: { status, error, uploaded, pruned } or null without a remote. */
+  async copyOffHost(config) {
+    if (!this.remoteSettings(config)) return null;
+    try {
+      const { uploaded, pruned } = await this.syncRemote(config);
+      alertService.clear('app-backup.upload-failed', { subjectKey: UPLOAD_ALERT_SUBJECT });
+      logger.info(`App backup: copied ${uploaded.length} archive(s) to ${config.sftpHost}${pruned.length ? `, pruned ${pruned.length} there` : ''}`);
+      return { status: 'uploaded', error: null, uploaded, pruned };
+    } catch (error) {
+      logger.error(`App backup: copy to ${config.sftpHost} failed: ${error.message}`);
+      alertService.raise('app-backup.upload-failed', {
+        subjectKey: UPLOAD_ALERT_SUBJECT,
+        title: 'Application backup not copied off the server',
+        message: `The backup was written locally, but copying it to ${config.sftpHost} failed: ${error.message}`,
+        data: { host: config.sftpHost },
+      });
+      return { status: 'failed', error: error.message.slice(0, 2000), uploaded: [], pruned: [] };
     }
   }
 
@@ -645,15 +950,7 @@ class AppBackupService {
 
   /** Apply retention; never removes `keepName` (the run that just finished) or the newest archive. */
   async prune(config, keepName) {
-    const archives = await this.list();
-    const cutoff = config.retainDays ? Date.now() - config.retainDays * 86400000 : null;
-    const removed = [];
-    archives.forEach((archive, index) => {
-      if (index === 0 || archive.name === keepName) return;
-      const tooMany = index >= (config.retainCount || DEFAULTS.retainCount);
-      const tooOld = cutoff && new Date(archive.createdAt).getTime() < cutoff;
-      if (tooMany || tooOld) removed.push(archive.name);
-    });
+    const removed = retentionVictims(await this.list(), config, keepName);
     for (const name of removed) await this.deleteArchive(name).catch(() => {});
     return removed;
   }
@@ -682,8 +979,16 @@ class AppBackupService {
     const [row, tools, archives, runs] = await Promise.all([
       this.getConfigRow(), this.toolStatus(), this.list(), this.runs(10),
     ]);
+    const lastRemote = row?.remoteType === 'sftp'
+      ? await getPrisma().appBackupRun.findFirst({
+        where: { remoteStatus: { not: null } }, orderBy: { startedAt: 'desc' },
+        select: { startedAt: true, remoteStatus: true, remoteError: true },
+      })
+      : null;
     return {
       config: this.publicConfig(row),
+      schedule: await this.scheduleStatus({ ...DEFAULTS, ...(row || {}) }),
+      remote: lastRemote,
       tools,
       path: backupDir(),
       running: Boolean(this.running),
@@ -699,3 +1004,5 @@ module.exports.isArchiveName = isArchiveName;
 module.exports.keyFingerprint = keyFingerprint;
 module.exports.archiveName = archiveName;
 module.exports.HISTORY_TABLES = HISTORY_TABLES;
+module.exports.overdueSince = overdueSince;
+module.exports.retentionVictims = retentionVictims;

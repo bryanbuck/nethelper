@@ -1,0 +1,93 @@
+# Browser smoke test (e2e/): builds the images and starts the stack the way a
+# user does, with deploy/install.sh -y, then signs in, adds a device, backs it
+# up twice with a change between, checks the diff, and takes an application
+# backup. The device is a stand-in Cisco IOS switch (e2e/fake-switch.js) that
+# the test runs on this runner; the backend container reaches it through the
+# Compose network's gateway.
+#
+# Not a required check: it builds both images, so it is slower than ci.yml,
+# and a failure here is worth a look before it is worth a block.
+name: E2E
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      E2E_ADMIN_EMAIL: e2e-admin@example.com
+      E2E_SWITCH_PORT: '2222'
+      E2E_BASE_URL: http://localhost:8080
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install the test runner
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Install NetHelper with deploy/install.sh
+        working-directory: deploy
+        run: |
+          password=$(openssl rand -hex 16)
+          echo "::add-mask::$password"
+          echo "E2E_ADMIN_PASSWORD=$password" >> "$GITHUB_ENV"
+          # NetHelper has one SSH port for every device: the stand-in's.
+          cat > docker-compose.override.yml <<'EOF'
+          services:
+            backend:
+              environment:
+                SSH_PORT: "2222"
+          EOF
+          NETHELPER_ADMIN_PASSWORD=$password ./install.sh -y --build \
+            --admin-email "$E2E_ADMIN_EMAIL" --admin-name "E2E Admin"
+
+      - name: Find the address the backend reaches this runner at
+        run: |
+          gateway=$(docker network inspect nethelper_default --format '{{(index .IPAM.Config 0).Gateway}}')
+          test -n "$gateway"
+          echo "E2E_SWITCH_HOST=$gateway" >> "$GITHUB_ENV"
+          echo "Stand-in switch address: $gateway:$E2E_SWITCH_PORT"
+
+      - name: Smoke test
+        working-directory: e2e
+        run: npx playwright test
+
+      - name: Stack logs
+        if: failure()
+        working-directory: deploy
+        run: docker compose logs --no-color --tail 300 backend frontend
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: e2e-report
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 7
+
+      - name: Remove the stack
+        if: always()
+        working-directory: deploy
+        run: docker compose down -v

@@ -1,0 +1,14 @@
+{
+  "name": "nethelper-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Browser smoke test of a running NetHelper stack (see README.md)",
+  "license": "AGPL-3.0-or-later",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.48.2",
+    "ssh2": "1.17.0"
+  }
+}

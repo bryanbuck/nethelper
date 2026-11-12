@@ -34,6 +34,17 @@ class AppBackupController {
     }
   }
 
+  /** POST /app-backups/remote/test: connect to the saved SFTP destination (pins its host key on first use). */
+  async testRemote(req, res, next) {
+    try {
+      const result = await appBackupService.testRemote();
+      logger.info(`App backup: remote test by ${req.user.email} (${result.ok ? 'ok' : 'failed'})`);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   /** GET /app-backups/:name/download */
   async download(req, res, next) {
     try {

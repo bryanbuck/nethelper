@@ -3805,6 +3805,34 @@
           "response": []
         },
         {
+          "name": "POST /app-backups/remote/test",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/app-backups/remote/test",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "app-backups",
+                "remote",
+                "test"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
           "name": "GET /app-backups/:name/download",
           "request": {
             "method": "GET",

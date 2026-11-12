@@ -124,6 +124,7 @@ async function startServer() {
       alertService.stop();
       systemStatusService.stop();
       updateCheckService.stop();
+      require('./src/services/app-backup.service').stopOverdueCheck();
       // io.close() disconnects WebSocket clients and closes the HTTP server;
       // plain server.close() would wait on those long-lived connections.
       await new Promise((resolve) => io.close(() => resolve()));
