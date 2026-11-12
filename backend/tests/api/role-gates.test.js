@@ -39,6 +39,7 @@ const RESTRICTED_READS = [
   'GET /backups/scopes/:scopeBackupId/diff/:otherId',
   'GET /settings/git-backup',
   'GET /settings/notification-channels',
+  'GET /automations/notification-channels',
   'GET /users/',
   'GET /system/',
   'GET /system/update',

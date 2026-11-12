@@ -132,3 +132,22 @@ test('a bad cron expression or timezone can\'t be activated', async () => {
   automation('badTz', [node('t', 'trigger', 'schedule', { schedule: '0 2 * * *', timezone: 'Mars/Olympus' })]);
   expect((await patch('/badTz/toggle')).body.error).toMatch(/unknown timezone Mars\/Olympus/);
 });
+
+test('HTTP Request header values are stored encrypted, returned masked, and kept through a masked save', async () => {
+  const http = (headers) => ({ id: 'h', type: 'action', data: { label: 'h', actionType: 'http-request', config: { method: 'GET', url: 'https://api.example/x', headers } } });
+  automation('hook', [node('t', 'trigger', 'manual'), http([]), edge('t', 'h')]);
+  const put = (elements) => request(app).put('/api/v1/automations/hook').set('Authorization', `Bearer ${token}`).send({ elements });
+
+  const first = await put([node('t', 'trigger', 'manual'), http([{ name: 'Authorization', value: 'Bearer s3cret' }]), edge('t', 'h')]);
+  expect(first.status).toBe(200);
+  expect(JSON.stringify(first.body)).not.toContain('s3cret');
+  expect(first.body.data.elements[1].data.config.headers).toEqual([{ name: 'Authorization', value: '***' }]);
+  const stored = mockAutomations.get('hook').elements[1].data.config.headers[0].value;
+  expect(stored).toMatch(/^enc:/);
+
+  const read = await request(app).get('/api/v1/automations/hook').set('Authorization', `Bearer ${token}`);
+  expect(read.body.data.elements[1].data.config.headers[0].value).toBe('***');
+
+  await put(first.body.data.elements);
+  expect(mockAutomations.get('hook').elements[1].data.config.headers[0].value).toBe(stored);
+});

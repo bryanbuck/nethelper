@@ -481,7 +481,7 @@ Changing `ENCRYPTION_KEY` makes stored secrets unreadable unless they are re-enc
 
 1. Stop the backend.
 2. Put the new key in the config, and keep the old one to hand.
-3. Run the rotation script. It rewrites all the secrets or none of them, and `--dry-run` previews it first.
+3. Run the rotation script. It rewrites all the secrets (credentials, integrations, the Git mirror, notification webhooks, the app backup passphrase and SFTP login, automation HTTP headers) or none of them, and `--dry-run` previews it first.
 4. Start the backend again.
 
 The command for step 3:

@@ -78,8 +78,19 @@ export class Automation {
     this.name = data.name || ''
     this.description = data.description || null
     this.type = data.type || AutomationType.CUSTOM_SCRIPT
-    this.workflow = data.workflow || { ...DefaultWorkflow }
-    this.active = data.active !== undefined ? data.active : true
+    // The API's fields: the builder graph is `elements` (vue-flow nodes + edges)
+    this.category = data.category || 'network'
+    this.priority = data.priority || 'medium'
+    this.elements = Array.isArray(data.elements) ? data.elements : []
+    this.metadata = data.metadata || null
+    this.enabled = data.enabled !== undefined ? data.enabled : true
+    this.lastRun = data.lastRun || null
+    this.workflow = {
+      ...DefaultWorkflow,
+      nodes: this.elements.filter((el) => !(el.source && el.target)),
+      edges: this.elements.filter((el) => el.source && el.target)
+    }
+    this.active = data.active !== undefined ? data.active : false
     this.createdBy = data.createdBy || null
     this.userId = data.userId || null
     this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date()
@@ -105,12 +116,16 @@ export class Automation {
    * @returns {Object} API payload
    */
   toApiPayload() {
+    // What POST/PUT /automations accept; the backend checks the graph itself.
     return {
       name: this.name,
-      description: this.description,
-      type: this.type,
-      workflow: this.workflow,
-      active: this.active
+      description: this.description || undefined,
+      category: this.category,
+      priority: this.priority,
+      elements: this.elements,
+      active: this.active,
+      enabled: this.enabled,
+      ...(this.metadata && { metadata: this.metadata })
     }
   }
 
@@ -310,16 +325,8 @@ export class Automation {
       errors.push('Automation name must be at least 2 characters long')
     }
 
-    // Type validation
-    if (!Object.values(AutomationType).includes(this.type)) {
-      errors.push('Invalid automation type')
-    }
-
-    // Workflow validation
-    const workflowValidation = this.validateWorkflow()
-    if (!workflowValidation.isValid) {
-      errors.push(...workflowValidation.errors)
-    }
+    // The graph is checked by the builder and, on run/activation, by the
+    // backend engine (a draft may be saved incomplete).
 
     return {
       isValid: errors.length === 0,
@@ -337,7 +344,12 @@ export class Automation {
       name: this.name,
       description: this.description,
       type: this.type,
-      workflow: JSON.parse(JSON.stringify(this.workflow)), // Deep clone workflow
+      category: this.category,
+      priority: this.priority,
+      elements: JSON.parse(JSON.stringify(this.elements)),
+      metadata: this.metadata,
+      enabled: this.enabled,
+      lastRun: this.lastRun,
       active: this.active,
       createdBy: this.createdBy,
       userId: this.userId,

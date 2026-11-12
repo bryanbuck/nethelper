@@ -3,8 +3,11 @@
  * Re-encrypt every stored secret from an old ENCRYPTION_KEY to the current one.
  *
  * Covers ApiCredential.password/apiKey/apiSecret/enableSecret, the secret fields inside
- * CloudIntegration.credentials (per constants/vendors.js), and the secret
- * fields inside GitBackupConfig.credentials (per git-backup.service.js).
+ * CloudIntegration.credentials (per constants/vendors.js), the secret
+ * fields inside GitBackupConfig.credentials (per git-backup.service.js), a
+ * webhook NotificationChannel's URL and header values, AppBackupConfig's
+ * passphrase and SFTP secrets, and the header values of HTTP Request steps
+ * inside Automation.elements (services/automation/secrets.js).
  *
  * Usage (from backend/, with the NEW key already in .env as ENCRYPTION_KEY):
  *   OLD_ENCRYPTION_KEY='<old key>' node scripts/rotate-encryption-key.js [--dry-run]
@@ -22,6 +25,7 @@ require('dotenv').config({ quiet: true });
 const { PrismaClient } = require('@prisma/client');
 const encryption = require('../src/utils/encryption');
 const { CLOUD_PROVIDERS } = require('../src/constants/vendors');
+const { rotateElements } = require('../src/services/automation/secrets');
 
 // The fallback utils/encryption.js used before 2026-09 when ENCRYPTION_KEY was unset.
 const LEGACY_DEFAULT_KEY = 'default-key-change-this-in-production-for-security';
@@ -29,6 +33,7 @@ const API_CREDENTIAL_FIELDS = ['password', 'apiKey', 'apiSecret', 'enableSecret'
 // Mirrors GIT_CREDENTIAL_FIELDS in git-backup.service.js. Kept literal so this
 // script doesn't need the service (and its Prisma/Redis wiring) loaded.
 const GIT_SECRET_FIELDS = ['token'];
+const APP_BACKUP_FIELDS = ['passphrase', 'sftpPassword', 'sftpPrivateKey', 'sftpKeyPassphrase'];
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -144,6 +149,55 @@ async function main() {
       }
       if (changed) {
         updates.push((tx) => tx.gitBackupConfig.update({ where: { id: config.id }, data: { credentials: next } }));
+      }
+    }
+
+    // NotificationChannel.config: a webhook's URL and header values
+    for (const channel of await prisma.notificationChannel.findMany({ where: { type: 'webhook' } })) {
+      const config = channel.config || {};
+      const next = { ...config, headers: { ...(config.headers || {}) } };
+      let changed = false;
+      const rotate = (label, value, set) => {
+        if (!value) return;
+        const result = planValue(value);
+        record(`NotificationChannel ${channel.id} (${channel.name}).${label}`, result);
+        if (result.status === 'rotate') {
+          set(result.value);
+          changed = true;
+        }
+      };
+      rotate('url', config.url, (v) => { next.url = v; });
+      for (const [name, value] of Object.entries(config.headers || {})) {
+        rotate(`header ${name}`, value, (v) => { next.headers[name] = v; });
+      }
+      if (changed) {
+        updates.push((tx) => tx.notificationChannel.update({ where: { id: channel.id }, data: { config: next } }));
+      }
+    }
+
+    // AppBackupConfig columns: the archive passphrase and the SFTP destination's secrets
+    for (const config of await prisma.appBackupConfig.findMany()) {
+      const data = {};
+      for (const field of APP_BACKUP_FIELDS) {
+        if (!config[field]) continue;
+        const result = planValue(config[field]);
+        record(`AppBackupConfig.${field}`, result);
+        if (result.status === 'rotate') data[field] = result.value;
+      }
+      if (Object.keys(data).length) {
+        updates.push((tx) => tx.appBackupConfig.update({ where: { id: config.id }, data }));
+      }
+    }
+
+    // Automation.elements: header values of HTTP Request steps
+    for (const automation of await prisma.automation.findMany({ select: { id: true, name: true, elements: true } })) {
+      const next = rotateElements(automation.elements, (ciphertext, label) => {
+        const result = planValue(ciphertext);
+        record(`Automation ${automation.id} (${automation.name}) ${label}`, result);
+        return result.status === 'rotate' ? result.value : null;
+      });
+      if (next) {
+        updates.push((tx) => tx.automation.update({ where: { id: automation.id }, data: { elements: next } }));
       }
     }
 

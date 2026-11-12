@@ -2517,6 +2517,24 @@
           "response": []
         },
         {
+          "name": "GET /automations/notification-channels",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/automations/notification-channels",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "automations",
+                "notification-channels"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "GET /automations/:id",
           "request": {
             "method": "GET",
