@@ -66,6 +66,7 @@ async function initializeQueues() {
   queues.discovery = createQueue('discovery');
   queues.configBackup = createQueue('config-backup');
   queues.topology = createQueue('topology');
+  queues.portClients = createQueue('port-clients');
   queues.appBackup = createQueue('app-backup');
 
   // Import and initialize job processors
@@ -75,6 +76,7 @@ async function initializeQueues() {
   require('../jobs/discovery.job')(queues.discovery);
   require('../jobs/config-backup.job')(queues.configBackup);
   require('../jobs/topology.job')(queues.topology);
+  require('../jobs/port-clients.job')(queues.portClients);
   require('../jobs/notification.job')(queues.notification);
   require('../jobs/app-backup.job')(queues.appBackup);
 

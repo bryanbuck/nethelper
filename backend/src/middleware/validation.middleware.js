@@ -210,6 +210,31 @@ const validateSavedFilter = {
   ],
 };
 
+// Port Identity (routes under /devices/:deviceId/ports, /devices/ports/search).
+// A port name arrives URL-encoded (1%2F1%2F4) and is decoded by Express.
+const portParam = param('port').isString().trim().isLength({ min: 1, max: 64 }).withMessage('Invalid port')
+  // eslint-disable-next-line no-control-regex
+  .custom((value) => !/[\u0000-\u001f]/.test(value)).withMessage('Invalid port');
+const optionalText = (field, max) => body(field).optional({ values: 'null' }).isString().withMessage(`${field} must be text`)
+  .isLength({ max }).withMessage(`${field} is limited to ${max} characters`);
+const validatePorts = {
+  device: [param('deviceId').isUUID().withMessage('Invalid device ID'), handleValidationErrors],
+  port: [param('deviceId').isUUID().withMessage('Invalid device ID'), portParam, handleValidationErrors],
+  note: [
+    param('deviceId').isUUID().withMessage('Invalid device ID'),
+    portParam,
+    optionalText('label', 64),
+    optionalText('location', 255),
+    optionalText('owner', 255),
+    optionalText('notes', 4000),
+    optionalText('portLabel', 64),
+    body('kind').optional({ values: 'null' }).isIn(['auto', 'static', 'dynamic', 'uplink', 'unused']).withMessage('Invalid port kind'),
+    body('expectedMac').optional({ values: 'falsy' }).custom(isMac).withMessage('expectedMac is not a MAC address'),
+    handleValidationErrors,
+  ],
+  search: [query('q').isString().trim().isLength({ min: 2, max: 100 }).withMessage('Search needs 2 to 100 characters'), handleValidationErrors],
+};
+
 // API Credential validation rules
 const validateApiCredential = {
   create: [
@@ -461,6 +486,7 @@ module.exports = {
   validateSchedule,
   validateDeviceGroup,
   validateSavedFilter,
+  validatePorts,
   validateApiCredential,
   validateDiscovery,
   validateBackup,

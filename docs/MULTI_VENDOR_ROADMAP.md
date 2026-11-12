@@ -212,16 +212,17 @@ Generalizes `pullConfig()`'s three-way branch and `useSshTransport()` into one d
 
 ```js
 // resolveTransport(device, operation) → ordered transports: 'cloud' | 'device-rest' | 'ssh'
-// (an empty list means unsupported). As built, in constants/vendors.js (2026-10-16):
+// (an empty list means unsupported). As built, in constants/vendors.js (2026-10-16; clients 2026-11-12):
 const TRANSPORT_MATRIX = {
-  'aruba/aos-cx':  { config: ['device-rest'], test: ['device-rest'], poll: ['device-rest'], live: ['device-rest'], topology: ['device-rest'] },
-  'aruba/aos-s':   { config: ['ssh'], test: ['ssh'], poll: ['ssh'], live: [], topology: ['ssh'] },
-  'juniper/junos': { config: ['device-rest', 'ssh'], test: ['device-rest', 'ssh'], poll: ['device-rest', 'ssh'], live: [], topology: ['device-rest', 'ssh'] },  // device-rest = NETCONF
-  'cisco/ios-xe':  { config: ['ssh'], test: ['ssh'], poll: ['ssh'], live: [], topology: ['ssh'] },
-  'cisco/meraki':  { config: [], test: [], poll: [], live: [], topology: [] },
+  'aruba/aos-cx':  { config: ['device-rest'], test: ['device-rest'], poll: ['device-rest'], live: ['device-rest'], topology: ['device-rest'], clients: ['device-rest'] },
+  'aruba/aos-s':   { config: ['ssh'], test: ['ssh'], poll: ['ssh'], live: [], topology: ['ssh'], clients: [] },
+  'juniper/junos': { config: ['device-rest', 'ssh'], test: ['device-rest', 'ssh'], poll: ['device-rest', 'ssh'], live: [], topology: ['device-rest', 'ssh'], clients: [] },  // device-rest = NETCONF
+  'cisco/ios-xe':  { config: ['ssh'], test: ['ssh'], poll: ['ssh'], live: [], topology: ['ssh'], clients: [] },
+  'cisco/meraki':  { config: [], test: [], poll: [], live: [], topology: [], clients: [] },
 };
 // managementMode === 'cloud': device-rest (when listed) then 'cloud', never ssh.
-// live: device-rest only, and only with an IP. topology: device-rest with an IP, then 'cloud'.
+// live: device-rest only, and only with an IP. topology and clients (Port Identity, §8g):
+// device-rest with an IP, then 'cloud'.
 ```
 
 `device-platform.js` is rewritten **field-first**: `detectPlatform()` returns `device.platform` when set, falling back to today's regexes only for legacy/unclassified rows. `isCxRestCapable()` / `useSshTransport()` keep their signatures (so `config-backup`, `device-poller`, and `device-api-test.controller` don't all change at once) but delegate to the router. `pullConfig()` becomes an ordered-fallback loop over `resolveTransport(device, 'config')`.
@@ -672,6 +673,149 @@ calls (webhooks under Alert Management, or the GreenLake event framework).
 That needs a public HTTPS endpoint, so it is deferred
 (`ROADMAP_AND_TODO.md` item 1). Classic Central's protobuf streaming API does
 not apply to New Central. Central stays on the 5-minute refresh.
+
+## 8g. Port Identity: wired clients on switch ports (2026-11-12)
+
+Port Identity answers "what is plugged into this switch port?" and gives users
+a place to record what they know about the port ("Room 214 printer"). Built on
+a long-lived branch from 2026-11-09, merged for `0.9.1-beta.2`. Status and
+remaining work: `ROADMAP_AND_TODO.md` item 19.
+
+### Ports and clients are different things
+
+- **Port notes** (`PortNote`) belong to the *port*: a short label (64
+  characters or less, the future port description), location, owner, free
+  notes, a kind override, and an optional pinned "expected device" MAC. Every
+  save or clear is a `PortNoteRevision` (who, when, the values after it), keyed
+  by device and port so the history survives a clear.
+- **Client sightings** (`PortClient`) are what reads see on the port right now
+  or recently: MAC, vendor, IP, hostname, 802.1X user, the cloud's profile,
+  VLAN, LLDP identity, and which sources saw it. They come and go on their own.
+- **Read state** (`PortReadState`, per device and source) says when the ports
+  were last read and whether that worked, keeps per-port MAC counts, names and
+  descriptions, and records the first read (`createdAt`).
+
+Only **wired clients on switch ports** are stored. Wireless clients stay on
+demand (the address lookup). The row count is bounded by ports, because uplinks
+and AP ports keep a count, not their clients. Port names are keyed by
+`normalizePortName()`, so `GigabitEthernet1/0/4` and `Gi1/0/4` are one port.
+
+### How sightings age (`services/ports/client-aging.js`)
+
+Each successful read is a full snapshot of one device's ports from one source.
+
+| Situation | Result |
+|---|---|
+| Listed | `present`, `lastSeen` = the read |
+| Left out, port link down | `gone` (`link-down`) at once |
+| Left out, a static port now has another MAC | `gone` (`port-reassigned`) |
+| Left out, port still up | one more miss; `unconfirmed` at `PORT_CLIENT_MISS_LIMIT` (2), `gone` (`omitted`) at twice that |
+| Same MAC listed on another non-uplink port anywhere | old sighting `gone` (`moved`, pointing at the new port) |
+| Read failed, device offline, not read | nothing changes; shown as **stale** once the last good read is older than twice the interval |
+
+A switch ages a quiet MAC out of its table after about 5 minutes, so one miss
+proves nothing; a link-down or a move does. Between reads, a `port.link.down`
+event (live monitor or Mist stream, via the in-process `events` emitter of
+`device-events.service.js`) ends the port's sightings.
+
+Port kind, unless the note overrides it: `uplink` (link to a managed device,
+LAG member, a non-telephone bridging LLDP neighbor, CX `network_infra_mac`, or
+more than 16 MACs), `ap`, `static` (one client for 7 days), `dynamic` (3+
+clients in 7 days), `new`, `idle`, `unused` (no client for 30 days, after being
+watched that long). Each client carries a freshness:
+`confirmed|unconfirmed|stale|gone`.
+
+Retention: `gone` sightings are pruned after `PORT_CLIENT_RETENTION_DAYS` (30),
+except each port's newest one.
+
+**Device merges**: a source device's port notes move to the kept device. When
+the kept device already has a note for the port, its empty fields are filled
+from the other note and differing values are appended to its notes under
+`[merged from <name>]` (`services/ports/port-note-merge.js`). Revisions move;
+sightings and read states cascade away and are rebuilt by the next read.
+
+### The collector (`services/ports/port-client.service.js`)
+
+One run (Bull queue `port-clients`, job `collect`, every `PORT_CLIENT_INTERVAL`,
+default 30 minutes; `POST /devices/:id/ports/read` queues one switch):
+
+1. **Read** every switch over `resolveTransport(device, 'clients')`, which
+   routes like topology: local REST when the device has an IP, then the cloud,
+   never SSH to a cloud-managed device.
+   - AOS-CX REST: `CXSwitchAPI.getClientTables()` makes three GETs on one
+     session (interfaces, MAC table, ARP), parsed by `parsers/aos-cx-clients.js`.
+     Facts: `docs/hardware/AOS_CX_NOTES.md`.
+   - Each cloud's wired-client list is read **once per integration per run**
+     and shared by its switches: provider `listWiredClients()`, capability
+     `wired-clients`, parsed by `parsers/cloud-clients.js`. Central walks
+     `clientPages()` (shared with the address lookup; 20 pages of 1000, then a
+     logged warning); Mist searches `wired_clients/search` over the last two
+     intervals.
+   - Junos, AOS-S and IOS direct reads are empty rows in the matrix for now.
+2. **Fleet-wide MAC to IP** from every switch's ARP table, then the clouds'
+   client IPs. Only the routing switch has most ARP entries, so a MAC seen on
+   an access switch gets its IP from the core's ARP.
+3. **Per switch** (`client-merge.js`, then `client-aging.js`): classify ports
+   (uplink, AP, edge); take presence from the switch's own MAC table when it
+   was read, otherwise from the cloud; enrich (cloud identity, ARP IP, the
+   client's own LLDP identity, OUI vendor, never for a random MAC); age the
+   stored sightings; write one transaction plus the `PortReadState` row.
+4. **Moves**: a MAC present on exactly one edge port in this run ends its live
+   sightings elsewhere.
+5. **Retention** as above.
+
+**Source precedence.** Presence: the switch's own MAC table, then Mist (by
+`when`), then Central (by status). Identity (hostname, profile, user): the
+clouds. IP: fleet-wide ARP, then the clouds, then the host's `ip neigh`. The
+kept VLAN is the client's untagged/data VLAN when it was learned in several.
+
+**Failures.** A failed switch read changes no sighting and records
+`PortReadState.error`. A cloud-managed switch whose REST read fails falls back
+to its cloud, which then decides presence for that switch. A platform with no
+client source is skipped as `unsupported`. Nullable JSON columns are written as
+SQL NULL (`Prisma.DbNull`), never JSON `null`.
+
+### What the cloud captures showed (2026-11-10, GET-only, scrubbed fixtures)
+
+**Aruba Central** (`GET /network-monitoring/v1alpha1/clients`;
+`tests/fixtures/central-live/clients.json`):
+- Each client carries `type` Wired|Wireless, `status`, `connectedTo` +
+  `connectedDeviceSerial` + `port` (in the switch's own format: `2` on AOS-S,
+  `1/1/4` on CX), `vlanId`, `connectedSince`, and `lastSeenAt` (`"0"` while
+  connected), plus Central's **own client profiling**: `category`, `function`,
+  `modelOs` ("HP iLO", "Cisco IP Phone"), `vendor`, `manufacturer`, `tags`,
+  `hostName`, and `userName` (the 802.1X identity, often a person).
+- Central lists only edge clients (34 of the 89 MACs in Sw-CoreA's table); the
+  rest sit behind uplinks and AP ports. Every client Central called connected
+  was in the switch's MAC table **on the same port** (34/34, 3/3).
+- **"Disconnected" is not absence:** 19 of 20 clients Central called
+  disconnected were still in the switch's MAC table. Where the switch's table
+  can be read, it decides presence and Central adds identity. For a switch
+  only Central can see (AOS-S under Central), Central's status is all there is.
+- A hostname can be NUL-padded (`"Watch\u0000\u0000…"`); strip it.
+- **Profiling is evidence, not fact**: Central classifies the USB-C dock behind
+  the lab's Cisco phone as "Cisco IP Phone" too. The UI shows it as a claim
+  ("Aruba Central classifies this as …"); the user's note is the final word.
+
+**Juniper Mist** (`wired_clients/search`, `stats/devices` `clients`;
+`mist-live/wired-clients-search.json`, `mist-live/stats-devices-switch-clients.json`):
+- `device_mac_port[]` carries the switch MAC, `port_id`, `vlan`, `ip`, `source`
+  (lldp), and **`start`/`when`** (first and last seen on that port). The record
+  also has `manufacture`, `random_mac`, `hostname[]` and `last_*`.
+- **A cloud listing is not "present now"**: a 7-day search returned the offline
+  EX's last client, last seen 6 days earlier. The sighting time is `when`, and
+  the search window is about two collection intervals.
+- Mist lists infrastructure as wired clients too (the neighbor switch, via
+  LLDP). Clients whose MAC is an inventory device's are dropped.
+
+**First live runs (2026-11-10 to 11-12, a copy of the dev DB)**: 12 switches,
+11 read and 1 failed (offline) in about 2 seconds, 40 clients stored and an
+unchanged second run. Of the 40, 35 had an IP (the core's ARP covers the access
+switch's clients), 35 a Central profile, 4 their own LLDP identity. Two days
+of 30-minute runs ended with 43 present and 2 gone (one link-down, one
+omitted). The Ports tab also showed **description drift on real gear**: AP
+ports described "AP01/AP11/AP21" heard AP11/AP21/AP01 over LLDP, because the
+APs were moved and the descriptions weren't updated (phase 2's case).
 
 ## 9. Risks & open questions
 

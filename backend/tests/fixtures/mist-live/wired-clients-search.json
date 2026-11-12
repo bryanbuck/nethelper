@@ -1,0 +1,52 @@
+{
+  "results": [
+    {
+      "org_id": "00000000-0000-4000-8000-000000000001",
+      "site_id": "00000000-0000-4000-8000-000000000002",
+      "timestamp": 1793710789.415,
+      "device_mac_port": [
+        {
+          "device_mac": "4c4ab400006e",
+          "port_id": "ge-0/0/11",
+          "start": "2026-10-07T15:45:37.663+0000",
+          "when": "2026-11-03T12:59:49.415+0000",
+          "ip": "172.16.10.1",
+          "ip6": "",
+          "vlan": 1,
+          "port_parent": "",
+          "source": "lldp"
+        }
+      ],
+      "device_mac": [
+        "4c4ab400006e"
+      ],
+      "username": [],
+      "vlan": [
+        1
+      ],
+      "port_id": [
+        "ge-0/0/11"
+      ],
+      "hostname": [
+        "Lab-Core"
+      ],
+      "ip": [
+        "172.16.10.1"
+      ],
+      "ip6": [],
+      "manufacture": "Hewlett Packard Enterprise",
+      "random_mac": false,
+      "last_vlan": 1,
+      "last_vlan_name": "default",
+      "last_port_id": "ge-0/0/11",
+      "last_hostname": "Lab-Core",
+      "last_ip": "172.16.10.1",
+      "last_device_mac": "4c4ab400006e",
+      "mac": "f4034300005a"
+    }
+  ],
+  "limit": 1000,
+  "start": 1793669289.1600428,
+  "end": 1794274089.1600428,
+  "total": 1
+}

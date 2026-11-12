@@ -112,6 +112,15 @@ const schema = Joi.object({
   TOPOLOGY_INTERVAL: Joi.number().integer().min(300000).default(21600000),
   TOPOLOGY_CONCURRENCY: Joi.number().integer().min(1).max(32).default(4),
   TOPOLOGY_CHANGE_RETENTION_DAYS: Joi.number().integer().min(1).default(90),
+
+  // Port Identity: wired clients on switch ports (services/ports/). Interval in
+  // milliseconds; a client is unconfirmed after MISS_LIMIT reads leave it out
+  // and gone after twice that.
+  PORT_CLIENTS_ENABLED: Joi.string().valid('true', 'false').default('true'),
+  PORT_CLIENT_INTERVAL: Joi.number().integer().min(300000).default(1800000),
+  PORT_CLIENT_CONCURRENCY: Joi.number().integer().min(1).max(32).default(4),
+  PORT_CLIENT_MISS_LIMIT: Joi.number().integer().min(1).max(10).default(2),
+  PORT_CLIENT_RETENTION_DAYS: Joi.number().integer().min(1).default(30),
 });
 
 function secretProblems(env) {

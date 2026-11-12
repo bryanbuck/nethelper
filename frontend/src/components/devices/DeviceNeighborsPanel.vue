@@ -42,6 +42,12 @@
       :items-per-page="50"
       no-data-text="No neighbors recorded"
     >
+      <template #[`item.localPort`]="{ item }">
+        {{ item.localPort }}
+        <div v-if="noteFor(item.localPort)?.label" class="text-caption text-medium-emphasis" title="Your port label">
+          {{ noteFor(item.localPort).label }}
+        </div>
+      </template>
       <template #[`item.remote`]="{ item }">
         <router-link v-if="item.remoteDevice" :to="`/devices/${item.remoteDevice.id}`">
           {{ item.remoteDevice.name }}
@@ -75,12 +81,14 @@ import { useNotificationsStore } from '@/stores/notifications'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { usePhoneColumns } from '@/composables/usePhoneColumns'
 import ActionButton from '@/components/common/ActionButton.vue'
+import { usePortLabels } from '@/composables/usePortLabels'
 
 const props = defineProps({
   device: { type: Object, required: true }
 })
 
 const topologyStore = useTopologyStore()
+const { noteFor } = usePortLabels(() => props.device)
 const authStore = useAuthStore()
 const notifications = useNotificationsStore()
 // The "read now" result arrives as a topology:updated socket event.

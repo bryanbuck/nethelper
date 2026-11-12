@@ -138,6 +138,16 @@ Production writes JSON logs to stdout. Values under secret-looking keys (passwor
 | `TOPOLOGY_CONCURRENCY` | `4` | Devices read at once. Each holds one session on its device while it is read. |
 | `TOPOLOGY_CHANGE_RETENTION_DAYS` | `90` | Link changes older than this, and links not seen for this long, are deleted after each collection. |
 
+### Port Identity (wired clients on switch ports)
+
+| Variable | Default | Notes |
+|---|---|---|
+| `PORT_CLIENTS_ENABLED` | `true` | Scheduled reads of switch MAC/ARP tables (AOS-CX REST) and the clouds' wired-client lists, shown on the device page's **Ports** tab. Port notes work either way. |
+| `PORT_CLIENT_INTERVAL` | `1800000` | Milliseconds between scheduled reads (30 minutes; minimum 300000). A sighting is shown as stale once the last good read is older than twice this. |
+| `PORT_CLIENT_CONCURRENCY` | `4` | Switches read at once (1–32). Each AOS-CX switch holds one REST session while it is read. |
+| `PORT_CLIENT_MISS_LIMIT` | `2` | Reads in a row that leave out a client on a port that is still up before it shows as unconfirmed; twice this and it is gone (1–10). A link-down or a move ends it at once. |
+| `PORT_CLIENT_RETENTION_DAYS` | `30` | Gone sightings older than this are deleted, except each port's newest one. |
+
 ### Config backups
 
 | Variable | Default | Notes |

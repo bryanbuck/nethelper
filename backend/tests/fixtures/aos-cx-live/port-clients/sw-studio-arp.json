@@ -1,0 +1,95 @@
+{
+  "default": {
+    "192.168.0.1,vlan10": {
+      "address_family": "ipv4",
+      "from": "dynamic",
+      "ip_address": "192.168.0.1",
+      "mac": "02:00:00:00:00:5c",
+      "phy_port": {
+        "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
+      },
+      "port": {
+        "vlan10": "/rest/v10.10/system/interfaces/vlan10"
+      },
+      "state": "reachable"
+    },
+    "192.168.0.12,vlan10": {
+      "address_family": "ipv4",
+      "from": "dynamic",
+      "ip_address": "192.168.0.12",
+      "mac": "e4:de:40:00:00:5d",
+      "phy_port": {
+        "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
+      },
+      "port": {
+        "vlan10": "/rest/v10.10/system/interfaces/vlan10"
+      },
+      "state": "reachable"
+    },
+    "192.168.0.169,vlan10": {
+      "address_family": "ipv4",
+      "from": "dynamic",
+      "ip_address": "192.168.0.169",
+      "mac": "00:50:56:00:00:08",
+      "phy_port": {
+        "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
+      },
+      "port": {
+        "vlan10": "/rest/v10.10/system/interfaces/vlan10"
+      },
+      "state": "reachable"
+    },
+    "192.168.0.20,vlan10": {
+      "address_family": "ipv4",
+      "from": "dynamic",
+      "ip_address": "192.168.0.20",
+      "mac": "00:0c:29:00:00:05",
+      "phy_port": {
+        "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
+      },
+      "port": {
+        "vlan10": "/rest/v10.10/system/interfaces/vlan10"
+      },
+      "state": "reachable"
+    },
+    "192.168.0.22,vlan10": {
+      "address_family": "ipv4",
+      "from": "dynamic",
+      "ip_address": "192.168.0.22",
+      "mac": "00:50:56:00:00:0a",
+      "phy_port": {
+        "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
+      },
+      "port": {
+        "vlan10": "/rest/v10.10/system/interfaces/vlan10"
+      },
+      "state": "reachable"
+    },
+    "192.168.0.33,vlan10": {
+      "address_family": "ipv4",
+      "from": "dynamic",
+      "ip_address": "192.168.0.33",
+      "mac": "00:50:56:00:00:12",
+      "phy_port": {
+        "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
+      },
+      "port": {
+        "vlan10": "/rest/v10.10/system/interfaces/vlan10"
+      },
+      "state": "reachable"
+    },
+    "192.168.0.34,vlan10": {
+      "address_family": "ipv4",
+      "from": "dynamic",
+      "ip_address": "192.168.0.34",
+      "mac": "00:50:56:00:00:13",
+      "phy_port": {
+        "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
+      },
+      "port": {
+        "vlan10": "/rest/v10.10/system/interfaces/vlan10"
+      },
+      "state": "reachable"
+    }
+  }
+}

@@ -416,6 +416,32 @@
       "name": "devices",
       "item": [
         {
+          "name": "GET /devices/ports/search",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/devices/ports/search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                "ports",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "GET /devices",
           "request": {
             "method": "GET",
@@ -1153,6 +1179,167 @@
               "variable": [
                 {
                   "key": "deviceId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /devices/:deviceId/ports",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/devices/:deviceId/ports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                ":deviceId",
+                "ports"
+              ],
+              "variable": [
+                {
+                  "key": "deviceId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /devices/:deviceId/ports/read",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/devices/:deviceId/ports/read",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                ":deviceId",
+                "ports",
+                "read"
+              ],
+              "variable": [
+                {
+                  "key": "deviceId",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /devices/:deviceId/ports/:port",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/devices/:deviceId/ports/:port",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                ":deviceId",
+                "ports",
+                ":port"
+              ],
+              "variable": [
+                {
+                  "key": "deviceId",
+                  "value": ""
+                },
+                {
+                  "key": "port",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /devices/:deviceId/ports/:port/note",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/devices/:deviceId/ports/:port/note",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                ":deviceId",
+                "ports",
+                ":port",
+                "note"
+              ],
+              "variable": [
+                {
+                  "key": "deviceId",
+                  "value": ""
+                },
+                {
+                  "key": "port",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"<string>\",\n  \"location\": \"<string>\",\n  \"owner\": \"<string>\",\n  \"notes\": \"<string>\",\n  \"portLabel\": \"<string>\",\n  \"kind\": \"auto\",\n  \"expectedMac\": \"<string>\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /devices/:deviceId/ports/:port/note",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/devices/:deviceId/ports/:port/note",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "devices",
+                ":deviceId",
+                "ports",
+                ":port",
+                "note"
+              ],
+              "variable": [
+                {
+                  "key": "deviceId",
+                  "value": ""
+                },
+                {
+                  "key": "port",
                   "value": ""
                 }
               ]

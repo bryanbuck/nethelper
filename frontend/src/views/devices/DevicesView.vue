@@ -13,6 +13,13 @@
         <div class="d-flex flex-wrap align-center ga-2">
           <ActionButton
             variant="outlined"
+            icon="mdi-map-search-outline"
+            label="Where is…"
+            title="Find a device on a switch port by MAC, IP, hostname or port label"
+            @click="portSearchOpen = true"
+          />
+          <ActionButton
+            variant="outlined"
             icon="mdi-chip"
             label="Firmware Status"
             to="/devices/firmware"
@@ -265,6 +272,7 @@
     </v-dialog>
 
     <DeviceGroupsDialog v-model="groupsDialog" @show-devices="setFilter('group', $event)" />
+    <PortSearchDialog v-model="portSearchOpen" />
 
     <DeviceEditDialog
       v-model="showEditDialog"
@@ -303,6 +311,7 @@ import DeviceTable from '@/components/devices/DeviceTable.vue'
 import DeviceEditDialog from '@/components/devices/DeviceEditDialog.vue'
 import DeviceCredentialSelect from '@/components/devices/DeviceCredentialSelect.vue'
 import DeviceGroupsDialog from '@/components/devices/DeviceGroupsDialog.vue'
+import PortSearchDialog from '@/components/devices/PortSearchDialog.vue'
 import ActionButton from '@/components/common/ActionButton.vue'
 import { vendorOptions, platformOptions } from '@/models/vendors'
 import { useDeviceForm, deviceTypes, managementModeOptions, deviceFormRules as rules } from '@/composables/useDeviceForm'
@@ -530,6 +539,7 @@ const selectStatus = (status) => {
 
 // The Groups dialog's "Show devices" sets the group filter (<id> or 'none')
 const groupsDialog = ref(false)
+const portSearchOpen = ref(false)
 
 // Initialize
 onMounted(() => {

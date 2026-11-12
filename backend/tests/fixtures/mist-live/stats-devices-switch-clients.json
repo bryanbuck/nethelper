@@ -1,0 +1,26 @@
+[
+  {
+    "mac": "4c4ab400006e",
+    "name": "JNEX-01",
+    "status": "disconnected",
+    "last_seen": 1793712599,
+    "clients": [
+      {
+        "device_mac": "4c4ab400006e",
+        "port_ids": [
+          "ge-0/0/11"
+        ],
+        "source": "lldp",
+        "mac": "f4034300005a"
+      }
+    ],
+    "mac_table_stats": {
+      "mac_table_count": 1,
+      "max_mac_entries_supported": 32768
+    },
+    "arp_table_stats": {
+      "arp_table_count": 1,
+      "max_entries_supported": 4096
+    }
+  }
+]
