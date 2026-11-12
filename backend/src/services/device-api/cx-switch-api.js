@@ -11,6 +11,8 @@ const logger = require('../../utils/logger');
 // One REST version for every call (login, requests, logout, notifications).
 // 10.10 is served by AOS-CX 10.10 and later; checked against ML.10.16.
 const CX_REST_VERSION = '10.10';
+// Login and logout answer at once on a healthy switch; never wait the full request timeout.
+const LOGIN_TIMEOUT_MS = 15000;
 
 /**
  * Aruba CX Switch API Implementation
@@ -41,6 +43,12 @@ class CXSwitchAPI extends BaseDeviceAPI {
     this.httpsAgent = new https.Agent({
       rejectUnauthorized: false,
     });
+
+    // No answer within this long fails the request. Without it a switch that
+    // went silent held its caller (a monitor's resync, a collection worker)
+    // until TCP gave up, which can take many minutes.
+    const configured = parseInt(process.env.CX_REST_TIMEOUT, 10);
+    this.requestTimeout = configured > 0 ? configured : 30000;
 
     // Session storage
     this.sessionCookie = null;
@@ -83,6 +91,7 @@ class CXSwitchAPI extends BaseDeviceAPI {
             'x-use-csrf-token': 'true', // Request CSRF token for v10.09+
           },
           httpsAgent: this.httpsAgent,
+          timeout: Math.min(this.requestTimeout, LOGIN_TIMEOUT_MS),
           validateStatus: (status) => status < 500, // Don't throw on 4xx errors
         }
       );
@@ -172,6 +181,7 @@ class CXSwitchAPI extends BaseDeviceAPI {
           ...(this.csrfToken && { 'X-CSRF-Token': this.csrfToken }),
         },
         httpsAgent: this.httpsAgent,
+        timeout: Math.min(this.requestTimeout, LOGIN_TIMEOUT_MS),
         validateStatus: (status) => status < 500,
       });
 
@@ -368,6 +378,7 @@ class CXSwitchAPI extends BaseDeviceAPI {
           'Accept': accept,
         },
         httpsAgent: this.httpsAgent,
+        timeout: this.requestTimeout,
         validateStatus: (status) => status < 500,
       };
 
