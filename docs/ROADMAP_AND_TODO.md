@@ -28,6 +28,7 @@ Hands-on checks that need real equipment, a real host, or a browser login, which
 - [x] **Live tab VLAN/description push on hardware** (item 3 below, done 2026-11-09): description, access VLAN, access → trunk, allowed-list-only and LAG VLAN changes made from Central all reached the Live tab within seconds (`docs/hardware/AOS_CX_NOTES.md`). Not tried: adding a port to a LAG (the automatic resubscribe).
 - [ ] **First. Application backup on a real Docker host** (item 16 below, added 2026-11-04): build the backend image (it now installs `postgresql-client-17` from the PGDG apt repo) and check `pg_dump --version` in it; Run now from Settings → App Backup against the Compose `postgres:15`; then restore that archive into a fresh stack with `docker compose run --rm backend node scripts/app-restore.js`. Bare metal was tested on the dev host (pg_dump 15) only.
 - [ ] **Junos SSH CLI fallback on hardware** (Phase 7 below): connection test, polls and a backup with NETCONF disabled.
+- [ ] **Port Identity on real data** (item 19 below, added 2026-11-12): over a few days, check the aging on the Ports tab: a quiet client goes unconfirmed and comes back, a cable pulled ends its sighting at once, and a device moved by hand to another port shows as moved. As an operator, save, edit and clear a note and check its history; as a viewer, check the note opens read-only and **Read now** is hidden. Try **Where is…** with a MAC fragment, an IP prefix and a hostname.
 
 ---
 
@@ -496,7 +497,7 @@ Built-in themes only. Users can't define their own. Palettes are in `frontend/sr
 **Status**: Not Started (planned 2026-10-22)
 **Estimated effort**: Large (phased; each work item below ships on its own)
 
-**Targets**: thousands of switches and APs, 10,000s of connected network clients (end-user devices on the managed network), and at most 100–200 signed-in NetHelper users, usually far fewer. NetHelper stores no network clients; only the on-demand address lookup reads them.
+**Targets**: thousands of switches and APs, 10,000s of connected network clients (end-user devices on the managed network), and at most 100–200 signed-in NetHelper users, usually far fewer. NetHelper stores no wireless clients (the on-demand address lookup reads them); wired clients on switch ports are stored by Port Identity (item 19), bounded by ports because uplinks and AP ports keep only a count.
 
 **Architecture decision**: keep nginx (or a load balancer/ingress) in front of Express. Express could serve the SPA (hashed, immutable-cached assets are not a load problem), but nginx does TLS and slow-client buffering, and becomes the load balancer once there is more than one backend (WebSocket upgrade, sticky sessions).
 
@@ -517,7 +518,8 @@ Replace an estimate with a measured value when one exists.
 | Config backup run | **~1,000–2,000 devices** in a 6 h window, at ~10–20 s per device | One device at a time | none yet (item 4) |
 | Live monitoring | **200 devices** | Hard cap; one WebSocket per device, one process | `LIVE_MAX_CONNECTIONS` |
 | Topology collection | thousands per 6 h cycle | 4 devices in parallel; cloud neighbors read in bulk per integration | `TOPOLOGY_CONCURRENCY` (max 32), `TOPOLOGY_INTERVAL` |
-| Central address lookup | **20,000 clients** | Walks the whole client list sequentially, 20 pages × 1000; clients past the cap are missed without a warning | code constant (`aruba-central.provider.js` `findByAddress`) |
+| Central client list (address lookup, Port Identity) | **20,000 clients** | Walks the whole client list sequentially, 20 pages × 1000; past the cap a warning is logged and the rest are missed | code constant (`aruba-central.provider.js` `CLIENT_MAX_PAGES`) |
+| Port Identity collection | thousands of switches per 30 min | 4 switches in parallel (three GETs each on AOS-CX); one client-list read per cloud integration per run | `PORT_CLIENT_CONCURRENCY` (max 32), `PORT_CLIENT_INTERVAL` |
 | Mist address lookup | no client-count limit | IP-filtered searches (`limit: 20`) | — |
 | Mist API budget | 5,000 requests/hour per org | The status refresh is one paged read (1000 per page) every 5 min; per-device calls (config backups) count against the budget | `CLOUD_STATUS_INTERVAL`, `CLOUD_SYNC_INTERVAL` |
 | Mist list pagination | 100,000 items per list | 100 pages × 1000, then a logged warning | code constant (`mist.provider.js`) |
@@ -649,6 +651,53 @@ The primary/secondary partitions, the default image and the booted image used to
 - Automatic rollback (needs a restore when migrations ran; today it is printed, not done).
 - Signed releases (the checksum guards the download's integrity; authenticity rests on HTTPS to GitHub).
 - A git checkout (`git pull` stays manual) and an in-place upgrade of the copied systemd unit / nginx files (listed, never overwritten).
+
+---
+
+### 19. Port Identity (what is plugged into each switch port)
+**Priority**: High
+**Status**: ✅ Phase 1 merged 2026-11-12 for `0.9.1-beta.2` (developed on `wip/port-identity` from 2026-11-09). Architecture, aging rules and live findings: `MULTI_VENDOR_ROADMAP.md` §8g; AOS-CX table facts: `docs/hardware/AOS_CX_NOTES.md`.
+
+**What exists**:
+- Data model: `PortNote` + `PortNoteRevision` (the user's label/location/owner/notes/kind/expected MAC, every save a revision), `PortClient` (wired-client sightings with aging), `PortReadState` (per device and source). Migrations `20261112120000_port_identity`, `20261112130000_port_client_identity`, `20261112140000_port_read_state_created`. Note: this reverses item 12's "NetHelper stores no network clients" for **wired** clients on switch ports, including the 802.1X user names and hostnames the clouds report.
+- Collector (`services/ports/`, Bull queue `port-clients`, every `PORT_CLIENT_INTERVAL`, 30 min; on by default, `PORT_CLIENTS_ENABLED=false` turns it off): AOS-CX REST MAC/ARP/interface tables, Central and Mist wired clients (one read per integration per run), fleet-wide ARP, port classes, moves, link-down from `device:event`.
+- API under `/devices`: `GET /ports/search`, `GET /:id/ports`, `GET /:id/ports/:port`, operator+ `PUT|DELETE /:id/ports/:port/note` and `POST /:id/ports/read`. Socket events `ports:updated`, `ports:collected`.
+- UI: device page **Ports** tab (switches), note dialog with evidence and history, labels on the Live and Neighbors tabs, **Where is…** search on the Devices page.
+
+**Known limits in beta.2**:
+- Vendor names come from the ~55 curated Aruba/Juniper prefixes or the cloud's own field, so most clients on a direct AOS-CX switch have no vendor.
+- A failed read can be recorded under the wrong source: a cloud-managed switch with no IP/credential whose cloud read fails gets `PortReadState(source: device-rest).error` = "Unable to connect to Aruba Central; device API needs an IP address and a linked credential".
+- On or off only through `PORT_CLIENTS_ENABLED` on the server.
+- Junos, AOS-S (direct) and IOS switches have no client reader; their Ports tab says ports are read every 30 minutes, which never happens there.
+- Central's client list stops at 20,000 clients (logged). For a switch only Central can see (AOS-S under Central), a client past the cut is missed and then aged out.
+- Aging has run on real data for two days only (one link-down, one omitted); a client moved by hand hasn't been seen.
+
+**Next (after beta.2, planned 2026-11-12)**, one release, about 4 days of work:
+
+1. **MAC vendor names from the IEEE registry** (about 2 days).
+   - *Sources and how they combine.* There are four, and they answer different questions:
+     | Source | What it is | Coverage | Kept as |
+     |---|---|---|---|
+     | Curated `KNOWN_OUIS` (`discovery.service.js`) | Hand-picked prefixes of the vendors NetHelper manages, mapped to the `Vendor` enum | ~55 Aruba/HPE/Juniper/Mist | Unchanged; the only source of `matchedVendor` (enum), and its label wins for those prefixes |
+     | IEEE registry (MA-L `oui.csv`, MA-M `mam.csv`, MA-S `oui36.csv`) | Who the address block was sold to: the NIC's maker | Every assigned block, ~50k rows; 24-, 28- and 36-bit prefixes | **New, bundled**: the default `vendor` for any non-random MAC |
+     | The cloud's own field (Central `vendor`/`manufacturer`, Mist `manufacture`) | The cloud's guess, from the OUI plus DHCP/traffic fingerprinting | Only clients the cloud lists | `profile.vendor` (a claim, shown as "Aruba Central says …"); fills `vendor` only when the IEEE table has no entry |
+     | Host `nmap-mac-prefixes` | Nmap's copy of MA-L, short names | ~32k MA-L rows, as old as the distro's nmap package | **Not used** (see below) |
+   - *Decision: the IEEE registry is the source for `vendor`, the cloud's field is evidence.* An OUI names who made the network chip, which is a fact; a cloud's manufacturer is a guess, like its device classification (Central called the USB-C dock behind a Cisco phone "Cisco IP Phone"). Today `client-merge.js` prefers the cloud's field over the OUI; this flips that, and the cloud's value stays visible in `profile`. A random (locally administered) MAC gets no vendor from any source, as now.
+   - *Why bundle rather than download at runtime.* NetHelper often runs without outbound internet (only the update check and clouds reach out), IEEE's site has been known to refuse scripted downloads, and a bundled file makes a lookup the same on every install of a release. *Why not the host's nmap file*: it is free and already installed, but its age depends on the distro (Debian's is years behind), it lacks the 28/36-bit blocks, and nmap's license covers nmap, not our use of its data. Wireshark's `manuf` is GPL-2.0 and adds nothing the IEEE files lack.
+   - *Build.* `backend/scripts/update-oui.js` downloads the three IEEE CSVs (with a browser-like Accept header and a polite delay), parses quoted CSV, shortens names (strip `Inc`, `Co., Ltd`, `Corporation`, `GmbH`…, title-case ALL-CAPS names, plus a small override map for the most common: "Apple", "Cisco", "HP", "Dell", "Intel", "Samsung", "Raspberry Pi"), and writes `backend/data/oui.tsv` (`prefix<TAB>name`, sorted, ~1.2 MB, ~400 KB gzipped in the tarball) plus a header line with the registry date. Committed to the repo; refreshed by running the script at release time (a step in `CONTRIBUTING.md` "Releasing").
+   - *Lookup.* `utils/oui.js`: lazy-loaded on first lookup into three Maps (36, 28, 24 bits), longest prefix wins; `lookup(mac) → { name, source: 'curated'|'ieee' } | null`; never throws (a missing file logs once and returns null). `discovery.lookupVendor()` becomes curated-then-IEEE, so discovery, the address lookup's neighbor entry and Port Identity all get it.
+   - *Backfill.* Stored `PortClient.vendor` and `DiscoveredDevice.vendor` refresh on their next read or scan; no migration.
+   - *Tests.* A fixture CSV for the parser and name shortener; longest-prefix (an MA-S block inside an MA-L one); random MAC → null; a check that `data/oui.tsv` exists, parses and is under a size cap. No test fails on the file's age (CI must not break on a date); the release step covers freshness.
+   - *Open before shipping.* Confirm the IEEE Registration Authority's terms allow redistributing the public listing in an AGPL project (Linux distros' `ieee-data` package does), and note the source in `LICENSE`/`README` third-party notes.
+2. **Fix the read-failure source** (about half a day). `collectAll()` records a failure under `resolveTransport(device)[0]`, and `readDevice()` folds "not configured" notes into the same message. Record each attempted source under its own `PortReadState` row (direct error → `device-rest`, cloud error → `cloud`). A source that was never attempted (no IP or credential) is not a failure: return it as a note on the port view. In the Ports tab, list reads per source ("AOS-CX REST: needs an IP and a credential · Aruba Central: Unable to connect"). Also give unsupported platforms their own empty state ("NetHelper can't read clients from Junos/AOS-S/IOS switches yet; notes still work").
+3. **Turn collection on or off in Settings** (about 1–1.5 days). A single-row `PortClientConfig` (`enabled`, `intervalMs`, `updatedById`), following `AppBackupConfig`. Admin-only `GET`/`PUT /settings/port-clients` (role-gates `ADMIN_ONLY`, Postman). `PORT_CLIENTS_ENABLED` / `PORT_CLIENT_INTERVAL` become the defaults for a new install, and `PORT_CLIENTS_ENABLED=false` stays a hard off, shown in the UI as "turned off on the server". A save re-syncs the Bull repeatable job (like `appBackupService.syncSchedule()`). Turning it off keeps notes and sightings: the Ports tab shows "Client collection is off" and freshness goes stale; "Read now" is refused with that reason. UI: a Port Identity card on a Settings tab (suggested: a new admin **Data collection** tab, which later also takes topology's on/off and interval). The data stays until retention prunes it; a "delete collected clients" button is deferred.
+
+**Later**:
+- Labels on the Network Map (edge tooltips, node drawer).
+- Phase 1b: Junos NETCONF, AOS-S and IOS SSH MAC/ARP parsers (spec-derived until hardware).
+- Phase 1.5: alert rules for an unexpected or missing pinned client; an Activity category.
+- Phase 2 (design first): push a note's label to the port description (AOS-CX REST, Mist, Junos/AOS-S/IOS direct); NetHelper's first write to devices.
+- Whether viewers should see 802.1X user names (today every role does).
 
 ---
 

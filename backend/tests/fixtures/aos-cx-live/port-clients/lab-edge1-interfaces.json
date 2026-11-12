@@ -1,0 +1,452 @@
+{
+  "1/1/1": {
+    "name": "1/1/1",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/1": "/rest/v10.10/system/interfaces/1%2F1%2F1"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "110": "/rest/v10.10/system/vlans/110"
+    }
+  },
+  "1/1/10": {
+    "name": "1/1/10",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/10": "/rest/v10.10/system/interfaces/1%2F1%2F10"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/11": {
+    "name": "1/1/11",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/11": "/rest/v10.10/system/interfaces/1%2F1%2F11"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/12": {
+    "name": "1/1/12",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/12": "/rest/v10.10/system/interfaces/1%2F1%2F12"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/13": {
+    "name": "1/1/13",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/13": "/rest/v10.10/system/interfaces/1%2F1%2F13"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/14": {
+    "name": "1/1/14",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/14": "/rest/v10.10/system/interfaces/1%2F1%2F14"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/15": {
+    "name": "1/1/15",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/15": "/rest/v10.10/system/interfaces/1%2F1%2F15"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/16": {
+    "name": "1/1/16",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/16": "/rest/v10.10/system/interfaces/1%2F1%2F16"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/17": {
+    "name": "1/1/17",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/17": "/rest/v10.10/system/interfaces/1%2F1%2F17"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/18": {
+    "name": "1/1/18",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/18": "/rest/v10.10/system/interfaces/1%2F1%2F18"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/19": {
+    "name": "1/1/19",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/19": "/rest/v10.10/system/interfaces/1%2F1%2F19"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/2": {
+    "name": "1/1/2",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/2": "/rest/v10.10/system/interfaces/1%2F1%2F2"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/20": {
+    "name": "1/1/20",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/20": "/rest/v10.10/system/interfaces/1%2F1%2F20"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/21": {
+    "name": "1/1/21",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/21": "/rest/v10.10/system/interfaces/1%2F1%2F21"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/22": {
+    "name": "1/1/22",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/22": "/rest/v10.10/system/interfaces/1%2F1%2F22"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/23": {
+    "name": "1/1/23",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/23": "/rest/v10.10/system/interfaces/1%2F1%2F23"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/24": {
+    "name": "1/1/24",
+    "type": "system",
+    "link_state": "up",
+    "admin_state": "up",
+    "link_speed": 1000000000,
+    "interfaces": {
+      "1/1/24": "/rest/v10.10/system/interfaces/1%2F1%2F24"
+    },
+    "applied_vlan_mode": null,
+    "applied_vlan_tag": null
+  },
+  "1/1/24.2201": {
+    "name": "1/1/24.2201",
+    "type": "vlansubint",
+    "link_state": "up",
+    "admin_state": "up",
+    "link_speed": null,
+    "interfaces": {
+      "1/1/24.2201": "/rest/v10.10/system/interfaces/1%2F1%2F24.2201"
+    },
+    "applied_vlan_mode": null,
+    "applied_vlan_tag": null
+  },
+  "1/1/25": {
+    "name": "1/1/25",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/25": "/rest/v10.10/system/interfaces/1%2F1%2F25"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/26": {
+    "name": "1/1/26",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/26": "/rest/v10.10/system/interfaces/1%2F1%2F26"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/27": {
+    "name": "1/1/27",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/27": "/rest/v10.10/system/interfaces/1%2F1%2F27"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/28": {
+    "name": "1/1/28",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/28": "/rest/v10.10/system/interfaces/1%2F1%2F28"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/3": {
+    "name": "1/1/3",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/3": "/rest/v10.10/system/interfaces/1%2F1%2F3"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/4": {
+    "name": "1/1/4",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/4": "/rest/v10.10/system/interfaces/1%2F1%2F4"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/5": {
+    "name": "1/1/5",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/5": "/rest/v10.10/system/interfaces/1%2F1%2F5"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/6": {
+    "name": "1/1/6",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/6": "/rest/v10.10/system/interfaces/1%2F1%2F6"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/7": {
+    "name": "1/1/7",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/7": "/rest/v10.10/system/interfaces/1%2F1%2F7"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/8": {
+    "name": "1/1/8",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/8": "/rest/v10.10/system/interfaces/1%2F1%2F8"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "1/1/9": {
+    "name": "1/1/9",
+    "type": "system",
+    "link_state": "down",
+    "admin_state": "down",
+    "link_speed": 0,
+    "interfaces": {
+      "1/1/9": "/rest/v10.10/system/interfaces/1%2F1%2F9"
+    },
+    "applied_vlan_mode": "access",
+    "applied_vlan_tag": {
+      "1": "/rest/v10.10/system/vlans/1"
+    }
+  },
+  "loopback0": {
+    "name": "loopback0",
+    "type": "loopback",
+    "link_state": "up",
+    "admin_state": "up",
+    "link_speed": null,
+    "interfaces": {
+      "loopback0": "/rest/v10.10/system/interfaces/loopback0"
+    },
+    "applied_vlan_mode": null,
+    "applied_vlan_tag": null
+  },
+  "ubt": {
+    "name": "ubt",
+    "type": "ubt",
+    "link_state": null,
+    "admin_state": null,
+    "link_speed": null,
+    "interfaces": {
+      "ubt": "/rest/v10.10/system/interfaces/ubt"
+    },
+    "applied_vlan_mode": null,
+    "applied_vlan_tag": null
+  },
+  "vlan1": {
+    "name": "vlan1",
+    "type": "vlan",
+    "link_state": "up",
+    "admin_state": "up",
+    "link_speed": null,
+    "interfaces": {
+      "vlan1": "/rest/v10.10/system/interfaces/vlan1"
+    },
+    "applied_vlan_mode": null,
+    "applied_vlan_tag": null
+  },
+  "vxlan1": {
+    "name": "vxlan1",
+    "type": "vxlan",
+    "link_state": null,
+    "admin_state": null,
+    "link_speed": null,
+    "interfaces": {
+      "vxlan1": "/rest/v10.10/system/interfaces/vxlan1"
+    },
+    "applied_vlan_mode": null,
+    "applied_vlan_tag": null
+  }
+}

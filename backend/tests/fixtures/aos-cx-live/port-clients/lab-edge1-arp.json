@@ -1,0 +1,17 @@
+{
+  "default": {
+    "172.22.1.1,1/1/24.2201": {
+      "address_family": "ipv4",
+      "from": "dynamic",
+      "ip_address": "172.22.1.1",
+      "mac": "f0:1a:a0:00:00:4a",
+      "phy_port": {
+        "1/1/24.2201": "/rest/v10.10/system/interfaces/1%2F1%2F24.2201"
+      },
+      "port": {
+        "1/1/24.2201": "/rest/v10.10/system/interfaces/1%2F1%2F24.2201"
+      },
+      "state": "reachable"
+    }
+  }
+}

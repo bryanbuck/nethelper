@@ -8,6 +8,7 @@
  * Rows older than DEVICE_EVENT_RETENTION_DAYS are pruned once a day.
  */
 
+const { EventEmitter } = require('events');
 const { getPrisma } = require('../config/database');
 const logger = require('../utils/logger');
 
@@ -29,6 +30,10 @@ function emit(event, payload) {
 }
 
 let pruneTimer = null;
+
+// In-process: every recorded event, as broadcast (e.g. Port Identity ends a
+// port's client sightings on port.link.down). Listeners must not throw.
+const events = new EventEmitter();
 
 /**
  * Persist an event and broadcast it. Never throws: a lost row is logged and
@@ -61,6 +66,11 @@ async function record(device, event, source) {
     occurredAt: row?.occurredAt || new Date(),
   };
   emit('device:event', payload);
+  try {
+    events.emit('recorded', payload);
+  } catch (error) {
+    logger.warn(`device-events: listener failed for ${payload.type}: ${error.message}`);
+  }
   return payload;
 }
 
@@ -143,6 +153,6 @@ function stopPruning() {
 }
 
 module.exports = {
-  record, recordStateIfChanged, recordStateOnce, prune, startPruning, stopPruning,
+  record, recordStateIfChanged, recordStateOnce, prune, startPruning, stopPruning, events,
   _resetCheckedStates: () => checkedStates.clear(),
 };

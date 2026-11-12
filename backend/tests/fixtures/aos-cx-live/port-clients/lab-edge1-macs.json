@@ -1,0 +1,16 @@
+{
+  "110": {
+    "dynamic,f4:03:43:00:00:5a": {
+      "from": "dynamic",
+      "mac_addr": "f4:03:43:00:00:5a",
+      "port": {
+        "vxlan1": "/rest/v10.10/system/interfaces/vxlan1"
+      },
+      "network_infra_mac": false,
+      "inactivity_timeout": 300,
+      "never_ageout": false,
+      "selected": true,
+      "denied": false
+    }
+  }
+}

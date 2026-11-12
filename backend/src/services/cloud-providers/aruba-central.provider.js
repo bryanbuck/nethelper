@@ -7,6 +7,7 @@ const { detectPlatform } = require('../../utils/device-platform');
 const { parseCentralTopology } = require('../topology/parsers/central');
 const { parseCentralVlans } = require('../topology/parsers/central-vlans');
 const { normalizeMac } = require('../../utils/device-key');
+const { parseCentralWiredClients } = require('../ports/parsers/cloud-clients');
 const { debugLog, Services } = require('../../utils/debug-logger');
 
 const logger = debugLog.createLogger(Services.ARUBA_CENTRAL);
@@ -25,6 +26,8 @@ const logger = debugLog.createLogger(Services.ARUBA_CENTRAL);
 // Alerts (network-notifications). The list carries no serial, MAC or site
 // id: the device appears only in the summary text. Device-offline alerts
 // repeat what the cloud status refresh records, so they are left out.
+// The client list walk (address lookup, Port Identity): 20 pages x 1000.
+const CLIENT_MAX_PAGES = 20;
 const ALERTS_ENDPOINT = '/network-notifications/v1/alerts';
 const ALERT_PAGE_LIMIT = 100; // the API's maximum
 const ALERT_MAX_PAGES = 10;
@@ -135,7 +138,7 @@ class ArubaCentralProvider extends BaseCloudProvider {
   }
 
   supports(capability) {
-    return ['inventory', 'status', 'test', 'scope-backup', 'topology', 'switch-vlans', 'address-lookup', 'alarms'].includes(capability);
+    return ['inventory', 'status', 'test', 'scope-backup', 'topology', 'switch-vlans', 'address-lookup', 'alarms', 'wired-clients'].includes(capability);
     // NOT 'config-backup': the classic /configuration/v2 endpoint is
     // quarantined (see getDeviceConfiguration). CX configs are still backed
     // up over device REST; AOS-S over SSH.
@@ -362,24 +365,49 @@ class ArubaCentralProvider extends BaseCloudProvider {
     // The client list can't be filtered by IP, so it is paged through; stop at
     // the first connected client holding the address (one holds it at a
     // time), which on a busy tenant usually saves most of the pages.
-    let next;
-    let pages = 0;
-    let connected = false;
-    do {
-      const page = await this.makeRequest('GET', '/network-monitoring/v1alpha1/clients', {
-        params: { limit: 1000, ...(next && { next }) },
-        context: 'address_lookup',
-      });
-      for (const item of page.items || []) {
+    for await (const items of this.clientPages('address_lookup')) {
+      let connected = false;
+      for (const item of items) {
         if (item.ipv4 !== ip) continue;
         const holder = centralClientHolder(item, this.parseTimestamp(item.lastSeenAt));
         holders.push(holder);
         if (holder.status === 'connected') connected = true;
       }
+      if (connected) break;
+    }
+    return holders;
+  }
+
+  /**
+   * The whole v1alpha1 client list (wired and wireless, connected and
+   * recently disconnected), one page of up to 1000 at a time, at most
+   * CLIENT_MAX_PAGES pages; a longer list is cut there with a warning.
+   */
+  async* clientPages(context = 'api_call') {
+    let next;
+    let pages = 0;
+    do {
+      const page = await this.makeRequest('GET', '/network-monitoring/v1alpha1/clients', {
+        params: { limit: 1000, ...(next && { next }) },
+        context,
+      });
+      yield page.items || [];
       next = page.next;
       pages += 1;
-    } while (next && !connected && pages < 20);
-    return holders;
+    } while (next && pages < CLIENT_MAX_PAGES);
+    if (next) logger.warn(`Central client list for "${this.integration.name}" cut after ${pages} pages (${pages * 1000} clients)`);
+  }
+
+  /**
+   * Port Identity: every wired client Central knows, as observations keyed to
+   * their switch's serial (services/ports/parsers/cloud-clients.js). One walk
+   * of the client list per call; callers share it per collection run.
+   */
+  async listWiredClients() {
+    const now = new Date();
+    const items = [];
+    for await (const page of this.clientPages('port_clients')) items.push(...page);
+    return parseCentralWiredClients(items, now);
   }
 
   /**

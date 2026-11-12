@@ -174,7 +174,7 @@
 
     <!-- Overview / Live -->
     <div v-if="device" class="d-flex align-center mb-4">
-      <!-- Phones: the four tabs fit once restyled (assets/styles/responsive.scss), and
+      <!-- Phones: the tabs (five for a switch) fit once restyled (responsive.scss, and the row's own padding below), and
            arrows that appear on a resize would then keep them overflowing, so none -->
       <v-tabs v-model="tab" color="primary" class="tab-row" :show-arrows="!xs">
         <v-tab value="overview">
@@ -184,6 +184,10 @@
         <v-tab value="live">
           <v-icon v-if="!xs" start icon="mdi-access-point" />
           Live
+        </v-tab>
+        <v-tab v-if="device.type === 'switch'" value="ports">
+          <v-icon v-if="!xs" start icon="mdi-ethernet" />
+          Ports
         </v-tab>
         <v-tab value="neighbors">
           <v-icon v-if="!xs" start icon="mdi-lan" />
@@ -246,6 +250,9 @@
 
     <!-- Live port/PoE state; subscribes only while this tab is open -->
     <DeviceLivePanel v-else-if="device && tab === 'live'" :device="device" @update="applyDevicePatch" />
+
+    <!-- Port Identity: what is connected to each port, and the user's port notes -->
+    <DevicePortsPanel v-else-if="device && tab === 'ports'" :device="device" />
 
     <!-- LLDP/CDP neighbors (Network Map data for this device) -->
     <DeviceNeighborsPanel v-else-if="device && tab === 'neighbors'" :device="device" />
@@ -728,6 +735,7 @@ import { formatDistanceToNow, format, fromUnixTime } from 'date-fns'
 import DeviceConnectionTest from '@/components/devices/DeviceConnectionTest.vue'
 import DeviceLivePanel from '@/components/devices/DeviceLivePanel.vue'
 import DeviceNeighborsPanel from '@/components/devices/DeviceNeighborsPanel.vue'
+import DevicePortsPanel from '@/components/devices/DevicePortsPanel.vue'
 import DeviceHistoryPanel from '@/components/devices/DeviceHistoryPanel.vue'
 import DeviceAddressLookup from '@/components/devices/DeviceAddressLookup.vue'
 import DeviceAlertsBanner from '@/components/devices/DeviceAlertsBanner.vue'
@@ -779,9 +787,10 @@ const lastTestResult = ref(null)
 const lastTest = ref(null)
 
 // Selected tab, kept in the URL (?tab=live) so a live view can be linked.
-const TABS = ['live', 'neighbors', 'history']
+const TABS = ['live', 'ports', 'neighbors', 'history']
 const tab = computed({
-  get: () => (TABS.includes(route.query.tab) ? route.query.tab : 'overview'),
+  // Ports exist for switches only; a ports link to anything else opens the overview.
+  get: () => (TABS.includes(route.query.tab) && (route.query.tab !== 'ports' || device.value?.type === 'switch') ? route.query.tab : 'overview'),
   set: (value) => router.replace({ query: { ...route.query, tab: TABS.includes(value) ? value : undefined } }),
 })
 
@@ -1304,6 +1313,12 @@ onUnmounted(() => {
 }
 
 @media (max-width: 599.98px) {
+  /* A switch has five tabs; at the phone-wide 12px they overflow a 390px
+     screen by a few pixels (and no arrows show), so this row uses 8px. */
+  .tab-row :deep(.v-tab.v-tab.v-btn) {
+    padding-inline: 8px;
+  }
+
   /* Two cards per row: the headline values drop to body size. */
   .stat-value {
     font-size: 1rem !important;

@@ -133,6 +133,7 @@
               >
                 <td>
                   <div class="font-weight-medium">{{ p.port }}</div>
+                  <div v-if="noteFor(p.port)?.label" class="text-caption" title="Your port label">{{ noteFor(p.port).label }}</div>
                   <div v-if="p.description" class="text-caption text-medium-emphasis">{{ p.description }}</div>
                   <div v-if="p.vlan" class="text-caption text-medium-emphasis">{{ vlanSummary(p.vlan) }}</div>
                 </td>
@@ -161,7 +162,10 @@
                 :class="{ 'recently-changed': recentlyChanged(p.port) }"
               >
                 <td class="font-weight-medium">{{ p.port }}</td>
-                <td class="text-medium-emphasis">{{ p.description || '' }}</td>
+                <td>
+                  <div v-if="noteFor(p.port)?.label" title="Your port label">{{ noteFor(p.port).label }}</div>
+                  <div class="text-medium-emphasis">{{ p.description || '' }}</div>
+                </td>
                 <td class="text-no-wrap">
                   <div>{{ vlanModeLabel(p.vlan) }}</div>
                   <div v-if="p.vlan?.lag" class="text-caption text-medium-emphasis">in {{ p.vlan.lag }}</div>
@@ -217,12 +221,15 @@ import { PlatformInfo, liveStateMode, cloudProviderLabel } from '@/models/vendor
 import LiveSparkline from '@/components/devices/LiveSparkline.vue'
 import DeviceEventsCard from '@/components/devices/DeviceEventsCard.vue'
 import { speedLabel } from '@/models/device-events'
+import { usePortLabels } from '@/composables/usePortLabels'
 import { vlanLines, vlanModeLabel, vlanSummary } from '@/models/live-vlan'
 
 const props = defineProps({
   device: { type: Object, required: true },
 })
 const emit = defineEmits(['update'])
+// Port Identity: the user's port labels next to the switch's descriptions.
+const { noteFor } = usePortLabels(() => props.device)
 
 const live = useLiveStore()
 const authStore = useAuthStore()

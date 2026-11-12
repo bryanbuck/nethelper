@@ -161,3 +161,37 @@ static VXLAN. Captures: `aos-cx-live/interfaces-vlans.json`,
   no EVPN configured, `evpn` is 404 and `evpn_instances` is `{}`.
 - `filter=type:<t>` works on `system/interfaces` here. The reader filters
   client-side anyway, in case older firmware rejects it.
+
+## MAC and ARP tables (Port Identity, 2026-11-10)
+
+GET-only reads of Sw-CoreA (6300F), Sw-Studio (6200F) and Lab-Edge0/1 (6300F).
+Scrubbed captures: `tests/fixtures/aos-cx-live/port-clients/`. The reader is
+`CXSwitchAPI.getClientTables()` (three GETs on one session), parsed by
+`services/ports/parsers/aos-cx-clients.js`.
+
+- `GET system/vlans/*/macs?depth=2` returns
+  `{ <vlan>: { "<from>,<mac>": { mac_addr, from, port: { "<port>": ref }, inactivity_timeout: 300, network_infra_mac, ... } } }`,
+  in 30–330 ms per switch.
+- The same MAC appears once per VLAN it was learned in (73 entries, 59 MACs on
+  Sw-Studio), so de-duplicate per (port, MAC).
+- `network_infra_mac` is true for every MAC learned on AP ports and switch
+  links, and false on edge ports (including a phone): the switch's own uplink
+  hint.
+- MACs are also learned on non-physical ports (`vxlan1` on a VTEP, `lag3`). A
+  LAG is stored as its own port; tunnel ports are skipped.
+- `GET system/vrfs/*/neighbors?depth=2` (ARP) returns
+  `{ <vrf>: { "<ip>,<l3 port>": { ip_address, mac, port: { vlan10: ref }, phy_port: { "1/1/13": ref }, state } } }`.
+  `phy_port` names the physical port behind the VLAN interface. Only the
+  routing switch has most entries (Sw-CoreA 65, the access switch 7), so IP
+  enrichment is fleet-wide. A switch that routes nothing answers with an empty
+  table; an ARP failure leaves the IPs empty rather than failing the read.
+- A quiet MAC leaves the table after `inactivity_timeout` (300 s), so one read
+  that misses a MAC proves nothing.
+- Ports seen: uplinks to inventory switches had 56 MACs; AP ports (LLDP `WLAN`)
+  8–13 (wireless clients bridged); a non-inventory gateway (LLDP
+  `Bridge, Router`) 19 and a small switch (LLDP `Bridge`) 3; a hypervisor trunk
+  (LLDP neighbor with no name or capabilities) 13; two ports with 3–4 MACs and
+  no LLDP. **Phone + PC** pairs (LLDP `Bridge, Telephone` plus a second MAC on
+  the data VLAN) are on both access switches.
+- Port descriptions are already meaningful on real switches ("IP Phone + USB-C
+  dock", "Trunk to Core"); the Ports tab shows them next to the user's label.

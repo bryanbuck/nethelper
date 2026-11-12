@@ -23,6 +23,7 @@ const { getPrisma } = require('../config/database');
 const deviceIdentity = require('./device-identity.service');
 const alertService = require('./alert.service');
 const { normalizeMac } = require('../utils/device-key');
+const { mergePortNotes } = require('./ports/port-note-merge');
 const { debugLog, Services } = require('../utils/debug-logger');
 
 const logger = debugLog.createLogger(Services.DEVICE);
@@ -298,6 +299,9 @@ class DeviceMergeService {
       // cascade away with them and are rebuilt on the target's next collection
       // (re-pointing them could collide on DeviceLink's unique port key).
       await tx.topologyChange.updateMany({ where: { deviceId: { in: ids } }, data: { deviceId: targetId } });
+      // Port notes move (or fold into the target's note for the same port);
+      // port client sightings cascade away and are rebuilt by the next read.
+      await mergePortNotes(tx, ids, targetId, new Map(sources.map((s) => [s.id, s.name])));
       for (const s of scheduleUpdates) {
         await tx.backupSchedule.update({ where: { id: s.id }, data: { deviceSelection: s.deviceSelection } });
       }

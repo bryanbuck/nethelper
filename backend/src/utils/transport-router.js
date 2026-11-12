@@ -18,7 +18,7 @@
 const { TRANSPORT_MATRIX, TRANSPORT_FALLBACKS } = require('../constants/vendors');
 const { detectPlatform, detectVendor, isCxRestCapable } = require('./device-platform');
 
-const OPERATIONS = ['config', 'test', 'poll', 'live', 'topology'];
+const OPERATIONS = ['config', 'test', 'poll', 'live', 'topology', 'clients'];
 
 /**
  * @param {Object} device - Device row (managementMode, vendor, platform, type, ...)
@@ -53,9 +53,10 @@ function resolveTransport(device, operation) {
     return [...transports];
   }
 
-  // Topology is a read-only neighbor read: local REST when the device has an
-  // IP, then the cloud plane (a provider capability, which may be unsupported).
-  if (operation === 'topology' && device?.managementMode === 'cloud') {
+  // Topology (neighbors) and clients (Port Identity: MAC/ARP tables, cloud
+  // wired clients) are read-only: local REST when the device has an IP, then
+  // the cloud plane (a provider capability, which may be unsupported).
+  if ((operation === 'topology' || operation === 'clients') && device?.managementMode === 'cloud') {
     const direct = device.ipAddress ? transports.filter((t) => t === 'device-rest') : [];
     return [...direct, 'cloud'];
   }
