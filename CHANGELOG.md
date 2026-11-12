@@ -9,6 +9,9 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 - **Application backup overdue** alert: scheduled backups are on, but none has succeeded since the time two scheduled runs back. It runs on its own timer, so it also notices a schedule that stopped firing. Settings → App Backup shows the last success and the next scheduled run.
 - A browser smoke test (`e2e/`, run in CI by `.github/workflows/e2e.yml`): installs NetHelper with `deploy/install.sh`, signs in, adds a device, backs it up twice with a change between, checks the diff, and takes an application backup.
 
+### Documentation
+- The install guide moved out of `deploy/README.md`: installing is now [`docs/INSTALL.md`](docs/INSTALL.md), and backup and restore, upgrading and key rotation are [`docs/OPERATIONS.md`](docs/OPERATIONS.md). The README's install steps use the release tarball instead of a `git clone` (a clone builds the images locally and can't use the one-command upgrade). The text the installer, the upgrade commands and the app print points at the new files.
+
 ## [0.9.1-beta.1] — 2026-11-11
 
 The first beta of 0.9.1, for early testing: Cisco IOS switches, an update notice with a one-command upgrade for later releases, and fixes found after 0.9.0. Installs on 0.9.0 are not told about it (the update notice offers betas only to beta installs).

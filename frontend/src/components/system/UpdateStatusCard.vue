@@ -58,7 +58,7 @@ import { useUpdateCheckStore } from '@/stores/updateCheck'
 import { timeAgo } from '@/models/activity'
 import ActionButton from '@/components/common/ActionButton.vue'
 
-const UPGRADE_DOC = 'https://github.com/bryanbuck/nethelper/blob/master/deploy/README.md#upgrading'
+const UPGRADE_DOC = 'https://github.com/bryanbuck/nethelper/blob/master/docs/OPERATIONS.md#upgrading'
 
 const store = useUpdateCheckStore()
 const status = computed(() => store.status)

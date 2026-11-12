@@ -10,10 +10,10 @@
 # tree (`--build`); both carry the same name and tag.
 #
 # The UI (and the API behind it, same origin) listens on HTTP_PORT. Put a TLS
-# terminator in front of it for anything beyond a lab: see README.md.
+# terminator in front of it for anything beyond a lab: see docs/INSTALL.md.
 #
 # For MAC-address discovery on the local L2 segment, also layer on
-# docker-compose.host-network.yml (see README.md).
+# docker-compose.host-network.yml (see docs/INSTALL.md).
 
 name: nethelper
 

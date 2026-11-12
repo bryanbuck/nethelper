@@ -12,7 +12,7 @@
 #   nethelper-admin restore /var/lib/nethelper/app-backups/<archive> [--dry-run]
 #   nethelper-admin upgrade [--version VERSION] [--no-backup] [--yes]
 #
-# Paths follow deploy/README.md; override with NETHELPER_HOME (code),
+# Paths follow docs/INSTALL.md; override with NETHELPER_HOME (code),
 # NETHELPER_ENV (settings file) and NETHELPER_USER (service user).
 
 set -eu
@@ -165,7 +165,7 @@ upgrade() {
   [ -f "$lib" ] || die "not found: $lib (set NETHELPER_HOME)"
   # shellcheck disable=SC1090 # the tree is chosen at run time
   . "$lib"
-  [ ! -e "$NETHELPER_HOME/.git" ] || die "$NETHELPER_HOME is a git checkout, not a release tarball: upgrade it with git pull and the steps in deploy/README.md, \"Upgrading\""
+  [ ! -e "$NETHELPER_HOME/.git" ] || die "$NETHELPER_HOME is a git checkout, not a release tarball: upgrade it with git pull and the steps in docs/OPERATIONS.md, \"Upgrading\""
   command -v npm >/dev/null 2>&1 || die "npm not found"
   tree=$(cd "$NETHELPER_HOME" && pwd -P)
   parent=$(dirname "$tree")
@@ -265,7 +265,7 @@ upgrade() {
   echo "- The $current tree is kept at $tree.previous; delete it once you're happy with $target."
   if [ -n "$changed" ]; then
     echo "- This release changed files your install has copies of. Compare and copy what you need"
-    echo "  (deploy/README.md, \"Bare metal\"), then reload systemd or nginx:"
+    echo "  (docs/INSTALL.md, \"Bare metal\"), then reload systemd or nginx:"
     for file in $changed; do echo "    $tree/$file"; done
   fi
   exit 0

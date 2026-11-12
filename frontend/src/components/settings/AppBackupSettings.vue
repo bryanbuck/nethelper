@@ -380,7 +380,7 @@
 docker compose run --rm backend node scripts/app-restore.js --file /data/app-backups/&lt;archive&gt;
 docker compose up -d</pre>
           <pre class="restore-cmd">sudo nethelper-admin restore /var/lib/nethelper/app-backups/&lt;archive&gt;</pre>
-          <p class="mt-2 mb-0">Details: <code>deploy/README.md</code>, "Backup and restore".</p>
+          <p class="mt-2 mb-0">Details: <code>docs/OPERATIONS.md</code>, "Backup and restore".</p>
         </v-expansion-panel-text>
       </v-expansion-panel>
     </v-expansion-panels>

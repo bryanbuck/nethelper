@@ -1,6 +1,6 @@
 # Getting started
 
-Your first hour with NetHelper, after it's installed ([`deploy/README.md`](../deploy/README.md); with Docker Compose, `deploy/install.sh` does it in one step) and the first admin exists. What each platform supports, and known limits: [`SUPPORT.md`](SUPPORT.md).
+Your first hour with NetHelper, after it's installed (the [README](../README.md#install) has the short way, [`INSTALL.md`](INSTALL.md) the rest) and the first admin exists. What each platform supports, and known limits: [`SUPPORT.md`](SUPPORT.md).
 
 ## Before you start
 
@@ -55,9 +55,9 @@ On a device's page, **Back Up Now**, or **Config Backups → Run Backup Now** fo
 
 Backups contain secrets, so only admins and operators can see their contents.
 
-Optional: **Settings → API Credentials → Git mirror** commits every backup to a Git repository. Use a **private** repository and a deploy key made for it, never your personal key (setup in [`deploy/README.md`](../deploy/README.md)).
+Optional: **Settings → API Credentials → Git mirror** commits every backup to a Git repository. Use a **private** repository and a deploy key made for it, never your personal key (mounting the key: [`INSTALL.md`](INSTALL.md#where-data-lives)).
 
-Back up NetHelper itself too: an admin turns on scheduled backups under **Settings → App Backup** (the database and the config backups in one archive), and keeps the archives and a copy of `ENCRYPTION_KEY` off the server: the same page can copy each archive to another server over SFTP. Restore steps are in [`deploy/README.md`](../deploy/README.md) "Backup and restore".
+Back up NetHelper itself too: an admin turns on scheduled backups under **Settings → App Backup** (the database and the config backups in one archive), and keeps the archives and a copy of `ENCRYPTION_KEY` off the server: the same page can copy each archive to another server over SFTP. Restore steps: [`OPERATIONS.md`](OPERATIONS.md#backup-and-restore).
 
 ## 6. Status and alerts
 

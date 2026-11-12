@@ -7,7 +7,7 @@
 #   ./install.sh --upgrade               # move a release-tarball install to the newest release
 #
 # What it does, in order (each docker command is echoed as it runs; the manual
-# steps are in README.md, "Installing by hand"):
+# steps are in docs/INSTALL.md, "Installing by hand"):
 #   1. checks Docker and Compose,
 #   2. creates deploy/.env with generated secrets, or fills in required secrets
 #      that are still empty (a value that is set is never changed),
@@ -151,7 +151,7 @@ ask_yes_no() { # question default(y|n)
 if [ -z "$ENV_ONLY" ]; then
   step "Checking Docker"
   command -v docker >/dev/null 2>&1 \
-    || die "docker isn't installed. Install Docker Engine with the Compose plugin first (README.md, \"Docker Compose\")."
+    || die "docker isn't installed. Install Docker Engine with the Compose plugin first (docs/INSTALL.md, \"Install Docker\")."
   docker info >/dev/null 2>&1 \
     || die "can't reach the Docker daemon. Is it running, and are you root or in the docker group?"
   compose_version=$(docker compose version --short 2>/dev/null) \
@@ -442,7 +442,7 @@ say "NetHelper is running: http://$host:$port"
 say ""
 say "- It speaks plain HTTP. Passwords and device credentials cross the network in"
 say "  clear text, so beyond a trusted management network put TLS in front"
-say "  (README.md, \"TLS\")."
+say "  (docs/INSTALL.md, \"TLS\")."
 say "- After signing in: change the admin's password (account menu), then follow"
 say "  docs/GETTING_STARTED.md."
 if [ -e ../.git ]; then

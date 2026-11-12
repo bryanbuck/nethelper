@@ -25,10 +25,10 @@ describe('release version', () => {
     defaults.forEach((v) => expect(v).toBe(VERSION));
   });
 
-  test('the runbook downloads this release', () => {
-    const readme = read('deploy/README.md');
-    const named = [...readme.matchAll(/nethelper-(\d[0-9A-Za-z.-]*?)\.tar\.gz|release download v(\S+)/g)].map((m) => m[1] || m[2]);
-    expect(named.length).toBeGreaterThanOrEqual(3);
+  test.each(['README.md', 'docs/INSTALL.md'])('%s downloads this release', (file) => {
+    const text = read(file);
+    const named = [...text.matchAll(/nethelper-(\d[0-9A-Za-z.-]*?)\.tar\.gz|releases\/download\/v([0-9A-Za-z.-]+)/g)].map((m) => m[1] || m[2]);
+    expect(named.length).toBeGreaterThanOrEqual(4);
     named.forEach((v) => expect(v).toBe(VERSION));
   });
 

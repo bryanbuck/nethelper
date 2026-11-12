@@ -142,7 +142,7 @@ up_rollback_help() {
   if [ -n "$5" ]; then
     printf '  %s has database migrations that %s lacks, and they may have run:\n' "$3" "$2"
     printf '%s\n' "$5" | sed 's/^/    /'
-    printf '  so restore the backup before starting %s (deploy/README.md, "Backup and restore"),\n' "$2"
+    printf '  so restore the backup before starting %s (docs/OPERATIONS.md, "Backup and restore"),\n' "$2"
     printf '  then: %s\n' "$6"
   else
     printf '  %s changes nothing in the database, so that is all; then: %s\n' "$3" "$6"

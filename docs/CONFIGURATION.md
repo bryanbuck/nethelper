@@ -27,7 +27,7 @@ Where environment settings live:
 | `DATABASE_URL` | `postgresql://user:password@host:5432/db?schema=public`. Use a URL-safe (hex) password. |
 | `JWT_SECRET` | Signs access tokens. At least 32 characters. |
 | `JWT_REFRESH_SECRET` | Signs refresh tokens. At least 32 characters, and different from `JWT_SECRET`. |
-| `ENCRYPTION_KEY` | Encrypts stored secrets: device, cloud and Git credentials, notification webhooks, the app backup passphrase and SFTP login, automation HTTP headers. At least 32 characters. **Back it up separately from the database**: without it the stored credentials can't be decrypted. To change it, see "Rotating the encryption key" in `deploy/README.md`. |
+| `ENCRYPTION_KEY` | Encrypts stored secrets: device, cloud and Git credentials, notification webhooks, the app backup passphrase and SFTP login, automation HTTP headers. At least 32 characters. **Back it up separately from the database**: without it the stored credentials can't be decrypted. To change it, see [Rotating the encryption key](OPERATIONS.md#rotating-the-encryption-key). |
 
 Generate secrets with `openssl rand -hex 32`.
 
@@ -145,7 +145,7 @@ Production writes JSON logs to stdout. Values under secret-looking keys (passwor
 | `BACKUP_GIT_REPO_PATH` | `backend/storage/config-repo` | Default Git mirror repository, used when the in-app setting is blank. |
 | `BACKUP_GIT_TIMEOUT_MS` | `60000` | Per git command. |
 | `BACKUP_GIT_KNOWN_HOSTS` | `git-known_hosts` next to `BACKUP_GIT_REPO_PATH` | Where the Git mirror's ssh remembers an SSH remote's host key (accepted on first use; pre-fill it to pin the key). `~/.ssh/known_hosts` is still read. Docker: `/data/git-known_hosts`. |
-| `APP_BACKUP_PATH` | `backend/storage/app-backups` | Application backups (Settings → App Backup). Docker: `/data/app-backups`. Bare metal: `/var/lib/nethelper/app-backups`. Prefer another disk or a mounted share; see `deploy/README.md` "Backup and restore". Needs `pg_dump` (`postgresql-client`, the server's major version or newer) and `tar`. |
+| `APP_BACKUP_PATH` | `backend/storage/app-backups` | Application backups (Settings → App Backup). Docker: `/data/app-backups`. Bare metal: `/var/lib/nethelper/app-backups`. Prefer another disk or a mounted share; see [`OPERATIONS.md`](OPERATIONS.md#backup-and-restore). Needs `pg_dump` (`postgresql-client`, the server's major version or newer) and `tar`. |
 | `APP_BACKUP_TIMEOUT_MS` | `1800000` | Limit for `pg_dump` in one application backup. |
 
 ### Optional integrations
