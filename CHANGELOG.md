@@ -4,6 +4,8 @@ All notable changes to NetHelper. Versions follow [Semantic Versioning](https://
 
 ## [Unreleased]
 
+## [0.9.1-beta.2] — 2026-11-12
+
 ### Added
 - **Off-host copies of application backups over SFTP.** Settings → App Backup can copy every archive to another server (a NAS, a backup host) after each run, with a password or private-key login. The server's host key is pinned on first use, uploads are size-checked before they get their real name, and the archive retention applies there too. Encrypted archives only. A failed copy raises the new **Application backup not copied off-host** alert and is retried on the next run.
 - **Application backup overdue** alert: scheduled backups are on, but none has succeeded since the time two scheduled runs back. It runs on its own timer, so it also notices a schedule that stopped firing. Settings → App Backup shows the last success and the next scheduled run.

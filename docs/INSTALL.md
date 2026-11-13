@@ -18,10 +18,10 @@ Either way, the browser talks to one origin: nginx serves the SPA and proxies `/
 Each release on GitHub has `nethelper-<version>.tar.gz` (the source plus a prebuilt UI, so bare metal skips the frontend build) and its checksum. Unpack it at `/opt/nethelper`; every command on this page runs from that tree:
 
 ```sh
-base=https://github.com/bryanbuck/nethelper/releases/download/v0.9.1-beta.1
-curl -fLO "$base/nethelper-0.9.1-beta.1.tar.gz" -fLO "$base/nethelper-0.9.1-beta.1.tar.gz.sha256"
-sha256sum -c nethelper-0.9.1-beta.1.tar.gz.sha256
-tar xzf nethelper-0.9.1-beta.1.tar.gz && mv nethelper-0.9.1-beta.1 /opt/nethelper
+base=https://github.com/bryanbuck/nethelper/releases/download/v0.9.1-beta.2
+curl -fLO "$base/nethelper-0.9.1-beta.2.tar.gz" -fLO "$base/nethelper-0.9.1-beta.2.tar.gz.sha256"
+sha256sum -c nethelper-0.9.1-beta.2.tar.gz.sha256
+tar xzf nethelper-0.9.1-beta.2.tar.gz && mv nethelper-0.9.1-beta.2 /opt/nethelper
 ```
 
 Install from a release, not a `git clone`, unless you're working on the code: see [From source](#from-source-a-git-checkout).

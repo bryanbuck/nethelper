@@ -20,10 +20,10 @@ You need a Linux host with Docker Engine and the Compose plugin ([installing Doc
 As root, download the release, check it, unpack it, and run the installer:
 
 ```sh
-base=https://github.com/bryanbuck/nethelper/releases/download/v0.9.1-beta.1
-curl -fLO "$base/nethelper-0.9.1-beta.1.tar.gz" -fLO "$base/nethelper-0.9.1-beta.1.tar.gz.sha256"
-sha256sum -c nethelper-0.9.1-beta.1.tar.gz.sha256
-tar xzf nethelper-0.9.1-beta.1.tar.gz && mv nethelper-0.9.1-beta.1 /opt/nethelper
+base=https://github.com/bryanbuck/nethelper/releases/download/v0.9.1-beta.2
+curl -fLO "$base/nethelper-0.9.1-beta.2.tar.gz" -fLO "$base/nethelper-0.9.1-beta.2.tar.gz.sha256"
+sha256sum -c nethelper-0.9.1-beta.2.tar.gz.sha256
+tar xzf nethelper-0.9.1-beta.2.tar.gz && mv nethelper-0.9.1-beta.2 /opt/nethelper
 cd /opt/nethelper/deploy && ./install.sh
 ```
 
