@@ -18,7 +18,7 @@ const mockPrisma = {
   portClient: {
     findMany: jest.fn(async () => []), update: jest.fn(async () => ({})), updateMany: jest.fn(), createMany: jest.fn(),
   },
-  portReadState: { upsert: jest.fn(async () => ({})) },
+  portReadState: { upsert: jest.fn(async () => ({})), deleteMany: jest.fn(async () => ({ count: 0 })) },
   $executeRaw: jest.fn(async () => 0),
 };
 mockPrisma.$transaction = jest.fn(async (fn) => fn(mockPrisma));
@@ -140,6 +140,66 @@ describe('collectAll', () => {
       where: { id: 'old' },
       data: expect.objectContaining({ state: 'gone', goneReason: 'moved', goneDetail: { deviceId: 'd-studio', port: '1/1/4' } }),
     });
+  });
+});
+
+describe('read failures are filed under the source that failed', () => {
+  // A Central-managed CX switch with no linked credential: only its cloud is tried.
+  const noCredCx = { ...studio, id: 'no-cred', name: 'Lab-Edge2' };
+
+  it('a cloud failure on a switch whose REST read was never tried is a cloud error, not a device one', async () => {
+    setDevices([noCredCx]);
+    mockProvider.listWiredClients.mockRejectedValueOnce(new Error('Unable to connect to Aruba Central'));
+    const summary = await service.collectAll();
+
+    expect(summary).toMatchObject({ ok: 0, failed: 1 });
+    const filed = mockPrisma.portReadState.upsert.mock.calls.map(([a]) => [a.create.source, a.create.error]);
+    expect(filed).toEqual([['cloud', 'Unable to connect to Aruba Central']]);
+    // A device-rest row that never succeeded (the old misfiled error) goes away.
+    expect(mockPrisma.portReadState.deleteMany).toHaveBeenCalledWith({
+      where: { deviceId: 'no-cred', source: { in: ['device-rest'] }, lastSuccessAt: null },
+    });
+  });
+
+  it('a cloud failure is recorded even when the switch itself was read', async () => {
+    setDevices([studio]);
+    mockProvider.listWiredClients.mockRejectedValueOnce(new Error('Central 503'));
+    const summary = await service.collectAll();
+
+    expect(summary.results[0]).toMatchObject({ status: 'ok', source: 'AOS-CX REST' });
+    const filed = mockPrisma.portReadState.upsert.mock.calls.map(([a]) => [a.create.source, a.create.error]);
+    expect(filed).toEqual(expect.arrayContaining([['device-rest', null], ['cloud', 'Central 503']]));
+  });
+
+  it('a switch with nothing to read records no failure', async () => {
+    setDevices([directAosS, { ...studio, id: 'no-cred', managementMode: 'direct' }]);
+    const summary = await service.collectAll();
+
+    expect(summary).toMatchObject({ ok: 0, failed: 0, skipped: 2 });
+    expect(mockPrisma.portReadState.upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe('clientSourcePlan', () => {
+  const { clientSourcePlan } = service;
+  it('says a platform with no reader is unsupported', () => {
+    expect(clientSourcePlan({ ...directAosS, platform: 'junos', vendor: 'juniper' })).toEqual({ supported: false, platform: 'junos', sources: [] });
+    expect(clientSourcePlan({ ...directAosS, platform: 'ios-xe', vendor: 'cisco' })).toMatchObject({ supported: false });
+  });
+
+  it('names what an AOS-CX switch needs before its own tables can be read', () => {
+    const plan = clientSourcePlan({ ...studio, managementMode: 'direct' }, { hasCredential: false });
+    expect(plan).toEqual({
+      supported: true,
+      platform: 'aos-cx',
+      sources: [{ source: 'device-rest', ready: false, note: 'needs an IP address and a linked device credential' }],
+    });
+    expect(clientSourcePlan({ ...studio, managementMode: 'direct' }, { hasCredential: true }).sources[0].ready).toBe(true);
+  });
+
+  it('a cloud-managed switch also has its cloud; one without an IP has only the cloud', () => {
+    expect(clientSourcePlan(studio, { hasCredential: true }).sources.map((x) => x.source)).toEqual(['device-rest', 'cloud']);
+    expect(clientSourcePlan({ ...studio, ipAddress: null }).sources).toEqual([{ source: 'cloud', ready: true, note: null }]);
   });
 });
 

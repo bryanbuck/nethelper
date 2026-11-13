@@ -70,3 +70,20 @@ test('search needs at least 2 characters and is not taken for a device id', asyn
   expect(res.status).toBe(200);
   expect(spy).toHaveBeenCalledWith('aa:bb');
 });
+
+test('read now refuses a switch NetHelper has no reader for, or one with nothing configured, before queueing', async () => {
+  const load = jest.spyOn(portView, 'loadDevice');
+  load.mockResolvedValueOnce({
+    id: D1, type: 'switch', vendor: 'juniper', platform: 'junos', managementMode: 'direct', ipAddress: '10.0.0.9',
+  });
+  let res = await api('post', `/${D1}/ports/read`);
+  expect(res.status).toBe(400);
+  expect(res.body.error).toMatch(/can't read connected devices from junos switches yet/);
+
+  load.mockResolvedValueOnce({
+    id: D1, type: 'switch', vendor: 'aruba', platform: 'aos-cx', managementMode: 'direct', ipAddress: null, apiCredentialId: null,
+  });
+  res = await api('post', `/${D1}/ports/read`);
+  expect(res.status).toBe(400);
+  expect(res.body.error).toMatch(/needs an IP address and a linked device credential/);
+});

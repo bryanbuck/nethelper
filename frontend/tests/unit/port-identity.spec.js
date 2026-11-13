@@ -12,7 +12,7 @@ import portsService from '@/services/ports.service'
 import { useAuthStore } from '@/stores/auth'
 import {
   FRESHNESS, GONE_REASONS, SOURCES, PORT_KINDS, NOTE_KINDS, NOTE_KIND_ITEMS,
-  clientTitle, profileText, freshnessText, portKey
+  clientTitle, profileText, freshnessText, portKey, readAvailability
 } from '@/models/port-clients'
 
 // Vuetify's data table and slide groups observe their size; jsdom has no ResizeObserver.
@@ -63,6 +63,28 @@ describe('models/port-clients', () => {
     expect(freshnessText({ freshness: 'stale', since: null }, now)).toBe('Stale: never read successfully')
     expect(freshnessText({ freshness: 'unconfirmed', missedReads: 3, since: '2026-11-10T11:00:00Z' }, now)).toBe('Not in the last 3 reads; last seen 1 h ago')
     expect(portKey(' 1/1/4 ')).toBe('1/1/4')
+  })
+})
+
+describe('readAvailability', () => {
+  test('no plan (an older server) changes nothing', () => {
+    expect(readAvailability(undefined)).toEqual({ canRead: true, message: null, notes: [] })
+  })
+  test('a platform without a reader cannot be read, and says notes still work', () => {
+    const a = readAvailability({ supported: false, platform: 'junos', sources: [] }, 'Junos')
+    expect(a.canRead).toBe(false)
+    expect(a.message).toMatch(/can't read connected devices from Junos switches yet/)
+  })
+  test('names what an unconfigured source needs; readable while another source is ready', () => {
+    const notReady = { source: 'device-rest', ready: false, note: 'needs an IP address and a linked device credential' }
+    expect(readAvailability({ supported: true, sources: [notReady] })).toEqual({
+      canRead: false,
+      message: "Connected devices can't be read yet (the switch: needs an IP address and a linked device credential).",
+      notes: ['the switch: needs an IP address and a linked device credential']
+    })
+    const withCloud = readAvailability({ supported: true, sources: [notReady, { source: 'cloud', ready: true, note: null }] })
+    expect(withCloud).toMatchObject({ canRead: true, message: null })
+    expect(withCloud.notes).toHaveLength(1)
   })
 })
 
@@ -142,6 +164,30 @@ describe('DevicePortsPanel', () => {
     await flushPromises()
     expect(wrapper.text()).not.toContain('Read now')
     expect(wrapper.findAll('button').some((b) => b.text() === 'Add')).toBe(false)
+  })
+
+  test('a switch NetHelper has no reader for says so and offers no Read now', async () => {
+    vi.spyOn(portsService, 'getPorts').mockResolvedValue({
+      ...VIEW, reads: [], ports: [], sources: { supported: false, platform: 'ios-xe', sources: [] }
+    })
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(wrapper.text()).toContain("can't read connected devices from")
+    expect(wrapper.text()).not.toContain('every 30 minutes')
+    expect(wrapper.text()).not.toContain('Read now')
+  })
+
+  test('a source that is not configured is named next to the read that worked', async () => {
+    vi.spyOn(portsService, 'getPorts').mockResolvedValue({
+      ...VIEW,
+      reads: [{ source: 'cloud', readAt: new Date().toISOString(), lastSuccessAt: new Date().toISOString(), error: null }],
+      sources: { supported: true, sources: [{ source: 'device-rest', ready: false, note: 'needs an IP address and a linked device credential' }, { source: 'cloud', ready: true, note: null }] }
+    })
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(wrapper.text()).toContain('Read from its cloud')
+    expect(wrapper.text()).toContain('the switch: needs an IP address and a linked device credential')
+    expect(wrapper.text()).toContain('Read now')
   })
 
   test('reloads when this switch\'s ports change, not another\'s', async () => {

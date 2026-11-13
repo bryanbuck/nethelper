@@ -24,7 +24,7 @@ const CloudProviderFactory = require('../cloud-providers/cloud-provider-factory'
 const { CapabilityError } = require('../cloud-providers/errors');
 const deviceEvents = require('../device-events.service');
 const { resolveTransport } = require('../../utils/transport-router');
-const { isCxRestCapable, detectPlatform } = require('../../utils/device-platform');
+const { clientSourcePlan } = require('./client-sources');
 const { normalizeMac } = require('../../utils/device-key');
 const { normalizePortName } = require('../topology/neighbor');
 const { parseCxInterfaces, parseCxMacTable, parseCxArp } = require('./parsers/aos-cx-clients');
@@ -56,12 +56,20 @@ function toDb(data) {
   return out;
 }
 
+/**
+ * Nothing could be read. `errors` and `notes` are keyed by source
+ * (`device-rest` | `cloud`): an error is a read that was tried and failed, a
+ * note a source that wasn't tried (not configured, not supported).
+ */
 class ReadSkip extends Error {
-  constructor(message, status = 'skipped') {
+  constructor(message, status = 'skipped', { errors = {}, notes = {} } = {}) {
     super(message);
     this.status = status;
+    this.errors = errors;
+    this.notes = notes;
   }
 }
+
 
 function vendorOf(mac) {
   try {
@@ -148,18 +156,21 @@ class PortClientService {
    * @throws {ReadSkip} when nothing could be read
    */
   async readDevice(device, run) {
-    const transports = resolveTransport(device, 'clients');
-    if (!transports.length) {
-      throw new ReadSkip(`No client source for platform "${detectPlatform(device) || 'unknown'}" yet`, 'unsupported');
+    const credentials = resolveTransport(device, 'clients').includes('device-rest')
+      ? await settingsService.getDeviceCredentialsForUse(device.id)
+      : null;
+    const plan = clientSourcePlan(device, { hasCredential: !!credentials });
+    if (!plan.supported) {
+      throw new ReadSkip(`No client source for platform "${plan.platform || 'unknown'}" yet`, 'unsupported');
     }
-    const out = { direct: null, cloud: null };
-    const notes = [];
+    const out = { direct: null, cloud: null, notes: {} };
 
-    if (transports.includes('device-rest')) {
-      const credentials = await settingsService.getDeviceCredentialsForUse(device.id);
-      if (!device.ipAddress || !credentials) notes.push('device API needs an IP address and a linked credential');
-      else if (!isCxRestCapable(device)) notes.push(`no client-table reader for platform "${detectPlatform(device)}" yet`);
-      else {
+    for (const { source, ready, note } of plan.sources) {
+      if (!ready) {
+        out.notes[source] = note;
+        continue;
+      }
+      if (source === 'device-rest') {
         try {
           const raw = await devicePollerService.withCxSession(device, credentials, (api) => api.getClientTables());
           const ifaces = parseCxInterfaces(raw.interfaces);
@@ -172,29 +183,32 @@ class PortClientService {
           out.directError = error.message;
           logger.warn(`port-clients: AOS-CX read failed for ${device.name}: ${error.message}`);
         }
-      }
-    }
-
-    if (transports.includes('cloud')) {
-      try {
-        const cloud = await this.cloudFor(device, run);
-        if (cloud) {
-          out.cloud = cloud.list;
-          if (!out.direct) {
-            out.source = 'cloud';
-            out.label = cloud.label;
-          }
+      } else {
+        try {
+          const cloud = await this.cloudFor(device, run);
+          if (cloud) {
+            out.cloud = cloud.list;
+            if (!out.direct) {
+              out.source = 'cloud';
+              out.label = cloud.label;
+            }
+          } else out.notes.cloud = 'the switch is not cloud-managed';
+        } catch (error) {
+          if (error instanceof CapabilityError) out.notes.cloud = error.message;
+          else out.cloudError = error.message;
         }
-      } catch (error) {
-        if (error instanceof CapabilityError) notes.push(error.message);
-        else out.cloudError = error.message;
       }
     }
 
     if (!out.direct && !out.cloud) {
-      const reasons = [out.directError, out.cloudError, ...notes].filter(Boolean);
-      const failed = out.directError || out.cloudError;
-      throw new ReadSkip(reasons.join('; ') || 'No transport available', failed ? 'failed' : 'skipped');
+      const errors = {
+        ...(out.directError && { 'device-rest': out.directError }),
+        ...(out.cloudError && { cloud: out.cloudError }),
+      };
+      const reasons = [...Object.values(errors), ...Object.values(out.notes)];
+      throw new ReadSkip(reasons.join('; ') || 'No transport available', Object.keys(errors).length ? 'failed' : 'skipped', {
+        errors, notes: out.notes,
+      });
     }
     return out;
   }
@@ -205,6 +219,25 @@ class PortClientService {
       create: { deviceId: device.id, source, readAt: now, error: message },
       update: { readAt: now, error: message },
     });
+  }
+
+  /**
+   * Record each source's outcome under its own PortReadState row: a failed
+   * read keeps its error there. A source that wasn't tried is not a failure;
+   * a row of it that never succeeded (an error filed there before, or left
+   * from when it was configured) is dropped, and the Ports view explains the
+   * source from clientSourcePlan() instead.
+   * @param errors  { [source]: message }
+   * @param notes   { [source]: why it wasn't tried }
+   */
+  async recordOutcome(device, { errors = {}, notes = {} }, now) {
+    for (const [source, message] of Object.entries(errors)) await this.recordFailure(device, source, message, now);
+    const untried = Object.keys(notes).filter((source) => !errors[source]);
+    if (untried.length) {
+      await getPrisma().portReadState.deleteMany({
+        where: { deviceId: device.id, source: { in: untried }, lastSuccessAt: null },
+      });
+    }
   }
 
   /**
@@ -271,7 +304,13 @@ class PortClientService {
         },
       });
     });
-    if (read.directError && source === 'cloud') await this.recordFailure(device, 'device-rest', read.directError, now);
+    await this.recordOutcome(device, {
+      errors: {
+        ...(read.directError && source !== 'device-rest' && { 'device-rest': read.directError }),
+        ...(read.cloudError && source !== 'cloud' && { cloud: read.cloudError }),
+      },
+      notes: read.notes || {},
+    }, now);
 
     const changed = create.length + update.filter((u) => u.data.state || u.data.goneReason).length;
     if (changed) emit('ports:updated', { deviceId: device.id });
@@ -331,8 +370,17 @@ class PortClientService {
         try {
           reads.push({ device, read: await this.readDevice(device, run) });
         } catch (error) {
-          const status = error instanceof ReadSkip ? error.status : 'failed';
-          reads.push({ device, status, reason: error.message });
+          if (error instanceof ReadSkip) {
+            reads.push({
+              device, status: error.status, reason: error.message, errors: error.errors, notes: error.notes,
+            });
+          } else {
+            // Unexpected: not tied to one source, so filed under the first one tried.
+            const first = resolveTransport(device, 'clients')[0] || 'device-rest';
+            reads.push({
+              device, status: 'failed', reason: error.message, errors: { [first]: error.message },
+            });
+          }
         }
       }
     };
@@ -346,12 +394,12 @@ class PortClientService {
     // 3. Apply per switch.
     const results = [];
     const placements = new Map();
-    for (const { device, read, status, reason } of reads) {
+    for (const {
+      device, read, status, reason, errors, notes,
+    } of reads) {
       if (!read) {
-        if (status === 'failed') {
-          await this.recordFailure(device, resolveTransport(device, 'clients')[0] || 'device-rest', reason, now)
-            .catch((error) => logger.warn(`port-clients: could not record failure for ${device.name}: ${error.message}`));
-        }
+        await this.recordOutcome(device, { errors, notes }, now)
+          .catch((error) => logger.warn(`port-clients: could not record failure for ${device.name}: ${error.message}`));
         results.push({ deviceId: device.id, name: device.name, status, reason });
         continue;
       }
@@ -406,3 +454,4 @@ class PortClientService {
 
 module.exports = new PortClientService();
 module.exports.ReadSkip = ReadSkip;
+module.exports.clientSourcePlan = clientSourcePlan;

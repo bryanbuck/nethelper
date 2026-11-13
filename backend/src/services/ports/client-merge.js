@@ -111,7 +111,9 @@ function presenceObservations({ direct = null, cloud = null } = {}) {
 }
 
 /**
- * Fill IP (fleet-wide ARP), LLDP identity and vendor (OUI) where still missing.
+ * Fill IP (fleet-wide ARP) and LLDP identity where still missing, and set the
+ * vendor from the MAC's registered prefix (curated, then IEEE), falling back
+ * to the cloud's manufacturer only when the prefix is unknown.
  * @param arpByMac     Map MAC -> ip (every routing switch's ARP, cloud IPs)
  * @param lldp         classifyPorts().lldp
  * @param vendorOf     (mac) => vendor name or null
@@ -128,8 +130,9 @@ function enrich(observations, { arpByMac = new Map(), lldp = new Map(), vendorOf
       out.lldp = l;
       if (!out.sources.includes('lldp')) out.sources.push('lldp');
     }
-    if (!out.vendor && !isRandomMac(o.mac)) out.vendor = vendorOf(o.mac) || null;
-    out.vendor = out.vendor || null;
+    // The registry names who made the network chip (a fact); a cloud's
+    // manufacturer is its guess and stays in `profile`. A random MAC has none.
+    out.vendor = isRandomMac(o.mac) ? null : (vendorOf(o.mac) || out.vendor || null);
     if (isRandomMac(o.mac)) out.profile = { ...(out.profile || {}), randomMac: true };
     out.sources = [...new Set(out.sources)].sort();
     return out;

@@ -83,3 +83,5 @@ Architecture: [`docs/MULTI_VENDOR_ROADMAP.md`](docs/MULTI_VENDOR_ROADMAP.md). Fo
 ## License
 
 GNU Affero General Public License v3.0 or later. See [`LICENSE`](LICENSE).
+
+Third-party data: `backend/src/data/oui.tsv` (MAC address prefixes and organization names) is generated from the IEEE Registration Authority's public MA-L, MA-M and MA-S listings (<https://standards-oui.ieee.org/>). IEEE does not assert copyright in the listing or restrict its distribution; it asks that the list be obtained from IEEE and updated regularly, which `npm run oui:update` does.

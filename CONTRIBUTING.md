@@ -53,8 +53,9 @@ And three rules:
 ## Releasing
 
 1. Set the new version everywhere it appears: `VERSION`, `version` in both `package.json` files (and their lockfiles, with `npm version <v> --no-git-tag-version` in each tier), the `NETHELPER_VERSION` defaults in `deploy/docker-compose.yml`, `ARG VITE_APP_VERSION` in `frontend/Dockerfile`, and the release download blocks in `README.md` and `docs/INSTALL.md`. `backend/tests/unit/release-version.test.js` fails if one is missed.
-2. Move the `[Unreleased]` entries in `CHANGELOG.md` under a dated heading for the version: `## [<version>] — <YYYY-MM-DD>`.
-3. Merge to `master`, then tag and push the tag: `git tag v<version> && git push origin v<version>`.
+2. Refresh the MAC vendor table from IEEE: `cd backend && npm run oui:update`, then commit `backend/src/data/oui.tsv` if it changed (the diff is the new assignments).
+3. Move the `[Unreleased]` entries in `CHANGELOG.md` under a dated heading for the version: `## [<version>] — <YYYY-MM-DD>`.
+4. Merge to `master`, then tag and push the tag: `git tag v<version> && git push origin v<version>`.
 
 The tag runs `.github/workflows/release.yml`. It checks that the tag matches `VERSION`, publishes the backend and frontend images to GHCR, and creates a GitHub release with `nethelper-<version>.tar.gz` (the source plus a prebuilt `frontend/dist`) and its checksum, using the version's `CHANGELOG.md` section as the notes. A version with a suffix (`-beta.2`) is marked as a pre-release and doesn't move the `latest` image tag. To try the workflow without publishing, run it by hand from the Actions tab: it builds everything and keeps the tarball as a workflow artifact.
 
