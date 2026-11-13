@@ -17,7 +17,7 @@
         aria-label="Filter ports"
       />
       <ActionButton
-        v-if="canEdit"
+        v-if="canEdit && availability.canRead"
         color="primary"
         variant="tonal"
         icon="mdi-refresh"
@@ -177,7 +177,8 @@ import { useNotificationsStore } from '@/stores/notifications'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { usePhoneColumns } from '@/composables/usePhoneColumns'
 import { timeAgo } from '@/models/activity'
-import { PORT_KINDS, clientTitle, freshnessText, portKey } from '@/models/port-clients'
+import { PORT_KINDS, clientTitle, freshnessText, portKey, readAvailability, READ_SOURCE_NAMES } from '@/models/port-clients'
+import { PlatformInfo } from '@/models/vendors'
 import ActionButton from '@/components/common/ActionButton.vue'
 import PortNoteDialog from '@/components/devices/PortNoteDialog.vue'
 import PortDetails from '@/components/devices/PortDetails.vue'
@@ -239,9 +240,14 @@ const rows = computed(() => {
   })
 })
 
+const availability = computed(() => readAvailability(view.value?.sources, PlatformInfo[props.device.platform]?.label))
+
 const noDataText = computed(() => {
   if (loading.value) return 'Loading ports'
-  if (!view.value?.ports?.length) return 'No ports read yet. Ports are read from the switch (AOS-CX) or its cloud every 30 minutes.'
+  if (!view.value?.ports?.length) {
+    if (availability.value.message) return availability.value.message
+    return 'No ports read yet. Ports are read from the switch (AOS-CX) or its cloud every 30 minutes.'
+  }
   return 'No port matches'
 })
 
@@ -253,17 +259,19 @@ const readChip = computed(() => {
   return { label: 'Read failed', color: 'error' }
 })
 
-const SOURCE_NAMES = { 'device-rest': 'the switch', cloud: 'its cloud' }
 const subtitle = computed(() => {
   const v = view.value
   if (!v) return ''
+  const { message, notes } = availability.value
+  if (v.sources && !v.sources.supported) return message
   if (!v.reads.length) {
-    return 'Not read yet. Connected devices come from the switch\'s own MAC and ARP tables (AOS-CX, with a linked credential) or from its cloud.'
+    return message || 'Not read yet. Connected devices come from the switch\'s own MAC and ARP tables (AOS-CX, with a linked credential) or from its cloud.'
   }
   const parts = []
   const good = v.reads.filter((r) => r.lastSuccessAt).sort((a, b) => new Date(b.lastSuccessAt) - new Date(a.lastSuccessAt))[0]
-  if (good) parts.push(`Read from ${SOURCE_NAMES[good.source] || good.source} ${timeAgo(good.lastSuccessAt)}`)
-  for (const r of v.reads.filter((x) => x.error)) parts.push(`${SOURCE_NAMES[r.source] || r.source}: ${r.error}`)
+  if (good) parts.push(`Read from ${READ_SOURCE_NAMES[good.source] || good.source} ${timeAgo(good.lastSuccessAt)}`)
+  for (const r of v.reads.filter((x) => x.error)) parts.push(`${READ_SOURCE_NAMES[r.source] || r.source}: ${r.error}`)
+  parts.push(...notes)
   const live = v.ports.reduce((n, p) => n + (p.uplink ? 0 : liveClients(p).length), 0)
   parts.push(`${live} connected device${live === 1 ? '' : 's'}`)
   return `${parts.join(' · ')}.`

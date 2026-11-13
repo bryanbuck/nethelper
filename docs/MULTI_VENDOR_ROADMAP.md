@@ -759,7 +759,7 @@ default 30 minutes; `POST /devices/:id/ports/read` queues one switch):
    (uplink, AP, edge); take presence from the switch's own MAC table when it
    was read, otherwise from the cloud; enrich (cloud identity, ARP IP, the
    client's own LLDP identity, OUI vendor, never for a random MAC); age the
-   stored sightings; write one transaction plus the `PortReadState` row.
+   stored sightings; write one transaction plus the `PortReadState` row(s).
 4. **Moves**: a MAC present on exactly one edge port in this run ends its live
    sightings elsewhere.
 5. **Retention** as above.
@@ -768,10 +768,28 @@ default 30 minutes; `POST /devices/:id/ports/read` queues one switch):
 `when`), then Central (by status). Identity (hostname, profile, user): the
 clouds. IP: fleet-wide ARP, then the clouds, then the host's `ip neigh`. The
 kept VLAN is the client's untagged/data VLAN when it was learned in several.
+**Vendor**: the MAC's registered prefix (`discovery.lookupVendor()`: the
+curated Aruba/Juniper labels, then the bundled IEEE table, `utils/oui.js`,
+longest prefix of MA-S/MA-M/MA-L), and only for an unknown prefix the cloud's
+manufacturer. The prefix names who made the network chip; a cloud's
+manufacturer and classification are its guess and stay in `profile`. A random
+(locally administered) MAC has no vendor. The table (`src/data/oui.tsv`, prefix
+and shortened organization name only) is regenerated from IEEE with
+`npm run oui:update` at each release; IEEE does not assert copyright in the
+listing or restrict its distribution (Debian ships it in `main` as
+`ieee-data`), and asks that it be fetched from IEEE and kept current.
 
-**Failures.** A failed switch read changes no sighting and records
-`PortReadState.error`. A cloud-managed switch whose REST read fails falls back
-to its cloud, which then decides presence for that switch. A platform with no
+**Failures.** A failed switch read changes no sighting. Each source records
+its own outcome in its own `PortReadState` row (`device-rest` | `cloud`): a
+REST failure under `device-rest`, a cloud failure under `cloud`, also when the
+other source worked. A cloud-managed switch whose REST read fails falls back to
+its cloud, which then decides presence for that switch. A source that wasn't
+tried is not a failure: `client-sources.js` `clientSourcePlan()` says per
+switch whether its platform has a reader and per source whether it is
+configured (REST needs an IP and a linked credential); the Ports view returns
+it as `sources`, the tab explains an unconfigured source or an unsupported
+platform from it, and "Read now" refuses (400) a switch with nothing to read.
+A never-successful row of an untried source is deleted. A platform with no
 client source is skipped as `unsupported`. Nullable JSON columns are written as
 SQL NULL (`Prisma.DbNull`), never JSON `null`.
 

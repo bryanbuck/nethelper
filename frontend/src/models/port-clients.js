@@ -81,3 +81,35 @@ export function freshnessText(client, now = Date.now()) {
 export function portKey(name) {
   return String(name || '').trim().toLowerCase().replace(/\s+/g, '')
 }
+
+/** Names of the read sources in the Ports tab's sentences. */
+export const READ_SOURCE_NAMES = { 'device-rest': 'the switch', cloud: 'its cloud' }
+
+/**
+ * Whether the switch's connected devices can be read, from the Ports view's
+ * `sources` plan (backend services/ports/client-sources.js).
+ * @param sources        view.sources: { supported, platform, sources: [{ source, ready, note }] }
+ * @param platformLabel  the platform's display name
+ * @returns {{ canRead: boolean, message: string|null, notes: string[] }}
+ *   message: why nothing can be read (null when something can);
+ *   notes: one line per source that isn't configured
+ */
+export function readAvailability(sources, platformLabel = null) {
+  if (!sources) return { canRead: true, message: null, notes: [] }
+  if (!sources.supported) {
+    return {
+      canRead: false,
+      message: `NetHelper can't read connected devices from ${platformLabel || sources.platform || 'these'} switches yet. Labels and notes still work on the ports listed here.`,
+      notes: []
+    }
+  }
+  const notes = (sources.sources || [])
+    .filter((s) => !s.ready && s.note)
+    .map((s) => `${READ_SOURCE_NAMES[s.source] || s.source}: ${s.note}`)
+  const canRead = (sources.sources || []).some((s) => s.ready)
+  return {
+    canRead,
+    message: canRead ? null : `Connected devices can't be read yet (${notes.join('; ')}).`,
+    notes
+  }
+}

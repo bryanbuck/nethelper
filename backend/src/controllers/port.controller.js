@@ -50,7 +50,15 @@ class PortController {
   /** Queue a client read of this switch now (202). One manual read at a time per switch. */
   async readNow(req, res, next) {
     try {
-      await portView.loadDevice(req.params.deviceId);
+      const device = await portView.loadDevice(req.params.deviceId);
+      const plan = portView.sourcePlan(device);
+      if (!plan.supported) {
+        return res.status(400).json({ success: false, error: `NetHelper can't read connected devices from ${plan.platform || 'this'} switches yet` });
+      }
+      if (!plan.sources.some((s) => s.ready)) {
+        const why = plan.sources.map((s) => s.note).filter(Boolean).join('; ');
+        return res.status(400).json({ success: false, error: `This switch can't be read: ${why}` });
+      }
       const queue = getQueue('portClients');
       const pending = [...await queue.getActive(), ...await queue.getWaiting()];
       const busy = pending.some((job) => job.name === 'collect' && !job.opts?.repeat

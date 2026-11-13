@@ -16,6 +16,7 @@ const { normalizePortName } = require('../topology/neighbor');
 const { findPort } = require('../topology/vlan-membership');
 const aging = require('./client-aging');
 const portClientService = require('./port-client.service');
+const { clientSourcePlan } = require('./client-sources');
 const logger = require('../../utils/logger');
 
 const RECENT_GONE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -102,10 +103,19 @@ class PortViewService {
       where: { id: deviceId },
       select: {
         id: true, name: true, type: true, vendor: true, platform: true, managementMode: true,
+        model: true, ipAddress: true, apiCredentialId: true,
       },
     });
     if (!device) throw new PortError('Device not found', 404);
     return device;
+  }
+
+  /**
+   * What a client read of this switch would try (`clientSourcePlan`): whether
+   * its platform has a reader, and per source whether it is configured.
+   */
+  sourcePlan(device) {
+    return clientSourcePlan(device, { hasCredential: !!device.apiCredentialId });
   }
 
   /**
@@ -188,7 +198,10 @@ class PortViewService {
     });
 
     return {
-      device,
+      device: {
+        id: device.id, name: device.name, type: device.type, vendor: device.vendor, platform: device.platform, managementMode: device.managementMode,
+      },
+      sources: this.sourcePlan(device),
       intervalMs: portClientService.intervalMs,
       lastSuccessAt,
       observingSince,

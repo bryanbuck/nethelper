@@ -7,6 +7,7 @@ const { getIO } = require('../websocket/socket.handler');
 const logger = require('../utils/logger');
 const { normalizeMac, normalizeSerial } = require('../utils/device-key');
 const { VENDORS } = require('../constants/vendors');
+const { lookup: ouiLookup } = require('../utils/oui');
 
 const execFileAsync = promisify(execFile);
 
@@ -122,10 +123,15 @@ class DiscoveryService {
     return normalizeMac(mac);
   }
 
+  /**
+   * The MAC's vendor name: the curated label for the vendors NetHelper
+   * manages, else the IEEE registry's organization (utils/oui.js), else null.
+   * A random (locally administered) MAC has none.
+   */
   lookupVendor(mac) {
     const normalized = this.normalizeMac(mac);
     if (!normalized) return null;
-    return KNOWN_OUIS[normalized.slice(0, 8)]?.label || null;
+    return KNOWN_OUIS[normalized.slice(0, 8)]?.label || ouiLookup(normalized);
   }
 
   /** The Vendor enum value a MAC's OUI belongs to, or null. */

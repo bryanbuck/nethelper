@@ -177,6 +177,15 @@ describe('per-switch merge', () => {
     expect(presenceObservations({ cloud }).map((o) => o.port)).toEqual(['2']);
   });
 
+  it('prefers the registered vendor over a cloud manufacturer, which only fills an unknown prefix', () => {
+    const out = enrich([
+      { port: '1/1/1', mac: '00:1f:9e:00:00:01', vendor: 'Cisco Systems, Inc', sources: ['cloud-wired'] },
+      { port: '1/1/2', mac: '00:1f:9e:00:00:02', vendor: 'Amcrest Technologies', sources: ['cloud-wired'] },
+    ], { vendorOf: (mac) => (mac.endsWith('01') ? 'Cisco' : null) });
+    expect(out[0].vendor).toBe('Cisco');
+    expect(out[1].vendor).toBe('Amcrest Technologies');
+  });
+
   it('enriches IP from fleet-wide ARP and vendor from the OUI, never for a random MAC', () => {
     const out = enrich([
       { port: '1/1/4', mac: '00:1f:9e:00:00:01', sources: ['mac-table'] },
